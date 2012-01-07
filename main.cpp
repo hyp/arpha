@@ -212,18 +212,23 @@ unittest(lexer){
 #define expectEof() token = lexer.consume();assert(token.isEOF())
 	
 	auto lexer = Lexer("foo 2 =");
+	assert(lexer.currentLocation().line() == 0);
 	expectSymbol("foo");
 	expectUinteger(2);
 	expectSymbol("=");
+	assert(lexer.currentLocation().line() == 0);
 	expectEof();
+	
 
 	lexer = Lexer("a_b bar + 5 - 7");
+	assert(lexer.currentLocation().line() == 0);
 	expectSymbol("a_b");
 	expectSymbol("bar");
 	expectSymbol("+");
 	expectUinteger(5);
 	expectSymbol("-");
 	expectUinteger(7);
+	assert(lexer.currentLocation().line() == 0);
 	expectEof();
 
 	//clean up

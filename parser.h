@@ -51,6 +51,7 @@ private:
 	Location location;
 };
 
+
 /*
 struct Scope;
 struct Expression;
