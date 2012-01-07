@@ -127,14 +127,14 @@ unittest(symbolTable){
 
 //lexing
 
-bool isDigit(char c){
-	return c>='0' && c<='9';
+Location::Location(int line){
+	lineNumber = line;
 }
 
-bool isLetter(char c){
-	return (c>='a' && c<='z') || (c>='A' && c<='Z') || c == '_';
+unittest(location){
+	auto loc = Location(2);
+	assert(loc.line() == 2);
 }
-
 
 Token::Token(){
 	isEndExpression=isNumber=isName=isEof=false;	
@@ -150,9 +150,16 @@ std::ostream& operator<< (std::ostream& stream,const Token& token){
 	return stream;
 }
 
-
-Lexer::Lexer(const char* source){
+Lexer::Lexer(const char* source) : location(0) {
 	ptr= source;
+}
+
+bool isDigit(char c){
+	return c>='0' && c<='9';
+}
+
+bool isLetter(char c){
+	return (c>='a' && c<='z') || (c>='A' && c<='Z') || c == '_';
 }
 
 Token Lexer::consume(){

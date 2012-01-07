@@ -1,6 +1,16 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+//to implement
+struct Location {
+private:
+	int lineNumber;
+public:
+
+	inline int line(){ return lineNumber; }
+	Location(int line);
+};
+
 struct Token {
 	union {
 		uint64 uinteger;
@@ -34,8 +44,11 @@ struct Lexer {
 	Token consume();
 	Token peek();
 
+	Location currentLocation(){ return location; }
+
 private:
 	const char* ptr;
+	Location location;
 };
 
 /*
