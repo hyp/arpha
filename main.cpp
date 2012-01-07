@@ -238,51 +238,6 @@ unittest(lexer){
 #undef expectEof
 }
 
-
-Token consume(const char** source){
-	const char* src=*source;
-	Token token;	
-	while((*src) <= ' ' && (*src)!='\0' && (*src)!='\n') src++; //skip spaces
-	
-	if( *src == '\n' || *src ==';'){
-		token.isEndExpression = true;
-		src++;			
-	}
-	else if(*src == '(' || *src==')' || *src == ',' || *src == '{' || *src == '}' || *src == ':'){
-		token.symbol = SymbolID(src,1);
-		src++;
-		token.isName = true;
-	}
-	else if( isDigit(*src)){
-		token.uinteger=0;
-		for(;isDigit(*src);src++)
-			token.uinteger = token.uinteger*10 + int((*src) -	'0');
-		token.isNumber = true;		
-	}
-	else if(*src=='\0') {
-		token.isEof = true;
-	}		
-	else if( isLetter(*src) ){
-		const char* start = src;
-		for(;(*src) > ' ' && (isLetter(*src) || isDigit(*src));src++);
-		token.symbol = SymbolID(start,src);
-		token.isName = true;
-	}else{
-		const char* start = src;
-		for(;(*src) > ' ' && (!isDigit(*src)) && (!isLetter(*src));src++);
-		token.symbol = SymbolID(start,src);
-		token.isName = true;	
-	}			
-	*source = src;
-	return token;			
-}
-
-Token peek(const char* source){
-	return consume(&source);
-}
-
-
-
 //parsing
 
 struct Expression;
@@ -299,16 +254,15 @@ struct ParseState {
 
 ParseState::ParseState(){ currentScope=0; }
 
-struct Parser {
-	const char** ptr;
-
+struct Parser : Lexer {
+	Scope* currentScope;
 	//Current parsing state
 	bool dontLookupNextSymbol;
 
 	//future proofing
 	int currentLocation(){ return 0; }
-
-	Parser(){ dontLookupNextSymbol = false; }
+	
+	Parser(const char* src,Scope* scope) : Lexer(src) { dontLookupNextSymbol = false;currentScope=scope; }
 
 	struct State {
 		const char* ptr;
@@ -318,19 +272,16 @@ struct Parser {
 
 	State getState(){
 		State state;
-		state.ptr = *ptr;
-		state.dontLookupNextSymbol = dontLookupNextSymbol;
+		//state.ptr = *ptr;
+		//state.dontLookupNextSymbol = dontLookupNextSymbol;
 		return state;
 	}
 	void restoreState(State& state){
-		*ptr = state.ptr;
+		//*ptr = state.ptr;
 		dontLookupNextSymbol = state.dontLookupNextSymbol;
 	}
 
 	size_t unresolvedExpressions,solvedExpressions;
-
-	Token consume();
-	Token peek();
 
 	void expect(SymbolID token);
 	bool match(SymbolID token);
@@ -710,14 +661,6 @@ Expression* Expression::lastChild(){
 		while(result->next) result = result->next;
 	}
 	return result;
-}
-
-Token Parser::consume(){
-	return ::consume(ptr);
-}
-
-Token Parser::peek(){
-	return ::peek(*ptr);
 }
 
 void Parser::expect(SymbolID token){
@@ -1272,11 +1215,13 @@ Expression* DefStatement::prefixParse(Parser* parser,ParseState state,Token){
 		Scope* oldScope= state.currentScope;
 		Type* returnType = arpha::Unresolved;
 		state.currentScope = bodyScope;
+		parser->currentScope = bodyScope;
 		if(parser->match("=")){
 			body = Return(bodyScope,parser->parse(state));
 		}else{
 			body = parser->parseBlock(bodyScope,state);
 		}
+		parser->currentScope = oldScope;
 		
 		
 		auto f = new Function(oldScope,name,argumentType,returnType,bodyScope,body);
@@ -1925,7 +1870,10 @@ Expression* Parser::parseBlock(Scope* newScope,ParseState state){
 }
 
 Expression* Parser::parse(ParseState state,int stickiness){
-
+	
+	if(state.currentScope != currentScope){
+		debug("Scope mismatch!");
+	}
 	Expression* expression;
 	Token token = consume();
 	//prefix
@@ -1995,9 +1943,7 @@ void arpha::test(){
 	Scope* scope = new Scope(arpha::globalScope);
 
 	auto f = [&scope](const char* str,Expression* expected,const char* file,int line){
-		Parser parser;
-		const char* ptr = str;
-		parser.ptr = &ptr;
+		Parser parser(str,scope);
 		ParseState state;
 		state.currentScope = scope;
 
@@ -2052,9 +1998,8 @@ void arpha::test(){
 int eval(const char* source){
 	Expression* node = (Expression*)1;
 	int result = 0;	
-	Parser parser;ParseState state;
+	Parser parser(source,arpha::globalScope);ParseState state;
 	state.currentScope = arpha::globalScope;
-	parser.ptr = &source;
 	while(node!=0){
 		node = parser.parse(state);
 		Token token = parser.consume();
