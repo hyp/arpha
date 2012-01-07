@@ -245,15 +245,6 @@ struct Scope;
 struct Definition;
 struct OverloadSet;
 
-struct ParseState {
-	Scope* currentScope;
-	
-
-	ParseState();
-};
-
-ParseState::ParseState(){ currentScope=0; }
-
 struct Parser : Lexer {
 	Scope* currentScope;
 	//Current parsing state
@@ -290,9 +281,9 @@ struct Parser : Lexer {
 	SymbolID expectName();
 	
 	/// Returns a raw expression, which may contain unresolved symbols
-	Expression* parse(ParseState state,int stickiness = 0);
+	Expression* parse(int stickiness = 0);
 
-	Expression* parseBlock(Scope* newScope,ParseState state);
+	Expression* parseBlock();
 
 	/// Resolve symbols, find the matching function call overloads, constant fold
 	Expression* evaluate(Expression*);
@@ -306,8 +297,8 @@ struct Definition {
 	SymbolID id;
 	int stickiness;
 
-	virtual Expression* prefixParse(Parser*,ParseState,Token);
-	virtual Expression* infixParse(Parser*,ParseState,Token,Expression*);
+	virtual Expression* prefixParse(Parser*,Token);
+	virtual Expression* infixParse(Parser*,Token,Expression*);
 
 	//Tries to resolve an unresolved expression
 	//Returns the given expression if resolving failed
@@ -373,7 +364,7 @@ struct Type: public Definition {
 	Type(Scope* scope,SymbolID name,size_t sz);
 
 	void add(Field field);
-	Expression* prefixParse(Parser*,ParseState,Token);
+	Expression* prefixParse(Parser*,Token);
 
 	//implicit type cast
 	bool canAssignFrom(Type* other);
@@ -450,7 +441,7 @@ struct Variable: public Definition {
 
 	Variable(Scope* scope,SymbolID name,Type* type);
 	
-	Expression* prefixParse(Parser*,ParseState,Token);
+	Expression* prefixParse(Parser*,Token);
 
 	void bindToConstant(Expression* expr);
 	Expression* bindedConstant();
@@ -504,8 +495,8 @@ struct OverloadSet: public Definition {
 	std::vector<Function*> functions;
 
 	OverloadSet(Scope* scope,SymbolID name);
-	Expression* prefixParse(Parser*,ParseState,Token);
-	Expression* infixParse(Parser*,ParseState,Token,Expression*);
+	Expression* prefixParse(Parser*,Token);
+	Expression* infixParse(Parser*,Token,Expression*);
 	bool isOverloadSet(){ return true; }
 
 	//Tries to resolve an unresolved expression using the set symbol hierarchy
@@ -541,7 +532,7 @@ Type::Field* Type::operator[](const SymbolID fieldName){
 struct Parentheses: public Definition {
 
 	Parentheses(SymbolID open,SymbolID close);
-	Expression* prefixParse(Parser*,ParseState,Token);
+	Expression* prefixParse(Parser*,Token);
 private:
 	SymbolID closer;
 };
@@ -549,13 +540,13 @@ private:
 //Behaves as .
 struct AccessOperator: public Definition {
 	AccessOperator(SymbolID name,int stickiness);
-	Expression* infixParse(Parser*,ParseState,Token,Expression*);
+	Expression* infixParse(Parser*,Token,Expression*);
 };
 
 //Behaves as ,
 struct ListOperator: public Definition {
 	ListOperator(SymbolID name,int stickiness);
-	Expression* infixParse(Parser*,ParseState,Token,Expression*);
+	Expression* infixParse(Parser*,Token,Expression*);
 };
 
 //Behaves as []
@@ -563,7 +554,7 @@ struct IndexOperator: public Definition {
 	SymbolID closingSymbol;
 
 	IndexOperator(SymbolID start,SymbolID end,int stickiness);
-	Expression* infixParse(Parser*,ParseState,Token,Expression*);
+	Expression* infixParse(Parser*,Token,Expression*);
 };
 
 //statement and prefix operator
@@ -571,34 +562,34 @@ struct IfMacro: public Definition {
 	SymbolID elseSymbol;
 	IfMacro(SymbolID ifSymbol,SymbolID elseSymbol,int stickiness);
 
-	Expression* infixParse(Parser*,ParseState,Token,Expression*);
+	Expression* infixParse(Parser*,Token,Expression*);
 };
 
 struct DefStatement: public Definition {
 	DefStatement(SymbolID name);
-	Expression* prefixParse(Parser*,ParseState,Token);
+	Expression* prefixParse(Parser*,Token);
 };
 
 struct TypeStatement : Definition {
 	TypeStatement();
-	Expression* prefixParse(Parser* parser,ParseState state,Token);
+	Expression* prefixParse(Parser* parser,Token);
 };
 
 struct VarStatement: public Definition {
 	VarStatement(SymbolID name);
-	Expression* prefixParse(Parser*,ParseState,Token);
+	Expression* prefixParse(Parser*,Token);
 };
 
 struct ReturnStatement: public Definition {
 	ReturnStatement() : Definition(0,"return") {}
-	Expression* prefixParse(Parser*,ParseState,Token);
+	Expression* prefixParse(Parser*,Token);
 };
 
 
 
 struct AssignmentOperator : public Definition {
 	AssignmentOperator(SymbolID name,int stickiness);
-	Expression* infixParse(Parser*,ParseState,Token,Expression*);
+	Expression* infixParse(Parser*,Token,Expression*);
 };
 
 //an expression
@@ -687,12 +678,12 @@ SymbolID Parser::expectName(){
 	return tok.symbol;
 }
 
-Expression* Definition::prefixParse(Parser*,ParseState,Token token){
+Expression* Definition::prefixParse(Parser*,Token token){
 	error(token,"Can't prefix parse %s!",token);
 	return 0;
 }
 
-Expression* Definition::infixParse(Parser*,ParseState,Token token,Expression*){
+Expression* Definition::infixParse(Parser*,Token token,Expression*){
 	error(token,"Can't prefix parse %s!",token);
 	return 0;
 }
@@ -713,8 +704,8 @@ Expression* Tuple(Expression* a,Expression* b);
 //Flattens the tuple
 Expression* flattenTuple(Expression* tuple);
 
-Expression* ListOperator::infixParse(Parser* parser,ParseState state,Token,Expression* prev){
-	return Tuple(prev,parser->parse(state,stickiness));
+Expression* ListOperator::infixParse(Parser* parser,Token,Expression* prev){
+	return Tuple(prev,parser->parse(stickiness));
 }
 
 //TODO functions arguments vector!
@@ -1053,24 +1044,24 @@ IndexOperator::IndexOperator(SymbolID start,SymbolID end,int stickiness) : Defin
 	closingSymbol = end;
 }
 
-Expression* IndexOperator::infixParse(Parser* parser,ParseState state,Token token,Expression* expr){
-	Expression* inner = parser->parse(state);
+Expression* IndexOperator::infixParse(Parser* parser,Token token,Expression* expr){
+	Expression* inner = parser->parse();
 	parser->expect(closingSymbol);
-	return Index(state.currentScope,expr,inner);
+	return Index(parser->currentScope,expr,inner);
 }
 
 AccessOperator::AccessOperator(SymbolID name,int stickiness) : Definition(0,name,stickiness){
 }
 
-Expression* AccessOperator::infixParse(Parser* parser,ParseState state,Token,Expression* expression){
+Expression* AccessOperator::infixParse(Parser* parser,Token,Expression* expression){
 	parser->dontLookupNextSymbol = true;//IMPORTANT
-	return Access(expression,parser->parse(state,stickiness));
+	return Access(expression,parser->parse(stickiness));
 }
 
-Expression* IfMacro::infixParse(Parser* parser,ParseState state,Token,Expression* a){
-	Expression* condition = parser->parse(state,0);
+Expression* IfMacro::infixParse(Parser* parser,Token,Expression* a){
+	Expression* condition = parser->parse();
 	parser->expect(elseSymbol);
-	Expression* b = parser->parse(state,0);
+	Expression* b = parser->parse();
 	return Match(condition,a);
 }
 
@@ -1078,9 +1069,9 @@ Parentheses::Parentheses(SymbolID open,SymbolID close) : Definition(0,open) {
 	closer= close;
 }
 
-Expression* Parentheses::prefixParse(Parser* parser,ParseState state,Token){
+Expression* Parentheses::prefixParse(Parser* parser,Token){
 	if(!parser->match(closer)){
-		Expression* e=parser->parse(state);
+		Expression* e=parser->parse();
 		parser->expect(closer);
 		return e;
 	}else return Constant(arpha::Nothing);
@@ -1089,13 +1080,13 @@ Expression* Parentheses::prefixParse(Parser* parser,ParseState state,Token){
 
 VarStatement::VarStatement(SymbolID name) : Definition(0,name) {}
 
-Expression* VarStatement::prefixParse(Parser* parser,ParseState state,Token){
+Expression* VarStatement::prefixParse(Parser* parser,Token){
 	Expression* tuple = 0;
 	std::vector<Variable*> vars;
 	do{
 		SymbolID name = parser->expectName();
-		Variable* var = new Variable(state.currentScope,name,arpha::Unresolved);
-		state.currentScope->define(var);
+		Variable* var = new Variable(parser->currentScope,name,arpha::Unresolved);
+		parser->currentScope->define(var);
 
 		if(tuple) tuple = Tuple(tuple,VariableReference(var));
 		else tuple = VariableReference(var);
@@ -1103,7 +1094,7 @@ Expression* VarStatement::prefixParse(Parser* parser,ParseState state,Token){
 	}while(parser->match(","));
 
 	auto st = parser->getState();
-	auto t = parser->evaluate(parser->parse(state,20));
+	auto t = parser->evaluate(parser->parse(20));
 	if(t->flags == Expression::TypeRef){
 		debug("the variables are of type %s",t->type->id);
 		for(auto i=vars.begin();i!=vars.end();++i){
@@ -1134,39 +1125,39 @@ Expression* Unresolved(Scope* scope,SymbolID symbol,Expression* children = 0){
 	return e;
 }
 
-Expression* Variable::prefixParse(Parser*,ParseState,Token){
+Expression* Variable::prefixParse(Parser*,Token){
 	return VariableReference(this);
 }
 
 AssignmentOperator::AssignmentOperator(SymbolID name,int stickiness) : Definition(0,name,stickiness) {
 }
 
-Expression* AssignmentOperator::infixParse(Parser* parser,ParseState state,Token,Expression* expression){
-	return Assignment(expression,parser->parse(state,stickiness-1)); //-1 for right associativity!
+Expression* AssignmentOperator::infixParse(Parser* parser,Token,Expression* expression){
+	return Assignment(expression,parser->parse(stickiness-1)); //-1 for right associativity!
 }
 
 struct Substitute: Definition {
 	Expression* substitute;
 
 	Substitute(Scope* scope,SymbolID name,Expression* expr) : Definition(scope,name,0) { substitute = expr; }
-	Expression* prefixParse(Parser* parser,ParseState state,Token);
+	Expression* prefixParse(Parser* parser,Token);
 	Expression* resolve(Expression*){ return substitute; }
 };
 
 TypeStatement::TypeStatement() : Definition(0,"type") {}
 
-Expression* TypeStatement::prefixParse(Parser* parser,ParseState state,Token){
+Expression* TypeStatement::prefixParse(Parser* parser,Token){
 	SymbolID name = parser->expectName();
-	return TypeReference(new Type(state.currentScope,name,0));
+	return TypeReference(new Type(parser->currentScope,name,0));
 }
 
 DefStatement::DefStatement(SymbolID name) : Definition(0,name) {}
 
 
 //facilitates the parsing of int32 or Arithmetic
-Expression* typeOrConstraint(Parser* parser,ParseState state){
+Expression* typeOrConstraint(Parser* parser){
 	auto loc = parser->currentLocation();
-	auto expr = parser->evaluate(parser->parse(state,1000));
+	auto expr = parser->evaluate(parser->parse(1000));
 	if(expr->flags != Expression::TypeRef){
 		if(expr->flags!=Expression::Unresolved) error(loc,"Expected a valid type or a function describing type's constraint!");
 		//TODO resolve the constraint function -> into OverloadSet yes! prob not as it has to expand in caller's scope
@@ -1175,12 +1166,12 @@ Expression* typeOrConstraint(Parser* parser,ParseState state){
 	return expr;
 }
 
-Expression* DefStatement::prefixParse(Parser* parser,ParseState state,Token){
+Expression* DefStatement::prefixParse(Parser* parser,Token){
 	SymbolID name = parser->expectName();
 	//Function
 	if( parser->match("(") ){
 		Type* argumentType = arpha::Nothing;
-		Scope* bodyScope = new Scope(state.currentScope);
+		Scope* bodyScope = new Scope(parser->currentScope);
 		std::vector<Function::Argument> arguments;
 		Variable* var;
 		if(!parser->match(")")){
@@ -1191,12 +1182,12 @@ Expression* DefStatement::prefixParse(Parser* parser,ParseState state,Token){
 				if(!parser->match(",")){
 					if(parser->match("->")){
 						
-						auto constr = typeOrConstraint(parser,state);
+						auto constr = typeOrConstraint(parser);
 						debug("Argument's type inferred as type with value constrainted to %s",constr->type->id);
 						arguments.back().variable.type   = arpha::type;
 						arguments.back().valueConstraint = constr->type;
 					}else{
-						Expression* type = parser->evaluate(parser->parse(state,1000));
+						Expression* type = parser->evaluate(parser->parse(1000));
 						if(type->flags != Expression::TypeRef) printf("Error: a valid type expected!\n");
 						arguments.back().variable.type = type->type;
 					}
@@ -1212,14 +1203,14 @@ Expression* DefStatement::prefixParse(Parser* parser,ParseState state,Token){
 			argumentType = Type::tuple(fields);
 		}
 		Expression* body;
-		Scope* oldScope= state.currentScope;
+		
 		Type* returnType = arpha::Unresolved;
-		state.currentScope = bodyScope;
+		Scope* oldScope= parser->currentScope;
 		parser->currentScope = bodyScope;
 		if(parser->match("=")){
-			body = Return(bodyScope,parser->parse(state));
+			body = Return(bodyScope,parser->parse());
 		}else{
-			body = parser->parseBlock(bodyScope,state);
+			body = parser->parseBlock();
 		}
 		parser->currentScope = oldScope;
 		
@@ -1237,7 +1228,7 @@ Expression* DefStatement::prefixParse(Parser* parser,ParseState state,Token){
 	//Or substitute
 	else{
 		parser->expect("=");
-		state.currentScope->define( new Substitute(state.currentScope,name,parser->parse(state)) );
+		parser->currentScope->define( new Substitute(parser->currentScope,name,parser->parse()) );
 	}
 	return Constant(arpha::Nothing);
 }
@@ -1249,12 +1240,12 @@ Expression* FunctionCall(Function* func,Expression* arguments){
 	return e;
 }
 
-Expression* ReturnStatement::prefixParse(Parser* parser,ParseState state,Token token){
-	return Return(state.currentScope,parser->isEndExpressionNext() ?  Constant(arpha::Nothing) : parser->parse(state));
+Expression* ReturnStatement::prefixParse(Parser* parser,Token token){
+	return Return(parser->currentScope,parser->isEndExpressionNext() ?  Constant(arpha::Nothing) : parser->parse());
 }
 
 
-Expression* Substitute::prefixParse(Parser* parser,ParseState state,Token){
+Expression* Substitute::prefixParse(Parser* parser,Token){
 	return Unresolved(scope,id);
 }
 
@@ -1348,21 +1339,21 @@ Expression* OverloadSet::resolve(Expression* expr){
 	return expr;
 }
 
-Expression* OverloadSet::prefixParse(Parser* parser,ParseState state,Token token){
+Expression* OverloadSet::prefixParse(Parser* parser,Token token){
 	if(parser->match("(")){
-		if(parser->match(")")) return Unresolved(state.currentScope,token.symbol,Constant(arpha::Nothing));
-		Expression * expr = Unresolved(state.currentScope,token.symbol,parser->parse(state,0));
+		if(parser->match(")")) return Unresolved(parser->currentScope,token.symbol,Constant(arpha::Nothing));
+		Expression * expr = Unresolved(parser->currentScope,token.symbol,parser->parse());
 		parser->expect(")");
 		return expr;
 	}
-	return Unresolved(state.currentScope,token.symbol);
+	return Unresolved(parser->currentScope,token.symbol);
 }
 
-Expression* OverloadSet::infixParse(Parser* parser,ParseState state,Token token,Expression* expr){
-	return Unresolved(state.currentScope,token.symbol,Tuple(expr,parser->parse(state,stickiness)));
+Expression* OverloadSet::infixParse(Parser* parser,Token token,Expression* expr){
+	return Unresolved(parser->currentScope,token.symbol,Tuple(expr,parser->parse(stickiness)));
 }
 
-Expression* Type::prefixParse(Parser* parser,ParseState state,Token){
+Expression* Type::prefixParse(Parser* parser,Token){
 	return TypeReference(this);
 }
 
@@ -1832,9 +1823,8 @@ void print(Expression* expr){
 }
 
 
-Expression* Parser::parseBlock(Scope* newScope,ParseState state){
+Expression* Parser::parseBlock(){
 	expect("{");
-	state.currentScope = newScope;
 	Expression* expr;
 	Expression* block = new Expression(Expression::Block,arpha::Nothing);
 	Expression* lastChild = 0;
@@ -1853,7 +1843,7 @@ Expression* Parser::parseBlock(Scope* newScope,ParseState state){
 			continue;
 		}
 
-		expr = parse(state);
+		expr = parse();
 		if(lastChild) lastChild->next = expr;
 		else block->children = expr;
 		lastChild = expr;
@@ -1869,11 +1859,8 @@ Expression* Parser::parseBlock(Scope* newScope,ParseState state){
 	return block;
 }
 
-Expression* Parser::parse(ParseState state,int stickiness){
+Expression* Parser::parse(int stickiness){
 	
-	if(state.currentScope != currentScope){
-		debug("Scope mismatch!");
-	}
 	Expression* expression;
 	Token token = consume();
 	//prefix
@@ -1883,16 +1870,16 @@ Expression* Parser::parse(ParseState state,int stickiness){
 		if(next.isName && next.symbol == SymbolID(":")){
 			consume();
 			debug("Named argument %s %s",token,next);
-			expression = Label(token.symbol,parse(state,16));
+			expression = Label(token.symbol,parse(16));
 		}else{
 			if(dontLookupNextSymbol){
-				expression = Unresolved(state.currentScope,token.symbol);
+				expression = Unresolved(currentScope,token.symbol);
 				dontLookupNextSymbol = false;
 			}
 			else{
-				Definition* parselet = state.currentScope->lookup(token.symbol);
+				Definition* parselet = currentScope->lookup(token.symbol);
 				if(!parselet) { error(token,"Can't prefix parse %s!",token); return 0; }
-				expression = parselet->prefixParse(this,state,token);
+				expression = parselet->prefixParse(this,token);
 			}
 		}
 	}
@@ -1906,8 +1893,8 @@ Expression* Parser::parse(ParseState state,int stickiness){
 	while(1){
 		token = peek();
 		if(token.isName){
-			Definition* parselet = state.currentScope->lookup(token.symbol);
-			if(parselet && stickiness < parselet->stickiness) expression = parselet->infixParse(this,state,consume(),expression);						
+			Definition* parselet = currentScope->lookup(token.symbol);
+			if(parselet && stickiness < parselet->stickiness) expression = parselet->infixParse(this,consume(),expression);						
 			else break;
 		}else break;	
 	}	
@@ -1944,10 +1931,8 @@ void arpha::test(){
 
 	auto f = [&scope](const char* str,Expression* expected,const char* file,int line){
 		Parser parser(str,scope);
-		ParseState state;
-		state.currentScope = scope;
 
-		Expression* expr = parser.parse(state);
+		Expression* expr = parser.parse();
 		expr = parser.evaluate(expr);
 
 		if(expected->sameAs(expr)){
@@ -1998,10 +1983,9 @@ void arpha::test(){
 int eval(const char* source){
 	Expression* node = (Expression*)1;
 	int result = 0;	
-	Parser parser(source,arpha::globalScope);ParseState state;
-	state.currentScope = arpha::globalScope;
+	Parser parser(source,arpha::globalScope);
 	while(node!=0){
-		node = parser.parse(state);
+		node = parser.parse();
 		Token token = parser.consume();
 		
 		if(!token.isEndExpression && token.isEof == false) error(token,"Error: ';' exprected!\n");
