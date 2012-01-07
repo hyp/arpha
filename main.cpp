@@ -1,19 +1,7 @@
-#include<stdio.h>
-#include<string.h>
-#include<math.h>
-#include <time.h>
-#include <vector>
-#include <string>
-#include <map>
-#include <exception>
-#include <sstream>
-#include <iostream>
+#include "common.h"
+#include "parser.h"
 
-typedef __int64 int64;
-typedef unsigned __int64 uint64;
-typedef unsigned int uint32;
 
-#define assert(what) ((what) ? (void)0 : _assert( __FILE__, __LINE__, (#what)))
 
 namespace testing {
 
@@ -24,10 +12,7 @@ namespace testing {
 	int iterations = 100;
 }
 
-template<typename F>
-void errorFunc(F f,std::string message){
-	std::cout<<"Error: "<<message<<std::endl;
-}
+
 
 void printFunc(std::string message){
 	std::cout<<message;
@@ -51,100 +36,20 @@ void _assert(const char* file, int line, const char* what) {
 
 #define unittest(name) void __unittest__##name(); testing::Unittest __Utest__##name(#name,& __unittest__##name); void __unittest__##name()
 
-std::string format(const char *s){
-	std::ostringstream stm;
-    while (*s) {
-        if (*s == '%' && *(++s) != '%')
-            throw std::runtime_error("invalid format string: missing arguments");
-		stm << *s++;
-    }
-	return stm.str();
-}
 
-//NoVariadicTemplatesInVC2010
-#define FmtBody(...) { std::ostringstream stm; while (*s) {  \
-        if (*s == '%' && *(++s) != '%') { \
-            stm << value; \
-            ++s; \
-            stm << format(s,__VA_ARGS__); \
-            return stm.str(); \
-        } \
-        stm << (*s++); \
-    } \
-    throw std::logic_error("extra arguments provided to format!"); \
-} 
-
-template<typename T>
-std::string format(const char *s, T value) FmtBody()
-template<typename T,typename T2>
-std::string format(const char *s, T value,T2 a) FmtBody(a)
-template<typename T,typename T2,typename T3>
-std::string format(const char *s, T value,T2 a,T3 b) FmtBody(a,b)
-template<typename T,typename T2,typename T3,typename T4>
-std::string format(const char *s, T value,T2 a,T3 b,T4 c) FmtBody(a,b,c)
-template<typename T,typename T2,typename T3,typename T4,typename T5>
-std::string format(const char *s, T value,T2 a,T3 b,T4 c,T5 d) FmtBody(a,b,d)
-
-#undef PrintFBody
 
 unittest(format) {
 	assert(format("Hello world") == "Hello world");
 	assert(format("A %d %s C %c B",12,"KIAI",'_') == "A 12 KIAI C _ B");
 }
 
-#define error(loc,...) errorFunc(loc,format(__VA_ARGS__))
-#define printf(...) printFunc(format(__VA_ARGS__))
-#define debug(...) debugPrint(format(__VA_ARGS__))
+
 
 
 
 //a table of unique symbols for fast symbol comparison
-struct SymbolTable {
 
-public:
-    struct Symbol {
-        Symbol* next;
-        size_t length;
-        char ptr[0];
-    };
-
-	SymbolTable();
-    ~SymbolTable();
-    Symbol* create(const char* src, size_t length);
-private:
-    enum {
-        hashTableLength = 64
-    };
-    Symbol* hashTable[hashTableLength];
-};
 SymbolTable symbols;
-
-struct SymbolID {
-
-	inline SymbolID() : symbol(0) {}
-	inline SymbolID(const char* begin,const char* end) { symbol=symbols.create(begin,size_t(end-begin)); }
-	inline SymbolID(const char* str,size_t length) { symbol=symbols.create(str,length); }
-	SymbolID(const char* str);
-
-	inline bool operator ==(const SymbolID& other) const {
-		return symbol == other.symbol;
-	}
-	inline bool operator !=(const SymbolID& other) const {
-		return symbol != other.symbol;
-	}
-	inline const char* ptr() const {
-		return symbol->ptr;
-	}
-	inline bool isNull() const{
-		return symbol == 0;
-	}
-	inline bool operator <(const SymbolID& other) const{
-		return symbol < other.symbol;
-	}
-private:
-	SymbolTable::Symbol* symbol;
-};
-
 std::ostream& operator<< (std::ostream& stream,const SymbolID symbol){
 	return stream<<symbol.ptr();
 }
@@ -230,26 +135,11 @@ bool isLetter(char c){
 	return (c>='a' && c<='z') || (c>='A' && c<='Z') || c == '_';
 }
 
-struct Token {
-	union {
-		uint64 uinteger;
-		double real;
-	};
-	SymbolID symbol;	
-	bool isNumber;
-	bool isString;
-	bool isName;
-	bool isEof;
-	bool isEndExpression;	
-	//future proofing
-	int location;
-	
-	Token(){
-		isEndExpression=isNumber=isName=isEof=false;	
-		uinteger = 0;	
-	}
-						
-};
+
+Token::Token(){
+	isEndExpression=isNumber=isName=isEof=false;	
+	uinteger = 0;	
+}
 
 std::ostream& operator<< (std::ostream& stream,const Token& token){
 	if(token.isName) stream<<token.symbol.ptr();
@@ -258,6 +148,82 @@ std::ostream& operator<< (std::ostream& stream,const Token& token){
 	else if(token.isEof) stream<<"EOF";
 	else assert(false);
 	return stream;
+}
+
+
+Lexer::Lexer(const char* source){
+	ptr= source;
+}
+
+Token Lexer::consume(){
+	Token token;	
+	while((*ptr) <= ' ' && (*ptr)!='\0' && (*ptr)!='\n') ptr++; //skip spaces
+	
+	if( *ptr == '\n' || *ptr ==';'){
+		token.isEndExpression = true;
+		ptr++;			
+	}
+	else if(*ptr == '(' || *ptr==')' || *ptr == ',' || *ptr == '{' || *ptr == '}' || *ptr == ':'){
+		token.symbol = SymbolID(ptr,1);
+		ptr++;
+		token.isName = true;
+	}
+	else if( isDigit(*ptr)){
+		token.uinteger=0;
+		for(;isDigit(*ptr);ptr++)
+			token.uinteger = token.uinteger*10 + int((*ptr) -	'0');
+		token.isNumber = true;		
+	}
+	else if(*ptr=='\0') {
+		token.isEof = true;
+	}		
+	else if( isLetter(*ptr) ){
+		const char* start = ptr;
+		for(;(*ptr) > ' ' && (isLetter(*ptr) || isDigit(*ptr));ptr++);
+		token.symbol = SymbolID(start,ptr);
+		token.isName = true;
+	}else{
+		const char* start = ptr;
+		for(;(*ptr) > ' ' && (!isDigit(*ptr)) && (!isLetter(*ptr));ptr++);
+		token.symbol = SymbolID(start,ptr);
+		token.isName = true;	
+	}			
+	return token;		
+}
+
+Token Lexer::peek(){
+	auto ptr2 = ptr;
+	auto t = consume();
+	ptr = ptr2;
+	return t;
+}
+
+unittest(lexer){
+	Token token;
+#define expectSymbol(which) token = lexer.consume();assert(token.isSymbol() && token.symbol==SymbolID(which))
+#define expectUinteger(n) token = lexer.consume();assert(token.isUinteger() && token.uinteger == n)
+#define expectEof() token = lexer.consume();assert(token.isEOF())
+	
+	auto lexer = Lexer("foo 2 =");
+	expectSymbol("foo");
+	expectUinteger(2);
+	expectSymbol("=");
+	expectEof();
+
+	lexer = Lexer("a_b bar + 5 - 7");
+	expectSymbol("a_b");
+	expectSymbol("bar");
+	expectSymbol("+");
+	expectUinteger(5);
+	expectSymbol("-");
+	expectUinteger(7);
+	expectEof();
+
+	//clean up
+	symbols.~SymbolTable();
+#undef expectSymbol
+#undef expectUinteger
+#undef expectEof
 }
 
 
