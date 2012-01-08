@@ -69,9 +69,12 @@ struct Parser : Lexer {
 	void restoreState(State& state);
 
 	void expect(SymbolID token);
-	bool match(SymbolID token);
-	bool isEndExpressionNext();
 	SymbolID expectName();
+
+	bool match(SymbolID token);
+	bool match(int tokenType);
+
+	bool isEndExpressionNext();
 	
 	/// Returns a raw expression, which may contain unresolved symbols
 	Expression* parse(int stickiness = 0);
@@ -87,6 +90,33 @@ struct Parser : Lexer {
 	size_t unresolvedExpressions,solvedExpressions;
 };
 
+//Defines how to parse a name
+struct Definition {
+	
+
+	virtual Expression* prefixParse(Parser*,Token);
+	virtual Expression* infixParse(Parser*,Token,Expression*);
+
+	//Tries to resolve an unresolved expression
+	//Returns the given expression if resolving failed
+	virtual Expression* resolve(Expression* expr) ;
+
+	virtual bool isOverloadSet();
+	
+	Definition(Scope* scp,SymbolID name);
+	Definition(Scope* scp,SymbolID name,int sticky);
+
+	Location location() const;
+
+	SymbolID id;
+	int stickiness;
+	Scope* scope;
+	int lineNumber; //location
+
+protected:
+	OverloadSet* getSet();
+};
+
 struct Scope {
 
 	Scope(Scope* parent);
@@ -100,5 +130,12 @@ private:
 	std::map<SymbolID,Definition*>  definitions;
 };
 
+//simple expression substitution - def pi = 3.14 - status: expressionwise 100% , def parser 40% (need multiples)
+struct Substitute: Definition {
+	Substitute(Scope* scope,SymbolID name,Location location,Expression* expr);
+	Expression* prefixParse(Parser* parser,Token);
+private:
+	Expression* substitute;
+};
 
 #endif

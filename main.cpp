@@ -169,6 +169,7 @@ Token Lexer::consume(){
 	while((*ptr) <= ' ' && (*ptr)!='\0' && (*ptr)!='\n') ptr++; //skip spaces
 	
 	if( *ptr == '\n' || *ptr ==';'){
+		if(*ptr == '\n') location = Location(location.line()+1);
 		token.type = Token::EndExpression;
 		ptr++;			
 	}
@@ -258,36 +259,24 @@ void Parser::restoreState(Parser::State& state){
 }
 
 
+Expression* Definition::resolve(Expression* expr) { return expr; }
 
-//Defines how to parse a name
-struct Definition {
-	SymbolID id;
-	int stickiness;
-	Scope* scope;
-	int lineNumber;
-	
+bool Definition::isOverloadSet(){ return false; }
 
-	virtual Expression* prefixParse(Parser*,Token);
-	virtual Expression* infixParse(Parser*,Token,Expression*);
+Definition::Definition(Scope* scp,SymbolID name){ scope=scp;id=name;stickiness = -1;lineNumber = 0; }	
 
-	//Tries to resolve an unresolved expression
-	//Returns the given expression if resolving failed
-	virtual Expression* resolve(Expression* expr) { return expr; }
+Definition::Definition(Scope* scp,SymbolID name,int sticky){ scope=scp;id=name;stickiness = sticky;lineNumber = 0; }
 
-	virtual bool isOverloadSet(){ return false; }
-	
-	Definition(Scope* scp,SymbolID name){ scope=scp;id=name;stickiness = -1; }	
-	Definition(Scope* scp,SymbolID name,int sticky){ scope=scp;id=name;stickiness = sticky; }
-
-protected:
-	OverloadSet* getSet();
-};
-
+Location Definition::location() const{
+	return Location(lineNumber);
+}
 
 Scope::Scope(Scope* parent){
 	this->parent = parent;
 }
 void Scope::define(Definition* definition){
+	auto alreadyDefined = contains(definition->id);
+	if(alreadyDefined) error(alreadyDefined->location(),"%s is already defined as %s at line %s",definition->id,alreadyDefined->id,alreadyDefined->location().line());
 	definitions[definition->id]=definition;
 }
 Definition* Scope::lookup(SymbolID name){
@@ -348,7 +337,7 @@ unittest(scope){
 	assert(!scope->lookup("foo"));
 	assert(!scope->contains("foo"));
 
-	auto t = new Type(scope,"foo",0);
+	auto t = new Type(scope,"foo",0); // replace with substitute
 	scope->define(t);
 	assert(scope->lookup("foo") == t);
 	assert(scope->contains("foo") == t);
@@ -643,6 +632,14 @@ bool Parser::match(SymbolID token){
 	return true;
 }
 
+bool Parser::match(int tokenType){
+	assert(tokenType >= Token::Symbol && tokenType <= Token::Eof); 
+	Token tok = peek();
+	if(tok.type != tokenType) return false;
+	consume();
+	return true;
+}
+
 bool Parser::isEndExpressionNext(){
 	Token tok = peek();
 	if(!tok.isEndExpression()) return false;
@@ -654,6 +651,8 @@ SymbolID Parser::expectName(){
 	if(tok.isSymbol()==false) error(previousLocation(),"A valid name is expected!");
 	return tok.symbol;
 }
+
+
 
 Expression* Definition::prefixParse(Parser* parser,Token token){
 	error(parser->previousLocation(),"Can't prefix parse %s!",token);
@@ -823,7 +822,7 @@ namespace arpha {
 		c->add(Type::Field(c,"bar"));
 		scope->define(new Variable(scope,"foo",c));
 		new Function(scope,"field",Nothing,Nothing,0,0);
-		new Function(scope,"bar",Nothing,Nothing,0,0);
+		//new Function(scope,"bar",Nothing,Nothing,0,0);
 
 		auto v = new Variable(scope,"bar",float64);
 		Expression* expr = new Expression(Expression::Constant,constant);
@@ -1111,13 +1110,15 @@ Expression* AssignmentOperator::infixParse(Parser* parser,Token,Expression* expr
 	return Assignment(expression,parser->parse(stickiness-1)); //-1 for right associativity!
 }
 
-struct Substitute: Definition {
-	Expression* substitute;
 
-	Substitute(Scope* scope,SymbolID name,Expression* expr) : Definition(scope,name,0) { substitute = expr; }
-	Expression* prefixParse(Parser* parser,Token);
-	Expression* resolve(Expression*){ return substitute; }
-};
+Substitute::Substitute(Scope* scope,SymbolID name,Location location,Expression* expr) : Definition(scope,name,0) { 
+	substitute = expr; 
+}
+Expression* Substitute::prefixParse(Parser* parser,Token){
+	return substitute;
+}
+
+
 
 TypeStatement::TypeStatement() : Definition(0,"type") {}
 
@@ -1203,7 +1204,7 @@ Expression* DefStatement::prefixParse(Parser* parser,Token){
 	//Or substitute
 	else{
 		parser->expect("=");
-		parser->currentScope->define( new Substitute(parser->currentScope,name,parser->parse()) );
+		parser->currentScope->define( new Substitute(parser->currentScope,name,parser->previousLocation(),parser->parse()) );
 	}
 	return Constant(arpha::Nothing);
 }
@@ -1220,9 +1221,7 @@ Expression* ReturnStatement::prefixParse(Parser* parser,Token token){
 }
 
 
-Expression* Substitute::prefixParse(Parser* parser,Token){
-	return Unresolved(scope,id);
-}
+
 
 
 OverloadSet::OverloadSet(Scope* scope,SymbolID name): Definition(scope,name) {
@@ -1942,7 +1941,7 @@ void arpha::test(){
 	}
 
 	//substitute
-	scope->define( new Substitute(scope,"magicNumber",Constant(::uint64(0xDEADBEEF))));
+	scope->define( new Substitute(scope,"magicNumber",Location(0),Constant(::uint64(0xDEADBEEF))));
 	ensure("magicNumber",Constant(::uint64(0xDEADBEEF)));
 
 	//.
