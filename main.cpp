@@ -265,6 +265,10 @@ bool Definition::isOverloadSet(){ return false; }
 
 Definition::Definition(Scope* scp,SymbolID name){ scope=scp;id=name;stickiness = -1;lineNumber = 0; }	
 
+Definition::Definition(Scope* scp,SymbolID name,Location location,int sticky ){
+	scope=scp;id=name;stickiness = sticky;lineNumber = location.line();
+}
+
 Definition::Definition(Scope* scp,SymbolID name,int sticky){ scope=scp;id=name;stickiness = sticky;lineNumber = 0; }
 
 Location Definition::location() const{
@@ -1111,7 +1115,8 @@ Expression* AssignmentOperator::infixParse(Parser* parser,Token,Expression* expr
 }
 
 
-Substitute::Substitute(Scope* scope,SymbolID name,Location location,Expression* expr) : Definition(scope,name,0) { 
+Substitute::Substitute(Scope* scope,SymbolID name,Location location,Expression* expr) : Definition(scope,name,location) { 
+	assert(expr);
 	substitute = expr; 
 }
 Expression* Substitute::prefixParse(Parser* parser,Token){

@@ -104,6 +104,7 @@ struct Definition {
 	virtual bool isOverloadSet();
 	
 	Definition(Scope* scp,SymbolID name);
+	Definition(Scope* scp,SymbolID name,Location location,int sticky = -1);
 	Definition(Scope* scp,SymbolID name,int sticky);
 
 	Location location() const;
