@@ -11,6 +11,8 @@ public:
 	Location(int line);
 };
 
+void errorFunc(Location& location,std::string message);
+
 struct Token {
 	union {
 		uint64 uinteger;
@@ -25,8 +27,6 @@ struct Token {
 	bool isName;
 	bool isEof;
 	bool isEndExpression;	
-	//future proofing
-	int location;
 	
 	
 
@@ -45,8 +45,9 @@ struct Lexer {
 	Token peek();
 
 	Location currentLocation(){ return location; }
+	Location previousLocation(){ return location; }
 
-private:
+protected:
 	const char* ptr;
 	Location location;
 };

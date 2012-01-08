@@ -56,10 +56,6 @@ std::string format(const char *s, T value,T2 a,T3 b,T4 c,T5 d) FmtBody(a,b,d)
 
 #undef FmtBody
 
-template<typename F>
-void errorFunc(F f,std::string message){
-	std::cout<<"Error: "<<message<<std::endl;
-}
 void printFunc(std::string message);
 void debugPrint(std::string message);
 

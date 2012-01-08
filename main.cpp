@@ -12,7 +12,9 @@ namespace testing {
 	int iterations = 100;
 }
 
-
+void errorFunc(Location& location,std::string message){
+	std::cout<<"Error @"<<location.line()<<" : "<<message<<std::endl;
+}
 
 void printFunc(std::string message){
 	std::cout<<message;
@@ -246,31 +248,29 @@ struct Definition;
 struct OverloadSet;
 
 struct Parser : Lexer {
-	Scope* currentScope;
 	//Current parsing state
+	Scope* currentScope;
 	bool dontLookupNextSymbol;
-
-	//future proofing
-	int currentLocation(){ return 0; }
-	
-	Parser(const char* src,Scope* scope) : Lexer(src) { dontLookupNextSymbol = false;currentScope=scope; }
 
 	struct State {
 		const char* ptr;
 		bool dontLookupNextSymbol;
-
 	};
-
 	State getState(){
 		State state;
-		//state.ptr = *ptr;
-		//state.dontLookupNextSymbol = dontLookupNextSymbol;
+		state.ptr = ptr;
+		state.dontLookupNextSymbol = dontLookupNextSymbol;
 		return state;
 	}
 	void restoreState(State& state){
-		//*ptr = state.ptr;
+		ptr = state.ptr;
 		dontLookupNextSymbol = state.dontLookupNextSymbol;
 	}
+
+	
+	Parser(const char* src,Scope* scope) : Lexer(src) { dontLookupNextSymbol = false;currentScope=scope; }
+
+
 
 	size_t unresolvedExpressions,solvedExpressions;
 
@@ -291,11 +291,15 @@ struct Parser : Lexer {
 
 
 
+
+
 //Defines how to parse a name
 struct Definition {
-	Scope* scope;
 	SymbolID id;
 	int stickiness;
+	Scope* scope;
+	int lineNumber;
+	
 
 	virtual Expression* prefixParse(Parser*,Token);
 	virtual Expression* infixParse(Parser*,Token,Expression*);
@@ -656,7 +660,7 @@ Expression* Expression::lastChild(){
 
 void Parser::expect(SymbolID token){
 	Token tok = consume();
-	if(tok.isName==false || tok.symbol!=token) error(tok,"'%s' expected!",token);
+	if(tok.isName==false || tok.symbol!=token) error(previousLocation(),"'%s' expected!",token);
 }
 
 bool Parser::match(SymbolID token){
@@ -674,17 +678,17 @@ bool Parser::isEndExpressionNext(){
 
 SymbolID Parser::expectName(){
 	Token tok = consume();
-	if(tok.isName==false) error(tok,"A valid name is expected!");
+	if(tok.isName==false) error(previousLocation(),"A valid name is expected!");
 	return tok.symbol;
 }
 
-Expression* Definition::prefixParse(Parser*,Token token){
-	error(token,"Can't prefix parse %s!",token);
+Expression* Definition::prefixParse(Parser* parser,Token token){
+	error(parser->previousLocation(),"Can't prefix parse %s!",token);
 	return 0;
 }
 
-Expression* Definition::infixParse(Parser*,Token token,Expression*){
-	error(token,"Can't prefix parse %s!",token);
+Expression* Definition::infixParse(Parser* parser,Token token,Expression*){
+	error(parser->previousLocation(),"Can't prefix parse %s!",token);
 	return 0;
 }
 
@@ -1835,7 +1839,7 @@ Expression* Parser::parseBlock(){
 			break;
 		}
 		if(token.isEof){
-			error(token,"EOF reached without the matching '}'");
+			error(previousLocation(),"EOF reached without the matching '}'");
 			break;
 		}
 		if(token.isEndExpression){
@@ -1851,10 +1855,10 @@ Expression* Parser::parseBlock(){
 		token = consume();
 		if(token.isName && token.symbol == SymbolID("}")) break;
 		if(token.isEof){
-			error(token,"EOF reached without the matching '}'");
+			error(previousLocation(),"EOF reached without the matching '}'");
 			break;
 		}
-		if(!token.isEndExpression) error(token,"';' expected!");
+		if(!token.isEndExpression) error(previousLocation(),"';' expected!");
 	}
 	return block;
 }
@@ -1878,13 +1882,13 @@ Expression* Parser::parse(int stickiness){
 			}
 			else{
 				Definition* parselet = currentScope->lookup(token.symbol);
-				if(!parselet) { error(token,"Can't prefix parse %s!",token); return 0; }
+				if(!parselet) { error(previousLocation(),"Can't prefix parse %s!",token); return 0; }
 				expression = parselet->prefixParse(this,token);
 			}
 		}
 	}
 	else {
-		error(token,"Can't parse %s!",token);
+		error(previousLocation(),"Can't parse %s!",token);
 		return 0;
 	}
 
@@ -1988,7 +1992,7 @@ int eval(const char* source){
 		node = parser.parse();
 		Token token = parser.consume();
 		
-		if(!token.isEndExpression && token.isEof == false) error(token,"Error: ';' exprected!\n");
+		if(!token.isEndExpression && token.isEof == false) error(parser.previousLocation(),"Error: ';' exprected!\n");
 		if(node){
 			node = evalAll(&parser,node);
 		}
