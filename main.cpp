@@ -1,6 +1,6 @@
 #include "common.h"
 #include "parser.h"
-
+#include "arpha.h"
 
 
 namespace testing {
@@ -13,7 +13,7 @@ namespace testing {
 }
 
 void errorFunc(Location& location,std::string message){
-	std::cout<<"Error @"<<location.line()<<" : "<<message<<std::endl;
+	std::cout<<'('<<location.line()<<')'<<": Error: "<<message<<std::endl;
 }
 
 void printFunc(std::string message){
@@ -139,15 +139,15 @@ unittest(location){
 }
 
 Token::Token(){
-	isEndExpression=isNumber=isName=isEof=false;	
+	type = -1;	
 	uinteger = 0;	
 }
 
 std::ostream& operator<< (std::ostream& stream,const Token& token){
-	if(token.isName) stream<<token.symbol.ptr();
-	else if(token.isNumber) stream<<token.uinteger;
-	else if(token.isEndExpression) stream<<"';'";
-	else if(token.isEof) stream<<"EOF";
+	if(token.isSymbol()) stream<<token.symbol.ptr();
+	else if(token.isUinteger()) stream<<token.uinteger;
+	else if(token.isEndExpression()) stream<<"';'";
+	else if(token.isEOF()) stream<<"EOF";
 	else assert(false);
 	return stream;
 }
@@ -169,33 +169,33 @@ Token Lexer::consume(){
 	while((*ptr) <= ' ' && (*ptr)!='\0' && (*ptr)!='\n') ptr++; //skip spaces
 	
 	if( *ptr == '\n' || *ptr ==';'){
-		token.isEndExpression = true;
+		token.type = Token::EndExpression;
 		ptr++;			
 	}
 	else if(*ptr == '(' || *ptr==')' || *ptr == ',' || *ptr == '{' || *ptr == '}' || *ptr == ':'){
 		token.symbol = SymbolID(ptr,1);
 		ptr++;
-		token.isName = true;
+		token.type = Token::Symbol;
 	}
 	else if( isDigit(*ptr)){
 		token.uinteger=0;
 		for(;isDigit(*ptr);ptr++)
 			token.uinteger = token.uinteger*10 + int((*ptr) -	'0');
-		token.isNumber = true;		
+		token.type = Token::Uinteger;	
 	}
 	else if(*ptr=='\0') {
-		token.isEof = true;
+		token.type = Token::Eof;	
 	}		
 	else if( isLetter(*ptr) ){
 		const char* start = ptr;
 		for(;(*ptr) > ' ' && (isLetter(*ptr) || isDigit(*ptr));ptr++);
 		token.symbol = SymbolID(start,ptr);
-		token.isName = true;
+		token.type = Token::Symbol;
 	}else{
 		const char* start = ptr;
 		for(;(*ptr) > ' ' && (!isDigit(*ptr)) && (!isLetter(*ptr));ptr++);
 		token.symbol = SymbolID(start,ptr);
-		token.isName = true;	
+		token.type = Token::Symbol;	
 	}			
 	return token;		
 }
@@ -242,54 +242,20 @@ unittest(lexer){
 
 //parsing
 
-struct Expression;
-struct Scope;
-struct Definition;
-struct OverloadSet;
 
-struct Parser : Lexer {
-	//Current parsing state
-	Scope* currentScope;
-	bool dontLookupNextSymbol;
 
-	struct State {
-		const char* ptr;
-		bool dontLookupNextSymbol;
-	};
-	State getState(){
+
+Parser::Parser(const char* src,Scope* scope) : Lexer(src) { dontLookupNextSymbol = false;currentScope=scope; }
+Parser::State Parser::getState(){
 		State state;
 		state.ptr = ptr;
 		state.dontLookupNextSymbol = dontLookupNextSymbol;
 		return state;
-	}
-	void restoreState(State& state){
+}
+void Parser::restoreState(Parser::State& state){
 		ptr = state.ptr;
 		dontLookupNextSymbol = state.dontLookupNextSymbol;
-	}
-
-	
-	Parser(const char* src,Scope* scope) : Lexer(src) { dontLookupNextSymbol = false;currentScope=scope; }
-
-
-
-	size_t unresolvedExpressions,solvedExpressions;
-
-	void expect(SymbolID token);
-	bool match(SymbolID token);
-	bool isEndExpressionNext();
-
-	SymbolID expectName();
-	
-	/// Returns a raw expression, which may contain unresolved symbols
-	Expression* parse(int stickiness = 0);
-
-	Expression* parseBlock();
-
-	/// Resolve symbols, find the matching function call overloads, constant fold
-	Expression* evaluate(Expression*);
-};
-
-
+}
 
 
 
@@ -317,17 +283,6 @@ protected:
 	OverloadSet* getSet();
 };
 
-struct Scope {
-
-	std::map<SymbolID,Definition*>  definitions;
-	Scope* parent;
-	Definition* owner;
-
-	Scope(Scope* parent);
-	void define(Definition* definition);
-	Definition* lookup(SymbolID name);
-	Definition* contains(SymbolID name);
-};
 
 Scope::Scope(Scope* parent){
 	this->parent = parent;
@@ -346,6 +301,8 @@ Definition* Scope::contains(SymbolID name){
 	if (var != definitions.end()) return var->second;
 	return 0;
 }
+
+
 
 struct Type: public Definition {
 	OverloadSet* set;
@@ -385,6 +342,22 @@ struct Type: public Definition {
 private:
 	Type(SymbolID name,size_t sz);
 };
+
+unittest(scope){
+	auto scope = new Scope(0);
+	assert(!scope->lookup("foo"));
+	assert(!scope->contains("foo"));
+
+	auto t = new Type(scope,"foo",0);
+	scope->define(t);
+	assert(scope->lookup("foo") == t);
+	assert(scope->contains("foo") == t);
+
+	delete t;
+	delete scope;
+	//clean up
+	symbols.~SymbolTable();
+}
 
 Type::Field::Field(Type* type,SymbolID name){ this->type=type;this->name=name; }
 bool Type::Field::isUnnamed(){
@@ -660,25 +633,25 @@ Expression* Expression::lastChild(){
 
 void Parser::expect(SymbolID token){
 	Token tok = consume();
-	if(tok.isName==false || tok.symbol!=token) error(previousLocation(),"'%s' expected!",token);
+	if(tok.isSymbol()==false || tok.symbol!=token) error(previousLocation(),"'%s' expected!",token);
 }
 
 bool Parser::match(SymbolID token){
 	Token tok = peek();
-	if(tok.isName==false || tok.symbol!=token) return false;
+	if(tok.isSymbol()==false || tok.symbol!=token) return false;
 	consume();
 	return true;
 }
 
 bool Parser::isEndExpressionNext(){
 	Token tok = peek();
-	if(!tok.isEndExpression) return false;
+	if(!tok.isEndExpression()) return false;
 	return true;
 }
 
 SymbolID Parser::expectName(){
 	Token tok = consume();
-	if(tok.isName==false) error(previousLocation(),"A valid name is expected!");
+	if(tok.isSymbol()==false) error(previousLocation(),"A valid name is expected!");
 	return tok.symbol;
 }
 
@@ -806,14 +779,12 @@ namespace arpha {
 		return type==int32 || type==uint32 || type == int64 || type == uint64 || type==int16 || type==uint16 || type==int8 || type==uint8 || type == float32 || type ==float64 || type==boolean;
 	}
 
-	void test();
-
 
 
 	void init(){
 		scope = new Scope(0);
-		globalScope = new Scope(0);
-		globalScope->parent = scope;
+		globalScope = new Scope(scope);
+		//globalScope->parent = scope;
 
 		globalScope->define(new Parentheses(SymbolID("("),SymbolID(")")));
 		globalScope->define(new ListOperator(SymbolID(","),15));
@@ -1834,15 +1805,15 @@ Expression* Parser::parseBlock(){
 	Expression* lastChild = 0;
 	while(1){
 		Token token = peek();
-		if(token.isName && token.symbol == SymbolID("}")){
+		if(token.isSymbol() && token.symbol == SymbolID("}")){
 			consume();
 			break;
 		}
-		if(token.isEof){
+		if(token.isEOF()){
 			error(previousLocation(),"EOF reached without the matching '}'");
 			break;
 		}
-		if(token.isEndExpression){
+		if(token.isEndExpression()){
 			consume();
 			continue;
 		}
@@ -1853,12 +1824,12 @@ Expression* Parser::parseBlock(){
 		lastChild = expr;
 
 		token = consume();
-		if(token.isName && token.symbol == SymbolID("}")) break;
-		if(token.isEof){
+		if(token.isSymbol() && token.symbol == SymbolID("}")) break;
+		if(token.isEOF()){
 			error(previousLocation(),"EOF reached without the matching '}'");
 			break;
 		}
-		if(!token.isEndExpression) error(previousLocation(),"';' expected!");
+		if(!token.isEndExpression()) error(previousLocation(),"';' expected!");
 	}
 	return block;
 }
@@ -1868,10 +1839,10 @@ Expression* Parser::parse(int stickiness){
 	Expression* expression;
 	Token token = consume();
 	//prefix
-	if(token.isNumber) expression = Constant(token.uinteger);
-	else if(token.isName){
+	if(token.isUinteger()) expression = Constant(token.uinteger);
+	else if(token.isSymbol()){
 		auto next = peek();
-		if(next.isName && next.symbol == SymbolID(":")){
+		if(next.isSymbol() && next.symbol == SymbolID(":")){
 			consume();
 			debug("Named argument %s %s",token,next);
 			expression = Label(token.symbol,parse(16));
@@ -1896,7 +1867,7 @@ Expression* Parser::parse(int stickiness){
 	//Token token;
 	while(1){
 		token = peek();
-		if(token.isName){
+		if(token.isSymbol()){
 			Definition* parselet = currentScope->lookup(token.symbol);
 			if(parselet && stickiness < parselet->stickiness) expression = parselet->infixParse(this,consume(),expression);						
 			else break;
@@ -1992,11 +1963,11 @@ int eval(const char* source){
 		node = parser.parse();
 		Token token = parser.consume();
 		
-		if(!token.isEndExpression && token.isEof == false) error(parser.previousLocation(),"Error: ';' exprected!\n");
+		if(!token.isEndExpression() && token.isEOF() == false) error(parser.previousLocation(),"Error: ';' exprected!\n");
 		if(node){
 			node = evalAll(&parser,node);
 		}
-		if(token.isEof) break;
+		if(token.isEOF()) break;
 	}
 	return result;							 				
 }
