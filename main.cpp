@@ -483,7 +483,6 @@ struct OverloadSet: public Definition {
 
 	OverloadSet(Scope* scope,SymbolID name);
 	Expression* prefixParse(Parser*,Token);
-	Expression* infixParse(Parser*,Token,Expression*);
 	bool isOverloadSet(){ return true; }
 
 	//Tries to resolve an unresolved expression using the set symbol hierarchy
@@ -501,11 +500,13 @@ struct OverloadSet: public Definition {
 
 
 
-//Behaves as ( ... )
+//Prefix - returns expression inside the parenthesis
+//infix  - applies to an unresolved expression as a function call
 struct Parentheses: public Definition {
 
 	Parentheses(SymbolID open,SymbolID close);
 	Expression* prefixParse(Parser*,Token);
+	Expression* infixParse(Parser*,Token,Expression*);
 private:
 	SymbolID closer;
 };
@@ -572,6 +573,7 @@ struct Expression {
 		FunctionCall, //f()
 		TypeRef,      //int32
 		Tuple, //a,b
+		OverloadSetRef,
 		Unresolved, //somethingNotDefinedYet //overloadableFunc(x,y) -- If children are present this is unresolved function call else it's an unresolved symbol
 		VariableRef,//x
 		Assignment, //x = 5
@@ -600,6 +602,7 @@ struct Expression {
 	SymbolID symbol;
 	union {
 		Type* constantType;
+		OverloadSet* set;
 	};
 	Expression* children;
 	Expression* next;
@@ -757,14 +760,14 @@ namespace arpha {
 
 
 	void basicFunctions(){
-		add= ArithmeticFunction(scope,"+",2,30);
-		sub= ArithmeticFunction(scope,"-",2,30);
-		mul= ArithmeticFunction(scope,"*",2,35);
-		divide= ArithmeticFunction(scope,"/",2,35);
-		mod= ArithmeticFunction(scope,"%",2,35);
-		plus= ArithmeticFunction(globalScope,"+",1);
-		minus= ArithmeticFunction(globalScope,"-",1,-1,true);
-		equals = ComparisonFunction(scope,"==",25);
+		add= ArithmeticFunction(scope,"add",2,30);
+		sub= ArithmeticFunction(scope,"subtract",2,30);
+		mul= ArithmeticFunction(scope,"multiply",2,35);
+		divide= ArithmeticFunction(scope,"divide",2,35);
+		mod= ArithmeticFunction(scope,"mod",2,35);
+		plus= ArithmeticFunction(globalScope,"plus",1);
+		minus= ArithmeticFunction(globalScope,"minus",1,-1,true);
+		equals = ComparisonFunction(scope,"equals",25);
 	}
 
 	Type* builtInType(const char* name,int size){
@@ -1047,6 +1050,9 @@ Expression* Parentheses::prefixParse(Parser* parser,Token){
 		return e;
 	}else return Constant(arpha::Nothing);
 }
+Expression* Parentheses::infixParse(Parser* parser,Token,Expression* a){
+	return nullptr;
+}
 
 
 VarStatement::VarStatement(SymbolID name) : Definition(0,name) {}
@@ -1090,6 +1096,13 @@ Expression* Unresolved(Scope* scope,SymbolID symbol,Expression* children = 0){
 	e->scope = scope;
 	e->symbol = symbol;
 	e->children = children;
+	return e;
+}
+
+Expression* OverloadSetRef(Scope* scope,OverloadSet* set){
+	Expression* e = new Expression(Expression::OverloadSetRef,arpha::Unresolved);
+	e->scope = scope;
+	e->set = set;
 	return e;
 }
 
@@ -1226,7 +1239,6 @@ OverloadSet::OverloadSet(Scope* scope,SymbolID name): Definition(scope,name) {
 		Definition* def= scope->parent->lookup(name);
 		if(def && def->isOverloadSet()){
 			parent = (OverloadSet*) def;
-			stickiness = parent->stickiness;
 		}
 	}
 }
@@ -1315,10 +1327,7 @@ Expression* OverloadSet::prefixParse(Parser* parser,Token token){
 		return expr;
 	}
 	return Unresolved(parser->currentScope,token.symbol);
-}
-
-Expression* OverloadSet::infixParse(Parser* parser,Token token,Expression* expr){
-	return Unresolved(parser->currentScope,token.symbol,Tuple(expr,parser->parse(stickiness)));
+	//return OverloadSetRef(parser->currentScope,this);
 }
 
 Expression* Type::prefixParse(Parser* parser,Token){
@@ -1778,6 +1787,9 @@ void print(Expression* expr){
 			printf("unresolved %s",expr->symbol);
 			if(expr->children) print(expr->children);
 			break;
+		case Expression::OverloadSetRef:
+			printf("overloadset %s",expr->set->id);
+			break;
 		case Expression::FieldAccess:
 			print(expr->children);
 			printf(" . %s",expr->field->name);
@@ -1992,6 +2004,7 @@ void arpha::test(){
 
 	printf("  done!\n");
 }
+
 
 
 int eval(const char* source){

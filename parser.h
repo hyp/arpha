@@ -194,7 +194,7 @@ private:
 	Expression* substitute;
 };
 
-//
+//Parses operators as function calls ex. 1 + 2 => add(1,2)
 struct Operator : public Definition {
 	
 	Operator(Scope* scope,SymbolID name,Location location,SymbolID func,int sticky = -1);
