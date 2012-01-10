@@ -570,10 +570,11 @@ struct AssignmentOperator : public Definition {
 struct Expression {
 	enum {
 		Constant = 0, //1
-		FunctionCall, //f()
+		FunctionCall, //a call to a specific function, which was already resolved - f_int32__int32(x)
+		Call,         //a call onto an object, either an overloadset(resolves to function call) or a type(which becomes constructor) - f(x)
 		TypeRef,      //int32
-		Tuple, //a,b
-		OverloadSetRef,
+		Tuple,		   //a,b
+		OverloadSetRef,//add
 		Unresolved, //somethingNotDefinedYet //overloadableFunc(x,y) -- If children are present this is unresolved function call else it's an unresolved symbol
 		VariableRef,//x
 		Assignment, //x = 5
@@ -602,7 +603,6 @@ struct Expression {
 	SymbolID symbol;
 	union {
 		Type* constantType;
-		OverloadSet* set;
 	};
 	Expression* children;
 	Expression* next;
@@ -962,6 +962,13 @@ Expression* VariableReference(Variable* variable){
 	return e;
 }
 
+Expression* Call(Expression* object,Expression* args){
+	Expression* e = new Expression(Expression::Call,arpha::Unresolved);
+	e->expression = object;
+	e->children = args;
+	return e;
+}
+
 Expression* Match(Expression* what,Expression* chain){
 	Expression* e = new Expression(Expression::Match,arpha::Unresolved); // evaluate type later
 	e->expression = what;
@@ -1039,7 +1046,7 @@ Expression* IfMacro::infixParse(Parser* parser,Token,Expression* a){
 	return Match(condition,a);
 }
 
-Parentheses::Parentheses(SymbolID open,SymbolID close) : Definition(0,open) {
+Parentheses::Parentheses(SymbolID open,SymbolID close) : Definition(0,open,90) {
 	closer= close;
 }
 
@@ -1050,8 +1057,8 @@ Expression* Parentheses::prefixParse(Parser* parser,Token){
 		return e;
 	}else return Constant(arpha::Nothing);
 }
-Expression* Parentheses::infixParse(Parser* parser,Token,Expression* a){
-	return nullptr;
+Expression* Parentheses::infixParse(Parser* parser,Token token,Expression* object){
+	return Call(object,prefixParse(parser,token));
 }
 
 
@@ -1099,10 +1106,10 @@ Expression* Unresolved(Scope* scope,SymbolID symbol,Expression* children = 0){
 	return e;
 }
 
-Expression* OverloadSetRef(Scope* scope,OverloadSet* set){
+Expression* OverloadSetRef(Scope* scope,SymbolID symbol){
 	Expression* e = new Expression(Expression::OverloadSetRef,arpha::Unresolved);
 	e->scope = scope;
-	e->set = set;
+	e->symbol = symbol;
 	return e;
 }
 
@@ -1309,25 +1316,19 @@ Function* OverloadSet::find(Expression* expr){
 
 Expression* OverloadSet::resolve(Expression* expr){
 	//TODO set hierarchy
-	if(expr->children){
-		Function* f=find(expr->children);
-		if(f) return FunctionCall(f,expr->children);		
-	}else{
-		assert(false);
-	}
-	if(parent) return parent->resolve(expr);
+		if(expr->children){
+			Function* f=find(expr->children);
+			if(f) return FunctionCall(f,expr->children);		
+		}else{
+			assert(false);
+		}
+		if(parent) return parent->resolve(expr);
+
 	return expr;
 }
 
 Expression* OverloadSet::prefixParse(Parser* parser,Token token){
-	if(parser->match("(")){
-		if(parser->match(")")) return Unresolved(parser->currentScope,token.symbol,Constant(arpha::Nothing));
-		Expression * expr = Unresolved(parser->currentScope,token.symbol,parser->parse());
-		parser->expect(")");
-		return expr;
-	}
-	return Unresolved(parser->currentScope,token.symbol);
-	//return OverloadSetRef(parser->currentScope,this);
+	return OverloadSetRef(parser->currentScope,token.symbol);
 }
 
 Expression* Type::prefixParse(Parser* parser,Token){
@@ -1363,10 +1364,10 @@ Operator::Operator(Scope* scope,SymbolID name,Location location,SymbolID func,in
 	functionName = func;
 }
 Expression* Operator::prefixParse(Parser* parser,Token){
-	return Unresolved(parser->currentScope,functionName,parser->parse());
+	return Call(OverloadSetRef(parser->currentScope,functionName),parser->parse());
 }
 Expression* Operator::infixParse(Parser* parser,Token,Expression* a){
-	return Unresolved(parser->currentScope,functionName,Tuple(a,parser->parse(stickiness)));
+	return Call(OverloadSetRef(parser->currentScope,functionName),Tuple(a,parser->parse(stickiness)));
 }
 
 
@@ -1570,6 +1571,20 @@ Expression* Parser::evaluate(Expression* expr){
 			expr->returnType = expr->children->returnType;
 			break;
 
+		case Expression::Call:
+			assert(expr->children);
+			assert(expr->expression);
+			expr->expression = evaluate(expr->expression);
+			expr->children = evaluate(expr->children);
+			def = expr->expression->scope->lookup(expr->expression->symbol);	
+			if(def){
+				assert(def->isOverloadSet());//TO
+				expr = def->resolve(expr);
+				//need check before evaluation to avoid infinite recursion when resolve fails
+				if(expr->flags != Expression::Unresolved) expr = evaluate( expr ); 
+			}
+			break;
+
 		case Expression::Unresolved:
 			if(expr->children) expr->children = evaluate(expr->children);
 			def = expr->scope->lookup(expr->symbol);	
@@ -1770,8 +1785,14 @@ void print(Expression* expr){
 			}
 			break;
 		case Expression::FunctionCall:
-			printf("call %s ",expr->function->id.ptr());
+			printf("fcall %s with ",expr->function->id.ptr());
 			if(expr->children) print(expr->children);
+			break;
+		case Expression::Call:
+			printf("call ");
+			print(expr->expression);
+			printf(" with ");
+			print(expr->children);
 			break;
 		case Expression::Label:
 			printf("%s : ",expr->symbol);
@@ -1788,7 +1809,7 @@ void print(Expression* expr){
 			if(expr->children) print(expr->children);
 			break;
 		case Expression::OverloadSetRef:
-			printf("overloadset %s",expr->set->id);
+			printf("overloadset %s",expr->symbol);
 			break;
 		case Expression::FieldAccess:
 			print(expr->children);
