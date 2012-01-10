@@ -295,47 +295,6 @@ Definition* Scope::contains(SymbolID name){
 	return 0;
 }
 
-
-
-struct Type: public Definition {
-	OverloadSet* set;
-	uint32 size;
-	uint32 alignment;
-	bool isTuple;
-
-	struct Field {
-		Type* type;
-		SymbolID name;
-
-		Field(Type* type,SymbolID name);
-		bool isUnnamed();
-	};
-	std::vector<Field> fields;
-
-	//map like interface for field queries
-	Type::Field* operator[](const SymbolID fieldName);
-	
-	Type(Scope* scope,SymbolID name,size_t sz);
-
-	void add(Field field);
-	Expression* prefixParse(Parser*,Token);
-
-	//implicit type cast
-	bool canAssignFrom(Type* other);
-
-	static std::vector<Type*> tuples;
-
-
-	//can it be converted
-	static Type* tuple(Type* a,Type* b);
-	static Type* flattenedTuple(Type* a,Type* b);
-	static Type* tuple(std::vector<Field>& fields);
-
-	//not expanded
-private:
-	Type(SymbolID name,size_t sz);
-};
-
 unittest(scope){
 	auto scope = new Scope(0);
 	assert(!scope->lookup("foo"));
@@ -353,6 +312,7 @@ unittest(scope){
 }
 
 Type::Field::Field(Type* type,SymbolID name){ this->type=type;this->name=name; }
+
 bool Type::Field::isUnnamed(){
 	return name.isNull();
 }
@@ -360,6 +320,21 @@ void Type::add(Type::Field field){
 	fields.push_back(field);
 	size += field.type->size;
 }
+
+unittest(type){
+	auto t = new Type(nullptr,SymbolID("foo"),4);
+	assert(t->size == 4);
+	auto t2 = new Type(nullptr,SymbolID("bar"),8);
+	t->add(Type::Field(t2,SymbolID("b")));
+	assert(t->size == 12);
+	assert( (t->operator[](SymbolID("b")))->type == t2 );
+
+	delete t2;
+	delete t;
+	//clean up
+	symbols.~SymbolTable();
+}
+
 std::vector<Type*> Type::tuples;
 
 
@@ -461,7 +436,6 @@ Function::Argument::Argument(const Variable& var,Function* typeConstraint,Defini
 
 struct OverloadSet: public Definition {
 	OverloadSet* parent;
-	Type* type;
 	std::vector<Function*> functions;
 
 	OverloadSet(Scope* scope,SymbolID name);
@@ -485,8 +459,6 @@ Type::Type(SymbolID name,size_t sz) : Definition(0,name) {
 Type::Type(Scope* scope,SymbolID name,size_t sz) : Definition(scope,name) { 
 	size=sz; 
 	isTuple = false;
-	set=getSet();
-	set->type = this;
 }
 
 Type::Field* Type::operator[](const SymbolID fieldName){
@@ -782,6 +754,11 @@ namespace arpha {
 		return type==int32 || type==uint32 || type == int64 || type == uint64 || type==int16 || type==uint16 || type==int8 || type==uint8 || type == float32 || type ==float64 || type==boolean;
 	}
 
+	Type* builtInType(const char* name,int size){
+		auto t = new Type(scope,SymbolID(name),size);
+		scope->define(t);
+		return t;
+	}
 
 
 	void init(){
@@ -800,28 +777,28 @@ namespace arpha {
 		globalScope->define(new AssignmentOperator("=",10));
 		globalScope->define(new ReturnStatement);
 		
-		type = new Type(scope,SymbolID("Type"),0);
-		expression = new Type(scope,SymbolID("expression"),0);
-		Nothing = new Type(scope,SymbolID("Nothing"),0);
+		type = builtInType("Type",0);
+		expression = builtInType("expression",0);
+		Nothing = builtInType("Nothing",0);
 		Unresolved = new Type(scope,SymbolID("Unresolved"),0);
 		inferred = new Type(scope,SymbolID("inferred"),0); //TOFIX & TODO use it as a wildcard '_' type
-		constant = new Type(scope,SymbolID("constant"),0);
+		constant = builtInType("constant",0);
 
 		int i = 0;
-		types[i++] = boolean = new Type(scope,"bool",1);
+		types[i++] = boolean = builtInType("bool",1);
 		types[i++] = constant;
-		types[i++] = int8 = new Type(scope,SymbolID("int8"),1);
-		types[i++] = uint8 = new Type(scope,SymbolID("uint8"),1);
-		types[i++] = int16 = new Type(scope,SymbolID("int16"),2);
-		types[i++] = uint16 = new Type(scope,SymbolID("uint16"),2);
-		types[i++] = int32 = new Type(scope,SymbolID("int32"),4);
-		types[i++] = uint32 = new Type(scope,SymbolID("uint32"),4);
-		types[i++] = int64 = new Type(scope,SymbolID("int64"),8);
-		types[i++] = uint64 = new Type(scope,SymbolID("uint64"),8);
-		types[i++] = float64 = new Type(scope,SymbolID("double"),8);
-		types[i++] = float32 = new Type(scope,SymbolID("float"),4);
+		types[i++] = int8 = builtInType("int8",1);
+		types[i++] = uint8 = builtInType("uint8",1);
+		types[i++] = int16 = builtInType("int16",2);
+		types[i++] = uint16 = builtInType("uint16",2);
+		types[i++] = int32 = builtInType("int32",4);
+		types[i++] = uint32 = builtInType("uint32",4);
+		types[i++] = int64 = builtInType("int64",8);
+		types[i++] = uint64 = builtInType("uint64",8);
+		types[i++] = float64 = builtInType("double",8);
+		types[i++] = float32 = builtInType("float",4);
 		
-		Type* c = new Type(scope,SymbolID("struct"),0);
+		Type* c = builtInType("struct",0);
 		c->add(Type::Field(int32,"field"));
 		c->add(Type::Field(c,"bar"));
 		scope->define(new Variable(scope,"foo",c));
@@ -1230,7 +1207,6 @@ Expression* ReturnStatement::prefixParse(Parser* parser,Token token){
 
 
 OverloadSet::OverloadSet(Scope* scope,SymbolID name): Definition(scope,name) {
-	type = 0;
 	//build set hierarchy
 	parent = 0;
 	if(scope->parent){
@@ -1312,7 +1288,7 @@ Expression* OverloadSet::resolve(Expression* expr){
 		Function* f=find(expr->children);
 		if(f) return FunctionCall(f,expr->children);		
 	}else{
-		if(type) return TypeReference(type);
+		assert(false);
 	}
 	if(parent) return parent->resolve(expr);
 	return expr;
@@ -1793,7 +1769,7 @@ void print(Expression* expr){
 			printf(")");
 			break;
 		case Expression::Block:
-			printf("{");
+			printf("{\n  ");
 			for(auto i = expr->children;i!=0;i=i->next){ print(i);printf(";\n  "); }
 			printf("}");
 			break;
@@ -1801,9 +1777,36 @@ void print(Expression* expr){
 	printf("):%s ",expr->returnType->id.ptr());
 }
 
+Expression* Parser::parseModule(){
+	Expression* expr;
+	Expression* block = new Expression(Expression::Block,arpha::Nothing);
+	Expression* lastChild = 0;
+	Token token;
+	
+	while(1){
+		token = peek();
+		if(token.isEOF()) break;
+		else if(token.isEndExpression()){
+			consume();
+			continue;
+		}
 
-Expression* Parser::parseBlock(){
-	expect("{");
+		expr = parse();
+		if(lastChild) lastChild->next = expr;
+		else block->children = expr;
+		lastChild = expr;
+
+		token = consume();
+		if(token.isEOF()) break;
+		else if(!token.isEndExpression()) error(previousLocation(),"';' expected!");
+	}
+
+	return block;
+}
+
+Expression* Parser::parseBlock(bool surroundedByBrackets){
+	if(surroundedByBrackets) expect("{");
+
 	Expression* expr;
 	Expression* block = new Expression(Expression::Block,arpha::Nothing);
 	Expression* lastChild = 0;
@@ -1960,20 +1963,9 @@ void arpha::test(){
 
 
 int eval(const char* source){
-	Expression* node = (Expression*)1;
-	int result = 0;	
 	Parser parser(source,arpha::globalScope);
-	while(node!=0){
-		node = parser.parse();
-		Token token = parser.consume();
-		
-		if(!token.isEndExpression() && token.isEOF() == false) error(parser.previousLocation(),"Error: ';' exprected!\n");
-		if(node){
-			node = evalAll(&parser,node);
-		}
-		if(token.isEOF()) break;
-	}
-	return result;							 				
+	evalAll(&parser,parser.parseModule());
+	return 0;					 				
 }
 
 

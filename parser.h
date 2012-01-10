@@ -79,7 +79,10 @@ struct Parser : Lexer {
 	/// Returns a raw expression, which may contain unresolved symbols
 	Expression* parse(int stickiness = 0);
 
-	Expression* parseBlock();
+	/// Returns a block - a list of raw expressions, surrounded by { } if required
+	Expression* parseBlock(bool surroundedByBrackets = true);
+
+	Expression* parseModule();
 
 	/// Resolve symbols, find the matching function call overloads, constant fold
 	Expression* evaluate(Expression*);
@@ -99,7 +102,7 @@ struct Definition {
 
 	//Tries to resolve an unresolved expression
 	//Returns the given expression if resolving failed
-	virtual Expression* resolve(Expression* expr) ;
+	virtual Expression* resolve(Expression* expr);
 
 	virtual bool isOverloadSet();
 	
@@ -112,9 +115,9 @@ struct Definition {
 	SymbolID id;
 	int stickiness;
 	Scope* scope;
-	int lineNumber; //location
-
+	
 protected:
+	int lineNumber; //location
 	OverloadSet* getSet();
 };
 
@@ -137,6 +140,42 @@ struct Substitute: Definition {
 	Expression* prefixParse(Parser* parser,Token);
 private:
 	Expression* substitute;
+};
+
+//type. tuple is an unnamed type
+struct Type: public Definition {
+
+	struct Field {
+		Type* type;
+		SymbolID name;
+
+		Field(Type* type,SymbolID name);
+		bool isUnnamed();
+	};
+
+	Type(Scope* scope,SymbolID name,size_t sz);
+	Expression* prefixParse(Parser*,Token);
+
+	//map like interface for field queries
+	Type::Field* operator[](const SymbolID fieldName);
+	void add(Field field);
+	
+	//implicit type cast
+	bool canAssignFrom(Type* other);
+
+	//global tuple constructs
+	static std::vector<Type*> tuples;
+	static Type* tuple(Type* a,Type* b);
+	static Type* flattenedTuple(Type* a,Type* b);
+	static Type* tuple(std::vector<Field>& fields);
+
+	uint32 size;
+	uint32 alignment;
+	bool isTuple;
+	std::vector<Field> fields;
+
+private:
+	Type(SymbolID name,size_t sz);
 };
 
 #endif
