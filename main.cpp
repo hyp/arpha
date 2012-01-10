@@ -311,15 +311,50 @@ unittest(scope){
 	symbols.~SymbolTable();
 }
 
-Type::Field::Field(Type* type,SymbolID name){ this->type=type;this->name=name; }
-
-bool Type::Field::isUnnamed(){
-	return name.isNull();
+Type::Type(SymbolID name,size_t sz) : Definition(0,name) { 
+	size=sz; 
+	isTuple = true;
 }
+
+Type::Type(Scope* scope,SymbolID name,size_t sz) : Definition(scope,name) { 
+	size=sz; 
+	isTuple = false;
+}
+
+Type::Field* Type::operator[](const SymbolID fieldName){
+	for(auto i = fields.begin();i!=fields.end();++i){
+		if( (*i).name == fieldName ) return i._Ptr;
+	}
+	return 0;
+}
+
 void Type::add(Type::Field field){
 	fields.push_back(field);
 	size += field.type->size;
 }
+
+bool Type::canAssignFrom(Type* other){
+	if(other->isTuple){
+		//check if tuple has the same underlying structure
+		if(fields.size() != other->fields.size()) return false;
+		for(size_t i =0;i<fields.size();i++){
+			if(!fields[i].type->canAssignFrom(other->fields[i].type)) return false;
+		}
+		return true;
+	}else{
+		if( ( other == arpha::constant ) && arpha::isAssignableFromConstant(this)){
+			debug("%s can assign from constant!",this->id);
+			return true;
+		}
+	}
+	return false;
+}
+
+Type::Field::Field(Type* type,SymbolID name){ this->type=type;this->name=name; }
+bool Type::Field::isUnnamed(){
+	return name.isNull();
+}
+
 
 unittest(type){
 	auto t = new Type(nullptr,SymbolID("foo"),4);
@@ -380,23 +415,31 @@ Type* Type::tuple(std::vector<Field>& fields){
 	return tuple;
 }
 
-struct Variable: public Definition {
-	Type* type;
-	Expression* substitute;
-
-	Variable(Scope* scope,SymbolID name,Type* type);
-	
-	Expression* prefixParse(Parser*,Token);
-
-	void bindToConstant(Expression* expr);
-	Expression* bindedConstant();
-};
+Variable::Variable(Scope* scope,SymbolID name,Location location,Type* type) : Definition(scope,name,location) {
+	this->type = type;
+	substitute = nullptr;
+}
 
 void Variable::bindToConstant(Expression* expr){
 	substitute = expr;
 }
+
 Expression* Variable::bindedConstant(){
 	return substitute;
+}
+
+unittest(variable){
+	Location location(0);
+	auto t = new Type(nullptr,SymbolID(),0);
+	auto v = new Variable(nullptr,SymbolID(),location,t);
+	assert(v->type == t);
+	assert(v->bindedConstant() == nullptr);
+
+	v->bindToConstant((Expression*)0xDEADBEEF);
+	assert(v->bindedConstant() == (Expression*)0xDEADBEEF);
+
+	delete v;
+	delete t;
 }
 
 
@@ -451,22 +494,10 @@ struct OverloadSet: public Definition {
 	Function* find(Expression* expr);
 };
 
-Type::Type(SymbolID name,size_t sz) : Definition(0,name) { 
-	size=sz; 
-	isTuple = true;
-}
 
-Type::Type(Scope* scope,SymbolID name,size_t sz) : Definition(scope,name) { 
-	size=sz; 
-	isTuple = false;
-}
 
-Type::Field* Type::operator[](const SymbolID fieldName){
-	for(auto i = fields.begin();i!=fields.end();++i){
-		if( (*i).name == fieldName ) return i._Ptr;
-	}
-	return 0;
-}
+
+
 
 
 
@@ -663,9 +694,6 @@ Expression* ListOperator::infixParse(Parser* parser,Token,Expression* prev){
 //TODO functions arguments vector!
 namespace arpha {
 	Scope* globalScope,*scope;
-	Type* type;
-	Type* expression;
-	Type* Nothing,*Unresolved,*inferred;
 	
 
 	Function* line;
@@ -674,23 +702,21 @@ namespace arpha {
 	Function* typeEquals;
 
 	//core types & functions
-	Type *constant;
-	Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
-	Type *float64,*float32;
-	Type *boolean;
+
 	enum {
 		BOOL,CNST,I8,U8,I16,U16,I32,U32,I64,U64,F64,F32,TYPE_COUNT
 	};
 	Type* types[TYPE_COUNT];
 
 	Function* createFunction(Scope* scope,const char* name,Type* returns,Type* arg0 = 0,const char *arg0n = 0,Type* arg1 = 0,const char *arg1n = 0){
+		Location location(0);
 		Type* argument = arpha::Nothing;
 		if(arg0) argument = arg1 ? Type::tuple(arg0,arg1) : arg0;
 		else if(arg1) argument = arg1;
 		//if(argument->isTuple) argument->fields[0].name = arg0n;
 		auto func = new Function(scope,name,argument,returns,0,0);
-		if(arg0) func->arguments.push_back(Function::Argument(Variable(0,arg0n,arg0),0,0));
-		if(arg1){ assert(arg0); func->arguments.push_back(Function::Argument(Variable(0,arg1n,arg1),0,0)); }
+		if(arg0) func->arguments.push_back(Function::Argument(Variable(0,arg0n,location,arg0),0,0));
+		if(arg1){ assert(arg0); func->arguments.push_back(Function::Argument(Variable(0,arg1n,location,arg1),0,0)); }
 		return func;
 	}
 
@@ -741,19 +767,6 @@ namespace arpha {
 		equals = ComparisonFunction(scope,"==",25);
 	}
 
-	inline bool isReal(Type* type){
-		return type == float32 || type == float64;
-	}
-	inline bool isInteger(Type* type){
-		return type==int32 || type==uint32 || type == int64|| type == uint64 || type==int16 || type==uint16 || type==int8 || type==uint8;
-	}
-	inline bool isSignedInteger(Type* type){
-		return type==int32 || type == int64 ||  type==int16 ||  type==int8;
-	}
-	inline bool isAssignableFromConstant(Type* type){
-		return type==int32 || type==uint32 || type == int64 || type == uint64 || type==int16 || type==uint16 || type==int8 || type==uint8 || type == float32 || type ==float64 || type==boolean;
-	}
-
 	Type* builtInType(const char* name,int size){
 		auto t = new Type(scope,SymbolID(name),size);
 		scope->define(t);
@@ -762,6 +775,7 @@ namespace arpha {
 
 
 	void init(){
+		Location location(0);
 		scope = new Scope(0);
 		globalScope = new Scope(scope);
 		//globalScope->parent = scope;
@@ -776,7 +790,9 @@ namespace arpha {
 		globalScope->define(new VarStatement("var"));
 		globalScope->define(new AssignmentOperator("=",10));
 		globalScope->define(new ReturnStatement);
-		
+
+		globalScope->define(new Operator::Parselet(globalScope,"operator",location));
+
 		type = builtInType("Type",0);
 		expression = builtInType("expression",0);
 		Nothing = builtInType("Nothing",0);
@@ -801,11 +817,11 @@ namespace arpha {
 		Type* c = builtInType("struct",0);
 		c->add(Type::Field(int32,"field"));
 		c->add(Type::Field(c,"bar"));
-		scope->define(new Variable(scope,"foo",c));
+		scope->define(new Variable(scope,"foo",location,c));
 		new Function(scope,"field",Nothing,Nothing,0,0);
 		//new Function(scope,"bar",Nothing,Nothing,0,0);
 
-		auto v = new Variable(scope,"bar",float64);
+		auto v = new Variable(scope,"bar",location,float64);
 		Expression* expr = new Expression(Expression::Constant,constant);
 		expr->constantType = float64;
 		expr->real = 3.14;
@@ -890,7 +906,7 @@ Function* Function::infer(Type* type){
 	Function* dup = new Function(scope,id,type,returnType,bodyScope,body); //TODO expr tree dup and eval
 	size_t i = 0;
 
-	Scope* dupBodyScope = bodyScope;
+	/*Scope* dupBodyScope = bodyScope;
 	if(type->isTuple){
 		for(auto arg = type->fields.begin();arg!=type->fields.end();++arg,++i){
 			dup->arguments.push_back(Argument(Variable(dupBodyScope,"#",(*arg).type),0,0));
@@ -899,7 +915,7 @@ Function* Function::infer(Type* type){
 	}else{
 			dup->arguments.push_back(Argument(Variable(dupBodyScope,"#",type),0,0));
 			debug(" Arg %d inferred as %s!",i,type->id);
-	}
+	}*/
 
 	return dup;
 }
@@ -1040,7 +1056,7 @@ Expression* VarStatement::prefixParse(Parser* parser,Token){
 	std::vector<Variable*> vars;
 	do{
 		SymbolID name = parser->expectName();
-		Variable* var = new Variable(parser->currentScope,name,arpha::Unresolved);
+		Variable* var = new Variable(parser->currentScope,name,parser->previousLocation(),arpha::Unresolved);
 		parser->currentScope->define(var);
 
 		if(tuple) tuple = Tuple(tuple,VariableReference(var));
@@ -1061,10 +1077,7 @@ Expression* VarStatement::prefixParse(Parser* parser,Token){
 	return tuple;
 }
 
-Variable::Variable(Scope* scope,SymbolID name,Type* type) : Definition(scope,name) {
-	this->type = type;
-	substitute = 0;
-}
+
 
 Expression* TypeReference(Type* type){
 	Expression* e = new Expression(Expression::TypeRef,arpha::type);
@@ -1135,7 +1148,7 @@ Expression* DefStatement::prefixParse(Parser* parser,Token){
 		if(!parser->match(")")){
 			while(1){
 				SymbolID argName = parser->expectName();
-				arguments.push_back(Function::Argument(Variable(bodyScope,argName,arpha::inferred),0,0));
+				arguments.push_back(Function::Argument(Variable(bodyScope,argName,parser->previousLocation(),arpha::inferred),0,0));
 				if(parser->match(")")) break;
 				if(!parser->match(",")){
 					if(parser->match("->")){
@@ -1312,22 +1325,41 @@ Expression* Type::prefixParse(Parser* parser,Token){
 	return TypeReference(this);
 }
 
-bool Type::canAssignFrom(Type* other){
-	if(other->isTuple){
-		//check if tuple has the same underlying structure
-		if(fields.size() != other->fields.size()) return false;
-		for(size_t i =0;i<fields.size();i++){
-			if(!fields[i].type->canAssignFrom(other->fields[i].type)) return false;
-		}
-		return true;
-	}else{
-		if( ( other == arpha::constant ) && arpha::isAssignableFromConstant(this)){
-			debug("%s can assign from constant!",this->id);
-			return true;
-		}
-	}
-	return false;
+Operator::Parselet::Parselet(Scope* scope,SymbolID name,Location location) : Definition(scope,name,location) {
 }
+Expression* Operator::Parselet::prefixParse(Parser* parser,Token){
+	auto name = parser->expectName();
+	SymbolID func;
+	int sticky = -1;
+
+	if(parser->match("=")) func = parser->expectName();
+	else if(parser->match("priority")){
+		auto expr = parser->evaluate(parser->parse(1000));
+		if(expr->isConstant() && expr->returnType == arpha::constant && arpha::isInteger(expr->constantType))
+			sticky = int(expr->uinteger);
+		else error(parser->previousLocation(),"integer constant expected!");
+		parser->expect("=");
+		func = parser->expectName();
+	}else{
+		error(parser->previousLocation(),"'=' or 'priority' expected");
+	}
+
+	auto op = new Operator(parser->currentScope,name,parser->previousLocation(),func,sticky);
+	parser->currentScope->define(op);
+
+	return Constant(arpha::Nothing);
+}
+
+Operator::Operator(Scope* scope,SymbolID name,Location location,SymbolID func,int sticky) : Definition(scope,name,location,sticky) {
+	functionName = func;
+}
+Expression* Operator::prefixParse(Parser* parser,Token){
+	return Unresolved(parser->currentScope,functionName,parser->parse());
+}
+Expression* Operator::infixParse(Parser* parser,Token,Expression* a){
+	return Unresolved(parser->currentScope,functionName,Tuple(a,parser->parse(stickiness)));
+}
+
 
 //
 Type* Expression::inferredType(){

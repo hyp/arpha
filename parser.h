@@ -137,6 +137,7 @@ private:
 //simple expression substitution - def pi = 3.14 - status: expressionwise 100% , def parser 40% (need multiples)
 struct Substitute: Definition {
 	Substitute(Scope* scope,SymbolID name,Location location,Expression* expr);
+
 	Expression* prefixParse(Parser* parser,Token);
 private:
 	Expression* substitute;
@@ -154,6 +155,7 @@ struct Type: public Definition {
 	};
 
 	Type(Scope* scope,SymbolID name,size_t sz);
+
 	Expression* prefixParse(Parser*,Token);
 
 	//map like interface for field queries
@@ -176,6 +178,40 @@ struct Type: public Definition {
 
 private:
 	Type(SymbolID name,size_t sz);
+};
+
+//variable
+struct Variable: public Definition {
+	Variable(Scope* scope,SymbolID name,Location location,Type* type);
+	
+	Expression* prefixParse(Parser*,Token);
+
+	void bindToConstant(Expression* expr);
+	Expression* bindedConstant();
+
+	Type* type;
+private:
+	Expression* substitute;
+};
+
+//
+struct Operator : public Definition {
+	
+	Operator(Scope* scope,SymbolID name,Location location,SymbolID func,int sticky = -1);
+
+
+	Expression* prefixParse(Parser*,Token);
+	Expression* infixParse(Parser*,Token,Expression*);
+
+	struct Parselet : public Definition {
+		Parselet(Scope* scope,SymbolID name,Location location);
+
+		Expression* prefixParse(Parser*,Token);
+	};
+
+private:
+	SymbolID functionName;
+
 };
 
 #endif
