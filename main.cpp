@@ -246,16 +246,14 @@ unittest(lexer){
 
 
 
-Parser::Parser(const char* src,Scope* scope) : Lexer(src) { dontLookupNextSymbol = false;currentScope=scope; }
+Parser::Parser(const char* src,Scope* scope) : Lexer(src) { currentScope=scope; }
 Parser::State Parser::getState(){
 		State state;
 		state.ptr = ptr;
-		state.dontLookupNextSymbol = dontLookupNextSymbol;
 		return state;
 }
 void Parser::restoreState(Parser::State& state){
 		ptr = state.ptr;
-		dontLookupNextSymbol = state.dontLookupNextSymbol;
 }
 
 
@@ -836,7 +834,7 @@ namespace arpha {
 		//line = new Function(scope,SymbolID("line"),Nothing,float64,0,0);
 		typeof = createFunction(scope,"typeof",type,expression,"expression");
 		_sizeof = createFunction(scope,"sizeof",constant,expression,"expression"); 
-		typeEquals = createFunction(scope,"==",boolean,type,"type",type,"another-type");
+		typeEquals = createFunction(scope,"equals",boolean,type,"type",type,"another-type");
 
 		test();
 	}
@@ -1031,13 +1029,7 @@ Expression* IndexOperator::infixParse(Parser* parser,Token token,Expression* exp
 	return Index(parser->currentScope,expr,inner);
 }
 
-AccessOperator::AccessOperator(SymbolID name,int stickiness) : Definition(0,name,stickiness){
-}
 
-Expression* AccessOperator::infixParse(Parser* parser,Token,Expression* expression){
-	parser->dontLookupNextSymbol = true;//IMPORTANT
-	return Access(expression,parser->parse(stickiness));
-}
 
 Expression* IfMacro::infixParse(Parser* parser,Token,Expression* a){
 	Expression* condition = parser->parse();
@@ -1106,12 +1098,21 @@ Expression* Unresolved(Scope* scope,SymbolID symbol,Expression* children = 0){
 	return e;
 }
 
+AccessOperator::AccessOperator(SymbolID name,int stickiness) : Definition(0,name,stickiness){
+}
+
+Expression* AccessOperator::infixParse(Parser* parser,Token,Expression* expression){
+	return Access(expression,Unresolved(parser->currentScope,parser->expectName()) );
+}
+
 Expression* OverloadSetRef(Scope* scope,SymbolID symbol){
 	Expression* e = new Expression(Expression::OverloadSetRef,arpha::Unresolved);
 	e->scope = scope;
 	e->symbol = symbol;
 	return e;
 }
+
+
 
 Expression* Variable::prefixParse(Parser*,Token){
 	return VariableReference(this);
@@ -1919,15 +1920,9 @@ Expression* Parser::parse(int stickiness){
 			debug("Named argument %s %s",token,next);
 			expression = Label(token.symbol,parse(16));
 		}else{
-			if(dontLookupNextSymbol){
-				expression = Unresolved(currentScope,token.symbol);
-				dontLookupNextSymbol = false;
-			}
-			else{
-				Definition* parselet = currentScope->lookup(token.symbol);
-				if(!parselet) { error(previousLocation(),"Can't prefix parse %s!",token); return 0; }
-				expression = parselet->prefixParse(this,token);
-			}
+			Definition* parselet = currentScope->lookup(token.symbol);
+			if(!parselet) { error(previousLocation(),"Can't prefix parse %s!",token); return 0; }
+			expression = parselet->prefixParse(this,token);
 		}
 	}
 	else {
@@ -2017,7 +2012,11 @@ void arpha::test(){
 	scope->define( new Substitute(scope,"magicNumber",Location(0),Constant(::uint64(0xDEADBEEF))));
 	ensure("magicNumber",Constant(::uint64(0xDEADBEEF)));
 
-	//.
+	//compile-time constant arithmetic evaluation
+	ensure("add(1,2)",Constant(::uint64(3)));
+	ensure("subtract(9,2)",Constant(::uint64(7)));
+	ensure("multiply(4,5)",Constant(::uint64(20)));
+	
 
 #undef ensure
 

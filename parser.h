@@ -60,7 +60,6 @@ struct OverloadSet;
 struct Parser : Lexer {
 	struct State {
 		const char* ptr;
-		bool dontLookupNextSymbol;
 	};
 
 	Parser(const char* src,Scope* scope);
@@ -89,7 +88,6 @@ struct Parser : Lexer {
 
 	//Current parsing state
 	Scope* currentScope;
-	bool dontLookupNextSymbol;	
 	size_t unresolvedExpressions,solvedExpressions;
 };
 
@@ -210,6 +208,7 @@ struct Operator : public Definition {
 	};
 
 private:
+
 	SymbolID functionName;
 
 };
