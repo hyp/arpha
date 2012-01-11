@@ -8,6 +8,7 @@ private:
 public:
 
 	inline int line(){ return lineNumber; }
+	inline Location(){}
 	Location(int line);
 };
 
@@ -52,6 +53,7 @@ protected:
 };
 
 //parsing
+struct Node; //ast node(expression)
 struct Expression;
 struct Scope;
 struct Definition;
@@ -91,9 +93,16 @@ struct Parser : Lexer {
 	size_t unresolvedExpressions,solvedExpressions;
 };
 
+Node* parseParenthesis(Definition*,Parser*);      // ::= '(' expression ')'
+Node* parseCall(Definition*,Parser*,Node*);       // ::= expression '(' expression ')'
+Node* parseTuple(Definition*,Parser*,Node*);      // ::= expression ',' expression
+Node* parseAccess(Definition*,Parser*,Node*);     // ::= expression '.' expression
+Node* parseAssignment(Definition*,Parser*,Node*); // ::= expression '=' expression
+
+
 //Defines how to parse a name
+
 struct Definition {
-	
 
 	virtual Expression* prefixParse(Parser*,Token);
 	virtual Expression* infixParse(Parser*,Token,Expression*);
@@ -118,6 +127,8 @@ protected:
 	int lineNumber; //location
 	OverloadSet* getSet();
 };
+
+
 
 struct Scope {
 
@@ -192,6 +203,46 @@ private:
 	Expression* substitute;
 };
 
+struct Function: public Definition {
+	OverloadSet* set;
+	Type* argument;
+	Type* returnType;
+	Scope* bodyScope;
+	Expression* body;
+	Expression* constraint; //constraint for inferred functions
+
+	struct Argument {
+		Variable variable;			 // so that code inside the functions has access to arguments
+		Function* typeConstraint;  // Arithmetic
+		Definition* valueConstraint; // x <- int32 //can be type or function!
+		
+		Argument(const Variable& var,Function* typeConstraint,Definition* valueConstraint);
+	};
+
+	std::vector<Argument> arguments;
+
+	Function(Scope* scope,SymbolID name,Type* argumentType,Type* retType,Scope* bodyScope,Expression* body);
+
+	Function* infer(Type* type);
+};
+
+struct OverloadSet: public Definition {
+	OverloadSet* parent;
+	std::vector<Function*> functions;
+
+	OverloadSet(Scope* scope,SymbolID name);
+	Expression* prefixParse(Parser*,Token);
+	bool isOverloadSet(){ return true; }
+
+	//Tries to resolve an unresolved expression using the set symbol hierarchy
+	//Returns Unresolved expression if resolving fails
+	Expression* resolve(Expression*);
+
+	Function* add(Function* func);
+	Function* find(Expression* expr);
+};
+
+
 //Parses operators as function calls ex. 1 + 2 => add(1,2)
 struct Operator : public Definition {
 	
@@ -212,5 +263,27 @@ private:
 	SymbolID functionName;
 
 };
+
+struct Compiler {
+
+	struct Unit {
+		Parser* parser;
+		const char* filename;
+	};
+private:
+	Unit unit;
+public:
+
+	inline Unit* currentUnit() { return &unit; }
+
+	void compile(const char* name,const char* source);
+
+	void onError(Location& location,std::string message);
+
+	//testing
+	void testParse(const char* str,Scope* scope,Expression* expected,const char* file,int line);
+};
+
+extern Compiler* compiler;
 
 #endif

@@ -2,17 +2,27 @@
 #define ARPHA_H
 
 namespace arpha {
+
+	namespace Precedence {
+		enum {
+			Assignment = 10, // =
+			Tuple = 15, // ,
+			Call = 90, //()
+			Access = 100, //.
+		};
+	}
+
 	void test();
 	void init();
 
 	//core types
-	Type* type;
-	Type* expression;
-	Type* Nothing,*Unresolved,*inferred;
-	Type *constant;
-	Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
-	Type *float64,*float32;
-	Type *boolean;	
+	extern Type* type;
+	extern Type* expression;
+	extern Type* Nothing,*Unresolved,*inferred;
+	extern Type *constant;
+	extern Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
+	extern Type *float64,*float32;
+	extern Type *boolean;	
 
 	inline bool isReal(Type* type){
 		return type == float32 || type == float64;

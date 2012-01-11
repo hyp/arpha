@@ -1,15 +1,23 @@
 #include "common.h"
 #include "parser.h"
+#include "ast.h"
 #include "arpha.h"
 
 
 namespace testing {
 
-	struct Unittest {
-		Unittest(const char* name,void (*func)());
-	};	
 	
 	int iterations = 100;
+}
+
+std::string format(const char *s){
+	std::ostringstream stm;
+    while (*s) {
+        if (*s == '%' && *(++s) != '%')
+            throw std::runtime_error("invalid format string: missing arguments");
+		stm << *s++;
+    }
+	return stm.str();
 }
 
 void errorFunc(Location& location,std::string message){
@@ -24,6 +32,9 @@ void debugPrint(std::string message){
 	std::cout<<"Debug: "<<message<<std::endl;
 }
 
+
+
+
 namespace testing {
 	Unittest::Unittest(const char* name, void (*func)()) {
 		std::cout<<"Running unittest "<<name<<"... \n";
@@ -36,7 +47,9 @@ void _assert(const char* file, int line, const char* what) {
 	std::cout<<"Assertion failed: line "<<line<<'('<<what<<")!"<<std::endl;
 }
 
-#define unittest(name) void __unittest__##name(); testing::Unittest __Utest__##name(#name,& __unittest__##name); void __unittest__##name()
+
+
+
 
 
 
@@ -446,50 +459,13 @@ struct OverloadSet;
 //a function's argument
 
 
-struct Function: public Definition {
-	OverloadSet* set;
-	Type* argument;
-	Type* returnType;
-	Scope* bodyScope;
-	Expression* body;
-	Expression* constraint; //constraint for inferred functions
 
-	struct Argument {
-		Variable variable;			 // so that code inside the functions has access to arguments
-		Function* typeConstraint;  // Arithmetic
-		Definition* valueConstraint; // x <- int32 //can be type or function!
-		
-		Argument(const Variable& var,Function* typeConstraint,Definition* valueConstraint);
-	};
-
-	std::vector<Argument> arguments;
-
-	Function(Scope* scope,SymbolID name,Type* argumentType,Type* retType,Scope* bodyScope,Expression* body);
-
-	Function* infer(Type* type);
-};
 
 Function::Argument::Argument(const Variable& var,Function* typeConstraint,Definition* valueConstraint) : variable(var) {
 	this->typeConstraint = typeConstraint;
 	this->valueConstraint = valueConstraint;
 }
 
-
-struct OverloadSet: public Definition {
-	OverloadSet* parent;
-	std::vector<Function*> functions;
-
-	OverloadSet(Scope* scope,SymbolID name);
-	Expression* prefixParse(Parser*,Token);
-	bool isOverloadSet(){ return true; }
-
-	//Tries to resolve an unresolved expression using the set symbol hierarchy
-	//Returns Unresolved expression if resolving fails
-	Expression* resolve(Expression*);
-
-	Function* add(Function* func);
-	Function* find(Expression* expr);
-};
 
 
 
@@ -564,6 +540,7 @@ struct AssignmentOperator : public Definition {
 	Expression* infixParse(Parser*,Token,Expression*);
 };
 
+
 //an expression
 struct Expression {
 	enum {
@@ -582,7 +559,7 @@ struct Expression {
 		Match, //match (expr) to a to b ...
 		Label, //a:
 		Return, //return expr
-		Block // { a ; b ; ... }
+		Block // { a ; b; ... }
 	};
 	int flags;
 	Type* returnType;
@@ -628,49 +605,7 @@ Expression* Expression::lastChild(){
 	return result;
 }
 
-void Parser::expect(SymbolID token){
-	Token tok = consume();
-	if(tok.isSymbol()==false || tok.symbol!=token) error(previousLocation(),"'%s' expected!",token);
-}
 
-bool Parser::match(SymbolID token){
-	Token tok = peek();
-	if(tok.isSymbol()==false || tok.symbol!=token) return false;
-	consume();
-	return true;
-}
-
-bool Parser::match(int tokenType){
-	assert(tokenType >= Token::Symbol && tokenType <= Token::Eof); 
-	Token tok = peek();
-	if(tok.type != tokenType) return false;
-	consume();
-	return true;
-}
-
-bool Parser::isEndExpressionNext(){
-	Token tok = peek();
-	if(!tok.isEndExpression()) return false;
-	return true;
-}
-
-SymbolID Parser::expectName(){
-	Token tok = consume();
-	if(tok.isSymbol()==false) error(previousLocation(),"A valid name is expected!");
-	return tok.symbol;
-}
-
-
-
-Expression* Definition::prefixParse(Parser* parser,Token token){
-	error(parser->previousLocation(),"Can't prefix parse %s!",token);
-	return 0;
-}
-
-Expression* Definition::infixParse(Parser* parser,Token token,Expression*){
-	error(parser->previousLocation(),"Can't prefix parse %s!",token);
-	return 0;
-}
 
 IfMacro::IfMacro(SymbolID ifSymbol,SymbolID elseSymbol,int stickiness) : Definition(0,ifSymbol,stickiness) {
 	this->elseSymbol = elseSymbol;
@@ -703,6 +638,13 @@ namespace arpha {
 	Function* typeEquals;
 
 	//core types & functions
+	Type* type;
+	Type* expression;
+	Type* Nothing,*Unresolved,*inferred;
+	Type *constant;
+	Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
+	Type *float64,*float32;
+	Type *boolean;	
 
 	enum {
 		BOOL,CNST,I8,U8,I16,U16,I32,U32,I64,U64,F64,F32,TYPE_COUNT
@@ -1103,6 +1045,8 @@ AccessOperator::AccessOperator(SymbolID name,int stickiness) : Definition(0,name
 }
 
 Expression* AccessOperator::infixParse(Parser* parser,Token,Expression* expression){
+
+
 	return Access(expression,parser->currentScope,parser->expectName());
 }
 
@@ -1973,25 +1917,7 @@ void arpha::test(){
 
 	Scope* scope = new Scope(arpha::globalScope);
 
-	auto f = [&scope](const char* str,Expression* expected,const char* file,int line){
-		Parser parser(str,scope);
-
-		Expression* expr = parser.parse();
-		expr = parser.evaluate(expr);
-
-		if(expected->sameAs(expr)){
-			if(!expr->sameAs(expected)) assert(false); //also unittest same as
-			return;
-		}
-
-		printf("  !!! Test '%s' failed: Expected ", str);
-		print(expected);
-		printf(" but got ");
-		print(expr);
-		printf(" instead!\n");
-	};
-
-#define ensure(src,expr) f(src,expr,__FILE__,__LINE__)
+#define ensure(src,expr) compiler->testParse(src,scope,expr,__FILE__,__LINE__)
 
 	//constants and tuples
 	ensure("()",Constant(arpha::Nothing));
@@ -2022,24 +1948,54 @@ void arpha::test(){
 
 #undef ensure
 
-
-
 	printf("  done!\n");
 }
 
 
-
-int eval(const char* source){
-	Parser parser(source,arpha::globalScope);
+void Compiler::compile(const char* name,const char* source){
+	
+	unit.filename = name;
+	Scope* scope = new Scope(arpha::globalScope);
+	Parser parser(source,scope);
+	unit.parser = &parser;
 	evalAll(&parser,parser.parseModule());
-	return 0;					 				
+}
+
+void Compiler::testParse(const char* str,Scope* scope,Expression* expected,const char* file,int line){
+	unit.filename = "test";
+	Parser parser(str,scope);
+	unit.parser = &parser;
+
+	Expression* expr = parser.parse();
+	expr = parser.evaluate(expr);
+
+	if(expected->sameAs(expr)){
+		if(!expr->sameAs(expected)) assert(false); //also unittest same as
+		return;
+	}
+
+	printf("  !!! Test '%s' failed: Expected ", str);
+	print(expected);
+	printf(" but got ");
+	print(expr);
+	printf(" instead!\n");
+}
+
+void Compiler::onError(Location& location,std::string message){
+	std::cout<< currentUnit()->filename << '(' << location.line() << ')' <<": Error: " << message << std::endl;
 }
 
 
+
+Compiler* compiler = nullptr;
+
 int main()
 {
-	//the language definitions			
+	//the language definitions	
+	Compiler c;
+	compiler = &c;
 	arpha::init();
+
 	
 	std::string source;
 	char buf[1024];
@@ -2050,7 +2006,7 @@ int main()
 		source+=buf;
 		source+="\n";
 	}
-	eval(source.c_str());
+	compiler->compile("source",source.c_str());
 			
 	return 0;
 }

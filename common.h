@@ -6,6 +6,7 @@
 #include<math.h>
 #include <time.h>
 #include <vector>
+#include <new>
 #include <string>
 #include <map>
 #include <exception>
@@ -19,16 +20,16 @@ typedef unsigned int uint32;
 void _assert(const char* file, int line, const char* what);
 #define assert(what) ((what) ? (void)0 : _assert( __FILE__, __LINE__, (#what)))
 
-//string formatting
-std::string format(const char *s){
-	std::ostringstream stm;
-    while (*s) {
-        if (*s == '%' && *(++s) != '%')
-            throw std::runtime_error("invalid format string: missing arguments");
-		stm << *s++;
-    }
-	return stm.str();
+namespace testing {
+
+	struct Unittest {
+		Unittest(const char* name,void (*func)());
+	};	
 }
+#define unittest(name) void __unittest__##name(); testing::Unittest __Utest__##name(#name,& __unittest__##name); void __unittest__##name()
+
+//string formatting
+std::string format(const char *s);
 
 //NoVariadicTemplatesInVC2010
 #define FmtBody(...) { std::ostringstream stm; while (*s) {  \
@@ -59,7 +60,7 @@ std::string format(const char *s, T value,T2 a,T3 b,T4 c,T5 d) FmtBody(a,b,d)
 void printFunc(std::string message);
 void debugPrint(std::string message);
 
-#define error(loc,...) errorFunc(loc,format(__VA_ARGS__))
+#define error(loc,...) compiler->onError(loc,format(__VA_ARGS__))
 #define printf(...) printFunc(format(__VA_ARGS__))
 #define debug(...) debugPrint(format(__VA_ARGS__))
 
