@@ -974,10 +974,11 @@ Expression* Match(Expression* what,Expression* chain){
 	return e;
 }
 
-Expression* Access(Expression* a,Expression* b){
+Expression* Access(Expression* object,Scope* scope,SymbolID symbol){
 	Expression* e = new Expression(Expression::Access,arpha::Unresolved); // evaluate type later
-	e->children = a;
-	a->next = b;
+	e->scope = scope;
+	e->symbol = symbol;
+	e->children = object;
 	return e;
 }
 
@@ -1102,7 +1103,7 @@ AccessOperator::AccessOperator(SymbolID name,int stickiness) : Definition(0,name
 }
 
 Expression* AccessOperator::infixParse(Parser* parser,Token,Expression* expression){
-	return Access(expression,Unresolved(parser->currentScope,parser->expectName()) );
+	return Access(expression,parser->currentScope,parser->expectName());
 }
 
 Expression* OverloadSetRef(Scope* scope,SymbolID symbol){
@@ -1669,21 +1670,22 @@ Expression* Parser::evaluate(Expression* expr){
 
 		case Expression::Access:
 			//resolve the left only when right was resolved
-			next =  expr->children->next;
 			expr->children = evaluate(expr->children);
-			expr->children->next = next;
 			if(expr->children->returnType != arpha::Unresolved){
 				//TODO type.field vs type.func when both possible
-				if(( expr->children->flags == Expression::VariableRef || expr->children->flags ==Expression::FieldAccess) && next->children == 0){
+				if( ( expr->children->flags == Expression::VariableRef || expr->children->flags ==Expression::FieldAccess) ){
 					debug("--. might be field");
-					if(auto field = expr->children->returnType->operator[](next->symbol)){
+					if(auto field = expr->children->returnType->operator[](expr->symbol)){
 						debug(" It is");
 						expr = FieldAccess(expr->children,field);
 						break;
 					}
+					debug("Other access not implemented yet!");
+					assert(false);
+				}else{
+					debug("Can only access fields or variables!");
+					assert(false);
 				}
-				expr->children->next = 0;
-				expr = Unresolved(next->scope,next->symbol,Tuple(expr->children,next->children));
 			}
 			break;
 		case Expression::Index:
@@ -1817,7 +1819,7 @@ void print(Expression* expr){
 			printf(" . %s",expr->field->name);
 			break;
 		case Expression::Access:
-			printf("access(");print(expr->children);printf(" ");print(expr->children->next);printf(")");
+			printf("access(");print(expr->children);printf(" . %s)",expr->symbol);
 			break;
 		case Expression::Index:
 			printf("index[](");print(expr->children);printf(" ");print(expr->children->next);printf(")");
