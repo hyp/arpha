@@ -12,17 +12,23 @@ inline Node* evaluate(Parser* parser,CallExpression* node){
 	auto argumentType = returnType(node->arg);
 	Definition* def;
 
-	if(argumentType == arpha::Nothing) error(node->arg->location,"Can't perform function call on nothing!");
-	else if(argumentType != arpha::Unresolved){
+	if(argumentType == compiler::Nothing) error(node->arg->location,"Can't perform function call on a statement!");
+	else if(argumentType != compiler::Unresolved){
 		switch( node->object->__type){
 		CASE(OverloadSetExpression):
-			/*def = ((OverloadSetExpression*)node->object)->scope->lookup(((OverloadSetExpression*)node->object)->symbol);	
+			def = ((OverloadSetExpression*)node->object)->scope->lookup(((OverloadSetExpression*)node->object)->symbol);	
 			if(def){
 				assert(def->isOverloadSet());//TO
-				//expr = def->resolve(expr);
-				//need check before evaluation to avoid infinite recursion when resolve fails
-				//if(expr->flags != Expression::Unresolved) expr = evaluate( expr ); 
-			}*/		
+				std::vector<Function*> functions;
+				((OverloadSet*)def)->findMatches(functions,node->arg);
+				if(functions.size() == 1){
+					node->object = parser->expressionFactory->makeFunction(functions[0]);
+					debug("Overload successfully resolved as %s: %s",functions[0]->id,functions[0]->argument->id);
+				}
+				else if(functions.size() > 1){
+					error(node->location,"multiple overloads possible");
+				}
+			}	
 			break;
 		CASE(TypeExpression):
 			error(node->object->location,"Type call not implemented");
@@ -49,11 +55,11 @@ inline Node* evaluate(Parser* parser,TupleExpression* node){
 		node->children[i] = parser->evaluate( node->children[i] );
 		returns = returnType(node->children[i]);
 
-		if(returns == arpha::Nothing){
-			error(node->children[i]->location,"a tuple can't have an expression which returns nothing!");
-			node->type = arpha::Error;
+		if(returns == compiler::Nothing){
+			error(node->children[i]->location,"a tuple can't have a statement member");
+			node->type = compiler::Error;
 		}
-		else if(returns == arpha::Unresolved) node->type = arpha::Unresolved;
+		else if(returns == compiler::Unresolved) node->type = compiler::Unresolved;
 		else fields.push_back(Type::Field(returns,SymbolID()));
 	}
 

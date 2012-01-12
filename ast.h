@@ -17,8 +17,9 @@ struct Node {
 //a constant value
 EXPR(ConstantExpression,0):
 	union {
-		uint64  _uint64;
-		double _float64;
+		int64   i64;
+		uint64  u64;
+		double  f64;
 	};
 	Type* type;
 	bool _isLiteral;
@@ -93,8 +94,12 @@ struct ExpressionFactory {
 	TupleExpression* makeUnit(); //unit is a tuple with 0 elements and type arpha::Nothing
 	TupleExpression* makeTuple(Node* a,Node* b);
 
+	TypeExpression* makeType(Type* type);
+	FunctionExpression* makeFunction(Function* func);
+
 	OverloadSetExpression* makeOverloadSet(Scope* scope,SymbolID symbol);
 	CallExpression* makeCall(Node* object,Node* argument);
+	BlockExpression* makeBlock();
 };
 
 //expression always returns something

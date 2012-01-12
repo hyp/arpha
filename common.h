@@ -60,7 +60,7 @@ std::string format(const char *s, T value,T2 a,T3 b,T4 c,T5 d) FmtBody(a,b,d)
 void printFunc(std::string message);
 void debugPrint(std::string message);
 
-#define error(loc,...) compiler->onError(loc,format(__VA_ARGS__))
+#define error(loc,...) compiler::onError(loc,format(__VA_ARGS__))
 #define printf(...) printFunc(format(__VA_ARGS__))
 #define debug(...) debugPrint(format(__VA_ARGS__))
 

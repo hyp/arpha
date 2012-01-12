@@ -11,13 +11,13 @@ void* ExpressionFactory::allocate(size_t size){
 
 ConstantExpression* ExpressionFactory::makeConstant(){
 	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
-	e->type = arpha::Unresolved;
+	e->type = compiler::Error;
 	e->_isLiteral = false;
 	return e;
 }
 ConstantExpression* ExpressionFactory::makeError(){
 	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
-	e->type = arpha::Error;
+	e->type = compiler::Error;
 	e->_isLiteral = false;
 	return e;
 }
@@ -26,6 +26,18 @@ TupleExpression* ExpressionFactory::makeUnit(){
 	e->type = arpha::Nothing;
 	return e;
 }
+
+TypeExpression* ExpressionFactory::makeType(Type* type){
+	auto e =new(allocate(sizeof(TypeExpression))) TypeExpression;
+	e->type = type;
+	return e;
+}
+FunctionExpression* ExpressionFactory::makeFunction(Function* func){
+	auto e =new(allocate(sizeof(FunctionExpression))) FunctionExpression;
+	e->function = func;
+	return e;
+}
+
 OverloadSetExpression* ExpressionFactory::makeOverloadSet(Scope* scope,SymbolID symbol){
 	auto e = new(allocate(sizeof(OverloadSetExpression))) OverloadSetExpression;
 	e->scope = scope;
@@ -48,34 +60,52 @@ TupleExpression* ExpressionFactory::makeTuple(Node* a,Node* b){
 	e->children.push_back(b);
 	return e;
 }
+BlockExpression* ExpressionFactory::makeBlock(){
+	return new(allocate(sizeof(BlockExpression))) BlockExpression;
+}
 
 #define CASE(t) case t::__value__
+
+static Type* literalConstantReturnType(const ConstantExpression* node){
+		if(node->type == arpha::int64)
+			return abs(node->i64) <= int64(std::numeric_limits<int>::max()) ? arpha::int32 : arpha::int64;
+		else if(node->type == arpha::uint64){
+			if(node->u64 <= uint64(std::numeric_limits<int>::max())) return arpha::int32;
+			else if(node->u64 <= uint64(std::numeric_limits<uint32>::max())) return arpha::uint32;
+			else if(node->u64 <= uint64(std::numeric_limits<int64>::max())) return arpha::int64;
+			else return arpha::uint64;		
+		}
+		else if(node->type == arpha::float64) return arpha::float64;
+		assert(false);
+		return nullptr;
+}
 
 Type* returnType(const Node* node){
 
 	switch(node->__type){
 		CASE(ConstantExpression): 
-	//TODO is Litteral check
+			if( ((ConstantExpression*)node)->isLiteral() ) return literalConstantReturnType((ConstantExpression*)node);
 			return ((ConstantExpression*)node)->type;
-		CASE(TypeExpression):     return arpha::type;
+		CASE(TypeExpression):     return compiler::type;
 		CASE(VariableExpression): return ((VariableExpression*)node)->variable->type;
 		CASE(CallExpression):	  return ((CallExpression*)node)->object->is<FunctionExpression> () ? 
-									( (FunctionExpression*)(((CallExpression*)node)->object) )->function->returnType : arpha::Unresolved;
+									( (FunctionExpression*)(((CallExpression*)node)->object) )->function->returnType : compiler::Unresolved;
 		CASE(FieldAccessExpression): return ((FieldAccessExpression*)node)->field->type;
 		CASE(AssignmentExpression):  return returnType( ((AssignmentExpression*)node)->object.v );
 		CASE(TupleExpression): assert(((TupleExpression*) node)->type); return ((TupleExpression*) node)->type;
 	}
 
-	return arpha::Nothing;
+	return compiler::Nothing;
 }
 
 std::ostream& operator<< (std::ostream& stream,const ConstantExpression* node){
-	if(node->type == arpha::uint64)       stream<<node->_uint64;
-	else if(node->type == arpha::float64) stream<<node->_float64;
-	else if(node->type == arpha::Error)   stream<<"error";
+	if(node->isLiteral()) stream<<'#';
+	if(node->type == arpha::uint64)       stream<<node->u64;
+	else if(node->type == arpha::int64) stream<<node->i64;
+	else if(node->type == arpha::float64) stream<<node->f64;
+	else if(node->type == compiler::Error)   stream<<"error";
 	else if(node->type == arpha::Nothing) stream<<"nothing";
 	else assert(false);
-	if(node->isLiteral()) stream<<'#';
 	return stream;
 }
 

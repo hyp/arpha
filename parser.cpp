@@ -48,6 +48,31 @@ SymbolID Parser::expectName(){
 	return tok.symbol;
 }
 
+Node* Parser::_parseModule(){
+	//top level
+	Node* block = expressionFactory->makeBlock();
+	Token token;
+	
+	while(1){
+		token = peek();
+		if(token.isEOF()) break;
+		else if(token.isEndExpression()){
+			consume();
+			continue;
+		}
+
+		((BlockExpression*)block)->children.push_back(_parse());
+
+		token = consume();
+		if(token.isEOF()) break;
+		else if(!token.isEndExpression()) error(previousLocation(),"';' expected!");
+	}
+
+	if(((BlockExpression*)block)->children.size() == 0) error(previousLocation(),"the source file is empty!");
+
+	return block;
+}
+
 Node* Parser::_parse(int stickiness){
 	
 	Node* expression;
@@ -60,7 +85,7 @@ Node* Parser::_parse(int stickiness){
 		expression = expressionFactory->makeConstant();
 		((ConstantExpression*)expression)->type       = arpha::uint64;
 		((ConstantExpression*)expression)->_isLiteral = true;
-		((ConstantExpression*)expression)->_uint64    = lookedUpToken.uinteger;
+		((ConstantExpression*)expression)->u64    = lookedUpToken.uinteger;
 	}
 	else if(lookedUpToken.isSymbol()){
 		Definition* parselet = _currentScope->lookup(lookedUpToken.symbol);
@@ -107,6 +132,10 @@ Node* Definition::infixParse(Parser* parser,Node*){
 	return nullptr;
 }
 
+Node* Type::prefixParse(Parser* parser){
+	return parser->expressionFactory->makeType(this);
+}
+
 Node* OverloadSet::prefixParse(Parser* parser){
 	return parser->expressionFactory->makeOverloadSet(parser->currentScope(),parser->lookedUpToken.symbol);
 }
@@ -130,26 +159,3 @@ TupleParser::TupleParser(SymbolID op,int sticky) : Definition(nullptr,op,sticky)
 Node* TupleParser::infixParse(Parser* parser,Node* node){
 	return parser->expressionFactory->makeTuple(node,parser->_parse(stickiness));
 }
-
-//core
-/*SymbolID parenthesisCloser;
-
-Node* parseParenthesis(Definition*,Parser* parser){
-	if( parser->match(parenthesisCloser) ){
-		parser->consume();
-		return 
-	}
-	auto e = parser->parse();
-	parser->expect(")");
-	return (Node*)e;
-}
-
-Node* parseCall(Definition*,Parser*,Node*){
-}
-
-Node* parseTuple(Definition*,Parser*,Node*){
-}
-Node* parseAccess(Definition*,Parser*,Node*){
-}
-Node* parseAssignment(Definition*,Parser*,Node*){
-	}*/

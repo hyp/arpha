@@ -21,10 +21,6 @@ std::string format(const char *s){
 	return stm.str();
 }
 
-void errorFunc(Location& location,std::string message){
-	std::cout<<'('<<location.line()<<')'<<": Error: "<<message<<std::endl;
-}
-
 void printFunc(std::string message){
 	std::cout<<message;
 }
@@ -642,7 +638,7 @@ namespace arpha {
 	//core types & functions
 	Type* type;
 	Type* expression;
-	Type* Nothing,*Unresolved,*inferred,*Error;
+	Type* Nothing,*Unresolved,*inferred;
 	Type *constant;
 	Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
 	Type *float64,*float32;
@@ -746,7 +742,6 @@ namespace arpha {
 		Nothing = builtInType("Nothing",0);
 		
 		Unresolved = new Type(scope,SymbolID("Unresolved"),0);
-		Error = new Type(scope,SymbolID("Error"),0);
 		inferred = new Type(scope,SymbolID("inferred"),0); //TOFIX & TODO use it as a wildcard '_' type
 		constant = builtInType("constant",0);
 
@@ -781,9 +776,9 @@ namespace arpha {
 		basicFunctions();
 
 		//line = new Function(scope,SymbolID("line"),Nothing,float64,0,0);
-		typeof = createFunction(scope,"typeof",type,expression,"expression");
-		_sizeof = createFunction(scope,"sizeof",constant,expression,"expression"); 
-		typeEquals = createFunction(scope,"equals",boolean,type,"type",type,"another-type");
+		typeof = createFunction(scope,"typeof",compiler::type,compiler::expression,"expression");
+		_sizeof = createFunction(scope,"sizeof",constant,compiler::expression,"expression"); 
+		typeEquals = createFunction(scope,"equals",boolean,compiler::type,"type",compiler::type,"another-type");
 
 		//test();
 	}
@@ -1266,6 +1261,33 @@ Function* OverloadSet::find(Expression* expr){
 	if(exprMatch) return exprMatch;
 	return 0;
 }
+
+void OverloadSet::findMatches(std::vector<Function*>& results,const Node* argument){
+	Type* argumentType = returnType(argument);
+	Function *implicitMatch = 0,*inferMatch = 0,*exprMatch = 0;//lastResort
+
+	for(auto i=functions.begin();i!=functions.end();++i){
+		if((*i)->argument == argumentType && argumentType!=arpha::inferred){
+			//QUICK HACKZ
+			debug("%d",(*i)->arguments.size());
+			/*if((*i)->arguments[0].valueConstraint && ((Type*) (*i)->arguments[0].valueConstraint) != expr->type){
+				debug("Value constraint %s in action against %s!",(*i)->arguments[0].valueConstraint->id,expr->type->id);
+			}*/
+			results.push_back(*i);
+		}
+		else if( (*i)->argument->canAssignFrom(argumentType) ){
+			debug("Imlicit function call function %s with args %s",id,argumentType->id);
+			results.push_back(*i);
+		}
+		else if( canInfer((*i)->argument,argumentType) ){
+			debug("Infering function %s with args %s",id,argumentType->id);
+			results.push_back(*i);
+		}
+		else if((*i)->argument == compiler::expression) exprMatch = *i;
+	}
+	if(exprMatch) results.push_back( exprMatch );
+}
+
 
 Expression* OverloadSet::resolve(Expression* expr){
 	//TODO set hierarchy
@@ -1918,7 +1940,50 @@ bool Expression::sameAs(Expression* other){
 }
 
 
-void arpha::test(){
+namespace compiler {
+	static const char* filename;
+
+	Type* expression;
+	Type* type;
+	Type* Nothing; 
+	Type* Error;
+	Type* Unresolved;
+
+	Type* builtInType(const char* name){
+		auto t = new Type(arpha::globalScope,SymbolID(name),0);
+		arpha::globalScope->define(t);
+		return t;
+	}
+
+void init(){
+
+	expression = builtInType("cExpression");
+	type = builtInType("cType");
+	Nothing = builtInType("cAbsolutelyNothing");
+	Error = builtInType("cError");
+	Unresolved = builtInType("cUnresolved");
+
+}
+
+void compile(const char* name,const char* source){
+
+	filename = name;
+	printf("------------------- new version: ------------------------------\n");
+	Scope* scope = new Scope(arpha::globalScope);
+	Parser parser2(source,scope);
+	ExpressionFactory expressions;
+	parser2.expressionFactory = &expressions;
+	printf("%s\n",parser2._parseModule());
+
+}
+
+void onError(Location& location,std::string message){
+	std::cout<< filename << '(' << location.line() << ')' <<": Error: " << message << std::endl;
+}
+
+}
+
+/*void arpha::test(){
 	//Parser testing
 	printf("Running language tests...\n");
 
@@ -1956,63 +2021,16 @@ void arpha::test(){
 #undef ensure
 
 	printf("  done!\n");
-}
+}*/
 
-void Compiler::Unit::markCurrentBlockAsUnresolved(){
-}
-
-void Compiler::compile(const char* name,const char* source){
-	
-	unit.filename = name;
-	Scope* scope = new Scope(arpha::globalScope);
-	Parser parser(source,scope);
-	unit.parser = &parser;
-	evalAll(&parser,parser.parseModule());
-	printf("------------------- new version: ------------------------------\n");
-	scope = new Scope(arpha::globalScope);
-	Parser parser2(source,scope);
-	parser2.expressionFactory = &unit.expressions;
-	unit.parser = &parser2;
-	printf("%s\n",parser2._parse());
-
-}
-
-void Compiler::testParse(const char* str,Scope* scope,Expression* expected,const char* file,int line){
-	unit.filename = "test";
-	Parser parser(str,scope);
-	unit.parser = &parser;
-
-	Expression* expr = parser.parse();
-	expr = parser.evaluate(expr);
-
-	if(expected->sameAs(expr)){
-		if(!expr->sameAs(expected)) assert(false); //also unittest same as
-		return;
-	}
-
-	printf("  !!! Test '%s' failed: Expected ", str);
-	print(expected);
-	printf(" but got ");
-	print(expr);
-	printf(" instead!\n");
-}
-
-void Compiler::onError(Location& location,std::string message){
-	std::cout<< currentUnit()->filename << '(' << location.line() << ')' <<": Error: " << message << std::endl;
-}
-
-
-
-Compiler* compiler = nullptr;
 
 int main()
 {
 	//the language definitions	
-	Compiler c;
-	compiler = &c;
+	
 	arpha::init();
 
-	
+	compiler::init();
 
 	
 	std::string source;
@@ -2024,7 +2042,7 @@ int main()
 		source+=buf;
 		source+="\n";
 	}
-	compiler->compile("source",source.c_str());
+	compiler::compile("source",source.c_str());
 			
 	return 0;
 }

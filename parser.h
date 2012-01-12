@@ -79,6 +79,7 @@ struct Parser : Lexer {
 	bool isEndExpressionNext();
 
 	Node* _parse(int stickiness =  0);
+	Node* _parseModule();
 	
 	/// Returns a raw expression, which may contain unresolved symbols
 	Expression* parse(int stickiness = 0);
@@ -187,6 +188,7 @@ struct Type: public Definition {
 
 	Type(Scope* scope,SymbolID name,size_t sz);
 
+	Node* prefixParse(Parser* parser);
 	Expression* prefixParse(Parser*,Token);
 
 	//map like interface for field queries
@@ -261,6 +263,7 @@ struct OverloadSet: public Definition {
 
 	//Tries to resolve an unresolved expression using the set symbol hierarchy
 	//Returns Unresolved expression if resolving fails
+	void findMatches(std::vector<Function*>& results,const Node* argument);
 	Expression* resolve(Expression*);
 
 	Function* add(Function* func);
