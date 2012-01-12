@@ -1,10 +1,26 @@
 #include "common.h"
 #include "parser.h"
+#include "interpreter.h"
 #include "ast.h"
 #include "compiler.h"
 #include "arpha.h"
 
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
+
+Node* evaluateResolvedFunctionCall(Parser* parser,CallExpression* node){
+	auto function = ((FunctionExpression*)node->object)->function;
+	bool interpret = false;
+
+	if(function->argument == compiler::expression) interpret = true;
+	else if(node->arg->is<TypeExpression>()) interpret = true;
+
+	
+	if(!interpret) return node;
+	debug("Interpreting function call %s with %s",function->id,node->arg);
+	Interpreter interpreter;
+	interpreter.expressionFactory = parser->expressionFactory;
+	return interpreter.interpret(node);
+}
 
 inline Node* evaluate(Parser* parser,CallExpression* node){
 #define CASE(t) case t::__value__
@@ -23,7 +39,9 @@ inline Node* evaluate(Parser* parser,CallExpression* node){
 				((OverloadSet*)def)->findMatches(functions,node->arg);
 				if(functions.size() == 1){
 					node->object = parser->expressionFactory->makeFunction(functions[0]);
+					//TODO function->adjustArgument
 					debug("Overload successfully resolved as %s: %s",functions[0]->id,functions[0]->argument->id);
+					return evaluateResolvedFunctionCall(parser,node);
 				}
 				else if(functions.size() > 1){
 					error(node->location,"multiple overloads possible");

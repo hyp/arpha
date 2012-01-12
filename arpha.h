@@ -16,6 +16,11 @@ namespace arpha {
 	void init();
 
 	extern Scope* globalScope,*scope;
+
+	//core functions
+	extern Function* typeof;
+	extern Function* _sizeof;
+
 	//core types
 	extern Type* type;
 	extern Type* expression;
@@ -23,6 +28,7 @@ namespace arpha {
 	extern Type *constant;
 	extern Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
 	extern Type *float64,*float32;
+
 	extern Type *boolean;	
 
 	inline bool isReal(Type* type){

@@ -1,5 +1,6 @@
 #include "common.h"
 #include "parser.h"
+#include "interpreter.h"
 #include "ast.h"
 #include "compiler.h"
 #include "arpha.h"
@@ -717,7 +718,7 @@ namespace arpha {
 
 	void init(){
 		Location location(0);
-		scope = new Scope(0);
+		scope = new Scope(compiler::scope);
 		globalScope = new Scope(scope);
 		//globalScope->parent = scope;
 
@@ -1941,7 +1942,9 @@ bool Expression::sameAs(Expression* other){
 
 
 namespace compiler {
-	static const char* filename;
+	static TranslationUnit* currentUnit;
+
+	Scope* scope;
 
 	Type* expression;
 	Type* type;
@@ -1950,12 +1953,13 @@ namespace compiler {
 	Type* Unresolved;
 
 	Type* builtInType(const char* name){
-		auto t = new Type(arpha::globalScope,SymbolID(name),0);
-		arpha::globalScope->define(t);
+		auto t = new Type(scope,SymbolID(name),0);
+		scope->define(t);
 		return t;
 	}
 
 void init(){
+	scope = new Scope(0);
 
 	expression = builtInType("cExpression");
 	type = builtInType("cType");
@@ -1963,22 +1967,27 @@ void init(){
 	Error = builtInType("cError");
 	Unresolved = builtInType("cUnresolved");
 
+	currentUnit = nullptr;
 }
 
 void compile(const char* name,const char* source){
-
-	filename = name;
-	printf("------------------- new version: ------------------------------\n");
+	TranslationUnit unit;
+	unit.filename = name;
+	unit.compile = true;
+	auto prevUnit = currentUnit;
+	currentUnit = &unit;
+	
 	Scope* scope = new Scope(arpha::globalScope);
-	Parser parser2(source,scope);
-	ExpressionFactory expressions;
-	parser2.expressionFactory = &expressions;
-	printf("%s\n",parser2._parseModule());
+	Parser parser(source,scope);
 
+	printf("------------------- new version: ------------------------------\n");
+	printf("%s\n",parser._parseModule());
+
+	currentUnit = prevUnit;
 }
 
 void onError(Location& location,std::string message){
-	std::cout<< filename << '(' << location.line() << ')' <<": Error: " << message << std::endl;
+	std::cout<< currentUnit->filename << '(' << location.line() << ')' <<": Error: " << message << std::endl;
 }
 
 }
@@ -2027,10 +2036,10 @@ void onError(Location& location,std::string message){
 int main()
 {
 	//the language definitions	
-	
+	compiler::init();
 	arpha::init();
 
-	compiler::init();
+	
 
 	
 	std::string source;
