@@ -58,6 +58,7 @@ struct Expression;
 struct Scope;
 struct Definition;
 struct OverloadSet;
+struct ExpressionFactory;
 
 struct Parser : Lexer {
 	struct State {
@@ -76,6 +77,8 @@ struct Parser : Lexer {
 	bool match(int tokenType);
 
 	bool isEndExpressionNext();
+
+	Node* _parse(int stickiness =  0);
 	
 	/// Returns a raw expression, which may contain unresolved symbols
 	Expression* parse(int stickiness = 0);
@@ -86,23 +89,28 @@ struct Parser : Lexer {
 	Expression* parseModule();
 
 	/// Resolve symbols, find the matching function call overloads, constant fold
+	Node* evaluate(Node* node);
 	Expression* evaluate(Expression*);
 
 	//Current parsing state
-	Scope* currentScope;
+	Token  lookedUpToken;
+	Scope* _currentScope;
+	ExpressionFactory* expressionFactory;
 	size_t unresolvedExpressions,solvedExpressions;
+
+	inline Scope* currentScope() const { return _currentScope; }
 };
 
-Node* parseParenthesis(Definition*,Parser*);      // ::= '(' expression ')'
-Node* parseCall(Definition*,Parser*,Node*);       // ::= expression '(' expression ')'
-Node* parseTuple(Definition*,Parser*,Node*);      // ::= expression ',' expression
-Node* parseAccess(Definition*,Parser*,Node*);     // ::= expression '.' expression
-Node* parseAssignment(Definition*,Parser*,Node*); // ::= expression '=' expression
+
+
 
 
 //Defines how to parse a name
 
 struct Definition {
+
+	virtual Node* prefixParse(Parser*);
+	virtual Node* infixParse(Parser*,Node*);
 
 	virtual Expression* prefixParse(Parser*,Token);
 	virtual Expression* infixParse(Parser*,Token,Expression*);
@@ -128,7 +136,21 @@ protected:
 	OverloadSet* getSet();
 };
 
+//::= '(' expression ')'
+//::= expression '(' expression ')'
+struct ParenthesisParser : Definition {
+	ParenthesisParser(SymbolID open,SymbolID close,int sticky);
+	
+	Node* prefixParse(Parser*);
+	Node* infixParse(Parser*,Node*);
+private: SymbolID closer;
+};
 
+//::= expression ',' expression
+struct TupleParser : Definition {
+	TupleParser(SymbolID op,int sticky);
+	Node* infixParse(Parser*,Node*);
+};
 
 struct Scope {
 
@@ -231,6 +253,9 @@ struct OverloadSet: public Definition {
 	std::vector<Function*> functions;
 
 	OverloadSet(Scope* scope,SymbolID name);
+
+	Node* prefixParse(Parser*);
+
 	Expression* prefixParse(Parser*,Token);
 	bool isOverloadSet(){ return true; }
 
@@ -264,26 +289,6 @@ private:
 
 };
 
-struct Compiler {
 
-	struct Unit {
-		Parser* parser;
-		const char* filename;
-	};
-private:
-	Unit unit;
-public:
-
-	inline Unit* currentUnit() { return &unit; }
-
-	void compile(const char* name,const char* source);
-
-	void onError(Location& location,std::string message);
-
-	//testing
-	void testParse(const char* str,Scope* scope,Expression* expected,const char* file,int line);
-};
-
-extern Compiler* compiler;
 
 #endif

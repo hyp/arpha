@@ -1,7 +1,20 @@
 #include "common.h"
 #include "parser.h"
 #include "ast.h"
+#include "compiler.h"
 #include "arpha.h"
+
+Parser::Parser(const char* src,Scope* scope) : Lexer(src) { _currentScope=scope; }
+
+Parser::State Parser::getState(){
+		State state;
+		state.ptr = ptr;
+		return state;
+}
+
+void Parser::restoreState(Parser::State& state){
+		ptr = state.ptr;
+}
 
 void Parser::expect(SymbolID token){
 	Token tok = consume();
@@ -35,14 +48,87 @@ SymbolID Parser::expectName(){
 	return tok.symbol;
 }
 
-Expression* Definition::prefixParse(Parser* parser,Token token){
-	error(parser->previousLocation(),"Can't prefix parse %s!",token);
-	return 0;
+Node* Parser::_parse(int stickiness){
+	
+	Node* expression;
+
+	//prefix	
+	Location location = currentLocation();
+	lookedUpToken = consume();
+	if(lookedUpToken.isUinteger()){
+		//
+		expression = expressionFactory->makeConstant();
+		((ConstantExpression*)expression)->type       = arpha::uint64;
+		((ConstantExpression*)expression)->_isLiteral = true;
+		((ConstantExpression*)expression)->_uint64    = lookedUpToken.uinteger;
+	}
+	else if(lookedUpToken.isSymbol()){
+		Definition* parselet = _currentScope->lookup(lookedUpToken.symbol);
+		if(!parselet){ 
+			error(location,"Can't prefix parse %s!",lookedUpToken); 
+			expression = expressionFactory->makeError();
+		}else{
+			expression = parselet->prefixParse(this);
+		}
+	}
+	else {
+		error(location,"Can't prefix parse %s!",lookedUpToken);
+		expression = expressionFactory->makeError();
+	}
+	expression->location = location;
+	expression = evaluate(expression);
+
+	//infix parsing
+	//Token token;
+	while(1){
+		lookedUpToken = peek();
+		if(lookedUpToken.isSymbol()){
+			Definition* parselet = _currentScope->lookup(lookedUpToken.symbol);
+			if(parselet && stickiness < parselet->stickiness){
+				location = currentLocation();
+				consume();
+				expression = parselet->infixParse(this,expression);
+				expression->location = location;
+				expression = evaluate(expression);
+			}
+			else break;
+		}else break;	
+	}	
+	return expression;	
 }
 
-Expression* Definition::infixParse(Parser* parser,Token token,Expression*){
-	error(parser->previousLocation(),"Can't prefix parse %s!",token);
-	return 0;
+Node* Definition::prefixParse(Parser* parser){
+	error(parser->previousLocation(),"Can't prefix parse %s!",parser->lookedUpToken);
+	return parser->expressionFactory->makeError();
+}
+
+Node* Definition::infixParse(Parser* parser,Node*){
+	assert(false); //TODO throw
+	return nullptr;
+}
+
+Node* OverloadSet::prefixParse(Parser* parser){
+	return parser->expressionFactory->makeOverloadSet(parser->currentScope(),parser->lookedUpToken.symbol);
+}
+
+//arpha concepts
+ParenthesisParser::ParenthesisParser(SymbolID open,SymbolID close,int sticky) : Definition(nullptr,open,sticky) {
+	closer= close;
+}
+Node* ParenthesisParser::prefixParse(Parser* parser){
+	if( parser->match(closer) )
+		return parser->expressionFactory->makeUnit();
+	auto e = parser->_parse();
+	parser->expect(closer);
+	return e;
+}
+Node* ParenthesisParser::infixParse(Parser* parser,Node* node){
+	return parser->expressionFactory->makeCall(node,prefixParse(parser));
+}
+
+TupleParser::TupleParser(SymbolID op,int sticky) : Definition(nullptr,op,sticky) {}
+Node* TupleParser::infixParse(Parser* parser,Node* node){
+	return parser->expressionFactory->makeTuple(node,parser->_parse(stickiness));
 }
 
 //core

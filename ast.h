@@ -14,8 +14,16 @@ struct Node {
 
 #define EXPR(name,id) struct name : public Node { enum { __value__ = id }; inline name() { __type = id; } public
 
+//a constant value
 EXPR(ConstantExpression,0):
-	uint64 uinteger;
+	union {
+		uint64  _uint64;
+		double _float64;
+	};
+	Type* type;
+	bool _isLiteral;
+
+	inline const bool isLiteral() const { return _isLiteral; }
 };
 
 EXPR(TypeExpression,1):
@@ -32,7 +40,7 @@ EXPR(FunctionExpression,3):
 
 EXPR(OverloadSetExpression,4):
 	Scope* scope;
-	SymbolID name;
+	SymbolID symbol;
 };
 
 EXPR(TupleExpression,5):
@@ -75,11 +83,19 @@ EXPR(BlockExpression,10):
 	std::vector<Node*> children;
 };
 
-#define EXPRESSION_TYPELIST(f) f(ConstantExpression) f(TypeExpression) f(VariableExpression) f(FunctionExpression) f(OverloadSetExpression) f(TupleExpression) f(CallExpression) \
-	f(FieldAccessExpression) f(AssignmentExpression) f(ReturnExpression) f(BlockExpression)
-
-
 #undef EXPR
+
+struct ExpressionFactory {
+	void* allocate(size_t size);
+
+	ConstantExpression* makeConstant();
+	ConstantExpression* makeError();
+	TupleExpression* makeUnit(); //unit is a tuple with 0 elements and type arpha::Nothing
+	TupleExpression* makeTuple(Node* a,Node* b);
+
+	OverloadSetExpression* makeOverloadSet(Scope* scope,SymbolID symbol);
+	CallExpression* makeCall(Node* object,Node* argument);
+};
 
 //expression always returns something
 Type* returnType(const Node* node);

@@ -1,6 +1,7 @@
 #include "common.h"
 #include "parser.h"
 #include "ast.h"
+#include "compiler.h"
 #include "arpha.h"
 
 
@@ -44,7 +45,7 @@ namespace testing {
 }
 
 void _assert(const char* file, int line, const char* what) {
-	std::cout<<"Assertion failed: line "<<line<<'('<<what<<")!"<<std::endl;
+	std::cout<<"Assertion failed: file: "<<file<<" line: "<<line<<'('<<what<<")!"<<std::endl;
 }
 
 
@@ -259,16 +260,17 @@ unittest(lexer){
 
 
 
-Parser::Parser(const char* src,Scope* scope) : Lexer(src) { currentScope=scope; }
-Parser::State Parser::getState(){
-		State state;
-		state.ptr = ptr;
-		return state;
-}
-void Parser::restoreState(Parser::State& state){
-		ptr = state.ptr;
+
+
+Expression* Definition::prefixParse(Parser* parser,Token token){
+	error(parser->previousLocation(),"Can't prefix parse %s!",token);
+	return 0;
 }
 
+Expression* Definition::infixParse(Parser* parser,Token token,Expression*){
+	error(parser->previousLocation(),"Can't prefix parse %s!",token);
+	return 0;
+}
 
 Expression* Definition::resolve(Expression* expr) { return expr; }
 
@@ -640,7 +642,7 @@ namespace arpha {
 	//core types & functions
 	Type* type;
 	Type* expression;
-	Type* Nothing,*Unresolved,*inferred;
+	Type* Nothing,*Unresolved,*inferred,*Error;
 	Type *constant;
 	Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
 	Type *float64,*float32;
@@ -723,8 +725,11 @@ namespace arpha {
 		globalScope = new Scope(scope);
 		//globalScope->parent = scope;
 
-		globalScope->define(new Parentheses(SymbolID("("),SymbolID(")")));
-		globalScope->define(new ListOperator(SymbolID(","),15));
+		//globalScope->define(new Parentheses(SymbolID("("),SymbolID(")")));
+		globalScope->define(new ParenthesisParser("(",")",arpha::Precedence::Call));
+		globalScope->define(new TupleParser(SymbolID(","),arpha::Precedence::Tuple));
+
+		//globalScope->define(new ListOperator(SymbolID(","),15));
 		globalScope->define(new IfMacro(SymbolID("if"),SymbolID("else"),15));
 		globalScope->define(new AccessOperator(".",110));
 		globalScope->define(new IndexOperator("[","]",80));
@@ -739,7 +744,9 @@ namespace arpha {
 		type = builtInType("Type",0);
 		expression = builtInType("expression",0);
 		Nothing = builtInType("Nothing",0);
+		
 		Unresolved = new Type(scope,SymbolID("Unresolved"),0);
+		Error = new Type(scope,SymbolID("Error"),0);
 		inferred = new Type(scope,SymbolID("inferred"),0); //TOFIX & TODO use it as a wildcard '_' type
 		constant = builtInType("constant",0);
 
@@ -778,7 +785,7 @@ namespace arpha {
 		_sizeof = createFunction(scope,"sizeof",constant,expression,"expression"); 
 		typeEquals = createFunction(scope,"equals",boolean,type,"type",type,"another-type");
 
-		test();
+		//test();
 	}
 };
 
@@ -969,7 +976,7 @@ IndexOperator::IndexOperator(SymbolID start,SymbolID end,int stickiness) : Defin
 Expression* IndexOperator::infixParse(Parser* parser,Token token,Expression* expr){
 	Expression* inner = parser->parse();
 	parser->expect(closingSymbol);
-	return Index(parser->currentScope,expr,inner);
+	return Index(parser->_currentScope,expr,inner);
 }
 
 
@@ -1004,8 +1011,8 @@ Expression* VarStatement::prefixParse(Parser* parser,Token){
 	std::vector<Variable*> vars;
 	do{
 		SymbolID name = parser->expectName();
-		Variable* var = new Variable(parser->currentScope,name,parser->previousLocation(),arpha::Unresolved);
-		parser->currentScope->define(var);
+		Variable* var = new Variable(parser->_currentScope,name,parser->previousLocation(),arpha::Unresolved);
+		parser->_currentScope->define(var);
 
 		if(tuple) tuple = Tuple(tuple,VariableReference(var));
 		else tuple = VariableReference(var);
@@ -1047,7 +1054,7 @@ AccessOperator::AccessOperator(SymbolID name,int stickiness) : Definition(0,name
 Expression* AccessOperator::infixParse(Parser* parser,Token,Expression* expression){
 
 
-	return Access(expression,parser->currentScope,parser->expectName());
+	return Access(expression,parser->_currentScope,parser->expectName());
 }
 
 Expression* OverloadSetRef(Scope* scope,SymbolID symbol){
@@ -1085,7 +1092,7 @@ TypeStatement::TypeStatement() : Definition(0,"type") {}
 
 Expression* TypeStatement::prefixParse(Parser* parser,Token){
 	SymbolID name = parser->expectName();
-	return TypeReference(new Type(parser->currentScope,name,0));
+	return TypeReference(new Type(parser->_currentScope,name,0));
 }
 
 DefStatement::DefStatement(SymbolID name) : Definition(0,name) {}
@@ -1108,7 +1115,7 @@ Expression* DefStatement::prefixParse(Parser* parser,Token){
 	//Function
 	if( parser->match("(") ){
 		Type* argumentType = arpha::Nothing;
-		Scope* bodyScope = new Scope(parser->currentScope);
+		Scope* bodyScope = new Scope(parser->_currentScope);
 		std::vector<Function::Argument> arguments;
 		Variable* var;
 		if(!parser->match(")")){
@@ -1142,14 +1149,14 @@ Expression* DefStatement::prefixParse(Parser* parser,Token){
 		Expression* body;
 		
 		Type* returnType = arpha::Unresolved;
-		Scope* oldScope= parser->currentScope;
-		parser->currentScope = bodyScope;
+		Scope* oldScope= parser->_currentScope;
+		parser->_currentScope = bodyScope;
 		if(parser->match("=")){
 			body = Return(bodyScope,parser->parse());
 		}else{
 			body = parser->parseBlock();
 		}
-		parser->currentScope = oldScope;
+		parser->_currentScope = oldScope;
 		
 		
 		auto f = new Function(oldScope,name,argumentType,returnType,bodyScope,body);
@@ -1165,7 +1172,7 @@ Expression* DefStatement::prefixParse(Parser* parser,Token){
 	//Or substitute
 	else{
 		parser->expect("=");
-		parser->currentScope->define( new Substitute(parser->currentScope,name,parser->previousLocation(),parser->parse()) );
+		parser->_currentScope->define( new Substitute(parser->_currentScope,name,parser->previousLocation(),parser->parse()) );
 	}
 	return Constant(arpha::Nothing);
 }
@@ -1178,7 +1185,7 @@ Expression* FunctionCall(Function* func,Expression* arguments){
 }
 
 Expression* ReturnStatement::prefixParse(Parser* parser,Token token){
-	return Return(parser->currentScope,parser->isEndExpressionNext() ?  Constant(arpha::Nothing) : parser->parse());
+	return Return(parser->_currentScope,parser->isEndExpressionNext() ?  Constant(arpha::Nothing) : parser->parse());
 }
 
 
@@ -1274,7 +1281,7 @@ Expression* OverloadSet::resolve(Expression* expr){
 }
 
 Expression* OverloadSet::prefixParse(Parser* parser,Token token){
-	return OverloadSetRef(parser->currentScope,token.symbol);
+	return OverloadSetRef(parser->_currentScope,token.symbol);
 }
 
 Expression* Type::prefixParse(Parser* parser,Token){
@@ -1300,8 +1307,8 @@ Expression* Operator::Parselet::prefixParse(Parser* parser,Token){
 		error(parser->previousLocation(),"'=' or 'priority' expected");
 	}
 
-	auto op = new Operator(parser->currentScope,name,parser->previousLocation(),func,sticky);
-	parser->currentScope->define(op);
+	auto op = new Operator(parser->_currentScope,name,parser->previousLocation(),func,sticky);
+	parser->_currentScope->define(op);
 
 	return Constant(arpha::Nothing);
 }
@@ -1310,10 +1317,10 @@ Operator::Operator(Scope* scope,SymbolID name,Location location,SymbolID func,in
 	functionName = func;
 }
 Expression* Operator::prefixParse(Parser* parser,Token){
-	return Call(OverloadSetRef(parser->currentScope,functionName),parser->parse());
+	return Call(OverloadSetRef(parser->_currentScope,functionName),parser->parse());
 }
 Expression* Operator::infixParse(Parser* parser,Token,Expression* a){
-	return Call(OverloadSetRef(parser->currentScope,functionName),Tuple(a,parser->parse(stickiness)));
+	return Call(OverloadSetRef(parser->_currentScope,functionName),Tuple(a,parser->parse(stickiness)));
 }
 
 
@@ -1866,7 +1873,7 @@ Expression* Parser::parse(int stickiness){
 			debug("Named argument %s %s",token,next);
 			expression = Label(token.symbol,parse(16));
 		}else{
-			Definition* parselet = currentScope->lookup(token.symbol);
+			Definition* parselet = _currentScope->lookup(token.symbol);
 			if(!parselet) { error(previousLocation(),"Can't prefix parse %s!",token); return 0; }
 			expression = parselet->prefixParse(this,token);
 		}
@@ -1881,7 +1888,7 @@ Expression* Parser::parse(int stickiness){
 	while(1){
 		token = peek();
 		if(token.isSymbol()){
-			Definition* parselet = currentScope->lookup(token.symbol);
+			Definition* parselet = _currentScope->lookup(token.symbol);
 			if(parselet && stickiness < parselet->stickiness) expression = parselet->infixParse(this,consume(),expression);						
 			else break;
 		}else break;	
@@ -1951,6 +1958,8 @@ void arpha::test(){
 	printf("  done!\n");
 }
 
+void Compiler::Unit::markCurrentBlockAsUnresolved(){
+}
 
 void Compiler::compile(const char* name,const char* source){
 	
@@ -1959,6 +1968,13 @@ void Compiler::compile(const char* name,const char* source){
 	Parser parser(source,scope);
 	unit.parser = &parser;
 	evalAll(&parser,parser.parseModule());
+	printf("------------------- new version: ------------------------------\n");
+	scope = new Scope(arpha::globalScope);
+	Parser parser2(source,scope);
+	parser2.expressionFactory = &unit.expressions;
+	unit.parser = &parser2;
+	printf("%s\n",parser2._parse());
+
 }
 
 void Compiler::testParse(const char* str,Scope* scope,Expression* expected,const char* file,int line){
@@ -1995,6 +2011,8 @@ int main()
 	Compiler c;
 	compiler = &c;
 	arpha::init();
+
+	
 
 	
 	std::string source;

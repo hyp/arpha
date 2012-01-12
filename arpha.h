@@ -18,7 +18,7 @@ namespace arpha {
 	//core types
 	extern Type* type;
 	extern Type* expression;
-	extern Type* Nothing,*Unresolved,*inferred;
+	extern Type* Nothing,*Unresolved,*inferred,*Error;
 	extern Type *constant;
 	extern Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
 	extern Type *float64,*float32;
