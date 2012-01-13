@@ -67,7 +67,7 @@ struct VariableOrField : Node {
 
 EXPR(FieldAccessExpression,7):
 	VariableOrField object;
-	Type::Field* field;
+	Variable* field;
 };
 
 EXPR(AssignmentExpression,8):
@@ -94,6 +94,7 @@ struct ExpressionFactory {
 	TupleExpression* makeUnit(); //unit is a tuple with 0 elements and type arpha::Nothing
 	TupleExpression* makeTuple(Node* a,Node* b);
 
+	VariableExpression* makeVariable(Variable* var);
 	TypeExpression* makeType(Type* type);
 	FunctionExpression* makeFunction(Function* func);
 

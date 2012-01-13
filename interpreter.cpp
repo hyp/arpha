@@ -1,5 +1,6 @@
 #include "common.h"
 #include "scope.h"
+#include "declarations.h"
 #include "parser.h"
 
 #include "interpreter.h"

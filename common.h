@@ -16,6 +16,7 @@
 typedef __int64 int64;
 typedef unsigned __int64 uint64;
 typedef unsigned int uint32;
+typedef unsigned char uint8;
 
 void _assert(const char* file, int line, const char* what);
 #define assert(what) ((what) ? (void)0 : _assert( __FILE__, __LINE__, (#what)))
@@ -119,11 +120,13 @@ const char* readFile(const char* filename);
 struct Location {
 private:
 	int lineNumber;
+	
 public:
+	int column;
 
 	inline int line(){ return lineNumber; }
-	inline Location(){}
-	Location(int line);
+	inline Location(){ lineNumber = -1;column =-1;}
+	Location(int line,int column);
 };
 
 void errorFunc(Location& location,std::string message);

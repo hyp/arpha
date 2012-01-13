@@ -130,14 +130,15 @@ Node* Substitute::parse(Parser* parser){
 	return expression;//TODO expression duplication
 }
 
-/*Node* parseSubstitute(PrefixDefinition* def,Parser* parser){
-	return (Node*)(def->data);
+Node* Variable::parse(Parser* parser){
+	return parser->expressionFactory->makeVariable(this);
 }
 
-Node* parseTypeExpression(PrefixDefinition* def,Parser* parser){
-	return parser->expressionFactory->makeType((Type*)def->data);
+Node* Type::parse(Parser* parser){
+	return parser->expressionFactory->makeType(this);
 }
 
+/*
 Node* parseOverloadSetExpression(PrefixDefinition* def,Parser* parser){
 	return parser->expressionFactory->makeOverloadSet(parser->currentScope(),parser->lookedUpToken.symbol);
 }*/

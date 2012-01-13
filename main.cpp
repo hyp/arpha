@@ -142,13 +142,15 @@ unittest(symbolTable){
 
 //lexing
 
-Location::Location(int line){
+Location::Location(int line,int column){
 	lineNumber = line;
+	this->column = column;
 }
 
 unittest(location){
-	auto loc = Location(2);
+	auto loc = Location(2,3);
 	assert(loc.line() == 2);
+	assert(loc.column == 3);
 }
 
 Token::Token(){
@@ -165,7 +167,7 @@ std::ostream& operator<< (std::ostream& stream,const Token& token){
 	return stream;
 }
 
-Lexer::Lexer(const char* source) : location(0) {
+Lexer::Lexer(const char* source) : location(0,0) {
 	ptr= source;
 }
 
@@ -182,7 +184,8 @@ Token Lexer::consume(){
 	while((*ptr) <= ' ' && (*ptr)!='\0' && (*ptr)!='\n') ptr++; //skip spaces
 	
 	if( *ptr == '\n' || *ptr ==';'){
-		if(*ptr == '\n') location = Location(location.line()+1);
+		if(*ptr == '\n') location = Location(location.line()+1,0);
+		else location.column++;
 		token.type = Token::EndExpression;
 		ptr++;			
 	}
@@ -284,7 +287,7 @@ Definition::Definition(Scope* scp,SymbolID name,Location location,int sticky ){
 Definition::Definition(Scope* scp,SymbolID name,int sticky){ scope=scp;id=name;stickiness = sticky;lineNumber = 0; }
 
 Location Definition::location() const{
-	return Location(lineNumber);
+	return Location(lineNumber,0);
 }
 
 Scope::Scope(Scope* parent){
@@ -351,65 +354,18 @@ unittest(scope){
 	assert(!scope->lookup("foo"));
 	assert(!scope->contains("foo"));
 
-	auto t = new Type(scope,"foo",0); // replace with substitute
-	scope->define(t);
-	assert(scope->lookup("foo") == t);
-	assert(scope->contains("foo") == t);
 
-	delete t;
 	//delete scope2;
 	delete scope;
 	//clean up
 	symbols.~SymbolTable();
 }
 
-Type::Type(SymbolID name,size_t sz) : Definition(0,name) { 
-	size=sz; 
-	isTuple = true;
-}
 
-Type::Type(Scope* scope,SymbolID name,size_t sz) : Definition(scope,name) { 
-	size=sz; 
-	isTuple = false;
-}
-
-Type::Field* Type::operator[](const SymbolID fieldName){
-	for(auto i = fields.begin();i!=fields.end();++i){
-		if( (*i).name == fieldName ) return i._Ptr;
-	}
-	return 0;
-}
-
-void Type::add(Type::Field field){
-	fields.push_back(field);
-	size += field.type->size;
-}
-
-bool Type::canAssignFrom(Type* other){
-	if(other->isTuple){
-		//check if tuple has the same underlying structure
-		if(fields.size() != other->fields.size()) return false;
-		for(size_t i =0;i<fields.size();i++){
-			if(!fields[i].type->canAssignFrom(other->fields[i].type)) return false;
-		}
-		return true;
-	}else{
-		if( ( other == arpha::constant ) && arpha::isAssignableFromConstant(this)){
-			debug("%s can assign from constant!",this->id);
-			return true;
-		}
-	}
-	return false;
-}
-
-Type::Field::Field(Type* type,SymbolID name){ this->type=type;this->name=name; }
-bool Type::Field::isUnnamed(){
-	return name.isNull();
-}
 
 
 unittest(type){
-	auto t = new Type(nullptr,SymbolID("foo"),4);
+	/*auto t = new Type(nullptr,SymbolID("foo"),4);
 	assert(t->size == 4);
 	auto t2 = new Type(nullptr,SymbolID("bar"),8);
 	t->add(Type::Field(t2,SymbolID("b")));
@@ -419,70 +375,14 @@ unittest(type){
 	delete t2;
 	delete t;
 	//clean up
-	symbols.~SymbolTable();
+	symbols.~SymbolTable();*/
 }
 
-std::vector<Type*> Type::tuples;
 
-
-Type* Type::tuple(Type* a,Type* b){
-	std::vector<Field> fields;
-	fields.push_back(Type::Field(a,SymbolID()));fields.push_back(Type::Field(b,SymbolID()));
-	return tuple(fields);
-}
-
-Type* Type::flattenedTuple(Type* a,Type* b){
-	std::vector<Field> fields;
-	if(a->isTuple) fields.insert(fields.end(),a->fields.begin(),a->fields.end());
-	else fields.push_back(Type::Field(a,SymbolID()));
-	if(b->isTuple) fields.insert(fields.end(),b->fields.begin(),b->fields.end());
-	else fields.push_back(Type::Field(b,SymbolID()));
-
-	debug("Make tuple (%s,%s) : %d",a->id.ptr(),b->id.ptr(),fields.size());
-	return tuple(fields);
-}
-
-Type* Type::tuple(std::vector<Field>& fields){
-	assert(fields.size());
-	if(fields.size()==1) return fields[0].type;
-	//check if such tuple already exists
-	for(std::vector<Type*>::iterator i=tuples.begin();i!=tuples.end();++i){
-		if((*i)->fields.size() == fields.size()){
-			bool exists = true;
-			for(size_t j=0;j < fields.size();++j) if(((*i)->fields[j].type != fields[j].type ) || ((*i)->fields[j].name != fields[j].name)) exists=false;
-			if(exists) return *i;
-		}
-	}
-	char buffer1[1024] = "tuple(";
-	char buffer2[1024];
-	for(size_t i=0;i<fields.size();i++){
-		sprintf(buffer2," %s",fields[i].type->id.ptr());
-		strcat(buffer1,buffer2);
-	}
-	strcat(buffer1,")");
-	Type* tuple=new Type(buffer1,0);
-	tuple->isTuple = true;
-	for(size_t i=0;i<fields.size();i++) tuple->add(fields[i]);
-	tuples.push_back(tuple);
-	return tuple;
-}
-
-Variable::Variable(Scope* scope,SymbolID name,Location location,Type* type) : Definition(scope,name,location) {
-	this->type = type;
-	substitute = nullptr;
-}
-
-void Variable::bindToConstant(Expression* expr){
-	substitute = expr;
-}
-
-Expression* Variable::bindedConstant(){
-	return substitute;
-}
 
 unittest(variable){
-	Location location(0);
-	auto t = new Type(nullptr,SymbolID(),0);
+	Location location(0,0);
+	/*auto t = new Type(nullptr,SymbolID(),0);
 	auto v = new Variable(nullptr,SymbolID(),location,t);
 	assert(v->type == t);
 	assert(v->bindedConstant() == nullptr);
@@ -491,7 +391,7 @@ unittest(variable){
 	assert(v->bindedConstant() == (Expression*)0xDEADBEEF);
 
 	delete v;
-	delete t;
+	delete t;*/
 }
 
 
@@ -559,11 +459,6 @@ struct DefStatement: public Definition {
 	Expression* prefixParse(Parser*,Token);
 };
 
-struct TypeStatement : Definition {
-	TypeStatement();
-	Expression* prefixParse(Parser* parser,Token);
-};
-
 struct VarStatement: public Definition {
 	VarStatement(SymbolID name);
 	Expression* prefixParse(Parser*,Token);
@@ -613,7 +508,6 @@ struct Expression {
 		Type* type;
 		Scope* scope;
 		Variable* variable;
-		Type::Field* field;
 		Expression* expression;
 	};
 	SymbolID symbol;
@@ -693,14 +587,14 @@ namespace arpha {
 	Type* types[TYPE_COUNT];
 
 	Function* createFunction(Scope* scope,const char* name,Type* returns,Type* arg0 = 0,const char *arg0n = 0,Type* arg1 = 0,const char *arg1n = 0){
-		Location location(0);
+		Location location(0,0);
 		Type* argument = arpha::Nothing;
-		if(arg0) argument = arg1 ? Type::tuple(arg0,arg1) : arg0;
-		else if(arg1) argument = arg1;
+		//if(arg0) argument = arg1 ? Type::tuple(arg0,arg1) : arg0;
+		//else if(arg1) argument = arg1;
 		//if(argument->isTuple) argument->fields[0].name = arg0n;
 		auto func = new Function(scope,name,argument,returns,0,0);
-		if(arg0) func->arguments.push_back(Function::Argument(Variable(0,arg0n,location,arg0),0,0));
-		if(arg1){ assert(arg0); func->arguments.push_back(Function::Argument(Variable(0,arg1n,location,arg1),0,0)); }
+		//if(arg0) func->arguments.push_back(Function::Argument(Variable(0,arg0n,location,arg0),0,0));
+		//if(arg1){ assert(arg0); func->arguments.push_back(Function::Argument(Variable(0,arg1n,location,arg1),0,0)); }
 		return func;
 	}
 
@@ -752,8 +646,9 @@ namespace arpha {
 	}
 
 	Type* builtInType(const char* name,int size){
-		auto t = new Type(scope,SymbolID(name),size);
-		//scope->definePrefix(Location(),SymbolID(name),parseTypeExpression,t);
+		auto t = new Type(SymbolID(name),Location());
+		t->size = size;
+		scope->define(t);
 		return t;
 	}
 
@@ -795,7 +690,7 @@ namespace arpha {
 
 	/// := def <name> = expression
 	struct DefParser: PrefixDefinition {
-		DefParser(): PrefixDefinition("def",Location()) {}
+		DefParser(): PrefixDefinition("def",Location()) {  }
 		Node* parse(Parser* parser){
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
@@ -807,9 +702,44 @@ namespace arpha {
 		}
 	};
 
+	/// ::= type <name> { field1,field2 type }
+	struct TypeParser: PrefixDefinition {
+		TypeParser(): PrefixDefinition("type",Location()) {  }
+		Node* parse(Parser* parser){
+			auto location  = parser->previousLocation();
+			auto name = parser->expectName();
+			auto type = new Type(name,location);
+			parser->currentScope()->define(type);
+			//fields
+			if(parser->match("{")){
+				parser->expect("}");
+			}
+
+			return type->parse(parser);
+		}
+	};
+
+	/// ::= var <names> [type]
+	struct VarParser: PrefixDefinition {
+		VarParser(): PrefixDefinition("var",Location()) {}
+		Node* parse(Parser* parser){
+			std::vector<Node*> vars;
+			do{
+				auto name = parser->expectName();
+				auto var = new Variable(name,parser->previousLocation());
+				parser->_currentScope->define(var);
+				vars.push_back(parser->expressionFactory->makeVariable(var));
+			}while(parser->match(","));
+
+			if(vars.size() == 1) return vars[0];
+			auto tuple = parser->expressionFactory->makeUnit();
+			tuple->children = vars;
+			return tuple;
+		}
+	};
 
 	void init(){
-		Location location(0);
+		Location location(0,0);
 		scope = new Scope(0);
 
 		closingParenthesis = SymbolID(")");
@@ -818,15 +748,10 @@ namespace arpha {
 		scope->define(new TupleParser);
 
 		scope->define(new DefParser);
-		//scope->definePrefix(location,"def",parseDef,nullptr);
+		scope->define(new TypeParser);
+		scope->define(new VarParser);
 
-		type = builtInType("Type",0);
-		expression = builtInType("expression",0);
 		Nothing = builtInType("Nothing",0);
-		
-		Unresolved = new Type(scope,SymbolID("Unresolved"),0);
-		inferred = new Type(scope,SymbolID("inferred"),0); //TOFIX & TODO use it as a wildcard '_' type
-		constant = builtInType("constant",0);
 
 		int i = 0;
 		types[i++] = boolean = builtInType("bool",1);
@@ -841,20 +766,6 @@ namespace arpha {
 		types[i++] = uint64 = builtInType("uint64",8);
 		types[i++] = float64 = builtInType("double",8);
 		types[i++] = float32 = builtInType("float",4);
-		
-		Type* c = builtInType("struct",0);
-		c->add(Type::Field(int32,"field"));
-		c->add(Type::Field(c,"bar"));
-		scope->define(new Variable(scope,"foo",location,c));
-		new Function(scope,"field",Nothing,Nothing,0,0);
-		//new Function(scope,"bar",Nothing,Nothing,0,0);
-
-		auto v = new Variable(scope,"bar",location,float64);
-		Expression* expr = new Expression(Expression::Constant,constant);
-		expr->constantType = float64;
-		expr->real = 3.14;
-		v->bindToConstant( expr );
-		scope->define(v);
 
 		basicFunctions();
 
@@ -872,12 +783,12 @@ void print(Expression* expr);
 bool Expression::isNothing(){ return flags==Constant && returnType == arpha::Nothing; }
 
 Expression* Tuple(Expression* a,Expression* b){
-	if(!a || a->isNothing()) return b;
+	/*if(!a || a->isNothing()) return b;
 	if(!b || b->isNothing()) return a;
 	Expression* tuple = new Expression(Expression::Tuple, a->returnType != arpha::Unresolved && b->returnType != arpha::Unresolved ? Type::tuple(a->returnType,b->returnType) : arpha::Unresolved);
 	tuple->children = a;
-	tuple->children->next = b;
-	return tuple;
+	tuple->children->next = b;*/
+	return nullptr;
 }
 
 
@@ -902,7 +813,7 @@ Expression* flattenTuple(Expression* tuple){
 		else tuple->children = *i;
 		prev = *i;
 	}
-	tuple->returnType = Type::flattenedTuple(a->returnType,b->returnType);
+//	tuple->returnType = Type::flattenedTuple(a->returnType,b->returnType);
 	return tuple; 
 }
 
@@ -1010,12 +921,6 @@ Expression* Access(Expression* object,Scope* scope,SymbolID symbol){
 	return e;
 }
 
-Expression* FieldAccess(Expression* expr,Type::Field* field){
-	Expression* e = new Expression(Expression::FieldAccess,field->type);
-	e->children = expr;
-	e->field = field;
-	return e;
-}
 
 Expression* Index(Scope* scope,Expression* a,Expression* b){
 	Expression* e = new Expression(Expression::Index,arpha::Unresolved); // evaluate type later
@@ -1083,35 +988,6 @@ Expression* Parentheses::infixParse(Parser* parser,Token token,Expression* objec
 }
 
 
-VarStatement::VarStatement(SymbolID name) : Definition(0,name) {}
-
-Expression* VarStatement::prefixParse(Parser* parser,Token){
-	Expression* tuple = 0;
-	std::vector<Variable*> vars;
-	do{
-		SymbolID name = parser->expectName();
-		Variable* var = new Variable(parser->_currentScope,name,parser->previousLocation(),arpha::Unresolved);
-		parser->_currentScope->define(var);
-
-		if(tuple) tuple = Tuple(tuple,VariableReference(var));
-		else tuple = VariableReference(var);
-		vars.push_back(var);
-	}while(parser->match(","));
-
-	auto st = parser->getState();
-	auto t = parser->evaluate(parser->parse(20));
-	if(t->flags == Expression::TypeRef){
-		debug("the variables are of type %s",t->type->id);
-		for(auto i=vars.begin();i!=vars.end();++i){
-			(*i)->type = t->type;
-		}
-	}
-	else parser->restoreState(st);
-
-	return tuple;
-}
-
-
 
 Expression* TypeReference(Type* type){
 	Expression* e = new Expression(Expression::TypeRef,arpha::type);
@@ -1145,10 +1021,6 @@ Expression* OverloadSetRef(Scope* scope,SymbolID symbol){
 
 
 
-Expression* Variable::prefixParse(Parser*,Token){
-	return VariableReference(this);
-}
-
 AssignmentOperator::AssignmentOperator(SymbolID name,int stickiness) : Definition(0,name,stickiness) {
 }
 
@@ -1158,12 +1030,6 @@ Expression* AssignmentOperator::infixParse(Parser* parser,Token,Expression* expr
 
 
 
-TypeStatement::TypeStatement() : Definition(0,"type") {}
-
-Expression* TypeStatement::prefixParse(Parser* parser,Token){
-	SymbolID name = parser->expectName();
-	return TypeReference(new Type(parser->_currentScope,name,0));
-}
 
 DefStatement::DefStatement(SymbolID name) : Definition(0,name) {}
 
@@ -1191,7 +1057,7 @@ Expression* DefStatement::prefixParse(Parser* parser,Token){
 		if(!parser->match(")")){
 			while(1){
 				SymbolID argName = parser->expectName();
-				arguments.push_back(Function::Argument(Variable(bodyScope,argName,parser->previousLocation(),arpha::inferred),0,0));
+				//arguments.push_back(Function::Argument(Variable(bodyScope,argName,parser->previousLocation(),arpha::inferred),0,0));
 				if(parser->match(")")) break;
 				if(!parser->match(",")){
 					if(parser->match("->")){
@@ -1199,7 +1065,7 @@ Expression* DefStatement::prefixParse(Parser* parser,Token){
 						auto constr = typeOrConstraint(parser);
 						debug("Argument's type inferred as type with value constrainted to %s",constr->type->id);
 						arguments.back().variable.type   = arpha::type;
-						arguments.back().valueConstraint = constr->type;
+						//arguments.back().valueConstraint = constr->type;
 					}else{
 						Expression* type = parser->evaluate(parser->parse(1000));
 						if(type->flags != Expression::TypeRef) printf("Error: a valid type expected!\n");
@@ -1209,12 +1075,12 @@ Expression* DefStatement::prefixParse(Parser* parser,Token){
 					parser->expect(",");
 				}
 			}
-			std::vector<Type::Field> fields;
+		/*	std::vector<Type::Field> fields;
 			for(auto i = arguments.begin();i!=arguments.end();++i){
 				bodyScope->define(&((*i).variable));
 				fields.push_back(Type::Field((*i).variable.type,(*i).variable.id));
 			}
-			argumentType = Type::tuple(fields);
+			argumentType = Type::tuple(fields);*/
 		}
 		Expression* body;
 		
@@ -1292,12 +1158,12 @@ bool canInfer(Type* a,Type* other){
 		}
 		return false;
 	}
-	if(a->fields.size() != other->fields.size()) return false;
+	/*if(a->fields.size() != other->fields.size()) return false;
 	for(size_t i = 0;i<a->fields.size();i++){
 		if(a->fields[i].type != arpha::inferred){
 			if(!a->fields[i].type->canAssignFrom(other->fields[i].type)) return false;
 		}else if(other->fields[i].type == arpha::Unresolved) return false;
-	}
+	}*/
 	return true;
 }
 
@@ -1379,10 +1245,6 @@ Expression* OverloadSet::resolve(Expression* expr){
 
 Expression* OverloadSet::prefixParse(Parser* parser,Token token){
 	return OverloadSetRef(parser->_currentScope,token.symbol);
-}
-
-Expression* Type::prefixParse(Parser* parser,Token){
-	return TypeReference(this);
 }
 
 Operator::Parselet::Parselet(Scope* scope,SymbolID name,Location location) : Definition(scope,name,location) {
@@ -1647,13 +1509,13 @@ Expression* Parser::evaluate(Expression* expr){
 			break;
 
 		case Expression::VariableRef:
-			if( auto cnst = expr->variable->bindedConstant()){
+			/*if( auto cnst = expr->variable->bindedConstant()){
 				assert(isConstant(cnst));
 				debug("A variable %s was replaced by a constant !",expr->variable->id);
 				expr = cnst;
 			}
 			//possibly update expr type on inferral by parent expression
-			else if(expr->returnType != expr->variable->type) expr->returnType = expr->variable->type;
+			else if(expr->returnType != expr->variable->type) expr->returnType = expr->variable->type;*/
 			break;
 
 		case Expression::Return:
@@ -1679,14 +1541,14 @@ Expression* Parser::evaluate(Expression* expr){
 			expr->children->next = evaluate(expr->children->next);
 			if(expr->children->next->returnType != arpha::Unresolved){	
 				//TODO var binded tuple assignment
-				if(expr->children->flags == Expression::VariableRef && expr->children->variable->bindedConstant() ){
+				/*if(expr->children->flags == Expression::VariableRef && expr->children->variable->bindedConstant() ){
 					debug("Assigment to a %s binded with constant",expr->children->variable->id);
 					//TODO TYPE CHECKS ETC
 					expr->children->variable->bindToConstant(expr->children->next);
 					expr = expr->children->next;
-				}
+				}*/
 				//
-				else {
+				//else {
 					next = expr->children->next;
 					expr->children = evaluate(expr->children);
 					expr->children->next = next;
@@ -1706,12 +1568,12 @@ Expression* Parser::evaluate(Expression* expr){
 							expr->children->returnType = expr->children->variable->type = expr->children->next->inferredType();
 						}
 						expr->returnType = expr->children->returnType;
-					}
+					//}
 
-					else if(expr->children->flags == Expression::FieldAccess){
+					//else if(expr->children->flags == Expression::FieldAccess){
 						expr->returnType = expr->children->returnType;
-					}
-					else printf("Error: can only assign to variables or fields!\n");
+					//}
+					//else printf("Error: can only assign to variables or fields!\n");
 				}
 			}
 			break;
@@ -1723,11 +1585,11 @@ Expression* Parser::evaluate(Expression* expr){
 				//TODO type.field vs type.func when both possible
 				if( ( expr->children->flags == Expression::VariableRef || expr->children->flags ==Expression::FieldAccess) ){
 					debug("--. might be field");
-					if(auto field = expr->children->returnType->operator[](expr->symbol)){
+					/*if(auto field = expr->children->returnType->operator[](expr->symbol)){
 						debug(" It is");
 						expr = FieldAccess(expr->children,field);
 						break;
-					}
+					}*/
 					debug("Other access not implemented yet!");
 					assert(false);
 				}else{
@@ -1864,7 +1726,7 @@ void print(Expression* expr){
 			break;
 		case Expression::FieldAccess:
 			print(expr->children);
-			printf(" . %s",expr->field->name);
+//			printf(" . %s",expr->field->name);
 			break;
 		case Expression::Access:
 			printf("access(");print(expr->children);printf(" . %s)",expr->symbol);
@@ -2025,10 +1887,11 @@ namespace compiler {
 	Type* Nothing; 
 	Type* Error;
 	Type* Unresolved;
+	Type* inferred;
 
 	Type* builtInType(const char* name){
-		auto t = new Type(scope,SymbolID(name),0);
-		//scope->definePrefix(Location(),SymbolID(name),parseTypeExpression,t);
+		auto t = new Type(SymbolID(name),Location());
+		scope->define(t);
 		return t;
 	}
 
@@ -2040,6 +1903,7 @@ void init(){
 	Nothing = builtInType("cAbsolutelyNothing");
 	Error = builtInType("cError");
 	Unresolved = builtInType("cUnresolved");
+	inferred = builtInType("inferred");
 
 	currentUnit = nullptr;
 }
@@ -2053,9 +1917,9 @@ void compile(const char* name,const char* source){
 	
 	Scope* scope = new Scope(nullptr);
 	//import 'compiler'
-	scope->importAllDefinitions(Location(-2),::compiler::scope);
+	scope->importAllDefinitions(Location(-2,0),::compiler::scope);
 	//import 'arpha'
-	scope->importAllDefinitions(Location(-1),::arpha::scope);
+	scope->importAllDefinitions(Location(-1,0),::arpha::scope);
 
 	Parser parser(source,scope);
 
@@ -2066,7 +1930,7 @@ void compile(const char* name,const char* source){
 }
 
 void onError(Location& location,std::string message){
-	std::cout<< currentUnit->filename << '(' << location.line() << ')' <<": Error: " << message << std::endl;
+	std::cout<< currentUnit->filename << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
 }
 
 }

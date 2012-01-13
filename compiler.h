@@ -18,6 +18,7 @@ namespace compiler {
 	extern Type* Nothing;   //expressions returning nothing are statements //compiler::Nothing(a statement) and arpha::Nothing(void) are diffrenent!
 	extern Type* Error;     //an error constant expression
 	extern Type* Unresolved;//unresolved function overload
+	extern Type* inferred;  //an inferred type
 
 	void init();
 

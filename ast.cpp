@@ -1,5 +1,6 @@
 #include "common.h"
 #include "scope.h"
+#include "declarations.h"
 #include "parser.h"
 
 #include "ast.h"
@@ -29,6 +30,11 @@ TupleExpression* ExpressionFactory::makeUnit(){
 	return e;
 }
 
+VariableExpression* ExpressionFactory::makeVariable(Variable* var){
+	auto e =new(allocate(sizeof(VariableExpression))) VariableExpression;
+	e->variable = var;
+	return e;
+}
 TypeExpression* ExpressionFactory::makeType(Type* type){
 	auto e =new(allocate(sizeof(TypeExpression))) TypeExpression;
 	e->type = type;
@@ -121,7 +127,7 @@ std::ostream& operator<< (std::ostream& stream,const Node* node){
 		CASE(FunctionExpression): stream<<"func "<<((FunctionExpression*)node)->function->id; break;
 		CASE(OverloadSetExpression): stream<<"overloadset "<<((OverloadSetExpression*)node)->symbol; break;
 		CASE(CallExpression): stream<<"call "<<((CallExpression*)node)->object<<" with "<<((CallExpression*)node)->arg; break;
-		CASE(FieldAccessExpression): stream<<((FieldAccessExpression*)node)->object.v<<" . "<<((FieldAccessExpression*)node)->field->name;
+		CASE(FieldAccessExpression): stream<<((FieldAccessExpression*)node)->object.v<<" . "<<((FieldAccessExpression*)node)->field->id;
 		CASE(AssignmentExpression): stream<< ((AssignmentExpression*)node)->object.v <<" = "<<((AssignmentExpression*)node)->value;
 		CASE(ReturnExpression): stream<<"return"<<((ReturnExpression*)node)->value;
 		CASE(TupleExpression):

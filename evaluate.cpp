@@ -1,5 +1,6 @@
 #include "common.h"
 #include "scope.h"
+#include "declarations.h"
 #include "parser.h"
 
 #include "interpreter.h"
@@ -67,7 +68,7 @@ inline Node* evaluate(Parser* parser,CallExpression* node){
 inline Node* evaluate(Parser* parser,TupleExpression* node){
 	if(node->children.size() == 0){ node->type= arpha::Nothing; return node; }
 	
-	std::vector<Type::Field> fields;
+	std::vector<std::pair<SymbolID,Type*>> fields;
 	
 	node->type = nullptr;
 	Type* returns;
@@ -80,7 +81,7 @@ inline Node* evaluate(Parser* parser,TupleExpression* node){
 			node->type = compiler::Error;
 		}
 		else if(returns == compiler::Unresolved) node->type = compiler::Unresolved;
-		else fields.push_back(Type::Field(returns,SymbolID()));
+		else fields.push_back(std::make_pair(SymbolID(),returns));
 	}
 
 	if(!node->type) node->type = Type::tuple(fields);

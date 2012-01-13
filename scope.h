@@ -5,9 +5,17 @@ struct Definition;
 struct Parser;
 struct Node;
 
+namespace Visibility {
+	enum {
+		Public = 0,
+		Private
+	};
+}
+
 struct PrefixDefinition {
 	SymbolID id;
 	Location location;
+	uint8 visibilityMode;
 
 	PrefixDefinition(SymbolID name,Location& location);
 	virtual Node* parse(Parser* parser) = 0;
@@ -17,6 +25,7 @@ struct InfixDefinition {
 	SymbolID id;
 	int stickiness;
 	Location location;
+	uint8 visibilityMode;
 	
 	InfixDefinition(SymbolID name,int stickiness,Location& location);
 	virtual Node* parse(Parser* parser,Node* node) = 0;

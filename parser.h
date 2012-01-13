@@ -131,57 +131,7 @@ protected:
 	OverloadSet* getSet();
 };
 
-//type. tuple is an unnamed type
-struct Type: public Definition {
-
-	struct Field {
-		Type* type;
-		SymbolID name;
-
-		Field(Type* type,SymbolID name);
-		bool isUnnamed();
-	};
-
-	Type(Scope* scope,SymbolID name,size_t sz);
-
-	Expression* prefixParse(Parser*,Token);
-
-	//map like interface for field queries
-	Type::Field* operator[](const SymbolID fieldName);
-	void add(Field field);
-	
-	//implicit type cast
-	bool canAssignFrom(Type* other);
-
-	//global tuple constructs
-	static std::vector<Type*> tuples;
-	static Type* tuple(Type* a,Type* b);
-	static Type* flattenedTuple(Type* a,Type* b);
-	static Type* tuple(std::vector<Field>& fields);
-
-	uint32 size;
-	uint32 alignment;
-	bool isTuple;
-	std::vector<Field> fields;
-
-private:
-	Type(SymbolID name,size_t sz);
-};
-
 //variable
-struct Variable: public Definition {
-	Variable(Scope* scope,SymbolID name,Location location,Type* type);
-	
-	Expression* prefixParse(Parser*,Token);
-
-	void bindToConstant(Expression* expr);
-	Expression* bindedConstant();
-
-	Type* type;
-private:
-	Expression* substitute;
-};
-
 struct Function: public Definition {
 	OverloadSet* set;
 	Type* argument;
