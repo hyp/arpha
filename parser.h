@@ -1,18 +1,6 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-//to implement
-struct Location {
-private:
-	int lineNumber;
-public:
-
-	inline int line(){ return lineNumber; }
-	inline Location(){}
-	Location(int line);
-};
-
-void errorFunc(Location& location,std::string message);
 
 //lexing
 struct Token {
@@ -102,9 +90,13 @@ struct Parser : Lexer {
 	inline Scope* currentScope() const { return _currentScope; }
 };
 
+//::= scope => ScopeExpression
+//def->data must be a valid Scope*
 
 
-
+//::= type   => TypeExpression
+//def->data must be a valid Type*
+Node* parseTypeExpression(PrefixDefinition* def,Parser* parser);
 
 //Defines how to parse a name
 
@@ -135,35 +127,6 @@ struct Definition {
 protected:
 	int lineNumber; //location
 	OverloadSet* getSet();
-};
-
-//::= '(' expression ')'
-//::= expression '(' expression ')'
-struct ParenthesisParser : Definition {
-	ParenthesisParser(SymbolID open,SymbolID close,int sticky);
-	
-	Node* prefixParse(Parser*);
-	Node* infixParse(Parser*,Node*);
-private: SymbolID closer;
-};
-
-//::= expression ',' expression
-struct TupleParser : Definition {
-	TupleParser(SymbolID op,int sticky);
-	Node* infixParse(Parser*,Node*);
-};
-
-struct Scope {
-
-	Scope(Scope* parent);
-	void define(Definition* definition);
-	Definition* lookup(SymbolID name);
-	Definition* contains(SymbolID name);
-
-	Scope* parent;
-	Definition* owner;
-private:
-	std::map<SymbolID,Definition*>  definitions;
 };
 
 //simple expression substitution - def pi = 3.14 - status: expressionwise 100% , def parser 40% (need multiples)

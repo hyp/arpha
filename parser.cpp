@@ -1,5 +1,7 @@
 #include "common.h"
+#include "scope.h"
 #include "parser.h"
+
 #include "ast.h"
 #include "compiler.h"
 #include "arpha.h"
@@ -88,12 +90,12 @@ Node* Parser::_parse(int stickiness){
 		((ConstantExpression*)expression)->u64    = lookedUpToken.uinteger;
 	}
 	else if(lookedUpToken.isSymbol()){
-		Definition* parselet = _currentScope->lookup(lookedUpToken.symbol);
-		if(!parselet){ 
+		auto prefixDefinition = _currentScope->lookupPrefix(lookedUpToken.symbol);
+		if(!prefixDefinition){ 
 			error(location,"Can't prefix parse %s!",lookedUpToken); 
 			expression = expressionFactory->makeError();
 		}else{
-			expression = parselet->prefixParse(this);
+			expression = prefixDefinition->parse(prefixDefinition,this);
 		}
 	}
 	else {
@@ -108,11 +110,11 @@ Node* Parser::_parse(int stickiness){
 	while(1){
 		lookedUpToken = peek();
 		if(lookedUpToken.isSymbol()){
-			Definition* parselet = _currentScope->lookup(lookedUpToken.symbol);
-			if(parselet && stickiness < parselet->stickiness){
+			auto infixDefinition = _currentScope->lookupInfix(lookedUpToken.symbol);
+			if(infixDefinition && stickiness < infixDefinition->stickiness){
 				location = currentLocation();
 				consume();
-				expression = parselet->infixParse(this,expression);
+				expression = infixDefinition->parse(infixDefinition,this,expression);
 				expression->location = location;
 				expression = evaluate(expression);
 			}
@@ -120,6 +122,10 @@ Node* Parser::_parse(int stickiness){
 		}else break;	
 	}	
 	return expression;	
+}
+
+Node* parseTypeExpression(PrefixDefinition* def,Parser* parser){
+	return parser->expressionFactory->makeType((Type*)def->data);
 }
 
 Node* Definition::prefixParse(Parser* parser){
@@ -133,29 +139,11 @@ Node* Definition::infixParse(Parser* parser,Node*){
 }
 
 Node* Type::prefixParse(Parser* parser){
-	return parser->expressionFactory->makeType(this);
+	assert(false); //TODO throw
+	return nullptr;
 }
 
 Node* OverloadSet::prefixParse(Parser* parser){
 	return parser->expressionFactory->makeOverloadSet(parser->currentScope(),parser->lookedUpToken.symbol);
 }
 
-//arpha concepts
-ParenthesisParser::ParenthesisParser(SymbolID open,SymbolID close,int sticky) : Definition(nullptr,open,sticky) {
-	closer= close;
-}
-Node* ParenthesisParser::prefixParse(Parser* parser){
-	if( parser->match(closer) )
-		return parser->expressionFactory->makeUnit();
-	auto e = parser->_parse();
-	parser->expect(closer);
-	return e;
-}
-Node* ParenthesisParser::infixParse(Parser* parser,Node* node){
-	return parser->expressionFactory->makeCall(node,prefixParse(parser));
-}
-
-TupleParser::TupleParser(SymbolID op,int sticky) : Definition(nullptr,op,sticky) {}
-Node* TupleParser::infixParse(Parser* parser,Node* node){
-	return parser->expressionFactory->makeTuple(node,parser->_parse(stickiness));
-}

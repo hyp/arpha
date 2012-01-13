@@ -1,5 +1,7 @@
 #include "common.h"
+#include "scope.h"
 #include "parser.h"
+
 #include "ast.h"
 #include "compiler.h"
 #include "arpha.h"

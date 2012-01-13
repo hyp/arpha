@@ -115,4 +115,17 @@ std::ostream& operator<< (std::ostream& stream,const SymbolID symbol);
 
 const char* readFile(const char* filename);
 
+//to implement
+struct Location {
+private:
+	int lineNumber;
+public:
+
+	inline int line(){ return lineNumber; }
+	inline Location(){}
+	Location(int line);
+};
+
+void errorFunc(Location& location,std::string message);
+
 #endif

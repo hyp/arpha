@@ -1,4 +1,5 @@
 #include "common.h"
+#include "scope.h"
 #include "parser.h"
 #include "interpreter.h"
 #include "ast.h"
@@ -307,6 +308,49 @@ Definition* Scope::contains(SymbolID name){
 
 unittest(scope){
 	auto scope = new Scope(0);
+
+	assert(!scope->lookupPrefix("foo"));
+	assert(!scope->lookupPrefix("bar"));
+	assert(!scope->lookupInfix("bar"));
+	assert(!scope->lookupInfix("foo"));
+	assert(!scope->containsPrefix("foo"));
+	assert(!scope->containsPrefix("bar"));
+	assert(!scope->containsInfix("bar"));
+	assert(!scope->containsInfix("foo"));
+
+	//normal scope lookup and contains
+	void* data = (void*)0xDEADBEEF;
+	scope->definePrefix(Location(),"foo",nullptr,data);
+	auto pdef = scope->lookupPrefix("foo");
+	assert(pdef);
+	assert(pdef->data == data);
+	pdef->data = (void*)0xBEEF;
+	pdef = scope->containsPrefix("foo");
+	assert(pdef);
+	assert(pdef->data == ((void*)0xBEEF));
+
+	scope->defineInfix(Location(),"foo",30,nullptr,data);
+	auto idef = scope->lookupInfix("foo");
+	assert(idef);
+	assert((void*)idef != (void*)pdef);
+	assert(idef->stickiness = 30);
+	assert(idef->data == data);
+	idef->stickiness = 25;
+	idef = scope->containsInfix("foo");
+	assert(idef);
+	assert(idef->stickiness = 25);
+	assert(idef->data == data);
+
+	//lookup from parent
+	auto scope2 = new Scope(scope);
+	scope->definePrefix(Location(),"bar",nullptr,data);
+	scope->defineInfix(Location(),"bar",15,nullptr,data);
+	assert(scope->containsPrefix("bar") && scope->containsInfix("bar"));
+	assert((!scope2->containsPrefix("bar")) && (!scope2->containsInfix("bar")));
+	assert(scope2->lookupPrefix("bar") == scope->containsPrefix("bar"));
+	assert(scope2->lookupInfix("bar") == scope->containsInfix("bar"));
+
+	//
 	assert(!scope->lookup("foo"));
 	assert(!scope->contains("foo"));
 
@@ -316,6 +360,7 @@ unittest(scope){
 	assert(scope->contains("foo") == t);
 
 	delete t;
+	delete scope2;
 	delete scope;
 	//clean up
 	symbols.~SymbolTable();
@@ -628,7 +673,7 @@ Expression* ListOperator::infixParse(Parser* parser,Token,Expression* prev){
 
 //TODO functions arguments vector!
 namespace arpha {
-	Scope* globalScope,*scope;
+	Scope *scope;
 	
 
 	Function* line;
@@ -704,8 +749,8 @@ namespace arpha {
 		mul= ArithmeticFunction(scope,"multiply",2,35);
 		divide= ArithmeticFunction(scope,"divide",2,35);
 		mod= ArithmeticFunction(scope,"mod",2,35);
-		plus= ArithmeticFunction(globalScope,"plus",1);
-		minus= ArithmeticFunction(globalScope,"minus",1,-1,true);
+		plus= ArithmeticFunction(scope,"plus",1);
+		minus= ArithmeticFunction(scope,"minus",1,-1,true);
 		equals = ComparisonFunction(scope,"equals",25);
 	}
 
@@ -715,28 +760,34 @@ namespace arpha {
 		return t;
 	}
 
+	SymbolID closingParenthesis;
+
+	//::= '(' expression ')'
+	Node* parseParenthesis(PrefixDefinition*,Parser* parser){
+		if( parser->match(closingParenthesis) )
+			return parser->expressionFactory->makeUnit();
+		auto e = parser->_parse();
+		parser->expect(closingParenthesis);
+		return e;
+	}
+	//::= expression '(' expression ')'
+	Node* parseCall(InfixDefinition*,Parser* parser,Node* node){
+		return parser->expressionFactory->makeCall(node,parseParenthesis(nullptr,parser));
+	}
+	//::= expression ',' expression
+	Node* parseTuple(InfixDefinition* def,Parser* parser,Node* node){ 
+		return parser->expressionFactory->makeTuple(node,parser->_parse(def->stickiness)); 
+	}
+
 
 	void init(){
 		Location location(0);
-		scope = new Scope(compiler::scope);
-		globalScope = new Scope(scope);
-		//globalScope->parent = scope;
+		scope = new Scope(0);
 
-		//globalScope->define(new Parentheses(SymbolID("("),SymbolID(")")));
-		globalScope->define(new ParenthesisParser("(",")",arpha::Precedence::Call));
-		globalScope->define(new TupleParser(SymbolID(","),arpha::Precedence::Tuple));
-
-		//globalScope->define(new ListOperator(SymbolID(","),15));
-		globalScope->define(new IfMacro(SymbolID("if"),SymbolID("else"),15));
-		globalScope->define(new AccessOperator(".",110));
-		globalScope->define(new IndexOperator("[","]",80));
-		globalScope->define(new DefStatement("def"));
-		globalScope->define(new TypeStatement);
-		globalScope->define(new VarStatement("var"));
-		globalScope->define(new AssignmentOperator("=",10));
-		globalScope->define(new ReturnStatement);
-
-		globalScope->define(new Operator::Parselet(globalScope,"operator",location));
+		closingParenthesis = SymbolID(")");
+		scope->definePrefix(location,"(",parseParenthesis,nullptr);
+		scope->defineInfix(location,"(",arpha::Precedence::Call,parseCall,nullptr);
+		scope->defineInfix(location,",",arpha::Precedence::Tuple,parseTuple,nullptr);
 
 		type = builtInType("Type",0);
 		expression = builtInType("expression",0);
@@ -1954,7 +2005,7 @@ namespace compiler {
 
 	Type* builtInType(const char* name){
 		auto t = new Type(scope,SymbolID(name),0);
-		scope->define(t);
+		scope->definePrefix(Location(),SymbolID(name),parseTypeExpression,t);
 		return t;
 	}
 
@@ -1977,7 +2028,12 @@ void compile(const char* name,const char* source){
 	auto prevUnit = currentUnit;
 	currentUnit = &unit;
 	
-	Scope* scope = new Scope(arpha::globalScope);
+	Scope* scope = new Scope(nullptr);
+	//import 'compiler'
+	scope->importAllDefinitions(Location(),::compiler::scope);
+	//import 'arpha'
+	scope->importAllDefinitions(Location(),::arpha::scope);
+
 	Parser parser(source,scope);
 
 	printf("------------------- new version: ------------------------------\n");
