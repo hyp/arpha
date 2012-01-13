@@ -90,20 +90,22 @@ struct Parser : Lexer {
 	inline Scope* currentScope() const { return _currentScope; }
 };
 
-//::= scope => ScopeExpression
-//def->data must be a valid Scope*
-
+//::= substitute => Expression
+//def->data must be a valid Node*
+//Node* parseSubstitute(PrefixDefinition* def,Parser* parser);
 
 //::= type   => TypeExpression
 //def->data must be a valid Type*
 Node* parseTypeExpression(PrefixDefinition* def,Parser* parser);
 
+//::= overloadSet => OSExpression
+//def->data must be a valid OverloadSet*
+Node* parseOverloadSetExpression(PrefixDefinition* def,Parser* parser);
+
 //Defines how to parse a name
 
 struct Definition {
 
-	virtual Node* prefixParse(Parser*);
-	virtual Node* infixParse(Parser*,Node*);
 
 	virtual Expression* prefixParse(Parser*,Token);
 	virtual Expression* infixParse(Parser*,Token,Expression*);
@@ -129,15 +131,6 @@ protected:
 	OverloadSet* getSet();
 };
 
-//simple expression substitution - def pi = 3.14 - status: expressionwise 100% , def parser 40% (need multiples)
-struct Substitute: Definition {
-	Substitute(Scope* scope,SymbolID name,Location location,Expression* expr);
-
-	Expression* prefixParse(Parser* parser,Token);
-private:
-	Expression* substitute;
-};
-
 //type. tuple is an unnamed type
 struct Type: public Definition {
 
@@ -151,7 +144,6 @@ struct Type: public Definition {
 
 	Type(Scope* scope,SymbolID name,size_t sz);
 
-	Node* prefixParse(Parser* parser);
 	Expression* prefixParse(Parser*,Token);
 
 	//map like interface for field queries
@@ -218,8 +210,6 @@ struct OverloadSet: public Definition {
 	std::vector<Function*> functions;
 
 	OverloadSet(Scope* scope,SymbolID name);
-
-	Node* prefixParse(Parser*);
 
 	Expression* prefixParse(Parser*,Token);
 	bool isOverloadSet(){ return true; }

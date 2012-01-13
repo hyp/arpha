@@ -6,18 +6,24 @@ struct Parser;
 struct Node;
 
 struct PrefixDefinition {
-	Node* (*parse)(PrefixDefinition*,Parser*);
-	void* data;
+	SymbolID id;
+	Location location;
+
+	PrefixDefinition(SymbolID name,Location& location);
+	virtual Node* parse(Parser* parser) = 0;
 };
 
 struct InfixDefinition {
+	SymbolID id;
 	int stickiness;
-	Node* (*parse)(InfixDefinition*,Parser*,Node*);
-	void* data;
+	Location location;
+	
+	InfixDefinition(SymbolID name,int stickiness,Location& location);
+	virtual Node* parse(Parser* parser,Node* node) = 0;
 };
 
 
-
+//Scope resolves symbols to corresponding definitions, which tells parser how to parse the encountered symbol
 struct Scope {
 
 	Scope(Scope* parent);
@@ -32,21 +38,21 @@ struct Scope {
 
 	PrefixDefinition* lookupPrefix(SymbolID name);
 	PrefixDefinition* containsPrefix(SymbolID name);
-	void definePrefix(Location& location,SymbolID name,Node* (*parselet)(PrefixDefinition*,Parser*),void* data);
+	void define(PrefixDefinition* definition);
 
 	InfixDefinition* lookupInfix(SymbolID name);
 	InfixDefinition* containsInfix(SymbolID name);
-	void defineInfix(Location& location,SymbolID name,int stickiness,Node* (*parselet)(InfixDefinition*,Parser*,Node*),void* data);
+	void define(InfixDefinition* definition);
 
 	Scope* parent;
 	Definition* owner;
 private:
 
-	std::map<SymbolID,PrefixDefinition> prefixDefinitions;
-	std::map<SymbolID,InfixDefinition> infixDefinitions;
+	std::map<SymbolID,PrefixDefinition*> prefixDefinitions;
+	std::map<SymbolID,InfixDefinition*> infixDefinitions;
 
-	std::map<SymbolID,PrefixDefinition> importedPrefixDefinitions;
-	std::map<SymbolID,InfixDefinition> importedInfixDefinitions;
+	std::map<SymbolID,PrefixDefinition*> importedPrefixDefinitions;
+	std::map<SymbolID,InfixDefinition*> importedInfixDefinitions;
 
 	std::map<SymbolID,Definition*>  definitions;
 };

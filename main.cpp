@@ -1,5 +1,6 @@
 #include "common.h"
 #include "scope.h"
+#include "declarations.h"
 #include "parser.h"
 #include "interpreter.h"
 #include "ast.h"
@@ -319,36 +320,32 @@ unittest(scope){
 	assert(!scope->containsInfix("foo"));
 
 	//normal scope lookup and contains
-	void* data = (void*)0xDEADBEEF;
-	scope->definePrefix(Location(),"foo",nullptr,data);
+/*	auto pdata = (PrefixDefinition*)0xDEADBEEF;
+	scope->define(Location(),"foo",pdata);
 	auto pdef = scope->lookupPrefix("foo");
 	assert(pdef);
-	assert(pdef->data == data);
-	pdef->data = (void*)0xBEEF;
+	assert(pdef == pdata);
 	pdef = scope->containsPrefix("foo");
 	assert(pdef);
-	assert(pdef->data == ((void*)0xBEEF));
+	assert(pdef == pdata);
 
-	scope->defineInfix(Location(),"foo",30,nullptr,data);
+	auto idata = (InfixDefinition*)0xDEADBEEF;
+	scope->define(Location(),"foo",idata);
 	auto idef = scope->lookupInfix("foo");
 	assert(idef);
-	assert((void*)idef != (void*)pdef);
-	assert(idef->stickiness = 30);
-	assert(idef->data == data);
-	idef->stickiness = 25;
+	assert(idef == idata);
 	idef = scope->containsInfix("foo");
 	assert(idef);
-	assert(idef->stickiness = 25);
-	assert(idef->data == data);
+	assert(idef == idata);
 
 	//lookup from parent
 	auto scope2 = new Scope(scope);
-	scope->definePrefix(Location(),"bar",nullptr,data);
-	scope->defineInfix(Location(),"bar",15,nullptr,data);
+	scope->define(Location(),"bar",pdata);
+	scope->define(Location(),"bar",idata);
 	assert(scope->containsPrefix("bar") && scope->containsInfix("bar"));
 	assert((!scope2->containsPrefix("bar")) && (!scope2->containsInfix("bar")));
 	assert(scope2->lookupPrefix("bar") == scope->containsPrefix("bar"));
-	assert(scope2->lookupInfix("bar") == scope->containsInfix("bar"));
+	assert(scope2->lookupInfix("bar") == scope->containsInfix("bar"));*/
 
 	//
 	assert(!scope->lookup("foo"));
@@ -360,7 +357,7 @@ unittest(scope){
 	assert(scope->contains("foo") == t);
 
 	delete t;
-	delete scope2;
+	//delete scope2;
 	delete scope;
 	//clean up
 	symbols.~SymbolTable();
@@ -756,28 +753,59 @@ namespace arpha {
 
 	Type* builtInType(const char* name,int size){
 		auto t = new Type(scope,SymbolID(name),size);
-		scope->define(t);
+		//scope->definePrefix(Location(),SymbolID(name),parseTypeExpression,t);
 		return t;
 	}
 
 	SymbolID closingParenthesis;
 
-	//::= '(' expression ')'
-	Node* parseParenthesis(PrefixDefinition*,Parser* parser){
-		if( parser->match(closingParenthesis) )
-			return parser->expressionFactory->makeUnit();
-		auto e = parser->_parse();
-		parser->expect(closingParenthesis);
-		return e;
-	}
-	//::= expression '(' expression ')'
-	Node* parseCall(InfixDefinition*,Parser* parser,Node* node){
-		return parser->expressionFactory->makeCall(node,parseParenthesis(nullptr,parser));
-	}
-	//::= expression ',' expression
-	Node* parseTuple(InfixDefinition* def,Parser* parser,Node* node){ 
-		return parser->expressionFactory->makeTuple(node,parser->_parse(def->stickiness)); 
-	}
+	/// ::= '(' expression ')'
+	struct ParenthesisParser: PrefixDefinition {
+		ParenthesisParser(): PrefixDefinition("(",Location()) {}
+		Node* parse(Parser* parser){
+			if( parser->match(closingParenthesis) )
+				return parser->expressionFactory->makeUnit();
+			auto e = parser->_parse();
+			parser->expect(closingParenthesis);
+			return e;
+		}
+	};
+
+	/// ::= expression '(' expression ')'
+	struct CallParser: InfixDefinition {
+		CallParser(): InfixDefinition("(",arpha::Precedence::Call,Location()) {}
+		Node* parse(Parser* parser,Node* node){
+			Node* arg;
+			if( parser->match(closingParenthesis) ) arg = parser->expressionFactory->makeUnit();
+			else{
+				arg = parser->_parse();
+				parser->expect(closingParenthesis);
+			}
+			return parser->expressionFactory->makeCall(node,arg);
+		}
+	};
+
+	/// ::= expression ',' expression
+	struct TupleParser: InfixDefinition {
+		TupleParser(): InfixDefinition(",",arpha::Precedence::Tuple,Location()) {}
+		Node* parse(Parser* parser,Node* node){
+			return parser->expressionFactory->makeTuple(node,parser->_parse(arpha::Precedence::Tuple)); 
+		}
+	};
+
+	/// := def <name> = expression
+	struct DefParser: PrefixDefinition {
+		DefParser(): PrefixDefinition("def",Location()) {}
+		Node* parse(Parser* parser){
+			auto location  = parser->previousLocation();
+			auto name = parser->expectName();
+			parser->expect("=");
+			auto sub = new Substitute(name,location);
+			sub->expression = parser->_parse(arpha::Precedence::Tuple);
+			parser->currentScope()->define(sub);
+			return sub->expression;
+		}
+	};
 
 
 	void init(){
@@ -785,9 +813,12 @@ namespace arpha {
 		scope = new Scope(0);
 
 		closingParenthesis = SymbolID(")");
-		scope->definePrefix(location,"(",parseParenthesis,nullptr);
-		scope->defineInfix(location,"(",arpha::Precedence::Call,parseCall,nullptr);
-		scope->defineInfix(location,",",arpha::Precedence::Tuple,parseTuple,nullptr);
+		scope->define(new ParenthesisParser);
+		scope->define(new CallParser);
+		scope->define(new TupleParser);
+
+		scope->define(new DefParser);
+		//scope->definePrefix(location,"def",parseDef,nullptr);
 
 		type = builtInType("Type",0);
 		expression = builtInType("expression",0);
@@ -884,7 +915,8 @@ OverloadSet* Definition::getSet(){
 			printf("Error: name already taken not for function!\n");
 	}else{
 		set = new OverloadSet(scope,id);
-		scope->define(set);	
+		scope->define(set);
+		//scope->definePrefix(Location(),id,parseOverloadSetExpression,set);
 	}
 	return set;
 }
@@ -1125,15 +1157,6 @@ Expression* AssignmentOperator::infixParse(Parser* parser,Token,Expression* expr
 }
 
 
-Substitute::Substitute(Scope* scope,SymbolID name,Location location,Expression* expr) : Definition(scope,name,location) { 
-	assert(expr);
-	substitute = expr; 
-}
-Expression* Substitute::prefixParse(Parser* parser,Token){
-	return substitute;
-}
-
-
 
 TypeStatement::TypeStatement() : Definition(0,"type") {}
 
@@ -1219,7 +1242,7 @@ Expression* DefStatement::prefixParse(Parser* parser,Token){
 	//Or substitute
 	else{
 		parser->expect("=");
-		parser->_currentScope->define( new Substitute(parser->_currentScope,name,parser->previousLocation(),parser->parse()) );
+		//parser->_currentScope->define( new Substitute(parser->_currentScope,name,parser->previousLocation(),parser->parse()) );
 	}
 	return Constant(arpha::Nothing);
 }
@@ -2005,7 +2028,7 @@ namespace compiler {
 
 	Type* builtInType(const char* name){
 		auto t = new Type(scope,SymbolID(name),0);
-		scope->definePrefix(Location(),SymbolID(name),parseTypeExpression,t);
+		//scope->definePrefix(Location(),SymbolID(name),parseTypeExpression,t);
 		return t;
 	}
 

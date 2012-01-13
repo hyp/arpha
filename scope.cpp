@@ -5,6 +5,13 @@
 #include "compiler.h"
 #include "arpha.h"
 
+PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){
+	this->id = name;this->location = location;
+}
+InfixDefinition::InfixDefinition(SymbolID name,int stickiness,Location& location){
+	this->id = name;this->stickiness = stickiness;this->location = location;
+}
+
 void Scope::importAllDefinitions(Location& location,Scope* scope){
 	for(auto i = scope->prefixDefinitions.begin(); i != scope->prefixDefinitions.end() ; ++i){
 		auto c = importedPrefixDefinitions.find((*i).first);
@@ -31,14 +38,14 @@ void Scope::importAllDefinitions(Location& location,Scope* scope){
 void Scope::importAlias(Location& location,Scope* scope,SymbolID alias){
 	auto c = containsPrefix(alias);
 	if(c) error(location,"Symbol '%s' is already defined! Failed to alias an imported scope as '%s'.",alias,alias);
-	else definePrefix(location,alias,nullptr,scope);
+	else void; /*definePrefix(location,alias,nullptr,scope);//TODO parser func*/
 }
 
 #define LOOKUP(t,c) \
 	auto var = t##Definitions.find(name); \
-	if (var != t##Definitions.end()) return &var->second; \
+	if (var != t##Definitions.end()) return var->second; \
 	var = imported##c##Definitions.find(name); \
-	if(var != imported##c##Definitions.end()) return &var->second; \
+	if(var != imported##c##Definitions.end()) return var->second; \
 	if(parent) return parent->lookup##c(name); \
 	return nullptr
 
@@ -51,21 +58,19 @@ InfixDefinition* Scope::lookupInfix(SymbolID name){
 
 #define CONTAINS(t) \
 	auto var = t.find(name);			   \
-	if (var != t.end()) return &var->second; \
+	if (var != t.end()) return var->second; \
 	return nullptr
 
 PrefixDefinition* Scope::containsPrefix(SymbolID name){ CONTAINS(prefixDefinitions); }
 InfixDefinition* Scope::containsInfix(SymbolID name)  { CONTAINS(infixDefinitions);  }
 
-void Scope::definePrefix(Location& location,SymbolID name,Node* (*parselet)(PrefixDefinition*,Parser*),void* data){
-	auto alreadyDefined = containsPrefix(name);
-	if(alreadyDefined) error(location,"%s is already (prefix)defined in the current scope",name);
-	PrefixDefinition def = { parselet,data };
-	prefixDefinitions[name] = def;
+void Scope::define(PrefixDefinition* definition){
+	auto alreadyDefined = containsPrefix(definition->id);
+	if(alreadyDefined) error(definition->location,"'%s' is already (prefix)defined in the current scope",definition->id);
+	else prefixDefinitions[definition->id] = definition;
 }
-void Scope::defineInfix(Location& location,SymbolID name,int stickiness,Node* (*parselet)(InfixDefinition*,Parser*,Node*),void* data){
-	auto alreadyDefined = containsInfix(name);
-	if(alreadyDefined) error(location,"%s is already (infix)defined in the current scope",name);
-	InfixDefinition def = { stickiness,parselet,data };
-	infixDefinitions[name] = def;
+void Scope::define(InfixDefinition* definition){
+	auto alreadyDefined = containsInfix(definition->id);
+	if(alreadyDefined) error(definition->location,"'%s' is already (infix)defined in the current scope",definition->id);
+	else infixDefinitions[definition->id] = definition;
 }

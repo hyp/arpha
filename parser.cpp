@@ -1,5 +1,6 @@
 #include "common.h"
 #include "scope.h"
+#include "declarations.h"
 #include "parser.h"
 
 #include "ast.h"
@@ -95,7 +96,7 @@ Node* Parser::_parse(int stickiness){
 			error(location,"Can't prefix parse %s!",lookedUpToken); 
 			expression = expressionFactory->makeError();
 		}else{
-			expression = prefixDefinition->parse(prefixDefinition,this);
+			expression = prefixDefinition->parse(this);
 		}
 	}
 	else {
@@ -114,7 +115,7 @@ Node* Parser::_parse(int stickiness){
 			if(infixDefinition && stickiness < infixDefinition->stickiness){
 				location = currentLocation();
 				consume();
-				expression = infixDefinition->parse(infixDefinition,this,expression);
+				expression = infixDefinition->parse(this,expression);
 				expression->location = location;
 				expression = evaluate(expression);
 			}
@@ -124,26 +125,22 @@ Node* Parser::_parse(int stickiness){
 	return expression;	
 }
 
+//parsing declarations
+Node* Substitute::parse(Parser* parser){
+	return expression;//TODO expression duplication
+}
+
+/*Node* parseSubstitute(PrefixDefinition* def,Parser* parser){
+	return (Node*)(def->data);
+}
+
 Node* parseTypeExpression(PrefixDefinition* def,Parser* parser){
 	return parser->expressionFactory->makeType((Type*)def->data);
 }
 
-Node* Definition::prefixParse(Parser* parser){
-	error(parser->previousLocation(),"Can't prefix parse %s!",parser->lookedUpToken);
-	return parser->expressionFactory->makeError();
-}
-
-Node* Definition::infixParse(Parser* parser,Node*){
-	assert(false); //TODO throw
-	return nullptr;
-}
-
-Node* Type::prefixParse(Parser* parser){
-	assert(false); //TODO throw
-	return nullptr;
-}
-
-Node* OverloadSet::prefixParse(Parser* parser){
+Node* parseOverloadSetExpression(PrefixDefinition* def,Parser* parser){
 	return parser->expressionFactory->makeOverloadSet(parser->currentScope(),parser->lookedUpToken.symbol);
-}
+}*/
+
+
 
