@@ -7,23 +7,23 @@
 
 void Scope::importAllDefinitions(Location& location,Scope* scope){
 	for(auto i = scope->prefixDefinitions.begin(); i != scope->prefixDefinitions.end() ; ++i){
-		auto c = containsPrefix((*i).first);
-		if(c){
-			error(location,"definition %s is already (p)imported!",(*i).first);
+		auto c = importedPrefixDefinitions.find((*i).first);
+		if(c != importedPrefixDefinitions.end()){
+			error(location,"definition '%s' is already (p)imported!",(*i).first);
 		}
 		else{
-			debug("Scope p-importing definition %s",(*i).first);
+			debug("Scope p-importing definition '%s'",(*i).first);
 			importedPrefixDefinitions[(*i).first]=(*i).second;
 		}
 	}
 
 	for(auto i = scope->infixDefinitions.begin(); i != scope->infixDefinitions.end() ; ++i){
-		auto c = containsInfix((*i).first);
-		if(c){
-			error(location,"definition %s is alreday (i)imported!",(*i).first);
+		auto c = importedInfixDefinitions.find((*i).first);
+		if(c != importedInfixDefinitions.end()){
+			error(location,"definition '%s' is alreday (i)imported!",(*i).first);
 		}
 		else{
-			debug("Scope i-importing definition %s",(*i).first);
+			debug("Scope i-importing definition '%s'",(*i).first);
 			importedInfixDefinitions[(*i).first]=(*i).second;
 		}
 	}

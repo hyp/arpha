@@ -2030,9 +2030,9 @@ void compile(const char* name,const char* source){
 	
 	Scope* scope = new Scope(nullptr);
 	//import 'compiler'
-	scope->importAllDefinitions(Location(),::compiler::scope);
+	scope->importAllDefinitions(Location(-2),::compiler::scope);
 	//import 'arpha'
-	scope->importAllDefinitions(Location(),::arpha::scope);
+	scope->importAllDefinitions(Location(-1),::arpha::scope);
 
 	Parser parser(source,scope);
 
