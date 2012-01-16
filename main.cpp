@@ -587,6 +587,7 @@ namespace arpha {
 	Type* types[TYPE_COUNT];
 
 	Function* createFunction(Scope* scope,const char* name,Type* returns,Type* arg0 = 0,const char *arg0n = 0,Type* arg1 = 0,const char *arg1n = 0){
+		//SymbolID name;
 		Location location(0,0);
 		Type* argument = arpha::Nothing;
 		//if(arg0) argument = arg1 ? Type::tuple(arg0,arg1) : arg0;
@@ -688,7 +689,24 @@ namespace arpha {
 		}
 	};
 
-	/// := def <name> = expression
+	/// ::= expression '.' expression
+	struct AccessParser: InfixDefinition {
+		AccessParser(): InfixDefinition(".",arpha::Precedence::Access,Location()) {}
+		Node* parse(Parser* parser,Node* node){
+			auto symbol = parser->expectName();
+			return parser->expressionFactory->makeAccess(node,symbol);
+		}
+	};
+
+	/// ::= expression '=' expression
+	struct AssignmentParser: InfixDefinition {
+		AssignmentParser(): InfixDefinition("=",arpha::Precedence::Assignment,Location()) {}
+		Node* parse(Parser* parser,Node* node){
+			return nullptr;
+		}
+	};
+
+	/// := def <name> '=' expression
 	struct DefParser: PrefixDefinition {
 		DefParser(): PrefixDefinition("def",Location()) {  }
 		Node* parse(Parser* parser){
@@ -702,7 +720,7 @@ namespace arpha {
 		}
 	};
 
-	/// ::= type <name> { field1,field2 type }
+	/// ::= type <name> '{' <fields> type '}'
 	struct TypeParser: PrefixDefinition {
 		TypeParser(): PrefixDefinition("type",Location()) {  }
 		Node* parse(Parser* parser){
@@ -738,14 +756,16 @@ namespace arpha {
 		}
 	};
 
-	void init(){
+	void init(Scope* scope){
 		Location location(0,0);
-		scope = new Scope(0);
+		::arpha::scope = scope;
 
 		closingParenthesis = SymbolID(")");
 		scope->define(new ParenthesisParser);
 		scope->define(new CallParser);
 		scope->define(new TupleParser);
+		scope->define(new AccessParser);
+		scope->define(new AssignmentParser);
 
 		scope->define(new DefParser);
 		scope->define(new TypeParser);
@@ -1878,7 +1898,85 @@ bool Expression::sameAs(Expression* other){
 
 
 namespace compiler {
-	static TranslationUnit* currentUnit;
+
+	struct Module {
+		Scope* scope;
+		Node*  body;
+		ExpressionFactory expressionFactory;
+		bool compile;
+
+	};
+
+	std::map<std::string,Module> modules;
+	Module* currentModule;
+
+	Module* arphaModule; //packages/arpha/arpha.arp
+
+	Module* loadModule(const char* moduleName,const char* source){
+		auto exists = modules.find(moduleName); 
+		if (exists != modules.end()) return &exists->second;
+
+		debug("new module %s created!",moduleName);
+		Module module = {};
+		modules[moduleName] = module;
+
+		auto prevModule = currentModule;
+		currentModule = &modules.find(moduleName)->second; 
+
+		//parse
+		currentModule->scope = new Scope(nullptr);
+		
+		//import 'compiler'
+		currentModule->scope->importAllDefinitions(Location(-2,0),::compiler::scope);
+
+
+		if(strcmp(moduleName,"packages_arpha_arpha")==0){
+			//the original arpha module
+			debug("This is the main arpha module");
+			arphaModule = currentModule;
+			arpha::init(currentModule->scope);
+		}else{
+			//import 'arpha'
+			currentModule->scope->importAllDefinitions(Location(-1,0),arphaModule->scope);
+		}
+
+		Parser parser(source,currentModule->scope);
+		parser.expressionFactory = &currentModule->expressionFactory;
+		currentModule->body = parser._parseModule();
+
+		debug("------------------- AST: ------------------------------");
+		debug("%s\n",currentModule->body);
+		
+		prevModule = currentModule;
+		currentModule = prevModule;
+
+		return prevModule;	
+	}
+
+	void* readFile(const char* filename){
+		FILE* file = fopen(filename, "rb");
+		assert(file);
+		fseek(file, 0, SEEK_END);
+		size_t size = (size_t) ftell(file);
+		rewind(file);
+		void* data = malloc(size);
+		assert(data);
+		fread(data, size, 1, file);
+		fclose(file);
+		return data;
+	}
+
+	std::string packageDir;
+
+	Scope* importPackage(const char* name){
+		auto moduleName = std::string("packages_") + name + "_" + name;
+		debug("fetching package %s",moduleName);
+		auto fileName = std::string("D:\\alex\\projects\\parser\\packages\\") + name + "\\" + name + ".arp";
+		auto src = readFile(fileName.c_str());
+		auto module = loadModule(moduleName.c_str(),(const char*)src);
+		free(src);
+		return module->scope;
+	}
 
 	Scope* scope;
 
@@ -1895,7 +1993,12 @@ namespace compiler {
 		return t;
 	}
 
+	
+	
 void init(){
+
+	packageDir = "D:\\alex\\projects\\parser\\packages\\";
+	
 	scope = new Scope(0);
 
 	expression = builtInType("cExpression");
@@ -1904,33 +2007,19 @@ void init(){
 	Error = builtInType("cError");
 	Unresolved = builtInType("cUnresolved");
 	inferred = builtInType("inferred");
-
-	currentUnit = nullptr;
 }
 
+
+
+
+
 void compile(const char* name,const char* source){
-	TranslationUnit unit;
-	unit.filename = name;
-	unit.compile = true;
-	auto prevUnit = currentUnit;
-	currentUnit = &unit;
-	
-	Scope* scope = new Scope(nullptr);
-	//import 'compiler'
-	scope->importAllDefinitions(Location(-2,0),::compiler::scope);
-	//import 'arpha'
-	scope->importAllDefinitions(Location(-1,0),::arpha::scope);
-
-	Parser parser(source,scope);
-
-	printf("------------------- new version: ------------------------------\n");
-	printf("%s\n",parser._parseModule());
-
-	currentUnit = prevUnit;
+	auto mod = loadModule(name,source);
+	mod->compile = true;
 }
 
 void onError(Location& location,std::string message){
-	std::cout<< currentUnit->filename << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
+	std::cout<< "" << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
 }
 
 }
@@ -1980,9 +2069,8 @@ int main()
 {
 	//the language definitions	
 	compiler::init();
-	arpha::init();
 
-	
+	compiler::importPackage("arpha");
 
 	
 	std::string source;

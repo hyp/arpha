@@ -13,7 +13,7 @@ namespace arpha {
 	}
 
 	void test();
-	void init();
+	void init(Scope* scope);
 
 	extern Scope *scope;
 

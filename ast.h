@@ -55,18 +55,19 @@ EXPR(CallExpression,6):
 	Node* arg;
 };
 
-struct FieldAccessExpression;
+struct AccessExpression;
 
 struct VariableOrField : Node {
 	union {
 		VariableExpression* v;
-		FieldAccessExpression* f;
+		AccessExpression* f;
 	};
 	int type;
 };
 
-EXPR(FieldAccessExpression,7):
-	VariableOrField object;
+EXPR(AccessExpression,7):
+	Node* object;
+	SymbolID symbol;
 	Variable* field;
 };
 
@@ -97,6 +98,7 @@ struct ExpressionFactory {
 	VariableExpression* makeVariable(Variable* var);
 	TypeExpression* makeType(Type* type);
 	FunctionExpression* makeFunction(Function* func);
+	AccessExpression* makeAccess(Node* object,SymbolID symbol);
 
 	OverloadSetExpression* makeOverloadSet(Scope* scope,SymbolID symbol);
 	CallExpression* makeCall(Node* object,Node* argument);

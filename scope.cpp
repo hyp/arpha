@@ -56,6 +56,11 @@ void Scope::importAlias(Location& location,Scope* scope,SymbolID alias){
 	if(parent) return parent->lookup##c(name); \
 	return nullptr
 
+PrefixDefinition* Scope::lookupImportedPrefix(SymbolID name){
+	auto var = prefixDefinitions.find(name); 
+	if (var != prefixDefinitions.end() && var->second->visibilityMode == Visibility::Public) return var->second;
+	return nullptr;
+}
 PrefixDefinition* Scope::lookupPrefix(SymbolID name){
 	LOOKUP(prefix,Prefix);
 }

@@ -31,6 +31,7 @@ struct InfixDefinition {
 	virtual Node* parse(Parser* parser,Node* node) = 0;
 };
 
+struct Variable;
 
 //Scope resolves symbols to corresponding definitions, which tells parser how to parse the encountered symbol
 struct Scope {
@@ -46,6 +47,7 @@ struct Scope {
 	void importAlias(Location& location,Scope* scope,SymbolID alias);
 
 	PrefixDefinition* lookupPrefix(SymbolID name);
+	PrefixDefinition* lookupImportedPrefix(SymbolID name);
 	PrefixDefinition* containsPrefix(SymbolID name);
 	void define(PrefixDefinition* definition);
 
@@ -55,6 +57,7 @@ struct Scope {
 
 	Scope* parent;
 	Definition* owner;
+
 private:
 
 	std::map<SymbolID,PrefixDefinition*> prefixDefinitions;

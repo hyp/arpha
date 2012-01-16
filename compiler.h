@@ -1,11 +1,7 @@
 #ifndef COMPLIER_H
 #define COMPILER_H
 
-struct TranslationUnit {
-	const char* filename;
-	bool compile;
-	ExpressionFactory expressionFactory;
-};
+
 
 namespace compiler {
 	//settings
@@ -21,6 +17,8 @@ namespace compiler {
 	extern Type* inferred;  //an inferred type
 
 	void init();
+
+	Scope* fetchImport(const char* import);
 
 	//
 	void compile(const char* name,const char* source);

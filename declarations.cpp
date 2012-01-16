@@ -4,6 +4,7 @@
 #include "parser.h"
 #include "ast.h"
 #include "compiler.h"
+#include "arpha.h"
 
 //variable
 Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location) {
@@ -11,6 +12,7 @@ Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,loc
 }
 
 //type
+
 Type::Type(SymbolID name,Location& location) : PrefixDefinition(name,location) {
 	size = 0;
 	isTuple = false;
@@ -77,4 +79,16 @@ Type* Type::tuple(std::vector<std::pair<SymbolID,Type*>>& fields){
 	}
 	tuples.push_back(tuple);
 	return tuple;
+}
+
+//function
+
+FunctionDef::Argument::Argument(const Variable& var) : variable(var) {
+}
+
+FunctionDef::FunctionDef(SymbolID name,Location& location) : PrefixDefinition(name,location){
+	argument = arpha::Nothing;
+	returnType   = arpha::Nothing;
+	bodyScope = nullptr;
+	body = nullptr;
 }

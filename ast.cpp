@@ -52,12 +52,20 @@ OverloadSetExpression* ExpressionFactory::makeOverloadSet(Scope* scope,SymbolID 
 	e->symbol = symbol;
 	return e;
 }
-CallExpression* ExpressionFactory::makeCall(Node* object,Node* argument){
+CallExpression*   ExpressionFactory::makeCall(Node* object,Node* argument){
 	auto e = new(allocate(sizeof(CallExpression))) CallExpression;
 	e->object = object;
 	e->arg = argument;
 	return e;
 }
+AccessExpression* ExpressionFactory::makeAccess(Node* object,SymbolID symbol){
+	auto e = new(allocate(sizeof(AccessExpression))) AccessExpression;
+	e->object = object;
+	e->symbol = symbol;
+	e->field  = nullptr;
+	return e;
+}
+
 TupleExpression* ExpressionFactory::makeTuple(Node* a,Node* b){
 	if( a->is<TupleExpression>() ){ //TODO, not 0 children?
 		((TupleExpression*)a)->children.push_back(b);
@@ -98,7 +106,7 @@ Type* returnType(const Node* node){
 		CASE(VariableExpression): return ((VariableExpression*)node)->variable->type;
 		CASE(CallExpression):	  return ((CallExpression*)node)->object->is<FunctionExpression> () ? 
 									( (FunctionExpression*)(((CallExpression*)node)->object) )->function->returnType : compiler::Unresolved;
-		CASE(FieldAccessExpression): return ((FieldAccessExpression*)node)->field->type;
+		//CASE(AccessExpression): return ((AccessExpression*)node)->
 		CASE(AssignmentExpression):  return returnType( ((AssignmentExpression*)node)->object.v );
 		CASE(TupleExpression): assert(((TupleExpression*) node)->type); return ((TupleExpression*) node)->type;
 	}
@@ -127,9 +135,9 @@ std::ostream& operator<< (std::ostream& stream,const Node* node){
 		CASE(FunctionExpression): stream<<"func "<<((FunctionExpression*)node)->function->id; break;
 		CASE(OverloadSetExpression): stream<<"overloadset "<<((OverloadSetExpression*)node)->symbol; break;
 		CASE(CallExpression): stream<<"call "<<((CallExpression*)node)->object<<" with "<<((CallExpression*)node)->arg; break;
-		CASE(FieldAccessExpression): stream<<((FieldAccessExpression*)node)->object.v<<" . "<<((FieldAccessExpression*)node)->field->id;
-		CASE(AssignmentExpression): stream<< ((AssignmentExpression*)node)->object.v <<" = "<<((AssignmentExpression*)node)->value;
-		CASE(ReturnExpression): stream<<"return"<<((ReturnExpression*)node)->value;
+		CASE(AccessExpression): stream<<((AccessExpression*)node)->object<<" . "<<((AccessExpression*)node)->symbol; break;
+		CASE(AssignmentExpression): stream<< ((AssignmentExpression*)node)->object.v <<" = "<<((AssignmentExpression*)node)->value; break;
+		CASE(ReturnExpression): stream<<"return"<<((ReturnExpression*)node)->value; break;
 		CASE(TupleExpression):
 			for(auto i = ((TupleExpression*) node)->children.begin();i != ((TupleExpression*) node)->children.end();){
 				stream<<(*i);

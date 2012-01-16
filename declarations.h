@@ -45,6 +45,33 @@ private:
 	std::vector<Variable> fields;
 };
 
+struct FunctionDef: public PrefixDefinition {
 
+	struct Argument {
+		Variable variable;			 // so that code inside the functions has access to arguments
+		//FunctionDef* typeConstraint; // Arithmetic
+		//Definition* valueConstraint; // x <- int32 //can be type or function!
+		
+		Argument(const Variable& var);
+	};
+
+	FunctionDef(SymbolID name,Location& location);
+
+	Node* parse(Parser* parser);
+
+	Type* argument;
+	Type* returnType;
+	Scope* bodyScope;
+	Node* body;
+	std::vector<Argument> arguments;
+};
+
+struct Overloadset: public PrefixDefinition {
+	Overloadset(SymbolID name,Location& location);
+
+	Node* parse(Parser* parser);
+	
+	std::vector<FunctionDef*> functions;
+};
 
 #endif

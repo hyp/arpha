@@ -138,10 +138,10 @@ Node* Type::parse(Parser* parser){
 	return parser->expressionFactory->makeType(this);
 }
 
-/*
-Node* parseOverloadSetExpression(PrefixDefinition* def,Parser* parser){
+Node* FunctionDef::parse(Parser* parser){
+	return nullptr;
+}
+
+Node* Overloadset::parse(Parser* parser){
 	return parser->expressionFactory->makeOverloadSet(parser->currentScope(),parser->lookedUpToken.symbol);
-}*/
-
-
-
+}
