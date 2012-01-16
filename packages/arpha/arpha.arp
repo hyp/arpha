@@ -2,6 +2,7 @@ def this_is_awsome = 2
 
 operator - = minus
 operator + = plus
+operator ! = not
 
 operator + priority 30 = add
 operator - priority 30 = subtract
@@ -13,3 +14,7 @@ operator == priority 25 = equals
 operator != priority 25 = not_equals
 
 var x
+
+def typeof(expression cExpression) cType
+def sizeof(expression cExpression) uint32
+def equals(x cType,y cType) bool

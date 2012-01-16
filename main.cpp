@@ -661,6 +661,7 @@ namespace arpha {
 		Node* parse(Parser* parser){
 			if( parser->match(closingParenthesis) ){
 				error(parser->previousLocation(),"() is an illegal expression!");
+				return parser->expressionFactory->makeError();
 			}
 			auto e = parser->_parse();
 			parser->expect(closingParenthesis);
@@ -707,13 +708,63 @@ namespace arpha {
 		}
 	};
 
+Node* parseFunction(SymbolID name,Location location,Parser* parser){
+	//Function
+	auto func = new FunctionDef(name,location);
+
+	//parse arguments
+	func->argument = compiler::Nothing;
+	if(!parser->match(")")){
+
+		std::vector<FunctionDef::Argument> arguments;
+		while(1){
+			//parse argument's name
+			SymbolID argName = parser->expectName();
+			auto var = Variable(argName,parser->previousLocation());
+			var.type = compiler::anyType;
+			arguments.push_back(FunctionDef::Argument(var));
+
+			if(parser->match(")")) break;
+			if(!parser->match(",")){
+				//parse additional information, like argument's type
+				auto node = parser->_parse(arpha::Precedence::Tuple);
+				if(!node->is<TypeExpression>()) error(node->location,"a valid type is expected instead of %s",node);
+				else arguments.back().variable.type = ((TypeExpression*)node)->type;
+
+				if(parser->match(")")) break;
+				parser->expect(",");
+			}
+		}
+		func->arguments = arguments;
+
+		//give the argument an appropriate type representation
+		if(arguments.size()>1){
+			std::vector<std::pair<SymbolID,Type*>> fields;
+			for(auto i=arguments.begin();i!=arguments.end();++i) fields.push_back(std::make_pair((*i).variable.id,(*i).variable.type));
+			func->argument = Type::tuple(fields);
+		}else func->argument = arguments.begin()->variable.type;
+	}
+	debug("Function's argumentType = %s",func->argument->id);
+
+	//parse returnType
+	func->returnType = compiler::inferred;									//def f(...) = 2             #returns int32, as indicated by 2
+	if(parser->peek().isEndExpression() || parser->peek().isEOF()) func->returnType = compiler::Nothing; //def definitionOnly(...);   #returns void
+	else if(auto t = parser->parseOptionalType()) func->returnType = t;	    //def foo(...) int32 { ... } #returns int32
+	debug("Function's returnType = %s",func->returnType->id);
+
+	//parse body
+	
+	//
+	return parser->expressionFactory->makeCompilerNothing();
+}
+
 	/// := 'def' <name> '=' expression
 	struct DefParser: PrefixDefinition {
 		DefParser(): PrefixDefinition("def",Location()) {  }
 		Node* parse(Parser* parser){
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
-			if(parser->match("(")){
+			if(parser->match("(")){ return parseFunction(name,location,parser);
 				//-- function
 				return nullptr;
 			}
@@ -814,6 +865,8 @@ namespace arpha {
 		scope->define(new TypeParser);
 		scope->define(new VarParser);
 		scope->define(new OperatorParser);
+
+		scope->define(new ReturnParser);
 
 		Nothing = builtInType("Nothing",0);
 
@@ -1992,6 +2045,7 @@ namespace compiler {
 	Type* Error;
 	Type* Unresolved;
 	Type* inferred;
+	Type* anyType; 
 
 	Type* builtInType(const char* name){
 		auto t = new Type(SymbolID(name),Location());
@@ -2014,6 +2068,7 @@ void init(){
 	Error = builtInType("cError");
 	Unresolved = builtInType("cUnresolved");
 	inferred = builtInType("inferred");
+	anyType = builtInType("anyType");
 
 	currentModule = modules.end();
 }

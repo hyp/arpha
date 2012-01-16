@@ -15,6 +15,7 @@ namespace compiler {
 	extern Type* Error;     //an error constant expression
 	extern Type* Unresolved;//unresolved function overload
 	extern Type* inferred;  //an inferred type
+	extern Type* anyType;       //a type which represents any given type
 
 	void init();
 

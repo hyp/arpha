@@ -143,11 +143,12 @@ Type* Parser::parseOptionalType(){
 	auto next = peek();
 	if(next.isEOF() || next.isEndExpression()) return nullptr;
 	const char* prevptr = ptr;
-	auto node = _parse();
+	auto node = _parse(arpha::Precedence::Assignment);
 	if(auto t = node->is<TypeExpression>()) return t->type;
 	ptr = prevptr;
 	return nullptr;
 }
+
 
 //parsing declarations
 Node* Substitute::parse(Parser* parser){

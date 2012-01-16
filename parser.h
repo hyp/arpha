@@ -69,6 +69,7 @@ struct Parser : Lexer {
 
 	Node* _parse(int stickiness =  0);
 	Node* _parseModule();
+
 	Type* parseOptionalType();
 	
 	/// Returns a raw expression, which may contain unresolved symbols
