@@ -175,25 +175,7 @@ struct OverloadSet: public Definition {
 
 
 //Parses operators as function calls ex. 1 + 2 => add(1,2)
-struct Operator : public Definition {
-	
-	Operator(Scope* scope,SymbolID name,Location location,SymbolID func,int sticky = -1);
 
-
-	Expression* prefixParse(Parser*,Token);
-	Expression* infixParse(Parser*,Token,Expression*);
-
-	struct Parselet : public Definition {
-		Parselet(Scope* scope,SymbolID name,Location location);
-
-		Expression* prefixParse(Parser*,Token);
-	};
-
-private:
-
-	SymbolID functionName;
-
-};
 
 
 

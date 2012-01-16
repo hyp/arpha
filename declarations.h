@@ -74,4 +74,23 @@ struct Overloadset: public PrefixDefinition {
 	std::vector<FunctionDef*> functions;
 };
 
+struct PrefixOperator : public PrefixDefinition {
+
+	PrefixOperator(SymbolID name,Location& location);
+
+	Node* parse(Parser* parser);
+
+	SymbolID function;
+};
+
+struct InfixOperator : public InfixDefinition {
+
+	InfixOperator(SymbolID name,int stickiness,Location& location);
+
+	Node* parse(Parser* parser,Node* node);
+
+	SymbolID function;
+};
+	
+
 #endif

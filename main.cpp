@@ -756,6 +756,30 @@ namespace arpha {
 		}
 	};
 
+	/// ::= operator <name> [priority <number>] = functionName
+	struct OperatorParser: PrefixDefinition {
+		OperatorParser(): PrefixDefinition("operator",Location()) {}
+		Node* parse(Parser* parser){
+			auto loc  = parser->previousLocation();
+			auto name = parser->expectName();
+			if(parser->match("=")){
+				auto op = new PrefixOperator(name,loc);
+				op->function = parser->expectName();
+				parser->currentScope()->define(op);
+			}else{
+				parser->expect("priority");
+				auto p = parser->_parse(arpha::Precedence::Tuple);
+				if(!p->is<ConstantExpression>()) error(parser->previousLocation(),"an integer expected!");
+				parser->expect("=");
+				auto op = new InfixOperator(name,int(((ConstantExpression*)p)->u64),loc);
+				debug("defined operator %d with stickiness %d",name,op->stickiness);
+				op->function = parser->expectName();
+				parser->currentScope()->define(op);
+			}
+			return parser->expressionFactory->makeConstant();
+		}
+	};
+
 	void init(Scope* scope){
 		Location location(0,0);
 		::arpha::scope = scope;
@@ -770,6 +794,7 @@ namespace arpha {
 		scope->define(new DefParser);
 		scope->define(new TypeParser);
 		scope->define(new VarParser);
+		scope->define(new OperatorParser);
 
 		Nothing = builtInType("Nothing",0);
 
@@ -1265,41 +1290,6 @@ Expression* OverloadSet::resolve(Expression* expr){
 
 Expression* OverloadSet::prefixParse(Parser* parser,Token token){
 	return OverloadSetRef(parser->_currentScope,token.symbol);
-}
-
-Operator::Parselet::Parselet(Scope* scope,SymbolID name,Location location) : Definition(scope,name,location) {
-}
-Expression* Operator::Parselet::prefixParse(Parser* parser,Token){
-	auto name = parser->expectName();
-	SymbolID func;
-	int sticky = -1;
-
-	if(parser->match("=")) func = parser->expectName();
-	else if(parser->match("priority")){
-		auto expr = parser->evaluate(parser->parse(1000));
-		if(expr->isConstant() && expr->returnType == arpha::constant && arpha::isInteger(expr->constantType))
-			sticky = int(expr->uinteger);
-		else error(parser->previousLocation(),"integer constant expected!");
-		parser->expect("=");
-		func = parser->expectName();
-	}else{
-		error(parser->previousLocation(),"'=' or 'priority' expected");
-	}
-
-	auto op = new Operator(parser->_currentScope,name,parser->previousLocation(),func,sticky);
-	parser->_currentScope->define(op);
-
-	return Constant(arpha::Nothing);
-}
-
-Operator::Operator(Scope* scope,SymbolID name,Location location,SymbolID func,int sticky) : Definition(scope,name,location,sticky) {
-	functionName = func;
-}
-Expression* Operator::prefixParse(Parser* parser,Token){
-	return Call(OverloadSetRef(parser->_currentScope,functionName),parser->parse());
-}
-Expression* Operator::infixParse(Parser* parser,Token,Expression* a){
-	return Call(OverloadSetRef(parser->_currentScope,functionName),Tuple(a,parser->parse(stickiness)));
 }
 
 
@@ -1930,9 +1920,8 @@ namespace compiler {
 		currentModule->scope->importAllDefinitions(Location(-2,0),::compiler::scope);
 
 
-		if(strcmp(moduleName,"packages_arpha_arpha")==0){
+		if(strcmp(moduleName,"packages/arpha/arpha")==0){
 			//the original arpha module
-			debug("This is the main arpha module");
 			arphaModule = currentModule;
 			arpha::init(currentModule->scope);
 		}else{
@@ -1959,9 +1948,10 @@ namespace compiler {
 		fseek(file, 0, SEEK_END);
 		size_t size = (size_t) ftell(file);
 		rewind(file);
-		void* data = malloc(size);
+		void* data = malloc(size+1);
 		assert(data);
 		fread(data, size, 1, file);
+		((char*)data)[size]='\0';
 		fclose(file);
 		return data;
 	}
@@ -1969,7 +1959,7 @@ namespace compiler {
 	std::string packageDir;
 
 	Scope* importPackage(const char* name){
-		auto moduleName = std::string("packages_") + name + "_" + name;
+		auto moduleName = std::string("packages/") + name + "/" + name;
 		debug("fetching package %s",moduleName);
 		auto fileName = std::string("D:\\alex\\projects\\parser\\packages\\") + name + "\\" + name + ".arp";
 		auto src = readFile(fileName.c_str());

@@ -92,3 +92,11 @@ FunctionDef::FunctionDef(SymbolID name,Location& location) : PrefixDefinition(na
 	bodyScope = nullptr;
 	body = nullptr;
 }
+
+//opreator
+
+PrefixOperator::PrefixOperator(SymbolID name,Location& location) : PrefixDefinition(name,location) {
+}
+
+InfixOperator::InfixOperator(SymbolID name,int stickiness,Location& location) : InfixDefinition(name,stickiness,location){
+}

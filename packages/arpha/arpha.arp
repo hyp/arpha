@@ -1,1 +1,15 @@
+def this_is_awsome = 2
+
+operator - = minus
+operator + = plus
+
+operator + priority 30 = add
+operator - priority 30 = subtract
+operator * priority 35 = multiply
+operator / priority 35 = divide
+operator % priority 35 = mod
+
+operator == priority 25 = equals
+operator != priority 25 = not_equals
+
 var x

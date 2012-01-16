@@ -15,8 +15,6 @@ namespace arpha {
 	void test();
 	void init(Scope* scope);
 
-	extern Scope *scope;
-
 	//core functions
 	extern Function* typeof;
 	extern Function* _sizeof;

@@ -47,7 +47,10 @@ bool Parser::isEndExpressionNext(){
 
 SymbolID Parser::expectName(){
 	Token tok = consume();
-	if(tok.isSymbol()==false) error(previousLocation(),"A valid name is expected!");
+	if(tok.isSymbol()==false){
+		error(previousLocation(),"A valid name is expected!");
+		return SymbolID("error-name");
+	}
 	return tok.symbol;
 }
 
@@ -144,4 +147,15 @@ Node* FunctionDef::parse(Parser* parser){
 
 Node* Overloadset::parse(Parser* parser){
 	return parser->expressionFactory->makeOverloadSet(parser->currentScope(),parser->lookedUpToken.symbol);
+}
+
+Node* PrefixOperator::parse(Parser* parser){
+	return parser->expressionFactory->makeCall(parser->expressionFactory->makeOverloadSet(parser->currentScope(),function),parser->_parse());
+}
+
+Node* InfixOperator::parse(Parser* parser,Node* node){
+	auto tuple = parser->expressionFactory->makeUnit();
+	tuple->children.push_back(node);
+	tuple->children.push_back(parser->_parse(stickiness));
+	return parser->expressionFactory->makeCall(parser->expressionFactory->makeOverloadSet(parser->currentScope(),function),tuple);
 }
