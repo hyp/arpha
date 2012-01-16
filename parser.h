@@ -60,6 +60,7 @@ struct Parser : Lexer {
 
 	void expect(SymbolID token);
 	SymbolID expectName();
+	int expectInteger();
 
 	bool match(SymbolID token);
 	bool match(int tokenType);
@@ -68,6 +69,7 @@ struct Parser : Lexer {
 
 	Node* _parse(int stickiness =  0);
 	Node* _parseModule();
+	Type* parseOptionalType();
 	
 	/// Returns a raw expression, which may contain unresolved symbols
 	Expression* parse(int stickiness = 0);

@@ -54,6 +54,17 @@ SymbolID Parser::expectName(){
 	return tok.symbol;
 }
 
+int Parser::expectInteger(){
+	auto node = _parse(arpha::Precedence::Tuple);
+	if(auto c= node->is<ConstantExpression>()){
+		if(arpha::isInteger(c->type)){
+			return int(c->u64);
+		}
+	}
+	error(node->location,"Expected an integer constant instead of %s!",node);
+	return -1;
+}
+
 Node* Parser::_parseModule(){
 	//top level
 	Node* block = expressionFactory->makeBlock();
@@ -128,9 +139,19 @@ Node* Parser::_parse(int stickiness){
 	return expression;	
 }
 
+Type* Parser::parseOptionalType(){
+	auto next = peek();
+	if(next.isEOF() || next.isEndExpression()) return nullptr;
+	const char* prevptr = ptr;
+	auto node = _parse();
+	if(auto t = node->is<TypeExpression>()) return t->type;
+	ptr = prevptr;
+	return nullptr;
+}
+
 //parsing declarations
 Node* Substitute::parse(Parser* parser){
-	return expression;//TODO expression duplication
+	return parser->expressionFactory->duplicate(expression);
 }
 
 Node* Variable::parse(Parser* parser){

@@ -18,6 +18,12 @@ ConstantExpression* ExpressionFactory::makeConstant(){
 	e->_isLiteral = false;
 	return e;
 }
+ConstantExpression* ExpressionFactory::makeCompilerNothing(){
+	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
+	e->type = compiler::Nothing;
+	e->_isLiteral = false;
+	return e;
+}
 ConstantExpression* ExpressionFactory::makeError(){
 	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
 	e->type = compiler::Error;
@@ -82,6 +88,11 @@ BlockExpression* ExpressionFactory::makeBlock(){
 
 #define CASE(t) case t::__value__
 
+Node* ExpressionFactory::duplicate(const Node* node){
+	return (Node*)node;//TODO
+}
+
+
 static Type* literalConstantReturnType(const ConstantExpression* node){
 		if(node->type == arpha::int64)
 			return abs(node->i64) <= int64(std::numeric_limits<int>::max()) ? arpha::int32 : arpha::int64;
@@ -120,6 +131,7 @@ std::ostream& operator<< (std::ostream& stream,const ConstantExpression* node){
 	else if(node->type == arpha::int64) stream<<node->i64;
 	else if(node->type == arpha::float64) stream<<node->f64;
 	else if(node->type == compiler::Error)   stream<<"error";
+	else if(node->type == compiler::Nothing) stream<<"statement";
 	else if(node->type == arpha::Nothing) stream<<"nothing";
 	else assert(false);
 	return stream;

@@ -712,11 +712,17 @@ namespace arpha {
 		Node* parse(Parser* parser){
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
-			parser->expect("=");
-			auto sub = new Substitute(name,location);
-			sub->expression = parser->_parse(arpha::Precedence::Tuple);
-			parser->currentScope()->define(sub);
-			return sub->expression;
+			if(parser->match("(")){
+				//-- function
+				return nullptr;
+			}
+			else{
+				parser->expect("=");
+				auto sub = new Substitute(name,location);
+				sub->expression = parser->_parse(arpha::Precedence::Tuple);
+				parser->currentScope()->define(sub);
+				return sub->expression;
+			}
 		}
 	};
 
@@ -749,6 +755,11 @@ namespace arpha {
 				vars.push_back(parser->expressionFactory->makeVariable(var));
 			}while(parser->match(","));
 
+			if(auto type = parser->parseOptionalType()){
+				debug("variables are of type %s",type->id);
+				for(auto i = vars.begin();i!=vars.end();++i) ((VariableExpression*)(*i))->variable->type = type;
+			}
+
 			if(vars.size() == 1) return vars[0];
 			auto tuple = parser->expressionFactory->makeUnit();
 			tuple->children = vars;
@@ -768,15 +779,14 @@ namespace arpha {
 				parser->currentScope()->define(op);
 			}else{
 				parser->expect("priority");
-				auto p = parser->_parse(arpha::Precedence::Tuple);
-				if(!p->is<ConstantExpression>()) error(parser->previousLocation(),"an integer expected!");
+				auto stickiness = parser->expectInteger();
 				parser->expect("=");
-				auto op = new InfixOperator(name,int(((ConstantExpression*)p)->u64),loc);
+				auto op = new InfixOperator(name,stickiness,loc);
 				debug("defined operator %d with stickiness %d",name,op->stickiness);
 				op->function = parser->expectName();
 				parser->currentScope()->define(op);
 			}
-			return parser->expressionFactory->makeConstant();
+			return parser->expressionFactory->makeCompilerNothing();
 		}
 	};
 
@@ -1892,54 +1902,53 @@ namespace compiler {
 	struct Module {
 		Scope* scope;
 		Node*  body;
-		ExpressionFactory expressionFactory;
+		ExpressionFactory expressionFactory; //TODO pointer it
 		bool compile;
-
 	};
 
+	typedef std::map<std::string,Module>::iterator ModulePtr;
+
 	std::map<std::string,Module> modules;
-	Module* currentModule;
 
-	Module* arphaModule; //packages/arpha/arpha.arp
+	ModulePtr currentModule;
 
-	Module* loadModule(const char* moduleName,const char* source){
-		auto exists = modules.find(moduleName); 
-		if (exists != modules.end()) return &exists->second;
+	//packages/arpha/arpha.arp
+	std::string arphaModuleName;
+	ModulePtr arphaModule; 
 
-		debug("new module %s created!",moduleName);
+	ModulePtr loadModule(const char* moduleName,const char* source){
 		Module module = {};
-		modules[moduleName] = module;
+		auto insertionResult = modules.insert(std::make_pair(std::string(moduleName),module));
+		if(!insertionResult.second) return insertionResult.first;
+		debug("new module %s created!",moduleName);
 
 		auto prevModule = currentModule;
-		currentModule = &modules.find(moduleName)->second; 
+		currentModule = insertionResult.first;
 
-		//parse
-		currentModule->scope = new Scope(nullptr);
-		
+		auto scope = currentModule->second.scope = new Scope(nullptr);
 		//import 'compiler'
-		currentModule->scope->importAllDefinitions(Location(-2,0),::compiler::scope);
+		scope->importAllDefinitions(Location(-2,0),::compiler::scope);
 
-
-		if(strcmp(moduleName,"packages/arpha/arpha")==0){
+		if(arphaModuleName == moduleName){
 			//the original arpha module
 			arphaModule = currentModule;
-			arpha::init(currentModule->scope);
+			arpha::init(scope);
 		}else{
 			//import 'arpha'
-			currentModule->scope->importAllDefinitions(Location(-1,0),arphaModule->scope);
+			scope->importAllDefinitions(Location(-1,0),arphaModule->second.scope);
 		}
 
-		Parser parser(source,currentModule->scope);
-		parser.expressionFactory = &currentModule->expressionFactory;
-		currentModule->body = parser._parseModule();
+		Parser parser(source,scope);
+		parser.expressionFactory = &currentModule->second.expressionFactory;
+		currentModule->second.body = parser._parseModule();
 
 		debug("------------------- AST: ------------------------------");
-		debug("%s\n",currentModule->body);
-		
-		prevModule = currentModule;
-		currentModule = prevModule;
+		debug("%s\n",currentModule->second.body);
 
-		return prevModule;	
+
+		//restore old module ptr
+		currentModule = prevModule;
+		return insertionResult.first;
 	}
 
 	void* readFile(const char* filename){
@@ -1959,13 +1968,11 @@ namespace compiler {
 	std::string packageDir;
 
 	Scope* importPackage(const char* name){
-		auto moduleName = std::string("packages/") + name + "/" + name;
-		debug("fetching package %s",moduleName);
-		auto fileName = std::string("D:\\alex\\projects\\parser\\packages\\") + name + "\\" + name + ".arp";
-		auto src = readFile(fileName.c_str());
-		auto module = loadModule(moduleName.c_str(),(const char*)src);
+		auto filename = packageDir + name + "/" + name + ".arp";
+		auto src = readFile(filename.c_str());
+		auto module = loadModule(filename.c_str(),(const char*)src);
 		free(src);
-		return module->scope;
+		return module->second.scope;
 	}
 
 	Scope* scope;
@@ -1987,9 +1994,10 @@ namespace compiler {
 	
 void init(){
 
-	packageDir = "D:\\alex\\projects\\parser\\packages\\";
+	packageDir = "D:/alex/projects/parser/packages/";
+	arphaModuleName = packageDir + "arpha/arpha.arp";
 	
-	scope = new Scope(0);
+	scope = new Scope(nullptr);
 
 	expression = builtInType("cExpression");
 	type = builtInType("cType");
@@ -1997,6 +2005,8 @@ void init(){
 	Error = builtInType("cError");
 	Unresolved = builtInType("cUnresolved");
 	inferred = builtInType("inferred");
+
+	currentModule = modules.end();
 }
 
 
@@ -2005,11 +2015,11 @@ void init(){
 
 void compile(const char* name,const char* source){
 	auto mod = loadModule(name,source);
-	mod->compile = true;
+	mod->second.compile = true;
 }
 
 void onError(Location& location,std::string message){
-	std::cout<< "" << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
+	std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
 }
 
 }
