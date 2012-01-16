@@ -91,9 +91,11 @@ struct ExpressionFactory {
 	void* allocate(size_t size);
 
 	ConstantExpression* makeConstant();
+	ConstantExpression* makeNothing();
 	ConstantExpression* makeCompilerNothing();
 	ConstantExpression* makeError();
-	TupleExpression* makeUnit(); //unit is a tuple with 0 elements and type arpha::Nothing
+
+	TupleExpression* makeTuple();
 	TupleExpression* makeTuple(Node* a,Node* b);
 
 	VariableExpression* makeVariable(Variable* var);
@@ -103,6 +105,7 @@ struct ExpressionFactory {
 
 	OverloadSetExpression* makeOverloadSet(Scope* scope,SymbolID symbol);
 	CallExpression* makeCall(Node* object,Node* argument);
+	ReturnExpression* makeReturn(Node* expression);
 	BlockExpression* makeBlock();
 
 	Node* duplicate(const Node* node);

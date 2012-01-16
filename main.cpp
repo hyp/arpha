@@ -659,8 +659,9 @@ namespace arpha {
 	struct ParenthesisParser: PrefixDefinition {
 		ParenthesisParser(): PrefixDefinition("(",Location()) {}
 		Node* parse(Parser* parser){
-			if( parser->match(closingParenthesis) )
-				return parser->expressionFactory->makeUnit();
+			if( parser->match(closingParenthesis) ){
+				error(parser->previousLocation(),"() is an illegal expression!");
+			}
 			auto e = parser->_parse();
 			parser->expect(closingParenthesis);
 			return e;
@@ -672,7 +673,7 @@ namespace arpha {
 		CallParser(): InfixDefinition("(",arpha::Precedence::Call,Location()) {}
 		Node* parse(Parser* parser,Node* node){
 			Node* arg;
-			if( parser->match(closingParenthesis) ) arg = parser->expressionFactory->makeUnit();
+			if( parser->match(closingParenthesis) ) arg = parser->expressionFactory->makeNothing();
 			else{
 				arg = parser->_parse();
 				parser->expect(closingParenthesis);
@@ -706,7 +707,7 @@ namespace arpha {
 		}
 	};
 
-	/// := def <name> '=' expression
+	/// := 'def' <name> '=' expression
 	struct DefParser: PrefixDefinition {
 		DefParser(): PrefixDefinition("def",Location()) {  }
 		Node* parse(Parser* parser){
@@ -726,7 +727,7 @@ namespace arpha {
 		}
 	};
 
-	/// ::= type <name> '{' <fields> type '}'
+	/// ::= 'type' <name> '{' <fields> type '}'
 	struct TypeParser: PrefixDefinition {
 		TypeParser(): PrefixDefinition("type",Location()) {  }
 		Node* parse(Parser* parser){
@@ -743,7 +744,7 @@ namespace arpha {
 		}
 	};
 
-	/// ::= var <names> [type]
+	/// ::= 'var' <names> [type]
 	struct VarParser: PrefixDefinition {
 		VarParser(): PrefixDefinition("var",Location()) {}
 		Node* parse(Parser* parser){
@@ -761,13 +762,13 @@ namespace arpha {
 			}
 
 			if(vars.size() == 1) return vars[0];
-			auto tuple = parser->expressionFactory->makeUnit();
+			auto tuple = parser->expressionFactory->makeTuple();
 			tuple->children = vars;
 			return tuple;
 		}
 	};
 
-	/// ::= operator <name> [priority <number>] = functionName
+	/// ::= 'operator' <name> [priority <number>] = functionName
 	struct OperatorParser: PrefixDefinition {
 		OperatorParser(): PrefixDefinition("operator",Location()) {}
 		Node* parse(Parser* parser){
@@ -787,6 +788,14 @@ namespace arpha {
 				parser->currentScope()->define(op);
 			}
 			return parser->expressionFactory->makeCompilerNothing();
+		}
+	};
+
+	/// ::= 'return' expression
+	struct ReturnParser: PrefixDefinition {
+		ReturnParser(): PrefixDefinition("return",Location()) {}
+		Node* parse(Parser* parser){
+			return parser->expressionFactory->makeReturn(parser->_parse());
 		}
 	};
 

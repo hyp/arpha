@@ -175,7 +175,7 @@ Node* PrefixOperator::parse(Parser* parser){
 }
 
 Node* InfixOperator::parse(Parser* parser,Node* node){
-	auto tuple = parser->expressionFactory->makeUnit();
+	auto tuple = parser->expressionFactory->makeTuple();
 	tuple->children.push_back(node);
 	tuple->children.push_back(parser->_parse(stickiness));
 	return parser->expressionFactory->makeCall(parser->expressionFactory->makeOverloadSet(parser->currentScope(),function),tuple);

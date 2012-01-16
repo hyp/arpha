@@ -18,6 +18,12 @@ ConstantExpression* ExpressionFactory::makeConstant(){
 	e->_isLiteral = false;
 	return e;
 }
+ConstantExpression* ExpressionFactory::makeNothing(){
+	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
+	e->type = arpha::Nothing;
+	e->_isLiteral = false;//???
+	return e;
+}
 ConstantExpression* ExpressionFactory::makeCompilerNothing(){
 	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
 	e->type = compiler::Nothing;
@@ -28,11 +34,6 @@ ConstantExpression* ExpressionFactory::makeError(){
 	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
 	e->type = compiler::Error;
 	e->_isLiteral = false;
-	return e;
-}
-TupleExpression* ExpressionFactory::makeUnit(){
-	auto e = new(allocate(sizeof(TupleExpression))) TupleExpression;
-	e->type = arpha::Nothing;
 	return e;
 }
 
@@ -72,6 +73,15 @@ AccessExpression* ExpressionFactory::makeAccess(Node* object,SymbolID symbol){
 	return e;
 }
 
+ReturnExpression* ExpressionFactory::makeReturn(Node* expression){
+	auto e = new(allocate(sizeof(ReturnExpression))) ReturnExpression;
+	e->value = expression;
+	return e;
+}
+TupleExpression* ExpressionFactory::makeTuple(){
+	auto e =new(allocate(sizeof(TupleExpression))) TupleExpression;
+	return e;
+}
 TupleExpression* ExpressionFactory::makeTuple(Node* a,Node* b){
 	if( a->is<TupleExpression>() ){ //TODO, not 0 children?
 		((TupleExpression*)a)->children.push_back(b);
