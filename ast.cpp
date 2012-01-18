@@ -36,6 +36,28 @@ ConstantExpression* ExpressionFactory::makeError(){
 	e->_isLiteral = false;
 	return e;
 }
+ConstantExpression* ExpressionFactory::makeScopeReference(Scope* scope){
+	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
+	e->refScope = scope;
+	e->type = compiler::scopeRef;
+	e->_isLiteral = false;
+	return e;
+}
+ConstantExpression* ExpressionFactory::makeFunctionReference(FunctionDef* func){
+	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
+	e->refFunction = func;
+	e->type = compiler::function;
+	e->_isLiteral = false;
+	return e;
+}
+ConstantExpression* ExpressionFactory::makeTypeReference(Type* type){
+	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
+	e->refType = type;
+	e->type = compiler::type;
+	e->_isLiteral = false;
+	return e;
+}
+
 
 VariableExpression* ExpressionFactory::makeVariable(Variable* var){
 	auto e =new(allocate(sizeof(VariableExpression))) VariableExpression;
@@ -140,6 +162,9 @@ std::ostream& operator<< (std::ostream& stream,const ConstantExpression* node){
 	if(node->type == arpha::uint64)       stream<<node->u64;
 	else if(node->type == arpha::int64) stream<<node->i64;
 	else if(node->type == arpha::float64) stream<<node->f64;
+	else if(node->type == compiler::type) stream<<node->refType->id;
+	else if(node->type == compiler::function) stream<<node->refFunction->id;
+	else if(node->type == compiler::scopeRef) stream<<"scope";
 	else if(node->type == compiler::Error)   stream<<"error";
 	else if(node->type == compiler::Nothing) stream<<"statement";
 	else if(node->type == arpha::Nothing) stream<<"nothing";

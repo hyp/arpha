@@ -15,6 +15,6 @@ operator != priority 25 = not_equals
 
 var x
 
-def typeof(expression cExpression) cType
-def sizeof(expression cExpression) uint32
-def equals(x cType,y cType) bool
+def typeof(expression compiler.Expression) compiler.Type
+def sizeof(expression compiler.Expression) uint32
+def equals(x compiler.Type,y compiler.Type) bool

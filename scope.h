@@ -32,6 +32,8 @@ struct InfixDefinition {
 };
 
 struct Variable;
+struct FunctionDef;
+struct ImportedScope;
 
 //Scope resolves symbols to corresponding definitions, which tells parser how to parse the encountered symbol
 struct Scope {
@@ -41,10 +43,16 @@ struct Scope {
 	Definition* lookup(SymbolID name);
 	Definition* contains(SymbolID name);
 
+	struct ImportFlags {
+		enum {
+			PUBLIC = 0x1,        //public import - the import will be imported into scopes importing the current scope
+			FORCE_ALIAS = 0x2    //force alias - the symbols from the scope are accessed only via the scope alias i.e. foo.bar
+		};
+	};
+	void import(ImportedScope* alias,int flags = 0);
+
 	//import all importable definitions to this scope
 	void importAllDefinitions(Location& location,Scope* scope);
-	//define scope alias in this scope
-	void importAlias(Location& location,Scope* scope,SymbolID alias);
 
 	PrefixDefinition* lookupPrefix(SymbolID name);
 	PrefixDefinition* lookupImportedPrefix(SymbolID name);
@@ -54,6 +62,8 @@ struct Scope {
 	InfixDefinition* lookupInfix(SymbolID name);
 	InfixDefinition* containsInfix(SymbolID name);
 	void define(InfixDefinition* definition);
+
+	void defineFunction(FunctionDef* definition);
 
 	Scope* parent;
 	Definition* owner;
@@ -67,6 +77,14 @@ private:
 	std::map<SymbolID,InfixDefinition*> importedInfixDefinitions;
 
 	std::map<SymbolID,Definition*>  definitions;
+};
+
+//
+struct ImportedScope : PrefixDefinition {
+	ImportedScope(SymbolID name,Location& location,Scope* scope);
+	Node* parse(Parser* parser);
+
+	Scope* scope;
 };
 
 #endif

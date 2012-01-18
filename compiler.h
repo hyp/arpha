@@ -17,6 +17,9 @@ namespace compiler {
 	extern Type* inferred;  //an inferred type
 	extern Type* anyType;       //a type which represents any given type
 
+	extern Type* scopeRef; //import foo; foo <- value expression, with typeof scope
+	extern Type* function;
+
 	void init();
 
 	Scope* fetchImport(const char* import);

@@ -9,16 +9,6 @@
 
 Parser::Parser(const char* src,Scope* scope) : Lexer(src) { _currentScope=scope; }
 
-Parser::State Parser::getState(){
-		State state;
-		state.ptr = ptr;
-		return state;
-}
-
-void Parser::restoreState(Parser::State& state){
-		ptr = state.ptr;
-}
-
 void Parser::expect(SymbolID token){
 	Token tok = consume();
 	if(tok.isSymbol()==false || tok.symbol!=token) error(previousLocation(),"'%s' expected!",token);
@@ -151,6 +141,10 @@ Type* Parser::parseOptionalType(){
 
 
 //parsing declarations
+
+Node* ImportedScope::parse(Parser* parser) {
+	return parser->expressionFactory->makeScopeReference(scope);
+}
 Node* Substitute::parse(Parser* parser){
 	return parser->expressionFactory->duplicate(expression);
 }

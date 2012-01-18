@@ -49,14 +49,8 @@ struct OverloadSet;
 struct ExpressionFactory;
 
 struct Parser : Lexer {
-	struct State {
-		const char* ptr;
-	};
 
 	Parser(const char* src,Scope* scope);
-
-	State getState();
-	void restoreState(State& state);
 
 	void expect(SymbolID token);
 	SymbolID expectName();
@@ -92,18 +86,6 @@ struct Parser : Lexer {
 
 	inline Scope* currentScope() const { return _currentScope; }
 };
-
-//::= substitute => Expression
-//def->data must be a valid Node*
-//Node* parseSubstitute(PrefixDefinition* def,Parser* parser);
-
-//::= type   => TypeExpression
-//def->data must be a valid Type*
-Node* parseTypeExpression(PrefixDefinition* def,Parser* parser);
-
-//::= overloadSet => OSExpression
-//def->data must be a valid OverloadSet*
-Node* parseOverloadSetExpression(PrefixDefinition* def,Parser* parser);
 
 //Defines how to parse a name
 
@@ -175,10 +157,6 @@ struct OverloadSet: public Definition {
 	Function* add(Function* func);
 	Function* find(Expression* expr);
 };
-
-
-//Parses operators as function calls ex. 1 + 2 => add(1,2)
-
 
 
 

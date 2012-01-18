@@ -15,6 +15,18 @@ InfixDefinition::InfixDefinition(SymbolID name,int stickiness,Location& location
 	visibilityMode = Visibility::Public;
 }
 
+void Scope::import(ImportedScope* alias,int flags){
+	auto c = containsPrefix(alias->id);
+	if(c){
+		error(alias->location,"Symbol '%s' is already defined! Failed to import scope '%s'.",alias->id,alias->id);
+		return;
+	}
+	define(alias);
+	if(!(flags & ImportFlags::FORCE_ALIAS)){
+		importAllDefinitions(alias->location,alias->scope);
+	}
+}
+
 void Scope::importAllDefinitions(Location& location,Scope* scope){
 	for(auto i = scope->prefixDefinitions.begin(); i != scope->prefixDefinitions.end() ; ++i){
 		if((*i).second->visibilityMode == Visibility::Public){
@@ -41,11 +53,6 @@ void Scope::importAllDefinitions(Location& location,Scope* scope){
 			}
 		}
 	}
-}
-void Scope::importAlias(Location& location,Scope* scope,SymbolID alias){
-	auto c = containsPrefix(alias);
-	if(c) error(location,"Symbol '%s' is already defined! Failed to alias an imported scope as '%s'.",alias,alias);
-	else void; /*definePrefix(location,alias,nullptr,scope);//TODO parser func*/
 }
 
 #define LOOKUP(t,c) \
@@ -86,3 +93,16 @@ void Scope::define(InfixDefinition* definition){
 	if(alreadyDefined) error(definition->location,"'%s' is already (infix)defined in the current scope",definition->id);
 	else infixDefinitions[definition->id] = definition;
 }
+
+void Scope::defineFunction(FunctionDef* definition){
+	//TODO overloadsets!
+	auto alreadyDefined = containsPrefix(definition->id);
+	if(alreadyDefined) error(definition->location,"'%s' is already (prefix)defined in the current scope",definition->id);
+	else prefixDefinitions[definition->id] = definition;
+}
+
+ImportedScope::ImportedScope(SymbolID name,Location& location,Scope* scope) : PrefixDefinition(name,location) {
+	this->scope = scope;
+	visibilityMode = Visibility::Private;
+}
+	

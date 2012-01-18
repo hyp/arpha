@@ -102,6 +102,7 @@ Node* Parser::evaluate(Node* node){
 		CASE(CallExpression);
 		CASE(TupleExpression);
 		CASE(BlockExpression);
+		
 	}
 
 	return node;

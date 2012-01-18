@@ -696,6 +696,17 @@ namespace arpha {
 		AccessParser(): InfixDefinition(".",arpha::Precedence::Access,Location()) {}
 		Node* parse(Parser* parser,Node* node){
 			auto symbol = parser->expectName();
+			//scope.something
+			if(auto val = node->is<ConstantExpression>()){
+				if(val->type == compiler::scopeRef){
+					auto def = val->refScope->lookupImportedPrefix(symbol);
+					if(!def){
+						error(node->location,"Unresolved symbol - '%s' isn't defined in module!",symbol);
+						return parser->expressionFactory->makeError();
+					}
+					return def->parse(parser);
+				}
+			}
 			return parser->expressionFactory->makeAccess(node,symbol);
 		}
 	};
@@ -745,6 +756,7 @@ Node* parseFunction(SymbolID name,Location location,Parser* parser){
 		}else func->argument = arguments.begin()->variable.type;
 	}
 	debug("Function's argumentType = %s",func->argument->id);
+	parser->currentScope()->defineFunction(func);
 
 	//parse returnType
 	func->returnType = compiler::inferred;									//def f(...) = 2             #returns int32, as indicated by 2
@@ -764,9 +776,8 @@ Node* parseFunction(SymbolID name,Location location,Parser* parser){
 		Node* parse(Parser* parser){
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
-			if(parser->match("(")){ return parseFunction(name,location,parser);
-				//-- function
-				return nullptr;
+			if(parser->match("(")){ 
+				return parseFunction(name,location,parser);
 			}
 			else{
 				parser->expect("=");
@@ -884,12 +895,7 @@ Node* parseFunction(SymbolID name,Location location,Parser* parser){
 		types[i++] = float64 = builtInType("double",8);
 		types[i++] = float32 = builtInType("float",4);
 
-		basicFunctions();
-
-		//line = new Function(scope,SymbolID("line"),Nothing,float64,0,0);
-		typeof = createFunction(scope,"typeof",compiler::type,compiler::expression,"expression");
-		_sizeof = createFunction(scope,"sizeof",constant,compiler::expression,"expression"); 
-		typeEquals = createFunction(scope,"equals",boolean,compiler::type,"type",compiler::type,"another-type");
+		//basicFunctions();
 
 		//test();
 	}
@@ -1989,7 +1995,8 @@ namespace compiler {
 
 		auto scope = currentModule->second.scope = new Scope(nullptr);
 		//import 'compiler'
-		scope->importAllDefinitions(Location(-2,0),::compiler::scope);
+		auto def = new ImportedScope("compiler",Location(-2,0),::compiler::scope);
+		scope->import(def,Scope::ImportFlags::FORCE_ALIAS);
 
 		if(arphaModuleName == moduleName){
 			//the original arpha module
@@ -1997,7 +2004,8 @@ namespace compiler {
 			arpha::init(scope);
 		}else{
 			//import 'arpha'
-			scope->importAllDefinitions(Location(-1,0),arphaModule->second.scope);
+			auto def = new ImportedScope("arpha",Location(-1,0),arphaModule->second.scope);
+			scope->import(def);
 		}
 
 		Parser parser(source,scope);
@@ -2047,6 +2055,9 @@ namespace compiler {
 	Type* inferred;
 	Type* anyType; 
 
+	Type* function;
+	Type* scopeRef;
+
 	Type* builtInType(const char* name){
 		auto t = new Type(SymbolID(name),Location());
 		scope->define(t);
@@ -2062,13 +2073,15 @@ void init(){
 	
 	scope = new Scope(nullptr);
 
-	expression = builtInType("cExpression");
-	type = builtInType("cType");
+	expression = builtInType("Expression");
+	type = builtInType("Type");
 	Nothing = builtInType("cAbsolutelyNothing");
-	Error = builtInType("cError");
-	Unresolved = builtInType("cUnresolved");
+	Error = builtInType("Error");
+	Unresolved = builtInType("Unresolved");
 	inferred = builtInType("inferred");
 	anyType = builtInType("anyType");
+	function = builtInType("funtype");
+	scopeRef = builtInType("scope");
 
 	currentModule = modules.end();
 }

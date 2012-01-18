@@ -20,6 +20,9 @@ EXPR(ConstantExpression,0):
 		int64   i64;
 		uint64  u64;
 		double  f64;
+		Scope*  refScope;
+		Type*   refType;
+		FunctionDef* refFunction;
 	};
 	Type* type;
 	bool _isLiteral;
@@ -94,6 +97,10 @@ struct ExpressionFactory {
 	ConstantExpression* makeNothing();
 	ConstantExpression* makeCompilerNothing();
 	ConstantExpression* makeError();
+
+	ConstantExpression* makeScopeReference(Scope* scope);
+	ConstantExpression* makeFunctionReference(FunctionDef* func);
+	ConstantExpression* makeTypeReference(Type* type);
 
 	TupleExpression* makeTuple();
 	TupleExpression* makeTuple(Node* a,Node* b);
