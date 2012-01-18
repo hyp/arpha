@@ -66,14 +66,6 @@ struct FunctionDef: public PrefixDefinition {
 	std::vector<Argument> arguments;
 };
 
-struct Overloadset: public PrefixDefinition {
-	Overloadset(SymbolID name,Location& location);
-
-	Node* parse(Parser* parser);
-	
-	std::vector<FunctionDef*> functions;
-};
-
 struct PrefixOperator : public PrefixDefinition {
 
 	PrefixOperator(SymbolID name,Location& location);

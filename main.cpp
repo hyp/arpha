@@ -7,6 +7,12 @@
 #include "compiler.h"
 #include "arpha.h"
 
+#ifdef  _WIN32
+#define WINDOWS_LEAN_AND_MEAN
+#include <windows.h>
+#undef max
+#undef min
+#endif
 
 namespace testing {
 
@@ -26,10 +32,16 @@ std::string format(const char *s){
 
 void printFunc(std::string message){
 	std::cout<<message;
+#ifdef  _WIN32
+	OutputDebugString(message.c_str());
+#endif
 }
 
 void debugPrint(std::string message){
 	std::cout<<"Debug: "<<message<<std::endl;
+#ifdef  _WIN32
+	OutputDebugString(message.c_str());
+#endif
 }
 
 
@@ -695,19 +707,24 @@ namespace arpha {
 	struct AccessParser: InfixDefinition {
 		AccessParser(): InfixDefinition(".",arpha::Precedence::Access,Location()) {}
 		Node* parse(Parser* parser,Node* node){
-			auto symbol = parser->expectName();
+			parser->lookedUpToken.type = Token::Symbol;
+			parser->lookedUpToken.symbol = parser->expectName();
 			//scope.something
 			if(auto val = node->is<ConstantExpression>()){
 				if(val->type == compiler::scopeRef){
-					auto def = val->refScope->lookupImportedPrefix(symbol);
+					auto def = val->refScope->lookupImportedPrefix(parser->lookedUpToken.symbol);
 					if(!def){
-						error(node->location,"Unresolved symbol - '%s' isn't defined in module!",symbol);
+						error(node->location,"Unresolved symbol - '%s' isn't defined in module!",parser->lookedUpToken.symbol);
 						return parser->expressionFactory->makeError();
 					}
-					return def->parse(parser);
+					debug("accessing '%s'",def->id);
+					auto expression = def->parse(parser);
+					//apply the correct overload lookup scope
+					if(expression->is<OverloadSetExpression>()) ((OverloadSetExpression*)expression)->scope = val->refScope;
+					return expression;
 				}
 			}
-			return parser->expressionFactory->makeAccess(node,symbol);
+			return parser->expressionFactory->makeAccess(node,parser->lookedUpToken.symbol);
 		}
 	};
 
@@ -739,8 +756,9 @@ Node* parseFunction(SymbolID name,Location location,Parser* parser){
 			if(!parser->match(",")){
 				//parse additional information, like argument's type
 				auto node = parser->_parse(arpha::Precedence::Tuple);
-				if(!node->is<TypeExpression>()) error(node->location,"a valid type is expected instead of %s",node);
-				else arguments.back().variable.type = ((TypeExpression*)node)->type;
+				const ConstantExpression* val;
+				if( (val = node->is<ConstantExpression>()) && val->type == compiler::type) arguments.back().variable.type = val->refType;
+				else error(node->location,"a valid type is expected instead of %s",node);
 
 				if(parser->match(")")) break;
 				parser->expect(",");

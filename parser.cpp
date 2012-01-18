@@ -134,7 +134,8 @@ Type* Parser::parseOptionalType(){
 	if(next.isEOF() || next.isEndExpression()) return nullptr;
 	const char* prevptr = ptr;
 	auto node = _parse(arpha::Precedence::Assignment);
-	if(auto t = node->is<TypeExpression>()) return t->type;
+	const ConstantExpression* val;
+	if( (val = node->is<ConstantExpression>()) && val->type == compiler::type) return val->refType;
 	ptr = prevptr;
 	return nullptr;
 }
@@ -154,24 +155,24 @@ Node* Variable::parse(Parser* parser){
 }
 
 Node* Type::parse(Parser* parser){
-	return parser->expressionFactory->makeType(this);
+	return parser->expressionFactory->makeTypeReference(this);
 }
 
 Node* FunctionDef::parse(Parser* parser){
-	return nullptr;
+	return parser->expressionFactory->makeFunctionReference(this);
 }
 
 Node* Overloadset::parse(Parser* parser){
-	return parser->expressionFactory->makeOverloadSet(parser->currentScope(),parser->lookedUpToken.symbol);
+	return parser->expressionFactory->makeOverloadSet(parser->lookedUpToken.symbol,parser->currentScope());
 }
 
 Node* PrefixOperator::parse(Parser* parser){
-	return parser->expressionFactory->makeCall(parser->expressionFactory->makeOverloadSet(parser->currentScope(),function),parser->_parse());
+	return parser->expressionFactory->makeCall(parser->expressionFactory->makeOverloadSet(function,parser->currentScope()),parser->_parse());
 }
 
 Node* InfixOperator::parse(Parser* parser,Node* node){
 	auto tuple = parser->expressionFactory->makeTuple();
 	tuple->children.push_back(node);
 	tuple->children.push_back(parser->_parse(stickiness));
-	return parser->expressionFactory->makeCall(parser->expressionFactory->makeOverloadSet(parser->currentScope(),function),tuple);
+	return parser->expressionFactory->makeCall(parser->expressionFactory->makeOverloadSet(function,parser->currentScope()),tuple);
 }

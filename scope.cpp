@@ -9,6 +9,7 @@
 PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){
 	this->id = name;this->location = location;
 	visibilityMode = Visibility::Public;
+	declarationType = 0;
 }
 InfixDefinition::InfixDefinition(SymbolID name,int stickiness,Location& location){
 	this->id = name;this->stickiness = stickiness;this->location = location;
@@ -21,53 +22,40 @@ void Scope::import(ImportedScope* alias,int flags){
 		error(alias->location,"Symbol '%s' is already defined! Failed to import scope '%s'.",alias->id,alias->id);
 		return;
 	}
+	if(!(flags & ImportFlags::FORCE_ALIAS)) imports.push_back(alias->scope);
 	define(alias);
-	if(!(flags & ImportFlags::FORCE_ALIAS)){
-		importAllDefinitions(alias->location,alias->scope);
-	}
 }
 
-void Scope::importAllDefinitions(Location& location,Scope* scope){
-	for(auto i = scope->prefixDefinitions.begin(); i != scope->prefixDefinitions.end() ; ++i){
-		if((*i).second->visibilityMode == Visibility::Public){
-			auto c = importedPrefixDefinitions.find((*i).first);
-			if(c != importedPrefixDefinitions.end()){
-				error(location,"definition '%s' is already (p)imported!",(*i).first);
-			}
-			else{
-				debug("Scope p-importing definition '%s'",(*i).first);
-				importedPrefixDefinitions[(*i).first]=(*i).second;
-			}
-		}
-	}
+#define LOOKUP_IMPORTED(t,c) \
+	auto var = t##Definitions.find(name); \
+	if (var != t##Definitions.end() && var->second->visibilityMode == Visibility::Public) return var->second; \
+	if(parent) return parent->lookupImported##c(name); \
+	return nullptr
 
-	for(auto i = scope->infixDefinitions.begin(); i != scope->infixDefinitions.end() ; ++i){
-		if((*i).second->visibilityMode == Visibility::Public){
-			auto c = importedInfixDefinitions.find((*i).first);
-			if(c != importedInfixDefinitions.end()){
-				error(location,"definition '%s' is alreday (i)imported!",(*i).first);
-			}
-			else{
-				debug("Scope i-importing definition '%s'",(*i).first);
-				importedInfixDefinitions[(*i).first]=(*i).second;
-			}
-		}
-	}
+PrefixDefinition* Scope::lookupImportedPrefix(SymbolID name){
+	LOOKUP_IMPORTED(prefix,Prefix);
+}
+
+InfixDefinition* Scope::lookupImportedInfix(SymbolID name){
+	LOOKUP_IMPORTED(infix,Infix);
 }
 
 #define LOOKUP(t,c) \
 	auto var = t##Definitions.find(name); \
 	if (var != t##Definitions.end()) return var->second; \
-	var = imported##c##Definitions.find(name); \
-	if(var != imported##c##Definitions.end()) return var->second; \
+	c##Definition* def = nullptr; \
+	for(auto i = imports.begin();i!=imports.end();++i){ \
+		auto d = (*i)->lookupImported##c(name); \
+		if(d){ \
+			if(def) error(d->location,"'%s' Symbol import conflict",d->id); /*TODO os conflict resolvement*/\
+			else def = d; \
+		} \
+	} \
+	if(def) return def;\
 	if(parent) return parent->lookup##c(name); \
 	return nullptr
 
-PrefixDefinition* Scope::lookupImportedPrefix(SymbolID name){
-	auto var = prefixDefinitions.find(name); 
-	if (var != prefixDefinitions.end() && var->second->visibilityMode == Visibility::Public) return var->second;
-	return nullptr;
-}
+
 PrefixDefinition* Scope::lookupPrefix(SymbolID name){
 	LOOKUP(prefix,Prefix);
 }
@@ -94,15 +82,81 @@ void Scope::define(InfixDefinition* definition){
 	else infixDefinitions[definition->id] = definition;
 }
 
+void findMatches(std::vector<FunctionDef*>& overloads,std::vector<FunctionDef*>& results,const Node* argument,bool enforcePublic = false){
+	Type* argumentType = returnType(argument);
+	FunctionDef *implicitMatch = nullptr,*inferMatch = nullptr,*exprMatch = nullptr;//lastResort
+
+	for(auto i=overloads.begin();i!=overloads.end();++i){
+		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
+		/*else*/ if((*i)->argument == compiler::expression){ debug("c"); exprMatch = *i; }
+	}
+	if(exprMatch && results.size()==0) results.push_back( exprMatch );//TODO careful with imports
+}
+
+FunctionDef* errorOnMultipleMatches(std::vector<FunctionDef*>& results){
+	//TODO
+	error(Location(),"multiple matches possible!");
+	return nullptr;
+}
+
+FunctionDef* Scope::resolveFunction(SymbolID name,const Node* argument){
+	std::vector<FunctionDef*> results;
+	//step 1 - check current scope for matching function
+	if(auto os = containsPrefix(name)){
+		if(os->declarationType == DeclarationType::OverloadSet){
+			findMatches(((Overloadset*)os)->functions,results,argument);
+			if(results.size() == 1) return results[0];
+			else if(results.size()>1) return errorOnMultipleMatches(results);
+		}
+	}
+	//step 2 - check imported scopes for matching function
+	if(imports.size()){
+		std::vector<FunctionDef*> overloads;
+		for(auto i = imports.begin();i!=imports.end();++i){ 
+			if(auto os = (*i)->containsPrefix(name)){
+				if(os->declarationType == DeclarationType::OverloadSet) overloads.insert(overloads.end(),((Overloadset*)os)->functions.begin(),((Overloadset*)os)->functions.end()); 
+			}
+		}
+		findMatches(overloads,results,argument,true);
+		if(results.size() == 1) return results[0];
+		else if(results.size()>1) return errorOnMultipleMatches(results);
+	}
+	//step 3 - check parent scope
+	if(parent) return parent->resolveFunction(name,argument);
+	return nullptr;
+}
+
 void Scope::defineFunction(FunctionDef* definition){
-	//TODO overloadsets!
+
+	Overloadset* set;
+
 	auto alreadyDefined = containsPrefix(definition->id);
-	if(alreadyDefined) error(definition->location,"'%s' is already (prefix)defined in the current scope",definition->id);
-	else prefixDefinitions[definition->id] = definition;
+	if(alreadyDefined){
+		if(alreadyDefined->declarationType != DeclarationType::OverloadSet){ 
+			error(definition->location,"'%s' is already (prefix)defined in the current scope",definition->id);
+			return;
+		}
+		set = (Overloadset*)alreadyDefined;
+		//todo safe add function
+		set->functions.push_back(definition);
+		
+	}
+	else {
+		set = new Overloadset(definition);
+		prefixDefinitions[definition->id] = set;
+	}
+}
+
+Overloadset::Overloadset(FunctionDef* firstFunction) : PrefixDefinition(firstFunction->id,firstFunction->location) {
+	declarationType = DeclarationType::OverloadSet;
+	visibilityMode = Visibility::Public;//!important // TODO module a type foo, module b private def foo() //<-- conflict
+	functions.push_back(firstFunction);
 }
 
 ImportedScope::ImportedScope(SymbolID name,Location& location,Scope* scope) : PrefixDefinition(name,location) {
 	this->scope = scope;
 	visibilityMode = Visibility::Private;
 }
+
+	
 	

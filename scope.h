@@ -12,10 +12,17 @@ namespace Visibility {
 	};
 }
 
+namespace DeclarationType {
+	enum {
+		OverloadSet = 1
+	};
+}
+
 struct PrefixDefinition {
 	SymbolID id;
 	Location location;
 	uint8 visibilityMode;
+	uint8 declarationType;
 
 	PrefixDefinition(SymbolID name,Location& location);
 	virtual Node* parse(Parser* parser) = 0;
@@ -31,6 +38,7 @@ struct InfixDefinition {
 	virtual Node* parse(Parser* parser,Node* node) = 0;
 };
 
+struct Node;
 struct Variable;
 struct FunctionDef;
 struct ImportedScope;
@@ -51,18 +59,17 @@ struct Scope {
 	};
 	void import(ImportedScope* alias,int flags = 0);
 
-	//import all importable definitions to this scope
-	void importAllDefinitions(Location& location,Scope* scope);
-
 	PrefixDefinition* lookupPrefix(SymbolID name);
 	PrefixDefinition* lookupImportedPrefix(SymbolID name);
 	PrefixDefinition* containsPrefix(SymbolID name);
 	void define(PrefixDefinition* definition);
 
 	InfixDefinition* lookupInfix(SymbolID name);
+	InfixDefinition* lookupImportedInfix(SymbolID name);
 	InfixDefinition* containsInfix(SymbolID name);
 	void define(InfixDefinition* definition);
 
+	FunctionDef* resolveFunction(SymbolID name,const Node* argument);
 	void defineFunction(FunctionDef* definition);
 
 	Scope* parent;
@@ -70,11 +77,10 @@ struct Scope {
 
 private:
 
+	std::vector<Scope*> imports;
+
 	std::map<SymbolID,PrefixDefinition*> prefixDefinitions;
 	std::map<SymbolID,InfixDefinition*> infixDefinitions;
-
-	std::map<SymbolID,PrefixDefinition*> importedPrefixDefinitions;
-	std::map<SymbolID,InfixDefinition*> importedInfixDefinitions;
 
 	std::map<SymbolID,Definition*>  definitions;
 };
@@ -85,6 +91,15 @@ struct ImportedScope : PrefixDefinition {
 	Node* parse(Parser* parser);
 
 	Scope* scope;
+};
+
+//
+struct Overloadset: public PrefixDefinition {
+	Overloadset(FunctionDef* firstFunction);
+
+	Node* parse(Parser* parser);
+	
+	std::vector<FunctionDef*> functions;
 };
 
 #endif

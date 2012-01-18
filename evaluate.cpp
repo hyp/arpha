@@ -11,11 +11,11 @@
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
 
 Node* evaluateResolvedFunctionCall(Parser* parser,CallExpression* node){
-	auto function = ((FunctionExpression*)node->object)->function;
+	auto function = ((ConstantExpression*)node->object)->refFunction;
 	bool interpret = false;
 
 	if(function->argument == compiler::expression) interpret = true;
-	else if(node->arg->is<TypeExpression>()) interpret = true;
+	//else if(node->arg->is<TypeExpression>()) interpret = true;
 
 	
 	if(!interpret) return node;
@@ -23,42 +23,28 @@ Node* evaluateResolvedFunctionCall(Parser* parser,CallExpression* node){
 	Interpreter interpreter;
 	interpreter.expressionFactory = parser->expressionFactory;
 	return interpreter.interpret(node);
+	return node;
 }
 
 inline Node* evaluate(Parser* parser,CallExpression* node){
 #define CASE(t) case t::__value__
 	node->arg = parser->evaluate(node->arg);
 	auto argumentType = returnType(node->arg);
-	Definition* def;
-
+	
 	if(argumentType == compiler::Nothing) error(node->arg->location,"Can't perform function call on a statement!");
 	else if(argumentType != compiler::Unresolved){
-		switch( node->object->__type){
-		CASE(OverloadSetExpression):
-			def = ((OverloadSetExpression*)node->object)->scope->lookup(((OverloadSetExpression*)node->object)->symbol);	
-			if(def){
-				assert(def->isOverloadSet());//TO
-				std::vector<Function*> functions;
-				((OverloadSet*)def)->findMatches(functions,node->arg);
-				if(functions.size() == 1){
-					node->object = parser->expressionFactory->makeFunction(functions[0]);
-					//TODO function->adjustArgument
-					debug("Overload successfully resolved as %s: %s",functions[0]->id,functions[0]->argument->id);
-					return evaluateResolvedFunctionCall(parser,node);
-				}
-				else if(functions.size() > 1){
-					error(node->location,"multiple overloads possible");
-				}
-			}	
-			break;
-		CASE(TypeExpression):
-			error(node->object->location,"Type call not implemented");
-			break;
-		CASE(FunctionExpression):
-			break;
-		default:
+		if(node->object->is<OverloadSetExpression>()){
+			auto func = ((OverloadSetExpression*)node->object)->scope->resolveFunction(((OverloadSetExpression*)node->object)->symbol,node->arg);
+			if(func){
+				node->object = parser->expressionFactory->makeFunctionReference(func);
+				//TODO function->adjustArgument
+				debug("Overload successfully resolved as %s: %s",func->id,func->argument->id);
+				return evaluateResolvedFunctionCall(parser,node);
+			}else{
+				//TODO mark current block as unresolved!
+			}
+		}else
 			error(node->object->location,"Can't perform a function call onto %s!",node->object);
-		}
 	}
 
 	return node;

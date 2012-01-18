@@ -9,7 +9,7 @@
 #include "arpha.h"
 
 Node* interpret(Interpreter* interpreter,CallExpression* node){
-	assert(node->object->is<FunctionExpression>());
+	/*assert(node->object->is<FunctionExpression>());
 	auto function = ((FunctionExpression*)node->object)->function;
 	
 	if(function == arpha::typeof) return interpreter->expressionFactory->makeType(returnType(node->arg));
@@ -18,7 +18,7 @@ Node* interpret(Interpreter* interpreter,CallExpression* node){
 		c->u64  = uint64( ( node->arg->is<TypeExpression>() ? ((TypeExpression*)node->arg)->type : returnType(node->arg) )->size );
 		c->type = arpha::uint64;
 		return c;
-	}
+	}*/
 	return node;
 }
 

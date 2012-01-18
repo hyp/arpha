@@ -30,16 +30,8 @@ EXPR(ConstantExpression,0):
 	inline const bool isLiteral() const { return _isLiteral; }
 };
 
-EXPR(TypeExpression,1):
-	Type* type;
-};
-
 EXPR(VariableExpression,2):
 	Variable* variable;
-};
-
-EXPR(FunctionExpression,3):
-	Function* function;
 };
 
 EXPR(OverloadSetExpression,4):
@@ -106,11 +98,9 @@ struct ExpressionFactory {
 	TupleExpression* makeTuple(Node* a,Node* b);
 
 	VariableExpression* makeVariable(Variable* var);
-	TypeExpression* makeType(Type* type);
-	FunctionExpression* makeFunction(Function* func);
 	AccessExpression* makeAccess(Node* object,SymbolID symbol);
 
-	OverloadSetExpression* makeOverloadSet(Scope* scope,SymbolID symbol);
+	OverloadSetExpression* makeOverloadSet(SymbolID symbol,Scope* scope);
 	CallExpression* makeCall(Node* object,Node* argument);
 	ReturnExpression* makeReturn(Node* expression);
 	BlockExpression* makeBlock();
