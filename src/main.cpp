@@ -8,38 +8,11 @@
 #include "compiler.h"
 #include "arpha.h"
 
-#ifdef  _WIN32
-#define WINDOWS_LEAN_AND_MEAN
-#include <windows.h>
-#undef max
-#undef min
-#endif
 
 
 void printFunc(std::string message){
 	std::cout<<message;
-#ifdef  _WIN32
-	OutputDebugString(message.c_str());
-#endif
 }
-
-void debugPrint(std::string message){
-	std::cout<<"Debug: "<<message<<std::endl;
-#ifdef  _WIN32
-	OutputDebugString(message.c_str());
-#endif
-}
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -571,7 +544,7 @@ namespace compiler {
 		auto filename = packageDir + name + "/" + name + ".arp";
 		auto src = System::fileToString(filename.c_str());
 		auto module = loadModule(filename.c_str(),(const char*)src);
-		free((void*)src);
+		System::free((void*)src);
 		return module->second.scope;
 	}
 

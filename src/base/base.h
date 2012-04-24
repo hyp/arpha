@@ -18,6 +18,10 @@ typedef unsigned __int64 uint64;
 typedef unsigned int uint32;
 typedef unsigned char uint8;
 
+typedef unsigned char U8Char;
+typedef wchar_t U16Char;
+typedef unsigned int UnicodeChar;
+
 //Assertion macro
 void _assert(const char* file, int line, const char* what);
 #define assert(what) ((what) ? (void)0 : _assert( __FILE__, __LINE__, (#what)))

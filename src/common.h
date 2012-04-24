@@ -4,20 +4,20 @@
 #include<stdio.h>
 #include<string.h>
 #include<math.h>
-#include <time.h>
 
 #include "base/base.h"
 #include "base/symbol.h"
 #include "base/format.h"
+#include "base/system.h"
+
 
 
 
 void printFunc(std::string message);
-void debugPrint(std::string message);
 
 #define error(loc,...) compiler::onError(loc,format(__VA_ARGS__))
 #define printf(...) printFunc(format(__VA_ARGS__))
-#define debug(...) debugPrint(format(__VA_ARGS__))
+#define debug(...) System::debugPrint(format(__VA_ARGS__))
 
 //to implement
 struct Location {
@@ -32,6 +32,5 @@ public:
 	Location(int line,int column);
 };
 
-void errorFunc(Location& location,std::string message);
 
 #endif
