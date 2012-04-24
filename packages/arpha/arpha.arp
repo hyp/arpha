@@ -4,14 +4,14 @@ operator - = minus
 operator + = plus
 operator ! = not
 
-operator + priority 30 = add
-operator - priority 30 = subtract
-operator * priority 35 = multiply
-operator / priority 35 = divide
-operator % priority 35 = mod
+operator + with priority 30 = add
+operator - with priority 30 = subtract
+operator * with priority 35 = multiply
+operator / with priority 35 = divide
+operator % with priority 35 = mod
 
-operator == priority 25 = equals
-operator != priority 25 = not_equals
+operator == with priority 25 = equals
+operator != with priority 25 = not_equals
 
 var x
 

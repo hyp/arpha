@@ -22,7 +22,7 @@ namespace compiler {
 
 	void init();
 
-	Scope* fetchImport(const char* import);
+	Scope* findModule(const char* name);
 
 	//
 	void compile(const char* name,const char* source);
