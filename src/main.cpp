@@ -20,15 +20,7 @@ namespace testing {
 	int iterations = 100;
 }
 
-std::string format(const char *s){
-	std::ostringstream stm;
-    while (*s) {
-        if (*s == '%' && *(++s) != '%')
-            throw std::runtime_error("invalid format string: missing arguments");
-		stm << *s++;
-    }
-	return stm.str();
-}
+
 
 void printFunc(std::string message){
 	std::cout<<message;
@@ -47,17 +39,6 @@ void debugPrint(std::string message){
 
 
 
-namespace testing {
-	Unittest::Unittest(const char* name, void (*func)()) {
-		std::cout<<"Running unittest "<<name<<"... \n";
-		func();
-		std::cout<<"   success!\n";
-	}
-}
-
-void _assert(const char* file, int line, const char* what) {
-	std::cout<<"Assertion failed: file: "<<file<<" line: "<<line<<'('<<what<<")!"<<std::endl;
-}
 
 
 
@@ -65,10 +46,8 @@ void _assert(const char* file, int line, const char* what) {
 
 
 
-unittest(format) {
-	assert(format("Hello world") == "Hello world");
-	assert(format("A %d %s C %c B",12,"KIAI",'_') == "A 12 KIAI C _ B");
-}
+
+
 
 
 
@@ -76,81 +55,9 @@ unittest(format) {
 
 //a table of unique symbols for fast symbol comparison
 
-SymbolTable symbols;
-std::ostream& operator<< (std::ostream& stream,const SymbolID symbol){
-	return stream<<symbol.ptr();
-}
 
-inline size_t hashString(const char* src, size_t length) {
-	return length + (size_t) src[0];
-}
 
-SymbolTable::Symbol* SymbolTable::create(const char* src, size_t length) {
-	if(length == 0) return 0;
-	size_t hsh = hashString(src, length) % hashTableLength;
-	//compare strings in current chain
-	Symbol** current = &hashTable[hsh];
-	while ((*current) != 0) {
-		if ((*current)->length == length) {
-			if (memcmp((*current)->ptr, src, length) == 0) {
-				return *current;
-			}
-		}
-		current = &((*current)->next);
-	}
-	//new entry
-	(*current) = (Symbol*) malloc(sizeof (Symbol) + sizeof (char) *(length + 1));
-	(*current)->next = 0;
-	(*current)->length = length;
-	memcpy((*current)->ptr, src, length);
-	(*current)->ptr[length] = 0; //null terminate
-	return *current;
-}
 
-SymbolTable::SymbolTable() {
-	for (size_t i = 0; i < hashTableLength; i++) hashTable[i] = 0;
-}
-
-SymbolTable::~SymbolTable() {
-	for (size_t i = 0; i < hashTableLength; i++) {
-		Symbol* current = hashTable[i], *next;
-		for (; current != 0; current = next) {
-			next = current->next;
-			free(current);
-		}
-		hashTable[i] = 0;
-	}
-}
-SymbolID::SymbolID(const char* str){
-	assert(str);
-	symbol = symbols.create(str,strlen(str));
-}
-
-unittest(symbolTable){
-	SymbolTable symbols;
-	char test[5];
-	int length,i;
-
-	srand(time(0));
-
-	for(int j=0;j<testing::iterations;j++){
-		length = rand()%4+1;
-		for(i=0;i<length;i++) test[i]=rand()%255+1;
-		test[i] = '\0';
-
-		auto a = symbols.create(test,length) , b = symbols.create(test,length);
-		test[0]=~test[0];
-		auto c  = symbols.create(test,length);
-		assert(a == b);
-		assert(a != c);
-		assert(b != c);
-		assert(strcmp(test,c->ptr)==0);
-		SymbolID x = *((SymbolID*)&a),y = *((SymbolID*)&b),z = *((SymbolID*)&c);
-		assert(x == y);
-		assert(x != z);
-		assert(y != z);
-	}
-}
 
 //lexing
 
@@ -263,7 +170,7 @@ unittest(lexer){
 	expectEof();
 
 	//clean up
-	symbols.~SymbolTable();
+	//symbols.~SymbolTable();
 #undef expectSymbol
 #undef expectUinteger
 #undef expectEof
@@ -329,7 +236,7 @@ unittest(scope){
 	//delete scope2;
 	delete scope;
 	//clean up
-	symbols.~SymbolTable();
+	//symbols.~SymbolTable();
 }
 
 
