@@ -19,8 +19,6 @@ void debugPrint(std::string message);
 #define printf(...) printFunc(format(__VA_ARGS__))
 #define debug(...) debugPrint(format(__VA_ARGS__))
 
-const char* readFile(const char* filename);
-
 //to implement
 struct Location {
 private:

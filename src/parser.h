@@ -1,44 +1,8 @@
-#ifndef PARSER_H
-#define PARSER_H
+#ifndef ARPHA_PARSER_H
+#define ARPHA_PARSER_H
 
-
-//lexing
-struct Token {
-	enum {
-		Symbol = 0,
-		Uinteger,
-		EndExpression,
-		Eof,
-	};
-	
-	union {
-		uint64 uinteger;
-		double real;
-	};
-	SymbolID symbol;	
-	int type;
-	
-	Token();
-	inline bool isSymbol() const { return type == Symbol; }
-	inline bool isUinteger() const { return type == Uinteger; }
-	inline bool isEOF() const { return type == Eof; }
-	inline bool isEndExpression() const { return type == EndExpression; }
-};
-std::ostream& operator<< (std::ostream& stream,const Token& token);
-
-struct Lexer {
-	Lexer(const char* source);
-
-	Token consume();
-	Token peek();
-
-	Location currentLocation(){ return location; }
-	Location previousLocation(){ return location; }
-
-protected:
-	const char* ptr;
-	Location location;
-};
+#include "syntax/token.h"
+#include "syntax/lexer.h"
 
 //parsing
 struct Node; //ast node(expression)
