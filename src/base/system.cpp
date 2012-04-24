@@ -7,7 +7,22 @@
 #include <windows.h>
 #undef max
 #undef min
+static UINT oldcp;
 #endif
+
+
+void System::init(){
+	//Enable utf8 in console for windows
+	#ifdef  _WIN32
+		oldcp = GetConsoleOutputCP();
+		SetConsoleOutputCP(CP_UTF8);
+	#endif
+}
+void System::shutdown(){
+	#ifdef  _WIN32
+		SetConsoleOutputCP(oldcp);
+	#endif
+}
 
 void* System::malloc(size_t size){
 	return ::malloc(size);
@@ -16,16 +31,30 @@ void System::free(void* ptr){
 	::free(ptr);
 }
 
-void System::debugPrint(const std::string& message){
-	std::cout<<"Debug: "<<message<<std::endl;
+void System::print(const std::string& message){
 	#ifdef  _WIN32
-		UTF16::StringBuffer wstr(message.c_str());
+		wprintf(L"%S", message.c_str()); 
+	#else
+		std::cout<<message;
+	#endif
+}
+void System::debugPrint(const std::string& message){
+	#ifdef  _WIN32
+		auto cstr = message.c_str();
+		wprintf(L"Debug: %S\n", cstr); 
+		UTF16::StringBuffer wstr(cstr);
 		OutputDebugStringW(wstr);
+		OutputDebugStringA("\n");
+	#else
+		std::cout<<"Debug: "<<message<<std::endl;
 	#endif
 }
 
 bool System::fileExists(const char* filename){
 	assert(filename);
+	FILE* file = fopen(filename, "rb");
+	if(!file) return false;
+	fclose(file);
 	return true;
 }
 
@@ -45,5 +74,7 @@ const char* System::fileToString(const char* filename){
 }
 
 unittest(System){
-	//Nothing to test
+	auto p = System::malloc(16);
+	assert(p);
+	System::free(p);
 }

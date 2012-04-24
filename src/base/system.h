@@ -7,7 +7,12 @@
 #include "base.h"
 
 namespace System {
-	//Debugging
+	//
+	void init();
+	void shutdown();
+
+	//Console io
+	void print(const std::string& message);
 	void debugPrint(const std::string& message);
 
 	//Heap allocation

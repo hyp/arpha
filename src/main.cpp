@@ -10,15 +10,6 @@
 
 
 
-void printFunc(std::string message){
-	std::cout<<message;
-}
-
-
-
-
-
-
 
 //a table of unique symbols for fast symbol comparison
 
@@ -542,6 +533,11 @@ namespace compiler {
 
 	Scope* importPackage(const char* name){
 		auto filename = packageDir + name + "/" + name + ".arp";
+		auto exists = System::fileExists(filename.c_str());
+		if(!exists){
+			//.
+			return nullptr;
+		}
 		auto src = System::fileToString(filename.c_str());
 		auto module = loadModule(filename.c_str(),(const char*)src);
 		System::free((void*)src);
@@ -607,9 +603,10 @@ void onError(Location& location,std::string message){
 
 int main()
 {
-	//the language definitions	
+	
+	System::init();
 	compiler::init();
-
+	//the language definitions
 	compiler::importPackage("arpha");
 
 	
@@ -623,6 +620,8 @@ int main()
 		source+="\n";
 	}
 	compiler::compile("source",source.c_str());
+
+	System::shutdown();
 			
 	return 0;
 }
