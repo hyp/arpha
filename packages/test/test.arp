@@ -1,0 +1,3 @@
+import samedir
+
+def another_value = some_value

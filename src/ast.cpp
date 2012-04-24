@@ -21,7 +21,7 @@ ConstantExpression* ExpressionFactory::makeConstant(){
 ConstantExpression* ExpressionFactory::makeNothing(){
 	auto e = new(allocate(sizeof(ConstantExpression))) ConstantExpression;
 	e->type = arpha::Nothing;
-	e->_isLiteral = false;//???
+	e->_isLiteral = false;//TODO check???
 	return e;
 }
 ConstantExpression* ExpressionFactory::makeCompilerNothing(){

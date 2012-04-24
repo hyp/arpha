@@ -16,6 +16,10 @@ InfixDefinition::InfixDefinition(SymbolID name,int stickiness,Location& location
 	visibilityMode = Visibility::Public;
 }
 
+Scope::Scope(Scope* parent){
+	this->parent = parent;
+}
+
 void Scope::import(ImportedScope* alias,int flags){
 	auto c = containsPrefix(alias->id);
 	if(c){

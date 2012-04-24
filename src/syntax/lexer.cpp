@@ -1,7 +1,10 @@
 #include "lexer.h"
+#include "../base/utf.h"
 
 Lexer::Lexer(const char* source) : location(0,0) {
 	ptr= source;
+	//check for UTF8 BOM
+	if(ptr[0]=='\xEF' && ptr[1]=='\xBB' && ptr[2]=='\xBF') ptr+=3;
 }
 
 bool isDigit(char c){
@@ -12,10 +15,18 @@ bool isLetter(char c){
 	return (c>='a' && c<='z') || (c>='A' && c<='Z') || c == '_';
 }
 
+bool isSpace(char c){
+	return c==' ' || c=='\t';
+}
+
+
 Token Lexer::consume(){
 	Token token;	
+
+	//Skip spaces and tabs.
 	while((*ptr) <= ' ' && (*ptr)!='\0' && (*ptr)!='\n') ptr++; //skip spaces
 	
+	//
 	if( *ptr == '\n' || *ptr ==';'){
 		if(*ptr == '\n') location = Location(location.line()+1,0);
 		else location.column++;
@@ -27,11 +38,20 @@ Token Lexer::consume(){
 		ptr++;
 		token.type = Token::Symbol;
 	}
-	else if( isDigit(*ptr)){
-		token.uinteger=0;
-		for(;isDigit(*ptr);ptr++)
-			token.uinteger = token.uinteger*10 + int((*ptr) -	'0');
-		token.type = Token::Uinteger;	
+	//Number literal
+	else if( isDigit(*ptr) ){
+		token.type = Token::Uinteger;
+		//the integer part
+		token.uinteger = int((*ptr) - '0');
+		for(ptr++;isDigit(*ptr);ptr++) token.uinteger = token.uinteger*10 + int((*ptr) -	'0');
+		if(*ptr == '.'){ //the fractional part
+			for(ptr++;isDigit(*ptr);ptr++);
+		}
+	}
+	//Comment
+	else if(*ptr=='#') {
+		for(ptr++;(*ptr)!='\n';ptr++); //skip till the end of newline
+		return consume();
 	}
 	else if(*ptr=='\0') {
 		token.type = Token::Eof;	

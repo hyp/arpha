@@ -1,9 +1,11 @@
-def this_is_awsome = 2
+﻿def this_is_awsome = 2
 
+# Prefix operators
 operator - = minus
 operator + = plus
 operator ! = not
 
+# Infix operators
 operator + with priority 30 = add
 operator - with priority 30 = subtract
 operator * with priority 35 = multiply

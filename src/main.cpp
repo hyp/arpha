@@ -11,40 +11,15 @@
 
 
 
-//a table of unique symbols for fast symbol comparison
-
-
-
-
-
 //lexing
 
-Location::Location(int line,int column){
-	lineNumber = line;
-	this->column = column;
-}
 
-unittest(location){
-	auto loc = Location(2,3);
-	assert(loc.line() == 2);
-	assert(loc.column == 3);
-}
 
 
 
 
 //parsing
 
-
-
-
-
-
-
-
-Scope::Scope(Scope* parent){
-	this->parent = parent;
-}
 
 
 unittest(scope){
@@ -95,41 +70,6 @@ unittest(scope){
 	//clean up
 	//symbols.~SymbolTable();
 }
-
-
-
-
-unittest(type){
-	/*auto t = new Type(nullptr,SymbolID("foo"),4);
-	assert(t->size == 4);
-	auto t2 = new Type(nullptr,SymbolID("bar"),8);
-	t->add(Type::Field(t2,SymbolID("b")));
-	assert(t->size == 12);
-	assert( (t->operator[](SymbolID("b")))->type == t2 );
-
-	delete t2;
-	delete t;
-	//clean up
-	symbols.~SymbolTable();*/
-}
-
-
-
-unittest(variable){
-	Location location(0,0);
-	/*auto t = new Type(nullptr,SymbolID(),0);
-	auto v = new Variable(nullptr,SymbolID(),location,t);
-	assert(v->type == t);
-	assert(v->bindedConstant() == nullptr);
-
-	v->bindToConstant((Expression*)0xDEADBEEF);
-	assert(v->bindedConstant() == (Expression*)0xDEADBEEF);
-
-	delete v;
-	delete t;*/
-}
-
-
 
 
 //TODO functions arguments vector!
@@ -289,57 +229,57 @@ namespace arpha {
 		}
 	};
 
-Node* parseFunction(SymbolID name,Location location,Parser* parser){
-	//Function
-	auto func = new Function(name,location);
+	Node* parseFunction(SymbolID name,Location location,Parser* parser){
+		//Function
+		auto func = new Function(name,location);
 
-	//parse arguments
-	func->argument = compiler::Nothing;
-	if(!parser->match(")")){
+		//parse arguments
+		func->argument = compiler::Nothing;
+		if(!parser->match(")")){
 
-		std::vector<Function::Argument> arguments;
-		while(1){
-			//parse argument's name
-			SymbolID argName = parser->expectName();
-			auto var = Variable(argName,parser->previousLocation());
-			var.type = compiler::anyType;
-			arguments.push_back(Function::Argument(var));
-
-			if(parser->match(")")) break;
-			if(!parser->match(",")){
-				//parse additional information, like argument's type
-				auto node = parser->_parse(arpha::Precedence::Tuple);
-				const ConstantExpression* val;
-				if( (val = node->is<ConstantExpression>()) && val->type == compiler::type) arguments.back().variable.type = val->refType;
-				else error(node->location,"a valid type is expected instead of %s",node);
+			std::vector<Function::Argument> arguments;
+			while(1){
+				//parse argument's name
+				SymbolID argName = parser->expectName();
+				auto var = Variable(argName,parser->previousLocation());
+				var.type = compiler::anyType;
+				arguments.push_back(Function::Argument(var));
 
 				if(parser->match(")")) break;
-				parser->expect(",");
+				if(!parser->match(",")){
+					//parse additional information, like argument's type
+					auto node = parser->_parse(arpha::Precedence::Tuple);
+					const ConstantExpression* val;
+					if( (val = node->is<ConstantExpression>()) && val->type == compiler::type) arguments.back().variable.type = val->refType;
+					else error(node->location,"a valid type is expected instead of %s",node);
+
+					if(parser->match(")")) break;
+					parser->expect(",");
+				}
 			}
+			func->arguments = arguments;
+
+			//give the argument an appropriate type representation
+			if(arguments.size()>1){
+				std::vector<std::pair<SymbolID,Type*>> fields;
+				for(auto i=arguments.begin();i!=arguments.end();++i) fields.push_back(std::make_pair((*i).variable.id,(*i).variable.type));
+				func->argument = Type::tuple(fields);
+			}else func->argument = arguments.begin()->variable.type;
 		}
-		func->arguments = arguments;
+		debug("Function's argumentType = %s",func->argument->id);
+		parser->currentScope()->defineFunction(func);
 
-		//give the argument an appropriate type representation
-		if(arguments.size()>1){
-			std::vector<std::pair<SymbolID,Type*>> fields;
-			for(auto i=arguments.begin();i!=arguments.end();++i) fields.push_back(std::make_pair((*i).variable.id,(*i).variable.type));
-			func->argument = Type::tuple(fields);
-		}else func->argument = arguments.begin()->variable.type;
-	}
-	debug("Function's argumentType = %s",func->argument->id);
-	parser->currentScope()->defineFunction(func);
+		//parse returnType
+		func->returnType = compiler::inferred;									//def f(...) = 2             #returns int32, as indicated by 2
+		if(parser->peek().isEndExpression() || parser->peek().isEOF()) func->returnType = compiler::Nothing; //def definitionOnly(...);   #returns void
+		else if(auto t = parser->parseOptionalType()) func->returnType = t;	    //def foo(...) int32 { ... } #returns int32
+		debug("Function's returnType = %s",func->returnType->id);
 
-	//parse returnType
-	func->returnType = compiler::inferred;									//def f(...) = 2             #returns int32, as indicated by 2
-	if(parser->peek().isEndExpression() || parser->peek().isEOF()) func->returnType = compiler::Nothing; //def definitionOnly(...);   #returns void
-	else if(auto t = parser->parseOptionalType()) func->returnType = t;	    //def foo(...) int32 { ... } #returns int32
-	debug("Function's returnType = %s",func->returnType->id);
-
-	//parse body
+		//parse body
 	
-	//
-	return parser->expressionFactory->makeCompilerNothing();
-}
+		//
+		return parser->expressionFactory->makeCompilerNothing();
+	}
 
 	/// := 'def' <name> '=' expression
 	struct DefParser: PrefixDefinition {
@@ -515,7 +455,7 @@ namespace compiler {
 	std::string arphaModuleName;
 
 
-	ModulePtr loadModule(const char* moduleName,const char* source){
+	ModulePtr newModule(const char* moduleName,const char* source){
 		Module module = {};
 		auto insertionResult = modules.insert(std::make_pair(std::string(moduleName),module));
 
@@ -548,6 +488,13 @@ namespace compiler {
 		return insertionResult.first;
 	}
 
+	ModulePtr newModuleFromFile(const char* filename){
+		auto src = System::fileToString(filename);
+		auto module = newModule(filename,(const char*)src);
+		System::free((void*)src);
+		return module;
+	}
+
 	//Module importing is done by searching in the appropriate directories
 	Scope* findModuleFromDirectory(std::string& dir,const char* name){
 		//Try non package way
@@ -561,9 +508,7 @@ namespace compiler {
 		auto module = modules.find(filename);
 		if(module == modules.end()){
 			System::debugPrint(format("A new module %s located at '%s' will be loaded.",name,filename));
-			auto src = System::fileToString(filename.c_str());
-			module = loadModule(filename.c_str(),(const char*)src);
-			System::free((void*)src);
+			module = newModuleFromFile(filename.c_str());
 		}
 		return module->second.scope;
 	}
@@ -593,62 +538,53 @@ namespace compiler {
 		scope->define(t);
 		return t;
 	}
-
 	
+	void init(){
+
+		packageDir = "D:/alex/projects/parser/packages";
+		arphaModuleName = packageDir + "/arpha/arpha.arp";
 	
-void init(){
+		scope = new Scope(nullptr);
 
-	packageDir = "D:/alex/projects/parser/packages";
-	arphaModuleName = packageDir + "/arpha/arpha.arp";
-	
-	scope = new Scope(nullptr);
+		expression = builtInType("Expression");
+		type = builtInType("Type");
+		Nothing = builtInType("cAbsolutelyNothing");
+		Error = builtInType("Error");
+		Unresolved = builtInType("Unresolved");
+		inferred = builtInType("inferred");
+		anyType = builtInType("anyType");
+		function = builtInType("funtype");
+		scopeRef = builtInType("scope");
 
-	expression = builtInType("Expression");
-	type = builtInType("Type");
-	Nothing = builtInType("cAbsolutelyNothing");
-	Error = builtInType("Error");
-	Unresolved = builtInType("Unresolved");
-	inferred = builtInType("inferred");
-	anyType = builtInType("anyType");
-	function = builtInType("funtype");
-	scopeRef = builtInType("scope");
+		currentModule = modules.end();
+	}
 
-	currentModule = modules.end();
-}
-
-
-
-
-
-void compile(const char* name,const char* source){
-	auto mod = loadModule(name,source);
-	mod->second.compile = true;
-}
-
-void onError(Location& location,std::string message){
-	std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
-}
+	void onError(Location& location,std::string message){
+		std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
+	}
 
 }
 
 
-int main(int argc, char * const argv[])
-{
+int main(int argc, char * const argv[]){
 	
 	System::init();
 	compiler::init();
-
 	
-	std::string source;
-	char buf[1024];
-	while(true){
+	if(argc < 2){
+
+		System::print("\nEnter arpha code followed by 2 newlines here:\n");
+		std::string source;
+		char buf[1024];
+		while(true){
 		
-		std::cin.getline(buf,1024);
-		if(buf[0]=='\0') break;
-		source+=buf;
-		source+="\n";
+			std::cin.getline(buf,1024);
+			if(buf[0]=='\0') break;
+			source+=buf;
+			source+="\n";
+		}
+		auto mod = compiler::newModule("source",source.c_str());
 	}
-	compiler::compile("source",source.c_str());
 
 	System::shutdown();
 			
