@@ -38,6 +38,7 @@ struct InfixDefinition {
 };
 
 struct Node;
+struct Type;
 struct Variable;
 struct Function;
 struct ImportedScope;
@@ -65,6 +66,7 @@ struct Scope {
 	InfixDefinition* containsInfix(SymbolID name);
 	void define(InfixDefinition* definition);
 
+	Function* resolve(const char* name,Type* argumentType);
 	Function* resolveFunction(SymbolID name,const Node* argument);
 	void defineFunction(Function* definition);
 

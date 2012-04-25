@@ -394,7 +394,7 @@ namespace arpha {
 		}
 	};
 
-	void init(Scope* scope){
+	void defineCoreSyntax(Scope* scope){
 		Location location(0,0);
 		::arpha::scope = scope;
 
@@ -449,10 +449,29 @@ namespace compiler {
 	typedef std::map<std::string,Module>::iterator ModulePtr;
 	std::map<std::string,Module> modules;
 	ModulePtr currentModule;
+	ModulePtr compilerModule;
 
 	std::string packageDir;
-	//packages/arpha/arpha.arp
-	std::string arphaModuleName;
+
+	std::string moduleDirectory(const char* filename){
+		std::string path(filename);
+		assert(path.length());
+		size_t i = path.length();
+		do {
+			i--;
+			if(path[i] == '/' || path[i] == '\\'){
+				path = i ? path.substr(0,i) : "";
+				break;
+			}		
+		}while(i != 0);
+		return path;
+	}
+
+	unittest(moduleDirectory){
+		assert(moduleDirectory("packages/arpha/arpha.arp") == "packages/arpha");
+		assert(moduleDirectory("/glasgow") == "");
+		assert(moduleDirectory("foo") == "foo");
+	}
 
 
 	ModulePtr newModule(const char* moduleName,const char* source){
@@ -462,18 +481,31 @@ namespace compiler {
 		auto prevModule = currentModule;
 		currentModule = insertionResult.first;
 
-		auto scope = currentModule->second.scope = new Scope(nullptr);
-		//import 'compiler'
-		auto def = new ImportedScope("compiler",Location(-2,0),::compiler::scope);
-		scope->import(def,Scope::ImportFlags::FORCE_ALIAS);
+		currentModule->second.directory = moduleDirectory(moduleName);
 
-		if(arphaModuleName == moduleName){
-			arpha::init(scope);
-		}else{
+		Scope* scope;
+		//Special case for 'packages/arpha/compiler/compiler.arp'
+		if(compilerModule == modules.end() && (packageDir + "/arpha/compiler/compiler.arp") == moduleName){
+			compilerModule = currentModule;
+			scope = ::compiler::scope;
+			//import 'arpha' by default //TODO move to file compiler.arp and eliminate recursive self import
+			auto def = new ImportedScope("arpha",Location(-1,0),::arpha::scope);
+			scope->import(def);
+		}else if((packageDir + "/arpha/arpha.arp") == moduleName){
+			scope = new Scope(nullptr);
+			arpha::defineCoreSyntax(scope);
+		}
+		else {
+			//import 'compiler'
+			scope = new Scope(nullptr);
+			auto def = new ImportedScope("compiler",Location(-2,0),::compiler::scope);
+			scope->import(def,Scope::ImportFlags::FORCE_ALIAS);
 			//import 'arpha' by default
-			auto def = new ImportedScope("arpha",Location(-1,0),findModule("arpha"));
+			def = new ImportedScope("arpha",Location(-1,0),findModule("arpha"));
 			scope->import(def);
 		}
+		currentModule->second.scope = scope;
+
 
 		Parser parser(source,scope);
 		parser.expressionFactory = &currentModule->second.expressionFactory;
@@ -515,7 +547,10 @@ namespace compiler {
 	//Finds a module and loads it if necessary to match the existing name
 	Scope* findModule(const char* name){
 		//Search in the current directory
-
+		if(currentModule != modules.end()){
+			auto module = findModuleFromDirectory(currentModule->second.directory,name);
+			if(module) return module;
+		}
 		//Search in the packages directory for a package
 		return findModuleFromDirectory(packageDir,name);
 	}
@@ -538,12 +573,13 @@ namespace compiler {
 		scope->define(t);
 		return t;
 	}
-	
+
 	void init(){
+		compilerModule = currentModule = modules.end();
 
 		packageDir = "D:/alex/projects/parser/packages";
-		arphaModuleName = packageDir + "/arpha/arpha.arp";
-	
+		
+		//scope for compiler module
 		scope = new Scope(nullptr);
 
 		expression = builtInType("Expression");
@@ -556,7 +592,11 @@ namespace compiler {
 		function = builtInType("funtype");
 		scopeRef = builtInType("scope");
 
-		currentModule = modules.end();
+		//Load language definitions.
+		auto arphaModule = newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
+
+		Interpreter::init(arphaModule->second.scope);
+	
 	}
 
 	void onError(Location& location,std::string message){

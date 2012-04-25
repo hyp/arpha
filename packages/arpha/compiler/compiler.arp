@@ -7,4 +7,4 @@ def version = 1
 
 #Resolves a overload set into a function based on the type of the function's argument
 #TODO string literals (1 st param)
-def resolve(argument compiler.Type)
+def resolve(argument Type)

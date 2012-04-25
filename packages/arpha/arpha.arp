@@ -1,4 +1,7 @@
-﻿def this_is_awsome = 2
+﻿# This module defines arpha's syntax
+import compiler
+
+def this_is_awsome = 2
 
 # Prefix operators
 operator - = minus
