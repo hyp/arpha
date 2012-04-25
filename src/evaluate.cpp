@@ -10,8 +10,56 @@
 
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
 
+namespace {
+	std::map<Function*,Node* (*)(Parser*,CallExpression*,Node*)> functionBindings;
+	Function* realAssert;
+}
+
+void Interpreter::init(Scope* arphaScope){
+	#define HANDLE(func,type,body)  { \
+		struct Handler { \
+			static Node* handle(Parser* parser,CallExpression* node,Node* argument) body \
+	    }; \
+		functionBindings[arphaScope->resolve(func,type)] = &(Handler::handle); }
+
+	HANDLE("typeof",compiler::expression,{ 
+		return parser->expressionFactory->makeTypeReference(returnType(argument)); 
+	});
+	HANDLE("sizeof",compiler::expression,{ 
+		auto size = parser->expressionFactory->makeConstant();
+		auto isTypeAlready = argument->is<ConstantExpression>() && ((ConstantExpression*)argument)->type == compiler::type;
+		size->u64  = uint64( ( isTypeAlready ? ((ConstantExpression*)argument)->refType : returnType(argument) )->size );
+		size->type = arpha::uint64;
+		return size;
+	});
+	//TODO - implement
+	realAssert = arphaScope->resolve("assert",arpha::boolean);
+	//TODO - simplify and add evaluator to produced result
+	HANDLE("assert",compiler::expression,{
+		node->object = parser->expressionFactory->makeFunctionReference(realAssert);
+		auto args= parser->expressionFactory->makeTuple();
+		args->children.push_back(argument);
+		auto line = parser->expressionFactory->makeConstant();
+		line->u64 = parser->currentLocation().line();
+		line->type = arpha::uint64;
+		args->children.push_back(line);
+		node->arg = parser->evaluate(args);
+		return node;
+	});
+
+	#undef HANDLE
+}
+
 Node* evaluateResolvedFunctionCall(Parser* parser,CallExpression* node){
 	auto function = ((ConstantExpression*)node->object)->refFunction;
+
+	//Try to expand the function
+	auto handler = functionBindings.find(function);
+	if(handler != functionBindings.end()){
+		debug("Expanding a function call %s with %s",function->id,node->arg);
+		return handler->second(parser,node,node->arg);
+	}
+	/*
 	bool interpret = false;
 
 	if(function->argument == compiler::expression) interpret = true;
@@ -22,7 +70,7 @@ Node* evaluateResolvedFunctionCall(Parser* parser,CallExpression* node){
 	debug("Interpreting function call %s with %s",function->id,node->arg);
 	Interpreter interpreter;
 	interpreter.expressionFactory = parser->expressionFactory;
-	return interpreter.interpret(node);
+	return interpreter.interpret(node);*/
 	return node;
 }
 

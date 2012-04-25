@@ -1,4 +1,9 @@
-﻿# This module defines arpha's syntax
+﻿#
+	This module defines arpha's syntax.
+	Author: Hyp
+	Version: 1
+#
+
 import compiler
 
 def this_is_awsome = 2
@@ -23,3 +28,8 @@ var x
 def typeof(expression compiler.Expression) compiler.Type
 def sizeof(expression compiler.Expression) uint32
 def equals(x compiler.Type,y compiler.Type) bool
+
+# Real assert #TODO(Lates) implementation
+def assert(what bool,line int32)
+# Wrapper, currently implemented by compiler
+def assert(expression compiler.Expression)

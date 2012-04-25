@@ -1,0 +1,20 @@
+#
+	This module provides various tests for testing the implementation of arpha's compiler.
+	Author: Hyp
+	Version: 1
+	TODO:(Lates) compile & run
+#
+
+# Testing various functions
+
+assert( equals(int32,int32) )
+assert( equals(compiler.Type,compiler.Type) )
+
+assert( typeof(2) == int32 )
+assert( typeof(int32) == compiler.Type )
+
+assert( sizeof(int8) == sizeof(uint8) == 1 )
+assert( sizeof(int16) == sizeof(uint16) == 2 )
+assert( sizeof(int32) == sizeof(uint32) == 4 )
+assert( sizeof(int64) == sizeof(uint64) == 8 )
+assert( sizeof(2) == sizeof(typeof(2)) == sizeof(int32) )

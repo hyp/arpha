@@ -48,9 +48,14 @@ Token Lexer::consume(){
 			for(ptr++;isDigit(*ptr);ptr++);
 		}
 	}
-	//Comment
+	//Comment TODO - fix crash when multiline comment isnt closed till eof
 	else if(*ptr=='#') {
-		for(ptr++;(*ptr)!='\n';ptr++); //skip till the end of newline
+		ptr++;
+		if((*ptr) == '\n' || (*ptr) == '\r'){
+			for(;!( (*ptr)=='#' && ((*(ptr+1))=='\r' || (*(ptr+1))=='\n') ) ;ptr++); //skip till '#' followed by newline
+			ptr++;
+		}
+		else for(;(*ptr)!='\n';ptr++); //skip till the end of newline
 		return consume();
 	}
 	else if(*ptr=='\0') {

@@ -1,4 +1,8 @@
-# This module contains the main compiler definitions
+#
+	This module contains the main compiler definitions.
+	Author: Hyp
+	Version: 1
+#
 
 # These constants are probably modified by compiler upon loading
 def version = 1

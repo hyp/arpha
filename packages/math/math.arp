@@ -1,3 +1,10 @@
+#
+	This module provides various mathematical constants and functions.
+	Author: Hyp
+	Version: 1
+	TODO:(Lates+1) Implementations
+#
+
 # Mathematical constants
 def pi = 3.14
 def e = 2.71
