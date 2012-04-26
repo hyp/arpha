@@ -1,3 +1,4 @@
 import samedir
+import public public
 
 def another_value = some_value

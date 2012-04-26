@@ -15,12 +15,19 @@ namespace {
 	Function* realAssert;
 }
 
-void Interpreter::init(Scope* arphaScope){
-	#define HANDLE(func,type,body)  { \
+void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
+	#define _HANDLE(module,func,type,body)  { \
 		struct Handler { \
 			static Node* handle(Parser* parser,CallExpression* node,Node* argument) body \
 	    }; \
-		functionBindings[arphaScope->resolve(func,type)] = &(Handler::handle); }
+		functionBindings[module->resolve(func,type)] = &(Handler::handle); }
+
+	#define HANDLE(func,type,body) _HANDLE(compilerScope,func,type,body)
+		
+	//TODO HANDLE("resolve")
+
+	#undef HANDLE
+	#define HANDLE(func,type,body) _HANDLE(arphaScope,func,type,body)
 
 	HANDLE("typeof",compiler::expression,{ 
 		return parser->expressionFactory->makeTypeReference(returnType(argument)); 
@@ -29,12 +36,12 @@ void Interpreter::init(Scope* arphaScope){
 		auto size = parser->expressionFactory->makeConstant();
 		auto isTypeAlready = argument->is<ConstantExpression>() && ((ConstantExpression*)argument)->type == compiler::type;
 		size->u64  = uint64( ( isTypeAlready ? ((ConstantExpression*)argument)->refType : returnType(argument) )->size );
-		size->type = arpha::uint64;
+		size->type = arpha::uint64;//TODO arpha.natural
 		return size;
 	});
 	//TODO - implement
 	realAssert = arphaScope->resolve("assert",arpha::boolean);
-	//TODO - simplify and add evaluator to produced result
+	//TODO - implement in Arpha
 	HANDLE("assert",compiler::expression,{
 		node->object = parser->expressionFactory->makeFunctionReference(realAssert);
 		auto args= parser->expressionFactory->makeTuple();
@@ -48,6 +55,7 @@ void Interpreter::init(Scope* arphaScope){
 	});
 
 	#undef HANDLE
+	#undef _HANDLE
 }
 
 Node* evaluateResolvedFunctionCall(Parser* parser,CallExpression* node){
@@ -128,6 +136,16 @@ inline Node* evaluate(Parser* parser,BlockExpression* node){
 	return node;
 }
 
+Node* evaluate(Parser* parser,IfExpression* node){
+	node->condition = parser->evaluate(node->condition);
+	node->consequence = parser->evaluate(node->consequence);
+	node->alternative = parser->evaluate(node->alternative);
+	if(node->condition->is<ConstantExpression>() && ((ConstantExpression*)node->condition)->type == arpha::boolean){ //TODO interpret properly
+		return ((ConstantExpression*)node->condition)->u64 ? node->consequence : node->alternative;
+	}
+	return node;
+}
+
 #define CASE(t) case t::__value__: node = ::evaluate(this,(t*)node); break
 
 Node* Parser::evaluate(Node* node){
@@ -136,7 +154,7 @@ Node* Parser::evaluate(Node* node){
 		CASE(CallExpression);
 		CASE(TupleExpression);
 		CASE(BlockExpression);
-		
+		CASE(IfExpression);
 	}
 
 	return node;

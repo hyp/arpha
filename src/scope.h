@@ -75,6 +75,7 @@ struct Scope {
 private:
 
 	std::vector<Scope*> imports;
+	std::vector<ImportedScope*> broadcastedImports;
 
 	std::map<SymbolID,PrefixDefinition*> prefixDefinitions;
 	std::map<SymbolID,InfixDefinition*> infixDefinitions;

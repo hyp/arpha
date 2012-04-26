@@ -77,7 +77,13 @@ EXPR(ReturnExpression,9):
 	Scope* currentBlock;
 };
 
-EXPR(BlockExpression,10):
+EXPR(IfExpression,10):
+	Node* condition;
+	Node* consequence;
+	Node* alternative;
+};
+
+EXPR(BlockExpression,11):
 	std::vector<Node*> children;
 };
 
@@ -104,6 +110,7 @@ struct ExpressionFactory {
 	OverloadSetExpression* makeOverloadSet(SymbolID symbol,Scope* scope);
 	CallExpression* makeCall(Node* object,Node* argument);
 	ReturnExpression* makeReturn(Node* expression);
+	IfExpression* makeIf(Node* condition,Node* consequence,Node* alternative);
 	BlockExpression* makeBlock();
 
 	Node* duplicate(const Node* node);

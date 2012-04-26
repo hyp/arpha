@@ -20,7 +20,7 @@ bool isSpace(char c){
 	return c==' ' || c=='\t';
 }
 
-
+//TODO make so that on when we peek, we don't duplicate the string
 Token Lexer::consume(){
 	Token token;	
 
@@ -49,7 +49,7 @@ Token Lexer::consume(){
 			for(ptr++;isDigit(*ptr);ptr++);
 		}
 	}
-	//Comment TODO - fix crash when multiline comment isnt closed till eof
+	//Comment TODO - fix crashes when comment isnt closed till eof
 	else if(*ptr=='#') {
 		ptr++;
 		if((*ptr) == '\n' || (*ptr) == '\r'){

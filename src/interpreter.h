@@ -8,7 +8,7 @@ struct Interpreter {
 
 	Node* interpret(Node* node);
 
-	static void init(Scope* arphaScope);
+	static void init(Scope* compilerScope,Scope* arphaScope);
 
 };
 

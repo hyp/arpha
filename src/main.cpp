@@ -8,20 +8,6 @@
 #include "compiler.h"
 #include "arpha.h"
 
-
-
-
-//lexing
-
-
-
-
-
-
-//parsing
-
-
-
 unittest(scope){
 	auto scope = new Scope(0);
 
@@ -78,79 +64,12 @@ namespace arpha {
 	
 
 	//core types & functions
-	Type* type;
-	Type* expression;
-	Type* Nothing,*Unresolved,*inferred;
-	Type *constant;
+	Type* Nothing;
 	Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
 	Type *float64,*float32;
 	Type *boolean;	
 	Type *constantString;
 
-	enum {
-		BOOL,CNST,I8,U8,I16,U16,I32,U32,I64,U64,F64,F32,TYPE_COUNT
-	};
-	Type* types[TYPE_COUNT];
-
-	/*Function* createFunction(Scope* scope,const char* name,Type* returns,Type* arg0 = 0,const char *arg0n = 0,Type* arg1 = 0,const char *arg1n = 0){
-		//SymbolID name;
-		Location location(0,0);
-		Type* argument = arpha::Nothing;
-		//if(arg0) argument = arg1 ? Type::tuple(arg0,arg1) : arg0;
-		//else if(arg1) argument = arg1;
-		//if(argument->isTuple) argument->fields[0].name = arg0n;
-		auto func = new Function(scope,name,argument,returns,0,0);
-		//if(arg0) func->arguments.push_back(Function::Argument(Variable(0,arg0n,location,arg0),0,0));
-		//if(arg1){ assert(arg0); func->arguments.push_back(Function::Argument(Variable(0,arg1n,location,arg1),0,0)); }
-		return func;
-	}
-
-	OverloadSet* ArithmeticFunction(Scope*,const char*,int,int sticky = 0,bool returnSigned=false);
-	OverloadSet* ArithmeticFunction(Scope* scope,const char* str,int numArguments,int sticky,bool returnSigned){
-		Function* f;
-		if(numArguments==1){
-			createFunction(scope,str,constant,constant,"x");
-			if(returnSigned){
-				for(int i=I8;i<=U64;i++)
-					createFunction(scope,str,types[ i%2==1 ? i-1 : i],types[i],"x");
-			}else{
-				for(int i=I8;i<=U64;i++)
-					createFunction(scope,str,types[i],types[i],"x");
-			}
-			createFunction(scope,str,float32,float32,"x");
-			f = createFunction(scope,str,float64,float64,"x");
-		}else{	
-			for(int i=CNST;i<TYPE_COUNT;i++)
-				f =createFunction(scope,str,types[i],types[i],"x",types[i],"y");
-			f->set->stickiness = sticky;
-		}
-		debug("%s set = %d",str,f->set);
-		return f->set;
-	}
-	OverloadSet* ComparisonFunction(Scope* scope,const char* str,int sticky = -1){
-			OverloadSet* set;
-			SymbolID name(str);
-			for(int i=0;i<TYPE_COUNT;i++)
-				set = createFunction(scope,str,arpha::boolean,types[i],"x",types[i],"y")->set;
-			set->stickiness = sticky;
-			return set;
-	}
-
-	OverloadSet *add,*sub,*mul,*divide,*mod,*plus,*minus;
-	OverloadSet *equals,*notequals,*less,*more,*lesseq,*moreeq;
-
-
-
-	void basicFunctions(){
-		add= ArithmeticFunction(scope,"add",2,30);
-		sub= ArithmeticFunction(scope,"subtract",2,30);
-		mul= ArithmeticFunction(scope,"multiply",2,35);
-		divide= ArithmeticFunction(scope,"divide",2,35);
-		mod= ArithmeticFunction(scope,"mod",2,35);
-		plus= ArithmeticFunction(scope,"plus",1);
-		minus= ArithmeticFunction(scope,"minus",1,-1,true);
-		equals = ComparisonFunction(scope,"equals",25);
-	}*/
 
 	Type* builtInType(const char* name,int size){
 		auto t = new Type(SymbolID(name),Location());
@@ -374,18 +293,34 @@ namespace arpha {
 		}
 	};
 
+	/// ::= 'if' condition 'then' trueExpression 'else' falseExpression
+	struct IfParser: PrefixDefinition {
+		IfParser(): PrefixDefinition("if",Location()) {}
+		Node* parse(Parser* parser){
+			auto condition = parser->_parse();
+			parser->expect("then");
+			auto expr = parser->_parse();
+			Node* elseExpr = parser->match("else") ? parser->_parse() : nullptr;
+			return parser->expressionFactory->makeIf(condition,expr,elseExpr);
+		}
+	};
+
+	/// ::= 'for' values 'in' sequence statement
+
 	/// ::= 'import' <module>,...
 	struct ImportParser: PrefixDefinition {
 		ImportParser(): PrefixDefinition("import",Location()) {}
 		Node* parse(Parser* parser){
 			Location location;
 			SymbolID moduleName;
+			int flags = 0;
+			if(parser->match("public")) flags = Scope::ImportFlags::PUBLIC;
 			do {
 				location = parser->currentLocation();
 				moduleName = parser->expectName();
 				if(auto moduleScope = compiler::findModule(moduleName.ptr())){
 					debug("Importing %s.",moduleName);
-					parser->currentScope()->import(new ImportedScope(moduleName,parser->previousLocation(),moduleScope));
+					parser->currentScope()->import(new ImportedScope(moduleName,parser->previousLocation(),moduleScope),flags);
 				}else{
 					//Error
 					error(location,"module '%s' wasn't found!",moduleName);
@@ -395,7 +330,7 @@ namespace arpha {
 		}
 	};
 
-	void defineCoreSyntax(Scope* scope){
+	void defineCoreSyntax(ExpressionFactory* expressionFactory,Scope* scope){
 		Location location(0,0);
 		::arpha::scope = scope;
 
@@ -413,28 +348,43 @@ namespace arpha {
 		scope->define(new ImportParser);
 
 		scope->define(new ReturnParser);
+		scope->define(new IfParser);
+
 
 		Nothing = builtInType("Nothing",0);
 
-		int i = 0;
-		types[i++] = boolean = builtInType("bool",1);
-		types[i++] = constant;
-		types[i++] = int8 = builtInType("int8",1);
-		types[i++] = uint8 = builtInType("uint8",1);
-		types[i++] = int16 = builtInType("int16",2);
-		types[i++] = uint16 = builtInType("uint16",2);
-		types[i++] = int32 = builtInType("int32",4);
-		types[i++] = uint32 = builtInType("uint32",4);
-		types[i++] = int64 = builtInType("int64",8);
-		types[i++] = uint64 = builtInType("uint64",8);
-		types[i++] = float64 = builtInType("double",8);
-		types[i++] = float32 = builtInType("float",4);
+		boolean = builtInType("bool",1);
+		int8 = builtInType("int8",1);
+		uint8 = builtInType("uint8",1);
+		int16 = builtInType("int16",2);
+		uint16 = builtInType("uint16",2);
+		int32 = builtInType("int32",4);
+		uint32 = builtInType("uint32",4);
+		int64 = builtInType("int64",8);
+		uint64 = builtInType("uint64",8);
+		float64 = builtInType("double",8);
+		float32 = builtInType("float",4);
+
 
 		constantString = builtInType("String",0);
 
-		//basicFunctions();
+		//true & false
+		auto value = expressionFactory->makeConstant();
+		value->type = boolean;
+		value->u64 = 1;
+		//TOREVIEW the need to set isLiteral
+		auto constant = new Substitute("true",location);
+		constant->expression = value;
+		scope->define(constant);
 
-		//test();
+		value = expressionFactory->makeConstant();
+		value->type = boolean;
+		value->u64 = 0;
+		//TOREVIEW the need to set isLiteral
+		constant = new Substitute("false",location);
+		constant->expression = value;
+		scope->define(constant);
+
 	}
 };
 
@@ -496,7 +446,7 @@ namespace compiler {
 			scope->import(def);
 		}else if((packageDir + "/arpha/arpha.arp") == moduleName){
 			scope = new Scope(nullptr);
-			arpha::defineCoreSyntax(scope);
+			arpha::defineCoreSyntax(&currentModule->second.expressionFactory,scope);
 		}
 		else {
 			//import 'compiler'
@@ -598,7 +548,7 @@ namespace compiler {
 		//Load language definitions.
 		auto arphaModule = newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
 
-		Interpreter::init(arphaModule->second.scope);
+		Interpreter::init(scope,arphaModule->second.scope);
 	
 	}
 

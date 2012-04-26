@@ -90,6 +90,13 @@ ReturnExpression* ExpressionFactory::makeReturn(Node* expression){
 	e->value = expression;
 	return e;
 }
+IfExpression* ExpressionFactory::makeIf(Node* condition,Node* consequence,Node* alternative){
+	auto e = new(allocate(sizeof(IfExpression))) IfExpression;
+	e->condition = condition;
+	e->consequence = consequence;
+	e->alternative = alternative;
+	return e;
+}
 TupleExpression* ExpressionFactory::makeTuple(){
 	auto e =new(allocate(sizeof(TupleExpression))) TupleExpression;
 	return e;
@@ -144,6 +151,7 @@ Type* returnType(const Node* node){
 		//CASE(AccessExpression): return ((AccessExpression*)node)->
 		CASE(AssignmentExpression):  return returnType( ((AssignmentExpression*)node)->object.v );
 		CASE(TupleExpression): assert(((TupleExpression*) node)->type); return ((TupleExpression*) node)->type;
+		CASE(IfExpression): return returnType( ((IfExpression*)node)->consequence );
 	}
 
 	return compiler::Nothing;
@@ -161,6 +169,7 @@ std::ostream& operator<< (std::ostream& stream,const ConstantExpression* node){
 	else if(node->type == compiler::Error)   stream<<"error";
 	else if(node->type == compiler::Nothing) stream<<"statement";
 	else if(node->type == arpha::Nothing) stream<<"nothing";
+	else if(node->type == arpha::boolean) stream<<(node->u64?"true":"false");
 	else assert(false);
 	return stream;
 }
@@ -176,6 +185,7 @@ std::ostream& operator<< (std::ostream& stream,const Node* node){
 		CASE(AccessExpression): stream<<((AccessExpression*)node)->object<<" . "<<((AccessExpression*)node)->symbol; break;
 		CASE(AssignmentExpression): stream<< ((AssignmentExpression*)node)->object.v <<" = "<<((AssignmentExpression*)node)->value; break;
 		CASE(ReturnExpression): stream<<"return"<<((ReturnExpression*)node)->value; break;
+		CASE(IfExpression): stream<<((IfExpression*)node)->condition<<'?'<<((IfExpression*)node)->consequence<<':'<<((IfExpression*)node)->alternative; break;
 		CASE(TupleExpression):
 			for(auto i = ((TupleExpression*) node)->children.begin();i != ((TupleExpression*) node)->children.end();){
 				stream<<(*i);

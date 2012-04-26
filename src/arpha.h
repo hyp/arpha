@@ -13,15 +13,12 @@ namespace arpha {
 	}
 
 	void test();
-	void defineCoreSyntax(Scope* scope);
+	void defineCoreSyntax(ExpressionFactory* expressionFactory,Scope* scope);
 
 	//core functions
 
 	//core types
-	extern Type* type;
-	extern Type* expression;
-	extern Type* Nothing,*Unresolved,*inferred;
-	extern Type *constant;
+	extern Type* Nothing;
 	extern Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
 	extern Type *float64,*float32;
 	//String literal - constant array of 8 bit charcaters utf8 encoded

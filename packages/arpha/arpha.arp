@@ -8,6 +8,13 @@ import compiler
 
 def this_is_awsome = 2
 
+# An unsigned integer representing CPU's word.
+# It is equivalent to size_t from C/C++.
+def natural = if true then uint32 else uint64
+
+# Literal constant strings
+def stringLiteral = String #HACK type "String" is temporary for now
+
 # Prefix operators
 operator - = minus
 operator + = plus
@@ -25,11 +32,17 @@ operator != with priority 25 = not_equals
 
 var x
 
-def typeof(expression compiler.Expression) compiler.Type
-def sizeof(expression compiler.Expression) uint32
+# Returns true if two given types are the same type.
 def equals(x compiler.Type,y compiler.Type) bool
 
+# Returns the type of a given expression.
+def typeof(expression compiler.Expression) compiler.Type
+
+# Returns the size(in bytes) of a given type. If an expression was given instead, returns the size of that expression's type.
+def sizeof(expression compiler.Expression) natural
+
+
 # Real assert #TODO(Lates) implementation
-def assert(what bool,line int32)
+def assert(file stringLiteral,line natural,expression stringLiteral)
 # Wrapper, currently implemented by compiler
 def assert(expression compiler.Expression)

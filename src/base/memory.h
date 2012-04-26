@@ -8,7 +8,10 @@
 
 namespace memory {
 
-	/// A continuos, fixed-length array of bytes.
+	/**
+		A continuos, fixed-length array of bytes.
+		Can be the owner of the array, and if it is, it will free up memory when release is called. 
+	*/
 	struct Block {
 	private:
 		const char* _ptr;
