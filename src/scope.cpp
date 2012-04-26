@@ -26,15 +26,15 @@ void Scope::import(ImportedScope* alias,int flags){
 		error(alias->location,"Symbol '%s' is already defined! Failed to import scope '%s'.",alias->id,alias->id);
 		return;
 	}
-	if(!(flags & ImportFlags::FORCE_ALIAS)){
+	if(!(flags & ImportFlags::QUALIFIED)){
 		imports.push_back(alias->scope);
 		//import broadcasted scopes
 		for(auto i=alias->scope->broadcastedImports.begin();i!=alias->scope->broadcastedImports.end();++i){
-			debug("Publicly importing scope aliased as %s",(*i)->id);
+			debug("Broadcasting a scope aliased as %s",(*i)->id);
 			import(*i);
 		}
 	}
-	if(flags & ImportFlags::PUBLIC){
+	if(flags & ImportFlags::BROADCAST){
 		debug("defining public import");
 		broadcastedImports.push_back(alias);
 	}

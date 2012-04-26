@@ -6,8 +6,8 @@
 #
 
 # Mathematical constants
-def pi = 3.14
-def e = 2.71
+def pi = 3.141592653589793238462643
+def e  = 2.718281828458563411277850
 
 def sqrt(x float) float
 

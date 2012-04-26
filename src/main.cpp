@@ -314,7 +314,7 @@ namespace arpha {
 			Location location;
 			SymbolID moduleName;
 			int flags = 0;
-			if(parser->match("public")) flags = Scope::ImportFlags::PUBLIC;
+			if(parser->match("public")) flags = Scope::ImportFlags::BROADCAST;
 			do {
 				location = parser->currentLocation();
 				moduleName = parser->expectName();
@@ -452,7 +452,7 @@ namespace compiler {
 			//import 'compiler'
 			scope = new Scope(nullptr);
 			auto def = new ImportedScope("compiler",Location(-2,0),::compiler::scope);
-			scope->import(def,Scope::ImportFlags::FORCE_ALIAS);
+			scope->import(def,Scope::ImportFlags::QUALIFIED);
 			//import 'arpha' by default
 			def = new ImportedScope("arpha",Location(-1,0),findModule("arpha"));
 			scope->import(def);

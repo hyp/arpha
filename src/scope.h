@@ -50,8 +50,8 @@ struct Scope {
 
 	struct ImportFlags {
 		enum {
-			PUBLIC = 0x1,        //public import - the import will be imported into scopes importing the current scope
-			FORCE_ALIAS = 0x2    //force alias - the symbols from the scope are accessed only via the scope alias i.e. foo.bar
+			BROADCAST = 0x1,  //Broadcasted import - the import will be imported into scopes importing the current scope
+			QUALIFIED = 0x2   //Qualified import - the symbols from the scope are accessed only via the qualified scope alias i.e. foo.bar
 		};
 	};
 	void import(ImportedScope* alias,int flags = 0);
