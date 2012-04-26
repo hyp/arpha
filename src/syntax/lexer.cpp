@@ -1,6 +1,7 @@
 #include "lexer.h"
 #include "../base/utf.h"
 
+
 Lexer::Lexer(const char* source) : location(0,0) {
 	ptr= source;
 	//check for UTF8 BOM
@@ -57,6 +58,14 @@ Token Lexer::consume(){
 		}
 		else for(;(*ptr)!='\n';ptr++); //skip till the end of newline
 		return consume();
+	}
+	else if(*ptr == '"'){
+		ptr++;
+		auto begin = ptr;
+		for(;(*ptr)!='"';ptr++);
+		token.type = Token::String;
+		token.string = memory::Block::construct(begin,size_t(ptr - begin)).duplicate();
+		ptr++;
 	}
 	else if(*ptr=='\0') {
 		token.type = Token::Eof;	

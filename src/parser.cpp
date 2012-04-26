@@ -94,6 +94,15 @@ Node* Parser::_parse(int stickiness){
 		((ConstantExpression*)expression)->_isLiteral = true;
 		((ConstantExpression*)expression)->u64    = lookedUpToken.uinteger;
 	}
+	else if(lookedUpToken.isString()){
+		expression = expressionFactory->makeConstant();
+		((ConstantExpression*)expression)->type       = arpha::constantString;
+		((ConstantExpression*)expression)->_isLiteral = true;
+		debug("Test1 %s",lookedUpToken.string);
+		((ConstantExpression*)expression)->string.aquire(lookedUpToken.string);
+		debug("Test2 %s",lookedUpToken.string);
+		debug("Test3 %s",((ConstantExpression*)expression)->string);
+	}
 	else if(lookedUpToken.isSymbol()){
 		auto prefixDefinition = _currentScope->lookupPrefix(lookedUpToken.symbol);
 		if(!prefixDefinition){ 

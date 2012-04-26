@@ -23,6 +23,7 @@ EXPR(ConstantExpression,0):
 		Scope*  refScope;
 		Type*   refType;
 		Function* refFunction;
+		memory::Block string;
 	};
 	Type* type;
 	bool _isLiteral;

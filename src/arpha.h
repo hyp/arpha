@@ -24,6 +24,8 @@ namespace arpha {
 	extern Type *constant;
 	extern Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
 	extern Type *float64,*float32;
+	//String literal - constant array of 8 bit charcaters utf8 encoded
+	extern Type *constantString; 
 
 	extern Type *boolean;	
 

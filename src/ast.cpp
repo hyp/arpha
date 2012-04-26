@@ -125,6 +125,7 @@ static Type* literalConstantReturnType(const ConstantExpression* node){
 			else return arpha::uint64;		
 		}
 		else if(node->type == arpha::float64) return arpha::float64;
+		else if(node->type == arpha::constantString) return arpha::constantString;
 		assert(false);
 		return nullptr;
 }
@@ -153,6 +154,7 @@ std::ostream& operator<< (std::ostream& stream,const ConstantExpression* node){
 	if(node->type == arpha::uint64)       stream<<node->u64;
 	else if(node->type == arpha::int64) stream<<node->i64;
 	else if(node->type == arpha::float64) stream<<node->f64;
+	else if(node->type == arpha::constantString) stream<<'"'<<node->string<<'"';
 	else if(node->type == compiler::type) stream<<"type "<<node->refType->id;
 	else if(node->type == compiler::function) stream<<"func "<<node->refFunction->id;
 	else if(node->type == compiler::scopeRef) stream<<"scope";

@@ -7,18 +7,21 @@
 
 #include "../base/base.h"
 #include "../base/symbol.h"
+#include "../base/memory.h"
 
 struct Token {
 	enum {
 		Symbol = 0,
 		Uinteger,
 		EndExpression,
+		String,
 		Eof,
 	};
 	
 	union {
 		uint64 uinteger;
 		double real;
+		memory::Block string;
 	};
 	SymbolID symbol;	
 	int type;
@@ -28,6 +31,7 @@ struct Token {
 	inline bool isUinteger() const { return type == Uinteger; }
 	inline bool isEOF() const { return type == Eof; }
 	inline bool isEndExpression() const { return type == EndExpression; }
+	inline bool isString() const { return type == String; }
 };
 
 std::ostream& operator<< (std::ostream& stream,const Token& token);

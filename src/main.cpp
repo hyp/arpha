@@ -85,6 +85,7 @@ namespace arpha {
 	Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
 	Type *float64,*float32;
 	Type *boolean;	
+	Type *constantString;
 
 	enum {
 		BOOL,CNST,I8,U8,I16,U16,I32,U32,I64,U64,F64,F32,TYPE_COUNT
@@ -428,6 +429,8 @@ namespace arpha {
 		types[i++] = uint64 = builtInType("uint64",8);
 		types[i++] = float64 = builtInType("double",8);
 		types[i++] = float32 = builtInType("float",4);
+
+		constantString = builtInType("String",0);
 
 		//basicFunctions();
 
