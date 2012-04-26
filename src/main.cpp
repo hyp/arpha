@@ -108,6 +108,14 @@ namespace arpha {
 		}
 	};
 
+	/// ::= expression '[' expression ']'
+	struct IndexParser: InfixDefinition {
+		IndexParser(): InfixDefinition("[",arpha::Precedence::Call,Location()) {}
+		Node* parse(Parser* parser,Node* node){
+			return nullptr;//TODO
+		}
+	};
+
 	/// ::= expression ',' expression
 	struct TupleParser: InfixDefinition {
 		TupleParser(): InfixDefinition(",",arpha::Precedence::Tuple,Location()) {}
@@ -314,7 +322,8 @@ namespace arpha {
 			Location location;
 			SymbolID moduleName;
 			int flags = 0;
-			if(parser->match("public")) flags = Scope::ImportFlags::BROADCAST;
+			if(parser->match("public")) flags |= Scope::ImportFlags::BROADCAST;
+			if(parser->match("qualified")) flags |= Scope::ImportFlags::QUALIFIED;
 			do {
 				location = parser->currentLocation();
 				moduleName = parser->expectName();
@@ -438,10 +447,11 @@ namespace compiler {
 
 		Scope* scope;
 		//Special case for 'packages/arpha/compiler/compiler.arp'
-		if(compilerModule == modules.end() && (packageDir + "/arpha/compiler/compiler.arp") == moduleName){
+		if((packageDir + "/arpha/compiler/compiler.arp") == moduleName){
+			assert(compilerModule == modules.end());
 			compilerModule = currentModule;
 			scope = ::compiler::scope;
-			//import 'arpha' by default //TODO move to file compiler.arp and eliminate recursive self import
+			//import 'arpha' by default
 			auto def = new ImportedScope("arpha",Location(-1,0),::arpha::scope);
 			scope->import(def);
 		}else if((packageDir + "/arpha/arpha.arp") == moduleName){
@@ -449,12 +459,9 @@ namespace compiler {
 			arpha::defineCoreSyntax(&currentModule->second.expressionFactory,scope);
 		}
 		else {
-			//import 'compiler'
 			scope = new Scope(nullptr);
-			auto def = new ImportedScope("compiler",Location(-2,0),::compiler::scope);
-			scope->import(def,Scope::ImportFlags::QUALIFIED);
 			//import 'arpha' by default
-			def = new ImportedScope("arpha",Location(-1,0),findModule("arpha"));
+			auto def = new ImportedScope("arpha",Location(-1,0),findModule("arpha"));
 			scope->import(def);
 		}
 		currentModule->second.scope = scope;

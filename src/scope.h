@@ -88,6 +88,7 @@ struct ImportedScope : PrefixDefinition {
 	Node* parse(Parser* parser);
 
 	Scope* scope;
+	int importFlags; //To apply the correct import of broadcasted imports
 };
 
 //

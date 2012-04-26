@@ -4,7 +4,7 @@
 	Version: 1
 #
 
-import compiler
+import public qualified compiler
 
 def this_is_awsome = 2
 
@@ -15,20 +15,7 @@ def natural = if true then uint32 else uint64
 # Literal constant strings
 def stringLiteral = String #HACK type "String" is temporary for now
 
-# Prefix operators
-operator - = minus
-operator + = plus
-operator ! = not
-
-# Infix operators
-operator + with priority 30 = add
-operator - with priority 30 = subtract
-operator * with priority 35 = multiply
-operator / with priority 35 = divide
-operator % with priority 35 = mod
-
-operator == with priority 25 = equals
-operator != with priority 25 = not_equals
+import public operators
 
 var x
 
