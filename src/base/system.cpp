@@ -73,6 +73,31 @@ const char* System::fileToString(const char* filename){
 	return (const char*)data;
 }
 
+namespace System {
+	namespace path {
+		std::string directory(const char* filename){
+			assert(filename);
+			std::string path(filename);	
+			size_t i = path.length();
+			do {
+				i--;
+				if(path[i] == '/' || path[i] == '\\'){
+					path = i ? path.substr(0,i) : "";
+					break;
+				}		
+			}while(i != 0);
+			return path;
+		}	
+	}
+
+	unittest(path_directory){
+		assert(path::directory("packages/arpha/arpha.arp") == "packages/arpha");
+		assert(path::directory("/glasgow") == "");
+		assert(path::directory("foo") == "foo");
+	}
+}
+
+
 unittest(System){
 	auto p = System::malloc(16);
 	assert(p);

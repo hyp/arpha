@@ -1,6 +1,8 @@
 #ifndef SCOPE_H
 #define SCOPE_H
 
+#include "base/memory.h"
+
 struct Parser;
 struct Node;
 
@@ -17,7 +19,7 @@ namespace DeclarationType {
 	};
 }
 
-struct PrefixDefinition {
+struct PrefixDefinition : memory::ManagedDefinition {
 	SymbolID id;
 	Location location;
 	uint8 visibilityMode;
@@ -27,7 +29,7 @@ struct PrefixDefinition {
 	virtual Node* parse(Parser* parser) = 0;
 };
 
-struct InfixDefinition {
+struct InfixDefinition : memory::ManagedDefinition {
 	SymbolID id;
 	int stickiness;
 	Location location;
@@ -44,7 +46,7 @@ struct Function;
 struct ImportedScope;
 
 //Scope resolves symbols to corresponding definitions, which tells parser how to parse the encountered symbol
-struct Scope {
+struct Scope: memory::ManagedDefinition {
 
 	Scope(Scope* parent);
 
@@ -79,7 +81,7 @@ private:
 
 	std::map<SymbolID,PrefixDefinition*> prefixDefinitions;
 	std::map<SymbolID,InfixDefinition*> infixDefinitions;
-
+	void reach();
 };
 
 //

@@ -23,26 +23,37 @@ struct Variable : PrefixDefinition  {
 };
 
 struct Type: public PrefixDefinition {
+private:
+	std::vector<Variable> fields;
+	Type* headRecord; ///if this is null, then the type isn't a record
+public:
 
 	Type(SymbolID name,Location& location);
 
 	Node* parse(Parser* parser);
 
 	Variable* lookupField(const SymbolID fieldName);
-	void add(Variable& var);
+	void add(Variable& var); //adds a field to the type
+
 	
 	//implicit type cast
-	bool canAssignFrom(Type* other);
+	bool is();
 
-	//global tuple constructs
-	static std::vector<Type*> tuples;
+	//unique record construction
 	static Type* tuple(std::vector<std::pair<SymbolID,Type*>>& fields);
 
 	uint32 size;
 	uint32 alignment;
-	bool isTuple;
+	
+
+	bool isRecord() const { return headRecord != nullptr; }
+
+	//Determines whether two records have the same field types or not
+	inline static bool recordsSameTypes(Type* r1,Type* r2){ return r1->headRecord == r2->headRecord; }
 private:
-	std::vector<Variable> fields;
+	static Type* createRecordType(std::vector<std::pair<SymbolID,Type*>>& record,Type* headRecord = nullptr);
+	static Type* findSubRecord(Type* headRecord,std::vector<Type*>& subRecords,std::vector<std::pair<SymbolID,Type*>>& record);
+	static Type* findRecord(std::vector<std::pair<SymbolID,Type*>>& record);
 };
 
 struct Function: public PrefixDefinition {

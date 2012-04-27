@@ -42,6 +42,29 @@ namespace memory {
 		static Block construct(const char* begin,size_t length);
 	};
 
+	/**
+		Base class for prefix and infix definitions
+		Proper memory management to be implemented at a later stage.
+	*/
+	struct ManagedDefinition {
+	private:
+		ManagedDefinition* next;
+	public:
+		inline ManagedDefinition(){}
+		
+		virtual void reach(){} //Will be called by GC, need to iterate over object's pointers
+		inline ManagedDefinition* __next(){ return next; }
+
+		void* operator new(size_t size);
+		void operator delete(void* p){}
+	protected:
+        //NOCOPY(ManagedDefinition)
+	};
+
+	void init();
+	void shutdown();
+
+	void reach(ManagedDefinition* definition);
 	
 }
 

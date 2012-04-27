@@ -54,6 +54,19 @@ void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
 		return node;
 	});
 
+	//
+	std::vector<std::pair<SymbolID,Type*>> record(2,std::make_pair(SymbolID(),compiler::type));
+	auto type_type = Type::tuple(record);
+	HANDLE("equals",type_type,{
+		auto twoTypes = argument->is<TupleExpression>();
+		auto t1 = twoTypes->children[0]->is<ConstantExpression>()->refType;
+		auto t2 = twoTypes->children[1]->is<ConstantExpression>()->refType;
+		auto result = parser->expressionFactory->makeConstant();
+		result->u64 =  t1 == t2 ? 1 : 0; //TODO tuple comparsion as well
+		result->type = arpha::boolean;
+		return result;
+	});
+
 	#undef HANDLE
 	#undef _HANDLE
 }

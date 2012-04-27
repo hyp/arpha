@@ -322,7 +322,7 @@ namespace arpha {
 			Location location;
 			SymbolID moduleName;
 			int flags = 0;
-			if(parser->match("public")) flags |= Scope::ImportFlags::BROADCAST;
+			if(parser->match("export")) flags |= Scope::ImportFlags::BROADCAST;
 			if(parser->match("qualified")) flags |= Scope::ImportFlags::QUALIFIED;
 			do {
 				location = parser->currentLocation();
@@ -415,27 +415,6 @@ namespace compiler {
 
 	std::string packageDir;
 
-	std::string moduleDirectory(const char* filename){
-		std::string path(filename);
-		assert(path.length());
-		size_t i = path.length();
-		do {
-			i--;
-			if(path[i] == '/' || path[i] == '\\'){
-				path = i ? path.substr(0,i) : "";
-				break;
-			}		
-		}while(i != 0);
-		return path;
-	}
-
-	unittest(moduleDirectory){
-		assert(moduleDirectory("packages/arpha/arpha.arp") == "packages/arpha");
-		assert(moduleDirectory("/glasgow") == "");
-		assert(moduleDirectory("foo") == "foo");
-	}
-
-
 	ModulePtr newModule(const char* moduleName,const char* source){
 		Module module = {};
 		auto insertionResult = modules.insert(std::make_pair(std::string(moduleName),module));
@@ -443,7 +422,7 @@ namespace compiler {
 		auto prevModule = currentModule;
 		currentModule = insertionResult.first;
 
-		currentModule->second.directory = moduleDirectory(moduleName);
+		currentModule->second.directory = System::path::directory(moduleName);
 
 		Scope* scope;
 		//Special case for 'packages/arpha/compiler/compiler.arp'
@@ -569,6 +548,7 @@ namespace compiler {
 int main(int argc, char * const argv[]){
 	
 	System::init();
+	memory::init();
 	compiler::init();
 	
 	if(argc < 2){
@@ -586,6 +566,7 @@ int main(int argc, char * const argv[]){
 		auto mod = compiler::newModule("source",source.c_str());
 	}
 
+	memory::shutdown();
 	System::shutdown();
 			
 	return 0;

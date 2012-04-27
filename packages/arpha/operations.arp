@@ -1,0 +1,10 @@
+#
+	This module defines arpha's core operation function - arithmetics, comparison etc.
+	Author: Hyp
+	Version: 1
+#
+
+def minus(x int32) int32
+
+def add(x int32,y int32) int32
+def subtract(x int32,y int32) int32

@@ -23,6 +23,11 @@ namespace System {
 	const char* currentDirectory();
     bool fileExists(const char* filename);
 	const char* fileToString(const char* filename);
+
+	//path
+	namespace path {
+		std::string directory(const char* filename);
+	}
 }
 
 #endif

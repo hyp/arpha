@@ -105,7 +105,16 @@ void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& resul
 
 	for(auto i=overloads.begin();i!=overloads.end();++i){
 		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
-		/*else*/ if((*i)->argument == compiler::expression){ debug("c"); exprMatch = *i; }
+		auto argumentType = returnType(argument);
+		if((*i)->argument == argumentType){
+			debug("-d");
+			results.push_back(*i);
+		}
+		else if(argumentType->isRecord() && Type::recordsSameTypes((*i)->argument, argumentType) ){
+			debug("-dr");
+			results.push_back(*i);
+		}
+		else if((*i)->argument == compiler::expression){ debug("-c"); exprMatch = *i; }
 	}
 	if(exprMatch && results.size()==0) results.push_back( exprMatch );//TODO careful with imports
 }
@@ -169,6 +178,14 @@ void Scope::defineFunction(Function* definition){
 		set = new Overloadset(definition);
 		prefixDefinitions[definition->id] = set;
 	}
+}
+
+void Scope::reach(){
+	memory::reach(parent);
+	for(auto i=imports.begin();i!=imports.end();++i) memory::reach(*i);
+	for(auto i=broadcastedImports.begin();i!=broadcastedImports.end();++i) memory::reach(*i);
+	for(auto i=prefixDefinitions.begin();i!=prefixDefinitions.end();++i) memory::reach(i->second);
+	for(auto i=infixDefinitions.begin();i!=infixDefinitions.end();++i) memory::reach(i->second);
 }
 
 Overloadset::Overloadset(Function* firstFunction) : PrefixDefinition(firstFunction->id,firstFunction->location) {

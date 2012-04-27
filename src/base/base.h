@@ -26,6 +26,11 @@ typedef unsigned int UnicodeChar;
 void _assert(const char* file, int line, const char* what);
 #define assert(what) ((what) ? (void)0 : _assert( __FILE__, __LINE__, (#what)))
 
+//class non copyable
+#define NOCOPY(t) \
+	t(const t &); \
+	t operator=(const t &);	
+
 //Unit testing macro
 namespace testing {
 

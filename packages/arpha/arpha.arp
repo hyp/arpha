@@ -2,9 +2,10 @@
 	This module defines arpha's syntax.
 	Author: Hyp
 	Version: 1
+	TODO: import syntax
 #
 
-import public qualified compiler
+import export qualified compiler
 
 def this_is_awsome = 2
 
@@ -15,11 +16,13 @@ def natural = if true then uint32 else uint64
 # Literal constant strings
 def stringLiteral = String #HACK type "String" is temporary for now
 
-import public operators
+import export operators
+
+import export operations
 
 var x
 
-# Returns true if two given types are the same type.
+# Returns true if two given types are the same type. TOCONSIDER move to compiler
 def equals(x compiler.Type,y compiler.Type) bool
 
 # Returns the type of a given expression.

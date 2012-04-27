@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "memory.h"
 #include "system.h"
+#include "format.h"
 
 std::ostream& operator<< (std::ostream& stream,const memory::Block& block){
 	assert(block.ptr());
@@ -17,7 +18,7 @@ namespace memory {
 		void* mem = System::malloc(length());
 		memcpy(mem,ptr(),length());
 		Block _;
-		_._ptr=(const char*)mem;
+		_._ptr=static_cast<const char*>(mem);
 		_._length=length();
 		return _;
 	}
@@ -40,7 +41,7 @@ namespace memory {
 	void memory::Block::release(){
 		assert(_ptr);
 		if(hasOwnership()){
-			System::free((void*)_ptr);
+			System::free(const_cast<char*>(_ptr));
 			_ptr = nullptr;_length = NotOwnerMask;
 		}
 	}
@@ -56,6 +57,76 @@ namespace memory {
 		assert(!b.hasOwnership());
 		assert(a.ptr() == data && a.length() == 4);
 		assert(!a.hasOwnership());
+	}
+
+	ManagedDefinition* definitionsRoot = nullptr;
+	size_t managedDefinitionsAllocations = 0;
+
+#define SYNCHRONIZED(x) x
+
+	void* ManagedDefinition::operator new(size_t size){
+		auto p = System::malloc(size);
+		ManagedDefinition* next;
+		SYNCHRONIZED(next = definitionsRoot;definitionsRoot = static_cast<ManagedDefinition*>(p);managedDefinitionsAllocations++);
+		static_cast<ManagedDefinition*>(p)->next = next;
+		return p;
+	}
+
+	//Mark and sweep collector for ManagedDefinitions
+	/*static void collectDefinitions(){
+		//Mark
+		for(auto i = definitionsRoot;i!=nullptr;i=i->__next()){
+			i->reach();
+		}
+		//Sweep
+		ManagedDefinition* next = nullptr;
+		ManagedDefinition* prev = nullptr;
+		for(auto i = definitionsRoot;i!=nullptr;i=next){
+			next = i->__next();
+			if(!i->mark){
+				System::free(i);
+				if(prev) prev->next = next;
+				else definitionsRoot = next;
+			}else {
+				i->mark = 0;
+				prev = i;
+			}	
+		}
+	}*/
+
+	void reach(ManagedDefinition* definition){
+		//Definitions aren't collected by GC for now, so don't do anything here
+	}
+	void init(){
+	}
+	void shutdown(){
+		System::debugPrint(format("Shutting down memory - defs:%s.",managedDefinitionsAllocations));
+		//Delete all the definitions
+		ManagedDefinition* next;
+		for(auto i = definitionsRoot;i!=nullptr;i=next){
+			next = i->__next();
+			System::free(i);
+			managedDefinitionsAllocations--;
+		}
+		assert(managedDefinitionsAllocations == 0); //ensure no memory leaks
+	}
+
+
+	unittest(managedDefinition){
+		struct Def: ManagedDefinition {
+			int i;
+		};
+		assert(definitionsRoot == nullptr);
+		auto x = new Def();
+		assert(x);
+		assert(definitionsRoot == x);
+		assert(x->__next() == nullptr);
+		auto y = new Def();
+		assert(y);
+		assert(definitionsRoot == y);
+		assert(y->__next() == x);
+
+		assert(managedDefinitionsAllocations == 2);
 	}
 }
 

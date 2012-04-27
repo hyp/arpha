@@ -1,0 +1,29 @@
+#
+	This module defines arpha's operators and their precendence.
+	Author: Hyp
+	Version: 1
+	TODO: ASAP precedence constants including the implementation defined ones.
+	Note:
+		Operator definitions are located in the order of increasing priority in this module.
+		Operators '=' '.' ',' are defined by the compiler implementation.
+#
+
+# Prefix operators
+operator - = minus
+operator + = plus
+operator ! = not
+
+# Infix operators
+
+## Comparison group
+operator == with priority 25 = equals
+operator != with priority 25 = not_equals
+
+## Sum group
+operator + with priority 30 = add
+operator - with priority 30 = subtract
+
+## Product group
+operator * with priority 35 = multiply
+operator / with priority 35 = divide
+operator % with priority 35 = mod
