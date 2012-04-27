@@ -40,17 +40,23 @@ void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
 		return size;
 	});
 	//TODO - implement
-	realAssert = arphaScope->resolve("assert",arpha::boolean);
+	//realAssert = arphaScope->resolve("assert",arpha::boolean);
 	//TODO - implement in Arpha
 	HANDLE("assert",compiler::expression,{
-		node->object = parser->expressionFactory->makeFunctionReference(realAssert);
+		auto cnst = argument->is<ConstantExpression>();
+		if(cnst){
+			if(cnst->type == arpha::boolean && cnst->u64==0){
+				error(parser->currentLocation(),"Test error - Assertion failed");
+			}
+		}
+		/*node->object = parser->expressionFactory->makeFunctionReference(realAssert);
 		auto args= parser->expressionFactory->makeTuple();
 		args->children.push_back(argument);
 		auto line = parser->expressionFactory->makeConstant();
 		line->u64 = parser->currentLocation().line();
 		line->type = arpha::uint64;
 		args->children.push_back(line);
-		node->arg = parser->evaluate(args);
+		node->arg = parser->evaluate(args);*/
 		return node;
 	});
 

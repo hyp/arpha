@@ -7,14 +7,22 @@
 
 # Testing various functions
 
+# Type equality and operator ==
 assert( equals(int32,int32) )
+assert( int32 == int32 )
 assert( equals(compiler.Type,compiler.Type) )
-
-assert( typeof(2) == int32 )
+assert( compiler.Type == compiler.Type )
 assert( typeof(int32) == compiler.Type )
 
+# Number literals default return type
+assert( typeof(2) == int32 )
+
+
+
+#
 assert( sizeof(int8) == sizeof(uint8) == 1 )
 assert( sizeof(int16) == sizeof(uint16) == 2 )
 assert( sizeof(int32) == sizeof(uint32) == 4 )
 assert( sizeof(int64) == sizeof(uint64) == 8 )
 assert( sizeof(2) == sizeof(typeof(2)) == sizeof(int32) )
+#

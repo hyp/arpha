@@ -326,13 +326,18 @@ namespace arpha {
 			if(parser->match("qualified")) flags |= Scope::ImportFlags::QUALIFIED;
 			do {
 				location = parser->currentLocation();
-				moduleName = parser->expectName();
-				if(auto moduleScope = compiler::findModule(moduleName.ptr())){
-					debug("Importing %s.",moduleName);
-					parser->currentScope()->import(new ImportedScope(moduleName,parser->previousLocation(),moduleScope),flags);
+				auto initial = parser->expectName();
+				std::string modulePath = initial.ptr();
+				while(parser->match(".")){
+					modulePath += '/';
+					modulePath += parser->expectName().ptr();
+				}
+				if(auto moduleScope = compiler::findModule(modulePath.c_str())){
+					debug("Importing %s.",modulePath);
+					parser->currentScope()->import(new ImportedScope(modulePath.c_str(),parser->previousLocation(),moduleScope),flags);
 				}else{
 					//Error
-					error(location,"module '%s' wasn't found!",moduleName);
+					error(location,"module '%s' wasn't found!",modulePath);
 				}
 			}while(parser->match(","));
 			return parser->expressionFactory->makeCompilerNothing();
