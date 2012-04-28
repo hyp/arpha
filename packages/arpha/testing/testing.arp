@@ -49,6 +49,9 @@ TODO: make this pass(need multiple resolving passes?)
 	t = true
 #
 
+#Assignment operator
+assert( typeof( x = 2 ) == uint8 ) #It must return the type of rhs, not lhs!
+
 
 #
 assert( sizeof(int8) == sizeof(uint8) == 1 )

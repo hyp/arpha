@@ -109,7 +109,7 @@ Type* CallExpression::returnType() const {
 	return compiler::Unresolved;
 }
 Type* AssignmentExpression::returnType() const {
-	return value->returnType();
+	return object->returnType();
 }
 Type* IfExpression::returnType() const {
 	return consequence->returnType();
