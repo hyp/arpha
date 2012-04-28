@@ -3,7 +3,7 @@
 #include "declarations.h"
 #include "parser.h"
 
-#include "ast.h"
+#include "syntax/ast.h"
 #include "compiler.h"
 #include "arpha.h"
 
@@ -46,7 +46,7 @@ SymbolID Parser::expectName(){
 
 int Parser::expectInteger(){
 	auto node = _parse(arpha::Precedence::Tuple);
-	if(auto c= node->is<ConstantExpression>()){
+	if(auto c= node->asConstantExpression()){
 		if(arpha::isInteger(c->type)){
 			return int(c->u64);
 		}
@@ -57,7 +57,7 @@ int Parser::expectInteger(){
 
 Node* Parser::_parseModule(){
 	//top level
-	Node* block = expressionFactory->makeBlock();
+	auto block = BlockExpression::create();
 	Token token;
 	
 	while(1){
@@ -68,14 +68,14 @@ Node* Parser::_parseModule(){
 			continue;
 		}
 
-		((BlockExpression*)block)->children.push_back(_parse());
+		block->children.push_back(_parse());
 
 		token = consume();
 		if(token.isEOF()) break;
 		else if(!token.isEndExpression()) error(previousLocation(),"';' expected!");
 	}
 
-	if(((BlockExpression*)block)->children.size() == 0) error(previousLocation(),"the source file is empty!");
+	if(block->children.size() == 0) error(previousLocation(),"the source file is empty!");
 
 	return block;
 }
@@ -88,30 +88,29 @@ Node* Parser::_parse(int stickiness){
 	Location location = currentLocation();
 	lookedUpToken = consume();
 	if(lookedUpToken.isUinteger()){
-		//
-		expression = expressionFactory->makeConstant();
-		((ConstantExpression*)expression)->type       = arpha::uint64;
-		((ConstantExpression*)expression)->_isLiteral = true;
-		((ConstantExpression*)expression)->u64    = lookedUpToken.uinteger;
+		auto cnst = ConstantExpression::create(arpha::uint64);
+		expression = static_cast<Node*>(cnst);
+		cnst->_isLiteral = true;
+		cnst->u64    = lookedUpToken.uinteger;
 	}
 	else if(lookedUpToken.isString()){
-		expression = expressionFactory->makeConstant();
-		((ConstantExpression*)expression)->type       = arpha::constantString;
-		((ConstantExpression*)expression)->_isLiteral = true;
-		((ConstantExpression*)expression)->string.aquire(lookedUpToken.string);
+		auto cnst = ConstantExpression::create(arpha::constantString);
+		expression = static_cast<Node*>(cnst);
+		cnst->_isLiteral = true;
+		cnst->string.aquire(lookedUpToken.string);
 	}
 	else if(lookedUpToken.isSymbol()){
 		auto prefixDefinition = _currentScope->lookupPrefix(lookedUpToken.symbol);
 		if(!prefixDefinition){ 
 			error(location,"Can't prefix parse %s!",lookedUpToken); 
-			expression = expressionFactory->makeError();
+			expression = ConstantExpression::create(compiler::Error);
 		}else{
 			expression = prefixDefinition->parse(this);
 		}
 	}
 	else {
 		error(location,"Can't prefix parse %s!",lookedUpToken);
-		expression = expressionFactory->makeError();
+		expression = ConstantExpression::create(compiler::Error);
 	}
 	expression->location = location;
 	expression = evaluate(expression);
@@ -141,7 +140,7 @@ Type* Parser::parseOptionalType(){
 	const char* prevptr = ptr;
 	auto node = _parse(arpha::Precedence::Assignment);
 	const ConstantExpression* val;
-	if( (val = node->is<ConstantExpression>()) && val->type == compiler::type) return val->refType;
+	if( (val = node->asConstantExpression()) && val->type == compiler::type) return val->refType;
 	ptr = prevptr;
 	return nullptr;
 }
@@ -150,35 +149,35 @@ Type* Parser::parseOptionalType(){
 //parsing declarations
 
 Node* ImportedScope::parse(Parser* parser) {
-	return parser->expressionFactory->makeScopeReference(scope);
+	return ConstantExpression::createScopeReference(scope);
 }
 Node* Substitute::parse(Parser* parser){
-	return parser->expressionFactory->duplicate(expression);
+	return expression; //TODO duplicate
 }
 
 Node* Variable::parse(Parser* parser){
-	return parser->expressionFactory->makeVariable(this);
+	return VariableExpression::create(this);
 }
 
 Node* Type::parse(Parser* parser){
-	return parser->expressionFactory->makeTypeReference(this);
+	return ConstantExpression::createTypeReference(this);
 }
 
 Node* Function::parse(Parser* parser){
-	return parser->expressionFactory->makeFunctionReference(this);
+	return ConstantExpression::createFunctionReference(this);
 }
 
 Node* Overloadset::parse(Parser* parser){
-	return parser->expressionFactory->makeOverloadSet(parser->lookedUpToken.symbol,parser->currentScope());
+	return OverloadSetExpression::create(parser->lookedUpToken.symbol,parser->currentScope());
 }
 
 Node* PrefixOperator::parse(Parser* parser){
-	return parser->expressionFactory->makeCall(parser->expressionFactory->makeOverloadSet(function,parser->currentScope()),parser->_parse());
+	return CallExpression::create(OverloadSetExpression::create(function,parser->currentScope()),parser->_parse());
 }
 
 Node* InfixOperator::parse(Parser* parser,Node* node){
-	auto tuple = parser->expressionFactory->makeTuple();
+	auto tuple = TupleExpression::create();
 	tuple->children.push_back(node);
 	tuple->children.push_back(parser->_parse(stickiness));
-	return parser->expressionFactory->makeCall(parser->expressionFactory->makeOverloadSet(function,parser->currentScope()),tuple);
+	return CallExpression::create(OverloadSetExpression::create(function,parser->currentScope()),tuple);
 }

@@ -4,7 +4,8 @@
 #include "parser.h"
 
 #include "interpreter.h"
-#include "ast.h"
+#include "syntax/ast.h"
+#include "syntax/astvisitor.h"
 #include "compiler.h"
 #include "arpha.h"
 
@@ -30,25 +31,23 @@ void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
 	#define HANDLE(func,type,body) _HANDLE(arphaScope,func,type,body)
 
 	HANDLE("typeof",compiler::expression,{ 
-		return parser->expressionFactory->makeTypeReference(returnType(argument)); 
+		return ConstantExpression::createTypeReference(argument->returnType()); 
 	});
 	HANDLE("sizeof",compiler::expression,{ 
-		auto size = parser->expressionFactory->makeConstant();
-		auto isTypeAlready = argument->is<ConstantExpression>() && ((ConstantExpression*)argument)->type == compiler::type;
-		size->u64  = uint64( ( isTypeAlready ? ((ConstantExpression*)argument)->refType : returnType(argument) )->size );
-		size->type = arpha::uint64;//TODO arpha.natural
+		auto size = ConstantExpression::create(arpha::uint64);//TODO arpha.natural
+		auto cnstArgument = argument->asConstantExpression();
+		size->u64  = uint64( ( cnstArgument->type == compiler::type ? cnstArgument->refType : argument->returnType() )->size );
 		return size;
 	});
 	//TODO - implement
 	//realAssert = arphaScope->resolve("assert",arpha::boolean);
 	//TODO - implement in Arpha
 	HANDLE("assert",compiler::expression,{
-		auto cnst = argument->is<ConstantExpression>();
-		if(cnst){
-			if(cnst->type == arpha::boolean && cnst->u64==0){
-				error(parser->currentLocation(),"Test error - Assertion failed");
-			}
+		auto cnst = argument->asConstantExpression();
+		if(cnst && cnst->type == arpha::boolean && cnst->u64==1){
+			return node;		
 		}
+		error(parser->currentLocation(),"Test error - Assertion failed");
 		/*node->object = parser->expressionFactory->makeFunctionReference(realAssert);
 		auto args= parser->expressionFactory->makeTuple();
 		args->children.push_back(argument);
@@ -64,12 +63,11 @@ void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
 	std::vector<std::pair<SymbolID,Type*>> record(2,std::make_pair(SymbolID(),compiler::type));
 	auto type_type = Type::tuple(record);
 	HANDLE("equals",type_type,{
-		auto twoTypes = argument->is<TupleExpression>();
-		auto t1 = twoTypes->children[0]->is<ConstantExpression>()->refType;
-		auto t2 = twoTypes->children[1]->is<ConstantExpression>()->refType;
-		auto result = parser->expressionFactory->makeConstant();
+		auto twoTypes = argument->asTupleExpression();
+		auto t1 = twoTypes->children[0]->asConstantExpression()->refType;
+		auto t2 = twoTypes->children[1]->asConstantExpression()->refType;
+		auto result = ConstantExpression::create(arpha::boolean);
 		result->u64 =  t1 == t2 ? 1 : 0; //TODO tuple comparsion as well
-		result->type = arpha::boolean;
 		return result;
 	});
 
@@ -78,7 +76,7 @@ void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
 }
 
 Node* evaluateResolvedFunctionCall(Parser* parser,CallExpression* node){
-	auto function = ((ConstantExpression*)node->object)->refFunction;
+	auto function = node->object->asConstantExpression()->refFunction;
 
 	//Try to expand the function
 	auto handler = functionBindings.find(function);
@@ -101,82 +99,72 @@ Node* evaluateResolvedFunctionCall(Parser* parser,CallExpression* node){
 	return node;
 }
 
-inline Node* evaluate(Parser* parser,CallExpression* node){
-#define CASE(t) case t::__value__
-	node->arg = parser->evaluate(node->arg);
-	auto argumentType = returnType(node->arg);
-	
-	if(argumentType == compiler::Nothing) error(node->arg->location,"Can't perform function call on a statement!");
-	else if(argumentType != compiler::Unresolved){
-		if(node->object->is<OverloadSetExpression>()){
-			auto func = ((OverloadSetExpression*)node->object)->scope->resolveFunction(((OverloadSetExpression*)node->object)->symbol,node->arg);
-			if(func){
-				node->object = parser->expressionFactory->makeFunctionReference(func);
-				//TODO function->adjustArgument
-				debug("Overload successfully resolved as %s: %s",func->id,func->argument->id);
-				return evaluateResolvedFunctionCall(parser,node);
-			}else{
-				//TODO mark current block as unresolved!
-			}
-		}else
-			error(node->object->location,"Can't perform a function call onto %s!",node->object);
-	}
+struct AstExpander: NodeVisitor {
+	Parser* parser;
 
-	return node;
-#undef CASE
-}
-
-inline Node* evaluate(Parser* parser,TupleExpression* node){
-	if(node->children.size() == 0){ node->type= arpha::Nothing; return node; }
+	Node* visit(CallExpression* node){
+		//evaluate argument
+		node->arg = node->arg->accept(this);
+		auto argumentType = node->arg->returnType();
 	
-	std::vector<std::pair<SymbolID,Type*>> fields;
-	
-	node->type = nullptr;
-	Type* returns;
-	for(size_t i =0;i<node->children.size();i++){
-		node->children[i] = parser->evaluate( node->children[i] );
-		returns = returnType(node->children[i]);
-
-		if(returns == compiler::Nothing){
-			error(node->children[i]->location,"a tuple can't have a statement member");
-			node->type = compiler::Error;
+		if(argumentType == compiler::Nothing) error(node->arg->location,"Can't perform function call on a statement!");
+		else if(argumentType != compiler::Unresolved){
+			if(auto callingOverloadSet = node->object->asOverloadSetExpression()){
+				auto func = callingOverloadSet->scope->resolveFunction(callingOverloadSet->symbol,node->arg);
+				if(func){
+					node->object = ConstantExpression::createFunctionReference(func);
+					//TODO function->adjustArgument
+					debug("Overload successfully resolved as %s: %s",func->id,func->argument->id);
+					return evaluateResolvedFunctionCall(parser,node);
+				}else{
+					//TODO mark current block as unresolved!
+				}
+			}else
+				error(node->object->location,"Can't perform a function call onto %s!",node->object);
 		}
-		else if(returns == compiler::Unresolved) node->type = compiler::Unresolved;
-		else fields.push_back(std::make_pair(SymbolID(),returns));
+
+		return node;
 	}
+	Node* visit(TupleExpression* node){
+		if(node->children.size() == 0){ node->type= arpha::Nothing; return node; }
+	
+		std::vector<std::pair<SymbolID,Type*>> fields;
+	
+		node->type = nullptr;
+		Type* returns;
+		for(size_t i =0;i<node->children.size();i++){
+			node->children[i] = node->children[i]->accept(this);
+			returns = node->children[i]->returnType();
 
-	if(!node->type) node->type = Type::tuple(fields);
-	return node;
-}
+			if(returns == compiler::Nothing){
+				error(node->children[i]->location,"a tuple can't have a statement member");
+				node->type = compiler::Error;
+			}
+			else if(returns == compiler::Unresolved) node->type = compiler::Unresolved;
+			else fields.push_back(std::make_pair(SymbolID(),returns));
+		}
 
-inline Node* evaluate(Parser* parser,BlockExpression* node){
-	for(size_t i =0;i<node->children.size();i++)
-		node->children[i] = parser->evaluate( node->children[i] );
-	return node;
-}
-
-Node* evaluate(Parser* parser,IfExpression* node){
-	node->condition = parser->evaluate(node->condition);
-	node->consequence = parser->evaluate(node->consequence);
-	node->alternative = parser->evaluate(node->alternative);
-	if(node->condition->is<ConstantExpression>() && ((ConstantExpression*)node->condition)->type == arpha::boolean){ //TODO interpret properly
-		return ((ConstantExpression*)node->condition)->u64 ? node->consequence : node->alternative;
+		if(!node->type) node->type = Type::tuple(fields);
+		return node;
 	}
-	return node;
-}
-
-#define CASE(t) case t::__value__: node = ::evaluate(this,(t*)node); break
-
+	Node* visit(BlockExpression* node){
+		for(size_t i =0;i<node->children.size();i++)
+			node->children[i] = node->children[i]->accept(this);
+		return node;
+	}
+	Node* visit(IfExpression* node){
+		node->condition = node->condition->accept(this);
+		node->consequence = node->consequence->accept(this);
+		node->alternative = node->alternative->accept(this);
+		auto constantCondition = node->condition->asConstantExpression();
+		if(constantCondition && constantCondition->type == arpha::boolean){ //TODO interpret properly
+			return constantCondition->u64 ? node->consequence : node->alternative;
+		}
+		return node;
+	}
+};
 Node* Parser::evaluate(Node* node){
-
-	switch(node->__type){
-		CASE(CallExpression);
-		CASE(TupleExpression);
-		CASE(BlockExpression);
-		CASE(IfExpression);
-	}
-
-	return node;
+	AstExpander expander;
+	expander.parser = this;
+	return node->accept(&expander);
 }
-
-#undef CASE

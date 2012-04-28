@@ -61,6 +61,7 @@ namespace memory {
         //NOCOPY(ManagedDefinition)
 	};
 
+
 	void init();
 	void shutdown();
 

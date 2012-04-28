@@ -2,7 +2,7 @@
 #include "scope.h"
 #include "declarations.h"
 #include "parser.h"
-#include "ast.h"
+#include "syntax/ast.h"
 #include "compiler.h"
 #include "arpha.h"
 

@@ -4,7 +4,7 @@
 #include "declarations.h"
 #include "parser.h"
 #include "interpreter.h"
-#include "ast.h"
+#include "syntax/ast.h"
 #include "compiler.h"
 #include "arpha.h"
 
@@ -86,7 +86,7 @@ namespace arpha {
 		Node* parse(Parser* parser){
 			if( parser->match(closingParenthesis) ){
 				error(parser->previousLocation(),"() is an illegal expression!");
-				return parser->expressionFactory->makeError();
+				return ConstantExpression::create(compiler::Error);
 			}
 			auto e = parser->_parse();
 			parser->expect(closingParenthesis);
@@ -99,12 +99,12 @@ namespace arpha {
 		CallParser(): InfixDefinition("(",arpha::Precedence::Call,Location()) {}
 		Node* parse(Parser* parser,Node* node){
 			Node* arg;
-			if( parser->match(closingParenthesis) ) arg = parser->expressionFactory->makeNothing();
+			if( parser->match(closingParenthesis) ) arg = ConstantExpression::create(arpha::Nothing);
 			else{
 				arg = parser->_parse();
 				parser->expect(closingParenthesis);
 			}
-			return parser->expressionFactory->makeCall(node,arg);
+			return CallExpression::create(node,arg);
 		}
 	};
 
@@ -120,7 +120,7 @@ namespace arpha {
 	struct TupleParser: InfixDefinition {
 		TupleParser(): InfixDefinition(",",arpha::Precedence::Tuple,Location()) {}
 		Node* parse(Parser* parser,Node* node){
-			return parser->expressionFactory->makeTuple(node,parser->_parse(arpha::Precedence::Tuple)); 
+			return TupleExpression::create(node,parser->_parse(arpha::Precedence::Tuple)); 
 		}
 	};
 
@@ -131,21 +131,21 @@ namespace arpha {
 			parser->lookedUpToken.type = Token::Symbol;
 			parser->lookedUpToken.symbol = parser->expectName();
 			//scope.something
-			if(auto val = node->is<ConstantExpression>()){
+			if(auto val = node->asConstantExpression()){
 				if(val->type == compiler::scopeRef){
 					auto def = val->refScope->lookupImportedPrefix(parser->lookedUpToken.symbol);
 					if(!def){
 						error(node->location,"Unresolved symbol - '%s' isn't defined in module!",parser->lookedUpToken.symbol);
-						return parser->expressionFactory->makeError();
+						return ConstantExpression::create(compiler::Error);
 					}
 					debug("accessing '%s'",def->id);
 					auto expression = def->parse(parser);
 					//apply the correct overload lookup scope
-					if(expression->is<OverloadSetExpression>()) ((OverloadSetExpression*)expression)->scope = val->refScope;
+					if(auto overloadSet = expression->asOverloadSetExpression()) overloadSet->scope = val->refScope;
 					return expression;
 				}
 			}
-			return parser->expressionFactory->makeAccess(node,parser->lookedUpToken.symbol);
+			return AccessExpression::create(node,parser->lookedUpToken.symbol);
 		}
 	};
 
@@ -178,7 +178,7 @@ namespace arpha {
 					//parse additional information, like argument's type
 					auto node = parser->_parse(arpha::Precedence::Tuple);
 					const ConstantExpression* val;
-					if( (val = node->is<ConstantExpression>()) && val->type == compiler::type) arguments.back().variable.type = val->refType;
+					if( (val = node->asConstantExpression()) && val->type == compiler::type) arguments.back().variable.type = val->refType;
 					else error(node->location,"a valid type is expected instead of %s",node);
 
 					if(parser->match(")")) break;
@@ -206,7 +206,7 @@ namespace arpha {
 		//parse body
 	
 		//
-		return parser->expressionFactory->makeCompilerNothing();
+		return ConstantExpression::create(compiler::Nothing);
 	}
 
 	/// := 'def' <name> '=' expression
@@ -254,16 +254,16 @@ namespace arpha {
 				auto name = parser->expectName();
 				auto var = new Variable(name,parser->previousLocation());
 				parser->_currentScope->define(var);
-				vars.push_back(parser->expressionFactory->makeVariable(var));
+				vars.push_back(VariableExpression::create(var));
 			}while(parser->match(","));
 
 			if(auto type = parser->parseOptionalType()){
 				debug("variables are of type %s",type->id);
-				for(auto i = vars.begin();i!=vars.end();++i) ((VariableExpression*)(*i))->variable->type = type;
+				for(auto i = vars.begin();i!=vars.end();++i) (*i)->asVariableExpression()->variable->type = type;
 			}
 
 			if(vars.size() == 1) return vars[0];
-			auto tuple = parser->expressionFactory->makeTuple();
+			auto tuple = TupleExpression::create();
 			tuple->children = vars;
 			return tuple;
 		}
@@ -289,7 +289,7 @@ namespace arpha {
 				op->function = parser->expectName();
 				parser->currentScope()->define(op);
 			}
-			return parser->expressionFactory->makeCompilerNothing();
+			return ConstantExpression::create(compiler::Nothing);
 		}
 	};
 
@@ -297,7 +297,7 @@ namespace arpha {
 	struct ReturnParser: PrefixDefinition {
 		ReturnParser(): PrefixDefinition("return",Location()) {}
 		Node* parse(Parser* parser){
-			return parser->expressionFactory->makeReturn(parser->_parse());
+			return ReturnExpression::create(parser->_parse());
 		}
 	};
 
@@ -309,7 +309,7 @@ namespace arpha {
 			parser->expect("then");
 			auto expr = parser->_parse();
 			Node* elseExpr = parser->match("else") ? parser->_parse() : nullptr;
-			return parser->expressionFactory->makeIf(condition,expr,elseExpr);
+			return IfExpression::create(condition,expr,elseExpr);
 		}
 	};
 
@@ -340,11 +340,11 @@ namespace arpha {
 					error(location,"module '%s' wasn't found!",modulePath);
 				}
 			}while(parser->match(","));
-			return parser->expressionFactory->makeCompilerNothing();
+			return ConstantExpression::create(compiler::Nothing);
 		}
 	};
 
-	void defineCoreSyntax(ExpressionFactory* expressionFactory,Scope* scope){
+	void defineCoreSyntax(Scope* scope){
 		Location location(0,0);
 		::arpha::scope = scope;
 
@@ -383,16 +383,14 @@ namespace arpha {
 		constantString = builtInType("String",0);
 
 		//true & false
-		auto value = expressionFactory->makeConstant();
-		value->type = boolean;
+		auto value = ConstantExpression::create(boolean);
 		value->u64 = 1;
 		//TOREVIEW the need to set isLiteral
 		auto constant = new Substitute("true",location);
 		constant->expression = value;
 		scope->define(constant);
 
-		value = expressionFactory->makeConstant();
-		value->type = boolean;
+		value = ConstantExpression::create(boolean);
 		value->u64 = 0;
 		//TOREVIEW the need to set isLiteral
 		constant = new Substitute("false",location);
@@ -409,7 +407,6 @@ namespace compiler {
 		std::string directory;
 		Scope* scope;
 		Node*  body;
-		ExpressionFactory expressionFactory; //TODO pointer it
 		bool compile;
 	};
 
@@ -440,7 +437,7 @@ namespace compiler {
 			scope->import(def);
 		}else if((packageDir + "/arpha/arpha.arp") == moduleName){
 			scope = new Scope(nullptr);
-			arpha::defineCoreSyntax(&currentModule->second.expressionFactory,scope);
+			arpha::defineCoreSyntax(scope);
 		}
 		else {
 			scope = new Scope(nullptr);
@@ -452,7 +449,6 @@ namespace compiler {
 
 
 		Parser parser(source,scope);
-		parser.expressionFactory = &currentModule->second.expressionFactory;
 		currentModule->second.body = parser._parseModule();
 
 		debug("------------------- AST: ------------------------------");
@@ -559,10 +555,10 @@ int main(int argc, char * const argv[]){
 	if(argc < 2){
 
 		System::print("\nEnter arpha code followed by 2 newlines here:\n");
-		std::string source;
+		std::string source = "import arpha.testing.testing\n";
 		char buf[1024];
 		while(true){
-		
+			std::cout<<"> ";
 			std::cin.getline(buf,1024);
 			if(buf[0]=='\0') break;
 			source+=buf;

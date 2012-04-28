@@ -36,7 +36,6 @@ struct Parser : Lexer {
 	//Current parsing state
 	Token  lookedUpToken;
 	Scope* _currentScope;
-	ExpressionFactory* expressionFactory;
 	size_t unresolvedExpressions,solvedExpressions;
 
 	inline Scope* currentScope() const { return _currentScope; }

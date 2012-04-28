@@ -13,7 +13,7 @@ namespace arpha {
 	}
 
 	void test();
-	void defineCoreSyntax(ExpressionFactory* expressionFactory,Scope* scope);
+	void defineCoreSyntax(Scope* scope);
 
 	//core functions
 

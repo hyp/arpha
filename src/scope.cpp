@@ -2,7 +2,7 @@
 #include "scope.h"
 #include "declarations.h"
 #include "parser.h"
-#include "ast.h"
+#include "syntax/ast.h"
 #include "compiler.h"
 #include "arpha.h"
 
@@ -100,12 +100,12 @@ void Scope::define(InfixDefinition* definition){
 }
 
 void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& results,const Node* argument,bool enforcePublic = false){
-	Type* argumentType = returnType(argument);
+	Type* argumentType = argument->returnType();
 	Function *implicitMatch = nullptr,*inferMatch = nullptr,*exprMatch = nullptr;//lastResort
 
 	for(auto i=overloads.begin();i!=overloads.end();++i){
 		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
-		auto argumentType = returnType(argument);
+		auto argumentType = argument->returnType();
 		if((*i)->argument == argumentType){
 			debug("-d");
 			results.push_back(*i);

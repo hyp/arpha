@@ -4,7 +4,6 @@
 struct Interpreter {
 
 
-	ExpressionFactory* expressionFactory;
 
 	Node* interpret(Node* node);
 

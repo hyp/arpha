@@ -2,6 +2,8 @@
 #define SCOPE_H
 
 #include "base/memory.h"
+#include "base/symbol.h"
+#include "base/location.h"
 
 struct Parser;
 struct Node;
