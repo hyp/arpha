@@ -5,7 +5,7 @@
 #define ARPHA_C_BACKEND_H
 
 #include "../base/base.h"
-#include "../syntax/ast.h"
+#include "../ast/node.h"
 
 
 void translate(std::ostream& output,Node* root);

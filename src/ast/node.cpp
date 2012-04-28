@@ -1,5 +1,5 @@
-#include "ast.h"
-#include "astvisitor.h"
+#include "node.h"
+#include "visitor.h"
 #include "../compiler.h"
 #include "../arpha.h"
 

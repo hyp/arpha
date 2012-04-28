@@ -1,5 +1,5 @@
 #include "c.h"
-#include "../syntax/astvisitor.h"
+#include "../ast/visitor.h"
 #include "../compiler.h"
 #include "../arpha.h"
 

@@ -4,7 +4,7 @@
 #ifndef ARPHA_AST_VISITOR_H
 #define ARPHA_AST_VISITOR_H
 
-#include "ast.h"
+#include "node.h"
 
 struct NodeVisitor {
 #define VISIT(T) virtual Node* visit(T* node){ return node; }

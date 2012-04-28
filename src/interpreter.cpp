@@ -4,7 +4,7 @@
 #include "parser.h"
 
 #include "interpreter.h"
-#include "syntax/ast.h"
+#include "ast/node.h"
 #include "compiler.h"
 #include "arpha.h"
 

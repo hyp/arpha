@@ -1,8 +1,8 @@
 /**
 * This module contains the definitions for all AST nodes.
 */
-#ifndef ARPHA_AST_H
-#define ARPHA_AST_H
+#ifndef ARPHA_AST_NODE_H
+#define ARPHA_AST_NODE_H
 
 #include "../base/base.h"
 #include "../base/location.h"
