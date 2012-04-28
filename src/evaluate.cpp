@@ -125,6 +125,17 @@ struct AstExpander: NodeVisitor {
 
 		return node;
 	}
+	Node* visit(AssignmentExpression* node){
+		node->value = node->value->accept(this);
+
+		if(node->value->returnType() != compiler::Unresolved){
+			if(auto var = node->object->asVariableExpression()){
+				if(var->returnType() == compiler::inferred) var->variable->inferType(node->value->returnType()); //Infer types for variables
+			}
+			else error(node->location,"Can't assign to %s!",node->object);
+		}
+		return node;
+	}
 	Node* visit(TupleExpression* node){
 		if(node->children.size() == 0){ node->type= arpha::Nothing; return node; }
 	

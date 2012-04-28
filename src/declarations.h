@@ -16,6 +16,7 @@ struct Type;
 
 struct Variable : PrefixDefinition  {
 	Variable(SymbolID name,Location& location);
+	void inferType(Type* t);
 
 	Node* parse(Parser* parser);
 

@@ -10,6 +10,10 @@
 Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location) {
 	type = compiler::inferred;
 }
+void Variable::inferType(Type* t){
+	debug("Inferred type %s for variable %s",t->id,id);
+	type = t;
+}
 
 //type
 

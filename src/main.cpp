@@ -153,7 +153,7 @@ namespace arpha {
 	struct AssignmentParser: InfixDefinition {
 		AssignmentParser(): InfixDefinition("=",arpha::Precedence::Assignment,Location()) {}
 		Node* parse(Parser* parser,Node* node){
-			return nullptr;
+			return AssignmentExpression::create(node,parser->_parse(arpha::Precedence::Assignment)); 
 		}
 	};
 
@@ -258,8 +258,7 @@ namespace arpha {
 			}while(parser->match(","));
 
 			if(auto type = parser->parseOptionalType()){
-				debug("variables are of type %s",type->id);
-				for(auto i = vars.begin();i!=vars.end();++i) (*i)->asVariableExpression()->variable->type = type;
+				for(auto i = vars.begin();i!=vars.end();++i) (*i)->asVariableExpression()->variable->inferType(type);
 			}
 
 			if(vars.size() == 1) return vars[0];

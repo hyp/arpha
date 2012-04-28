@@ -24,31 +24,31 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(VariableExpression* node){
-		stream<<"variable "<<((VariableExpression*)node)->variable->id;
+		stream<<"variable "<<node->variable->id;
 		return node;
 	}
 	Node* visit(OverloadSetExpression* node){
-		stream<<"overloadset "<<((OverloadSetExpression*)node)->symbol;
+		stream<<"overloadset "<<node->symbol;
 		return node;
 	}
 	Node* visit(CallExpression* node){
-		stream<<"call "<<((CallExpression*)node)->object<<" with "<<((CallExpression*)node)->arg;
+		stream<<"call "<<node->object<<" with "<<node->arg;
 		return node;
 	}
 	Node* visit(AccessExpression* node){
-		stream<<((AccessExpression*)node)->object<<" . "<<((AccessExpression*)node)->symbol;
+		stream<<node->object<<" . "<<node->symbol;
 		return node;
 	}
 	Node* visit(AssignmentExpression* node){
-		//stream<< ((AssignmentExpression*)node)->object.v <<" = "<<((AssignmentExpression*)node)->value;
+		stream<<node->object<<" = "<<node->value;
 		return node;
 	}
 	Node* visit(ReturnExpression* node){
-		stream<<"return"<<((ReturnExpression*)node)->value;
+		stream<<"return "<<node->value;
 		return node;
 	}
 	Node* visit(IfExpression* node){
-		stream<<((IfExpression*)node)->condition<<'?'<<((IfExpression*)node)->consequence<<':'<<((IfExpression*)node)->alternative;
+		stream<<node->condition<<'?'<<node->consequence<<':'<<node->alternative;
 		return node;
 	}
 	Node* visit(TupleExpression* node){
@@ -107,6 +107,9 @@ Type* CallExpression::returnType() const {
 		if(cnst->type == compiler::function ) return cnst->refFunction->returnType;
 	}
 	return compiler::Unresolved;
+}
+Type* AssignmentExpression::returnType() const {
+	return value->returnType();
 }
 Type* IfExpression::returnType() const {
 	return consequence->returnType();
@@ -185,6 +188,12 @@ AccessExpression* AccessExpression::create(Node* object,SymbolID symbol){
 	e->object = object;
 	e->symbol = symbol;
 	e->field  = nullptr;
+	return e;
+}
+AssignmentExpression* AssignmentExpression::create(Node* object,Node* value){
+	auto e = new AssignmentExpression;
+	e->object = object;
+	e->value = value;
 	return e;
 }
 ReturnExpression* ReturnExpression::create(Node* expression){

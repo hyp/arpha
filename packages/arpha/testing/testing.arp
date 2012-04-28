@@ -7,16 +7,47 @@
 
 # Testing various functions
 
+
 # Type equality and operator ==
 assert( equals(int32,int32) )
+assert(equals(int8,int8))
+assert((equals(bool,bool)))
 assert( int32 == int32 )
+assert( (int32) == int32 )
+assert( (int64) == ((int64)) )
 assert( equals(compiler.Type,compiler.Type) )
 assert( compiler.Type == compiler.Type )
 assert( typeof(int32) == compiler.Type )
+#
+assert( true == true )
+assert( false == false)
+#
 
 # Number literals default return type
 assert( typeof(2) == int32 )
 
+# Conditionals
+assert( if true then true else false )
+assert( if false then false else true )
+assert( if int32 == int32 then true else false )
+
+# Variable definition with type inferring
+var x uint8
+assert( typeof(x) == uint8 )
+#
+TODO: make this pass
+	var y = 2
+	assert( typeof(y) == int32 )
+#
+var z
+z = false
+assert( typeof(z) == bool )
+#
+TODO: make this pass(need multiple resolving passes?)
+	var t
+	assert( typeof(t) == bool )
+	t = true
+#
 
 
 #
