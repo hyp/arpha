@@ -15,8 +15,9 @@ struct NodeVisitor;
 
 //Injects visitor callback and dynamic cast function into a node structure
 //Note: only does the definitions, the appropriate implementations are done by traversing NODE_LIST
-#define DECLARE_NODE(T) private:\
-	virtual Node* accept(NodeVisitor* visitor);                      \
+#define DECLARE_NODE(T) \
+	virtual Node* accept(NodeVisitor* visitor);  \
+	private:             \
 	virtual T* as##T();  \
 
 //This is a list of node types. TODO refactor into NODETYPE_LIST
@@ -125,11 +126,11 @@ struct CallExpression : Node {
 };
 
 struct AccessExpression : Node {
-	static AccessExpression* create(Node* object,SymbolID symbol);
+	static AccessExpression* create(Node* object,SymbolID symbol,Scope* scope);
 	
 	Node* object;
 	SymbolID symbol;
-	Variable* field;
+	Scope* scope;
 	DECLARE_NODE(AccessExpression);
 };
 

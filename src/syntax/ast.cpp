@@ -183,11 +183,11 @@ CallExpression* CallExpression::create(Node* object,Node* argument){
 	e->arg = argument;
 	return e;
 }
-AccessExpression* AccessExpression::create(Node* object,SymbolID symbol){
+AccessExpression* AccessExpression::create(Node* object,SymbolID symbol,Scope* scope){
 	auto e = new AccessExpression;
 	e->object = object;
 	e->symbol = symbol;
-	e->field  = nullptr;
+	e->scope = scope;
 	return e;
 }
 AssignmentExpression* AssignmentExpression::create(Node* object,Node* value){

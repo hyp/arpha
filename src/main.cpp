@@ -80,6 +80,13 @@ namespace arpha {
 
 	SymbolID closingParenthesis;
 
+	/// ::= '{' expression ';' expressions... '}'
+	struct BlockParser: PrefixDefinition {
+		BlockParser(): PrefixDefinition("{",Location()) {}
+		Node* parse(Parser* parser){
+		}
+	};
+
 	/// ::= '(' expression ')'
 	struct ParenthesisParser: PrefixDefinition {
 		ParenthesisParser(): PrefixDefinition("(",Location()) {}
@@ -145,7 +152,7 @@ namespace arpha {
 					return expression;
 				}
 			}
-			return AccessExpression::create(node,parser->lookedUpToken.symbol);
+			return AccessExpression::create(node,parser->lookedUpToken.symbol,parser->currentScope());
 		}
 	};
 
@@ -553,7 +560,7 @@ int main(int argc, char * const argv[]){
 	
 	if(argc < 2){
 
-		System::print("\nEnter arpha code followed by 2 newlines here:\n");
+		System::print("\nWelcome to arpha code console. Type in the code and press return twice to compile it!\n");
 		std::string source = "import arpha.testing.testing\n";
 		char buf[1024];
 		while(true){
@@ -564,6 +571,8 @@ int main(int argc, char * const argv[]){
 			source+="\n";
 		}
 		auto mod = compiler::newModule("source",source.c_str());
+	}else{
+		System::print("\nSorry, can't accept files yet!\n");
 	}
 
 	memory::shutdown();

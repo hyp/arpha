@@ -136,6 +136,16 @@ struct AstExpander: NodeVisitor {
 		}
 		return node;
 	}
+	Node* visit(AccessExpression* node){
+		node->object = node->object->accept(this);
+
+		auto objectType = node->object->returnType();
+		//TODO type field access & expression '.' call notation
+		//TODO a.foo(2) when def foo(a,b) -> foo(a,2)
+
+		//a.foo when def foo(a) -> foo(a)
+		return CallExpression::create(OverloadSetExpression::create(node->symbol,node->scope),node->object)->accept(this);
+	}
 	Node* visit(TupleExpression* node){
 		if(node->children.size() == 0){ node->type= arpha::Nothing; return node; }
 	

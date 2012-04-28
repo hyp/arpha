@@ -19,9 +19,14 @@ assert( equals(compiler.Type,compiler.Type) )
 assert( compiler.Type == compiler.Type )
 assert( typeof(int32) == compiler.Type )
 #
-assert( true == true )
-assert( false == false)
+TODO
+	assert( true == true )
+	assert( false == false)
 #
+
+#'.' syntax
+assert( uint16.typeof == compiler.Type )
+
 
 # Number literals default return type
 assert( typeof(2) == int32 )
