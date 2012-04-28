@@ -1,16 +1,14 @@
+/**
+* This module contains the heart of arpha - THE Parser.
+*/
 #ifndef ARPHA_PARSER_H
 #define ARPHA_PARSER_H
 
-#include "syntax/token.h"
-#include "syntax/lexer.h"
+#include "token.h"
+#include "lexer.h"
 
-//parsing
-struct Node; //ast node(expression)
-struct Expression;
+struct Node;
 struct Scope;
-struct Definition;
-struct OverloadSet;
-struct ExpressionFactory;
 
 struct Parser : Lexer {
 
@@ -25,8 +23,8 @@ struct Parser : Lexer {
 
 	bool isEndExpressionNext();
 
-	Node* _parse(int stickiness =  0);
-	Node* _parseModule();
+	Node* parse(int stickiness =  0);
+	Node* parseModule();
 
 	Type* parseOptionalType();
 

@@ -1,11 +1,11 @@
-#include "common.h"
-#include "scope.h"
-#include "declarations.h"
+#include "../common.h"
+#include "../scope.h"
+#include "../declarations.h"
 #include "parser.h"
 
-#include "ast/node.h"
-#include "compiler.h"
-#include "arpha.h"
+#include "../ast/node.h"
+#include "../compiler.h"
+#include "../arpha.h"
 
 Parser::Parser(const char* src,Scope* scope) : Lexer(src) { _currentScope=scope; }
 
@@ -45,7 +45,7 @@ SymbolID Parser::expectName(){
 }
 
 int Parser::expectInteger(){
-	auto node = _parse(arpha::Precedence::Tuple);
+	auto node = parse(arpha::Precedence::Tuple);
 	if(auto c= node->asConstantExpression()){
 		if(arpha::isInteger(c->type)){
 			return int(c->u64);
@@ -55,7 +55,7 @@ int Parser::expectInteger(){
 	return -1;
 }
 
-Node* Parser::_parseModule(){
+Node* Parser::parseModule(){
 	//top level
 	auto block = BlockExpression::create();
 	Token token;
@@ -68,7 +68,7 @@ Node* Parser::_parseModule(){
 			continue;
 		}
 
-		block->children.push_back(_parse());
+		block->children.push_back(parse());
 
 		token = consume();
 		if(token.isEOF()) break;
@@ -80,7 +80,7 @@ Node* Parser::_parseModule(){
 	return block;
 }
 
-Node* Parser::_parse(int stickiness){
+Node* Parser::parse(int stickiness){
 	
 	Node* expression;
 
@@ -138,7 +138,7 @@ Type* Parser::parseOptionalType(){
 	auto next = peek();
 	if(next.isEOF() || next.isEndExpression()) return nullptr;
 	const char* prevptr = ptr;
-	auto node = _parse(arpha::Precedence::Assignment);
+	auto node = parse(arpha::Precedence::Assignment);
 	const ConstantExpression* val;
 	if( (val = node->asConstantExpression()) && val->type == compiler::type) return val->refType;
 	ptr = prevptr;
@@ -172,12 +172,12 @@ Node* Overloadset::parse(Parser* parser){
 }
 
 Node* PrefixOperator::parse(Parser* parser){
-	return CallExpression::create(OverloadSetExpression::create(function,parser->currentScope()),parser->_parse());
+	return CallExpression::create(OverloadSetExpression::create(function,parser->currentScope()),parser->parse());
 }
 
 Node* InfixOperator::parse(Parser* parser,Node* node){
 	auto tuple = TupleExpression::create();
 	tuple->children.push_back(node);
-	tuple->children.push_back(parser->_parse(stickiness));
+	tuple->children.push_back(parser->parse(stickiness));
 	return CallExpression::create(OverloadSetExpression::create(function,parser->currentScope()),tuple);
 }

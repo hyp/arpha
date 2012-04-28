@@ -2,7 +2,7 @@
 #include "base/system.h"
 #include "scope.h"
 #include "declarations.h"
-#include "parser.h"
+#include "syntax/parser.h"
 #include "interpreter.h"
 #include "ast/node.h"
 #include "compiler.h"
@@ -95,7 +95,7 @@ namespace arpha {
 				error(parser->previousLocation(),"() is an illegal expression!");
 				return ConstantExpression::create(compiler::Error);
 			}
-			auto e = parser->_parse();
+			auto e = parser->parse();
 			parser->expect(closingParenthesis);
 			return e;
 		}
@@ -108,7 +108,7 @@ namespace arpha {
 			Node* arg;
 			if( parser->match(closingParenthesis) ) arg = ConstantExpression::create(arpha::Nothing);
 			else{
-				arg = parser->_parse();
+				arg = parser->parse();
 				parser->expect(closingParenthesis);
 			}
 			return CallExpression::create(node,arg);
@@ -127,7 +127,7 @@ namespace arpha {
 	struct TupleParser: InfixDefinition {
 		TupleParser(): InfixDefinition(",",arpha::Precedence::Tuple,Location()) {}
 		Node* parse(Parser* parser,Node* node){
-			return TupleExpression::create(node,parser->_parse(arpha::Precedence::Tuple)); 
+			return TupleExpression::create(node,parser->parse(arpha::Precedence::Tuple)); 
 		}
 	};
 
@@ -160,7 +160,7 @@ namespace arpha {
 	struct AssignmentParser: InfixDefinition {
 		AssignmentParser(): InfixDefinition("=",arpha::Precedence::Assignment,Location()) {}
 		Node* parse(Parser* parser,Node* node){
-			return AssignmentExpression::create(node,parser->_parse(arpha::Precedence::Assignment)); 
+			return AssignmentExpression::create(node,parser->parse(arpha::Precedence::Assignment)); 
 		}
 	};
 
@@ -183,7 +183,7 @@ namespace arpha {
 				if(parser->match(")")) break;
 				if(!parser->match(",")){
 					//parse additional information, like argument's type
-					auto node = parser->_parse(arpha::Precedence::Tuple);
+					auto node = parser->parse(arpha::Precedence::Tuple);
 					const ConstantExpression* val;
 					if( (val = node->asConstantExpression()) && val->type == compiler::type) arguments.back().variable.type = val->refType;
 					else error(node->location,"a valid type is expected instead of %s",node);
@@ -228,7 +228,7 @@ namespace arpha {
 			else{
 				parser->expect("=");
 				auto sub = new Substitute(name,location);
-				sub->expression = parser->_parse(arpha::Precedence::Tuple);
+				sub->expression = parser->parse(arpha::Precedence::Tuple);
 				parser->currentScope()->define(sub);
 				return sub->expression;
 			}
@@ -303,7 +303,7 @@ namespace arpha {
 	struct ReturnParser: PrefixDefinition {
 		ReturnParser(): PrefixDefinition("return",Location()) {}
 		Node* parse(Parser* parser){
-			return ReturnExpression::create(parser->_parse());
+			return ReturnExpression::create(parser->parse());
 		}
 	};
 
@@ -311,10 +311,10 @@ namespace arpha {
 	struct IfParser: PrefixDefinition {
 		IfParser(): PrefixDefinition("if",Location()) {}
 		Node* parse(Parser* parser){
-			auto condition = parser->_parse();
+			auto condition = parser->parse();
 			parser->expect("then");
-			auto expr = parser->_parse();
-			Node* elseExpr = parser->match("else") ? parser->_parse() : nullptr;
+			auto expr = parser->parse();
+			Node* elseExpr = parser->match("else") ? parser->parse() : nullptr;
 			return IfExpression::create(condition,expr,elseExpr);
 		}
 	};
@@ -455,7 +455,7 @@ namespace compiler {
 
 
 		Parser parser(source,scope);
-		currentModule->second.body = parser._parseModule();
+		currentModule->second.body = parser.parseModule();
 
 		debug("------------------- AST: ------------------------------");
 		debug("%s\n",currentModule->second.body);

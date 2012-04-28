@@ -1,7 +1,7 @@
 #include "common.h"
 #include "scope.h"
 #include "declarations.h"
-#include "parser.h"
+#include "syntax/parser.h"
 
 #include "interpreter.h"
 #include "ast/node.h"

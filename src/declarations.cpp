@@ -1,7 +1,7 @@
 #include "common.h"
 #include "scope.h"
 #include "declarations.h"
-#include "parser.h"
+#include "syntax/parser.h"
 #include "ast/node.h"
 #include "compiler.h"
 #include "arpha.h"
