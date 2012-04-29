@@ -50,11 +50,7 @@ TODO: make this pass(need multiple resolving passes?)
 	t = true
 #
 
-# Type definition
-type Type0 { var x,y int32 }
-#TODO assert( sizeof(Type0) == 8 )
-var t0instance Type0
-assert(typeof(t0instance) == Type0)
+import export type
 
 # '.' syntax
 assert( uint16.typeof == compiler.Type )

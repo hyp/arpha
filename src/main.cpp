@@ -235,29 +235,50 @@ namespace arpha {
 		}
 	};
 
-	/// ::= 'type' <name> '{' <fields> type '}'
+	/// ::= 'type' <name> {body|'=' type}
 	struct TypeParser: PrefixDefinition {
 		TypeParser(): PrefixDefinition("type",Location()) {  }
+		// fields ::= {'var'|'val'} <name>,... {type ['=' initialValue]|['=' initialValue]}
+		static void fields(Type* type,Parser* parser){
+			std::vector<std::pair<SymbolID,Location>> vars;
+			do vars.push_back(std::make_pair(parser->expectName(),parser->previousLocation()));
+			while(parser->match(","));
+			auto t = parser->expectType();
+			for(auto i = vars.begin(); i != vars.end(); ++i){
+				Variable v((*i).first,(*i).second);
+				v.inferType(t);
+				type->add(v);
+			}
+		}
+		// body ::= '{' fields ';' fields ... '}'
+		static void body(Type* type,Parser* parser){
+			Token token;
+			bool parseError = false;
+			while(1){
+				token = parser->consume();
+				if(token.isEndExpression()) continue; //account for useless ';' - i.e. { ';' ';' fields ';' ';' fields ';' }
+				else if(token.isSymbol()){
+					if(token.symbol == "}") break; //account for standart '}' - i.e. { fields ; fields ; }
+					else if(token.symbol == "var") fields(type,parser);
+					else parseError = true;
+				}else parseError = true;
+				if(parseError){
+					error(parser->previousLocation(),"Can't parse %s inside a type %s declaration",token,type->id);
+					parseError = false;
+					//TODO skip till ';'|'}'
+				}
+				token = parser->consume();
+				if(token.isSymbol() && token.symbol == "}") break; //account for no closing ';' on last field - i.e. { fields ; fields }
+				if(!token.isEndExpression()) error(parser->previousLocation(),"';' expected!");
+			}
+		}
 		Node* parse(Parser* parser){
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
 			auto type = new Type(name,location);
 			parser->currentScope()->define(type);
 			//fields
-			if(parser->match("{")){
-				
-				parser->expect("var");
-				std::vector<std::pair<SymbolID,Location>> vars;
-				do vars.push_back(std::make_pair(parser->expectName(),parser->previousLocation()));
-				while(parser->match(","));
-				auto t = parser->expectType();
-				for(auto i = vars.begin(); i != vars.end(); ++i){
-					Variable v((*i).first,(*i).second);
-					v.inferType(t);
-					type->add(v);
-				}
-				parser->expect("}");
-			}
+			if(parser->match("{")) body(type,parser);
 
 			return type->parse(parser);
 		}

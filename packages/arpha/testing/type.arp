@@ -1,0 +1,29 @@
+#
+	This module provides various tests for testing the type definition.
+	Author: Hyp
+	Version: 1
+	TODO: field access tests
+#
+
+type Type0 { var x,y int32 }
+#TODO assert( sizeof(Type0) == 8 )
+var t0instance Type0
+assert(typeof(t0instance) == Type0)
+type Type1 { 
+	var x,y int32 
+}
+var t1instance Type1
+assert(typeof(t1instance) == Type1)
+type Type2 { 
+	var x,y int32 }
+var t2instance Type2
+assert(typeof(t2instance) == Type2)
+type Type3 {
+
+	var x int32 
+	
+	var y int32 
+	
+}
+var t3instance Type3
+assert(typeof(t3instance) == Type3)
