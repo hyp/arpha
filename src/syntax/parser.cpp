@@ -29,12 +29,6 @@ bool Parser::match(int tokenType){
 	return true;
 }
 
-bool Parser::isEndExpressionNext(){
-	Token tok = peek();
-	if(!tok.isEndExpression()) return false;
-	return true;
-}
-
 SymbolID Parser::expectName(){
 	Token tok = consume();
 	if(tok.isSymbol()==false){
@@ -55,31 +49,9 @@ int Parser::expectInteger(){
 	return -1;
 }
 
-Node* Parser::parseModule(){
-	//top level
-	auto block = BlockExpression::create();
-	Token token;
-	
-	while(1){
-		token = peek();
-		if(token.isEOF()) break;
-		else if(token.isEndExpression()){
-			consume();
-			continue;
-		}
-
-		block->children.push_back(parse());
-
-		token = consume();
-		if(token.isEOF()) break;
-		else if(!token.isEndExpression()) error(previousLocation(),"';' expected!");
-	}
-
-	if(block->children.size() == 0) error(previousLocation(),"the source file is empty!");
-
-	return block;
-}
-
+/**
+* Pratt parser is fucking awsome.
+*/
 Node* Parser::parse(int stickiness){
 	
 	Node* expression;
@@ -116,7 +88,6 @@ Node* Parser::parse(int stickiness){
 	expression = evaluate(expression);
 
 	//infix parsing
-	//Token token;
 	while(1){
 		lookedUpToken = peek();
 		if(lookedUpToken.isSymbol()){
@@ -142,9 +113,9 @@ Type* Parser::expectType(){
 	error(loc,"Expected a valid type instead of %s!",node);
 	return compiler::Error;
 }
-Type* Parser::parseOptionalType(){
+Type* Parser::matchType(){
 	auto next = peek();
-	if(next.isEOF() || next.isEndExpression()) return nullptr;
+	if(next.isEOF() || next.isLine()) return nullptr;
 	const char* prevptr = ptr;
 	auto node = parse(arpha::Precedence::Assignment);
 	const ConstantExpression* val;

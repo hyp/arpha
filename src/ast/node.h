@@ -164,9 +164,10 @@ struct IfExpression : Node {
 };
 
 struct BlockExpression : Node {
-	static BlockExpression* create();
+	static BlockExpression* create(Scope* scope);
 
 	std::vector<Node*> children;
+	Scope* scope;
 	DECLARE_NODE(BlockExpression);
 };
 

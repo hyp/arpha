@@ -21,13 +21,10 @@ struct Parser : Lexer {
 	bool match(SymbolID token);
 	bool match(int tokenType);
 
-	bool isEndExpressionNext();
-
 	Node* parse(int stickiness =  0);
-	Node* parseModule();
 
 	Type* expectType();
-	Type* parseOptionalType();//TODO -> matchType
+	Type* matchType();
 
 	/// Resolve symbols, find the matching function call overloads, constant fold
 	Node* evaluate(Node* node);

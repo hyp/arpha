@@ -38,6 +38,7 @@ public:
 	Variable* lookupField(const SymbolID fieldName);
 	void add(const Variable& var); //adds a field to the type
 
+
 	//unique record construction
 	static Type* tuple(std::vector<std::pair<SymbolID,Type*>>& fields);
 

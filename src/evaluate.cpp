@@ -39,6 +39,10 @@ void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
 			}
 			System::print("\n");
 		}
+		else if(cnst->type == compiler::scopeRef){
+			System::print(format("------------------- DEF dump: ------------------------------\nScope \n",cnst->refType->id,cnst->refType->size));
+			System::print("\n");
+		}
 		return argument; 
 	});
 

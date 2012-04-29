@@ -37,4 +37,6 @@ std::string format(const char *s, T value,T2 a,T3 b,T4 c,T5 d,T6 e) FmtBody(a,b,
 
 #undef FmtBody
 
+
+
 #endif

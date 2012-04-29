@@ -61,7 +61,6 @@ unittest(scope){
 //TODO functions arguments vector!
 namespace arpha {
 	Scope *scope;
-	
 
 	//core types & functions
 	Type* Nothing;
@@ -70,7 +69,6 @@ namespace arpha {
 	Type *boolean;	
 	Type *constantString;
 
-
 	Type* builtInType(const char* name,int size){
 		auto t = new Type(SymbolID(name),Location());
 		t->size = size;
@@ -78,18 +76,95 @@ namespace arpha {
 		return t;
 	}
 
-	SymbolID closingParenthesis;
 
-	/// ::= '{' expression ';' expressions... '}'
+	// parses blocks and whatnot
+	// body ::= {';'|newline}* expression {';'|newline}+ expressions...
+	// ::= {body|'{' body '}'}
 	struct BlockParser: PrefixDefinition {
-		BlockParser(): PrefixDefinition("{",Location()) {}
+		SymbolID lineAlternative; //AKA the ';' symbol
+		SymbolID closingBrace;    //'}'
+
+		BlockParser(): PrefixDefinition("{",Location()) {
+			lineAlternative = ";";
+			closingBrace = "}";
+		}
+
+		struct BlockChildParser {
+			BlockExpression* _block;
+			BlockChildParser(BlockExpression* block) : _block(block) {}
+			bool operator ()(Parser* parser){
+				_block->children.push_back(parser->parse());
+				return true;
+			}
+		};
+
+		void skipExpression(Parser* parser,bool matchClosingBrace){	
+			for(Token token;;parser->consume()){
+				token = parser->peek();
+				//TODO correctly skip potential inner {} blocks
+				if(token.isLine() || (token.isSymbol() && token.symbol == lineAlternative) 
+					|| (matchClosingBrace && token.isSymbol() && token.symbol == closingBrace) || token.isEOF()) return;	
+			}
+		}
+		template<class F>
+		void body(Parser* parser,F functor,bool matchClosingBrace = true,bool acceptEOF = false){
+			Token token;
+			bool isSym;
+			while(1){
+				token = parser->peek();
+				isSym = token.isSymbol();
+				//account for useless ';'|newlines - i.e. { ';' ';' expr ';' ';' expr ';' }
+				if(token.isLine() || (isSym && token.symbol == lineAlternative)){
+					parser->consume();
+					continue;
+				}
+				//account for standart '}' - i.e. { expr ; expr ; }. Also accounts for the '{' '}' case.
+				else if(matchClosingBrace && isSym && token.symbol == closingBrace){
+					parser->consume();
+					break;
+				}
+				else if(acceptEOF && token.isEOF()) break; //expr ';' EOF case
+				//If the functor returned an error, skip till ';'|newline
+				if(!functor(parser)) skipExpression(parser,matchClosingBrace);
+				//Expect a ';'|newline|'}'
+				token = parser->consume();
+				isSym = token.isSymbol();		
+				if(matchClosingBrace && isSym && token.symbol == closingBrace) break; //account for no closing ';' on last field - i.e. { expr ; expr }
+				else if(!(token.isLine() || (isSym && token.symbol == lineAlternative))){
+					if(acceptEOF && token.isEOF()) break;
+					error(parser->previousLocation(),"Unexpected %s - A newline or a '%s' is expected!",token,lineAlternative);
+				}
+			}
+		}
+
+		//On '{'
 		Node* parse(Parser* parser){
+			auto oldScope = parser->currentScope();
+			BlockExpression* block = BlockExpression::create(new Scope(oldScope));
+			parser->_currentScope = block->scope;
+			body(parser,BlockChildParser(block));
+			parser->_currentScope = oldScope;
+			return block;
 		}
 	};
 
+	BlockParser* blockParser;
+
+	// parses an arpha module
+	// ::= {EOF|block.body EOF}
+	BlockExpression* parseModule(Parser* parser,Scope* scope){
+		parser->_currentScope = scope;
+		BlockExpression* block = BlockExpression::create(scope);
+		blockParser->body(parser,BlockParser::BlockChildParser(block),false,true); //Ignore '}' and end on EOF
+		return block;
+	}
+
 	/// ::= '(' expression ')'
 	struct ParenthesisParser: PrefixDefinition {
-		ParenthesisParser(): PrefixDefinition("(",Location()) {}
+		SymbolID closingParenthesis;
+		ParenthesisParser(): PrefixDefinition("(",Location()) {
+			closingParenthesis = ")";
+		}
 		Node* parse(Parser* parser){
 			if( parser->match(closingParenthesis) ){
 				error(parser->previousLocation(),"() is an illegal expression!");
@@ -103,7 +178,10 @@ namespace arpha {
 
 	/// ::= expression '(' expression ')'
 	struct CallParser: InfixDefinition {
-		CallParser(): InfixDefinition("(",arpha::Precedence::Call,Location()) {}
+		SymbolID closingParenthesis;
+		CallParser(): InfixDefinition("(",arpha::Precedence::Call,Location()) {
+			closingParenthesis = ")";
+		}
 		Node* parse(Parser* parser,Node* node){
 			Node* arg;
 			if( parser->match(closingParenthesis) ) arg = ConstantExpression::create(arpha::Nothing);
@@ -206,8 +284,8 @@ namespace arpha {
 
 		//parse returnType
 		func->returnType = compiler::inferred;									//def f(...) = 2             #returns int32, as indicated by 2
-		if(parser->peek().isEndExpression() || parser->peek().isEOF()) func->returnType = compiler::Nothing; //def definitionOnly(...);   #returns void
-		else if(auto t = parser->parseOptionalType()) func->returnType = t;	    //def foo(...) int32 { ... } #returns int32
+		if(parser->peek().isLine() || parser->peek().isEOF()) func->returnType = compiler::Nothing; //def definitionOnly(...);   #returns void
+		else if(auto t = parser->matchType()) func->returnType = t;	    //def foo(...) int32 { ... } #returns int32
 		debug("Function's returnType = %s",func->returnType->id);
 
 		//parse body
@@ -251,34 +329,29 @@ namespace arpha {
 			}
 		}
 		// body ::= '{' fields ';' fields ... '}'
-		static void body(Type* type,Parser* parser){
-			Token token;
-			bool parseError = false;
-			while(1){
-				token = parser->consume();
-				if(token.isEndExpression()) continue; //account for useless ';' - i.e. { ';' ';' fields ';' ';' fields ';' }
-				else if(token.isSymbol()){
-					if(token.symbol == "}") break; //account for standart '}' - i.e. { fields ; fields ; }
-					else if(token.symbol == "var") fields(type,parser);
-					else parseError = true;
-				}else parseError = true;
-				if(parseError){
-					error(parser->previousLocation(),"Can't parse %s inside a type %s declaration",token,type->id);
-					parseError = false;
-					//TODO skip till ';'|'}'
+		struct BodyParser {
+			Type* _type;
+			BodyParser(Type* type) : _type(type) {}
+			bool operator()(Parser* parser){
+				auto token = parser->consume();
+				if(token.isSymbol()){
+					if(token.symbol == "var"){
+						fields(_type,parser);
+						return true;
+					}
 				}
-				token = parser->consume();
-				if(token.isSymbol() && token.symbol == "}") break; //account for no closing ';' on last field - i.e. { fields ; fields }
-				if(!token.isEndExpression()) error(parser->previousLocation(),"';' expected!");
+				error(parser->previousLocation(),"Unexpected %s - a var is expected inside a type %s body!",token,_type->id);
+				return false;
 			}
-		}
+		};
+		
 		Node* parse(Parser* parser){
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
 			auto type = new Type(name,location);
 			parser->currentScope()->define(type);
 			//fields
-			if(parser->match("{")) body(type,parser);
+			if(parser->match("{")) blockParser->body(parser,BodyParser(type));
 
 			return type->parse(parser);
 		}
@@ -296,7 +369,7 @@ namespace arpha {
 				vars.push_back(VariableExpression::create(var));
 			}while(parser->match(","));
 
-			if(auto type = parser->parseOptionalType()){
+			if(auto type = parser->matchType()){
 				for(auto i = vars.begin();i!=vars.end();++i) (*i)->asVariableExpression()->variable->inferType(type);
 			}
 
@@ -388,7 +461,8 @@ namespace arpha {
 		Location location(0,0);
 		::arpha::scope = scope;
 
-		closingParenthesis = SymbolID(")");
+		blockParser = new BlockParser;
+		//scope->define(blockParser);
 		scope->define(new ParenthesisParser);
 		scope->define(new CallParser);
 		scope->define(new TupleParser);
@@ -489,7 +563,7 @@ namespace compiler {
 
 
 		Parser parser(source,scope);
-		currentModule->second.body = parser.parseModule();
+		currentModule->second.body = arpha::parseModule(&parser,scope);
 
 		debug("------------------- AST: ------------------------------");
 		debug("%s\n",currentModule->second.body);
@@ -586,11 +660,14 @@ namespace compiler {
 }
 
 
+void runTests();
+
 int main(int argc, char * const argv[]){
 	
 	System::init();
 	memory::init();
 	compiler::init();
+	runTests();
 	
 	if(argc < 2){
 

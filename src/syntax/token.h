@@ -13,7 +13,7 @@ struct Token {
 	enum {
 		Symbol = 0,
 		Uinteger,
-		EndExpression,
+		Line,
 		String,
 		Eof,
 	};
@@ -30,7 +30,7 @@ struct Token {
 	inline bool isSymbol() const { return type == Symbol; }
 	inline bool isUinteger() const { return type == Uinteger; }
 	inline bool isEOF() const { return type == Eof; }
-	inline bool isEndExpression() const { return type == EndExpression; }
+	inline bool isLine() const { return type == Line; }
 	inline bool isString() const { return type == String; }
 };
 

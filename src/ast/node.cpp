@@ -208,6 +208,8 @@ IfExpression* IfExpression::create(Node* condition,Node* consequence,Node* alter
 	e->alternative = alternative;
 	return e;
 }
-BlockExpression* BlockExpression::create(){
-	return new BlockExpression;
+BlockExpression* BlockExpression::create(Scope* scope){
+	auto e = new BlockExpression;
+	e->scope = scope;
+	return e;
 }

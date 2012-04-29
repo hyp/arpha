@@ -28,13 +28,11 @@ Token Lexer::consume(){
 	while((*ptr) <= ' ' && (*ptr)!='\0' && (*ptr)!='\n') ptr++; //skip spaces
 	
 	//
-	if( *ptr == '\n' || *ptr ==';'){
-		if(*ptr == '\n') location = Location(location.line()+1,0);
-		else location.column++;
-		token.type = Token::EndExpression;
-		ptr++;			
+	if( *ptr == '\n'){
+		token.type = Token::Line;
+		ptr++;	
 	}
-	else if(*ptr == '(' || *ptr==')' || *ptr == ',' || *ptr == '{' || *ptr == '}' || *ptr == ':'){
+	else if(*ptr ==';' || *ptr == '(' || *ptr==')' || *ptr == ',' || *ptr == '{' || *ptr == '}' || *ptr == ':'){
 		token.symbol = SymbolID(ptr,1);
 		ptr++;
 		token.type = Token::Symbol;
