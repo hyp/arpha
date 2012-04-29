@@ -245,6 +245,17 @@ namespace arpha {
 			parser->currentScope()->define(type);
 			//fields
 			if(parser->match("{")){
+				
+				parser->expect("var");
+				std::vector<std::pair<SymbolID,Location>> vars;
+				do vars.push_back(std::make_pair(parser->expectName(),parser->previousLocation()));
+				while(parser->match(","));
+				auto t = parser->expectType();
+				for(auto i = vars.begin(); i != vars.end(); ++i){
+					Variable v((*i).first,(*i).second);
+					v.inferType(t);
+					type->add(v);
+				}
 				parser->expect("}");
 			}
 
@@ -319,7 +330,9 @@ namespace arpha {
 		}
 	};
 
-	/// ::= 'for' values 'in' sequence statement
+	/// TODO ::= match expr { to pattern: ... }
+
+	/// TODO ::= 'for' values 'in' sequence expression
 
 	/// ::= 'import' <module>,...
 	struct ImportParser: PrefixDefinition {

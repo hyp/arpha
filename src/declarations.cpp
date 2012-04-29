@@ -29,7 +29,7 @@ Variable* Type::lookupField(const SymbolID fieldName){
 	return nullptr;
 }
 
-void Type::add(Variable& var){
+void Type::add(const Variable& var){
 	fields.push_back(var);
 	size += var.type->size;
 }

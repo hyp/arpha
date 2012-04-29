@@ -26,6 +26,10 @@ void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
 	#define HANDLE(func,type,body) _HANDLE(compilerScope,func,type,body)
 		
 	//TODO HANDLE("resolve")
+	HANDLE("dumpAST",compiler::expression,{ 
+		System::print(format("------------------- AST dump: ------------------------------\n%s\n\n",argument));
+		return argument; 
+	});
 
 	#undef HANDLE
 	#define HANDLE(func,type,body) _HANDLE(arphaScope,func,type,body)

@@ -134,6 +134,14 @@ Node* Parser::parse(int stickiness){
 	return expression;	
 }
 
+Type* Parser::expectType(){
+	auto loc = currentLocation();
+	auto node = parse(arpha::Precedence::Assignment);
+	const ConstantExpression* val;
+	if( (val = node->asConstantExpression()) && val->type == compiler::type) return val->refType;
+	error(loc,"Expected a valid type instead of %s!",node);
+	return compiler::Error;
+}
 Type* Parser::parseOptionalType(){
 	auto next = peek();
 	if(next.isEOF() || next.isEndExpression()) return nullptr;

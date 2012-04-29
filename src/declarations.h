@@ -24,21 +24,18 @@ struct Variable : PrefixDefinition  {
 };
 
 struct Type: public PrefixDefinition {
-private:
+private:	
 	std::vector<Variable> fields;
 	Type* headRecord; ///if this is null, then the type isn't a record
 public:
+	
 
 	Type(SymbolID name,Location& location);
 
 	Node* parse(Parser* parser);
 
 	Variable* lookupField(const SymbolID fieldName);
-	void add(Variable& var); //adds a field to the type
-
-	
-	//implicit type cast
-	bool is();
+	void add(const Variable& var); //adds a field to the type
 
 	//unique record construction
 	static Type* tuple(std::vector<std::pair<SymbolID,Type*>>& fields);

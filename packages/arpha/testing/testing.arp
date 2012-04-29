@@ -24,10 +24,6 @@ TODO
 	assert( false == false)
 #
 
-#'.' syntax
-assert( uint16.typeof == compiler.Type )
-
-
 # Number literals default return type
 assert( typeof(2) == int32 )
 
@@ -54,7 +50,16 @@ TODO: make this pass(need multiple resolving passes?)
 	t = true
 #
 
-#Assignment operator
+# Type definition
+type Type0 { var x,y int32 }
+#TODO assert( sizeof(Type0) == 8 )
+var t0instance Type0
+assert(typeof(t0instance) == Type0)
+
+# '.' syntax
+assert( uint16.typeof == compiler.Type )
+
+# Assignment operator
 assert( typeof( x = 2 ) == uint8 ) #It must return the type of rhs, not lhs!
 
 

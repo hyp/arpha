@@ -26,7 +26,8 @@ struct Parser : Lexer {
 	Node* parse(int stickiness =  0);
 	Node* parseModule();
 
-	Type* parseOptionalType();
+	Type* expectType();
+	Type* parseOptionalType();//TODO -> matchType
 
 	/// Resolve symbols, find the matching function call overloads, constant fold
 	Node* evaluate(Node* node);
