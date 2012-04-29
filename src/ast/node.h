@@ -5,8 +5,8 @@
 #define ARPHA_AST_NODE_H
 
 #include "../base/base.h"
-#include "../base/location.h"
 #include "../base/memory.h"
+#include "../syntax/location.h"
 
 #include "../scope.h"
 #include "../declarations.h"

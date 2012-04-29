@@ -8,6 +8,7 @@
 #include "../base/base.h"
 #include "../base/symbol.h"
 #include "token.h"
+#include "location.h"
 
 struct Lexer {
 	Lexer(const char* source);

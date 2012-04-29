@@ -3,7 +3,7 @@
 
 #include "base/memory.h"
 #include "base/symbol.h"
-#include "base/location.h"
+#include "syntax/location.h"
 
 struct Parser;
 struct Node;

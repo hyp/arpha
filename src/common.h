@@ -6,7 +6,7 @@
 #include "base/symbol.h"
 #include "base/format.h"
 #include "base/system.h"
-#include "base/location.h"
+#include "syntax/location.h"
 
 
 #define error(loc,...) compiler::onError(loc,format(__VA_ARGS__))

@@ -10,8 +10,11 @@ public:
 	int column;
 
 	inline int line(){ return lineNumber; }
-	inline Location(){ lineNumber = -1;column =-1;}
-	Location(int line,int column);
+
+	inline Location() : lineNumber(-1),column(-1) { 
+	}
+	inline Location(int line,int _column) : lineNumber(line), column(_column) {
+	}
 };
 
 #endif
