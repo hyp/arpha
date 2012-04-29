@@ -30,6 +30,17 @@ void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
 		System::print(format("------------------- AST dump: ------------------------------\n%s\n\n",argument));
 		return argument; 
 	});
+	HANDLE("dumpDEF",compiler::expression,{ 
+		auto cnst = argument->asConstantExpression();
+		if(cnst->type == compiler::type){
+			System::print(format("------------------- DEF dump: ------------------------------\nType %s (sizeof %s)\n",cnst->refType->id,cnst->refType->size));
+			for(auto i = cnst->refType->fields.begin();i!=cnst->refType->fields.end();++i){
+				System::print(format("  field %s of type %s\n",(*i).id,(*i).type->id));
+			}
+			System::print("\n");
+		}
+		return argument; 
+	});
 
 	#undef HANDLE
 	#define HANDLE(func,type,body) _HANDLE(arphaScope,func,type,body)

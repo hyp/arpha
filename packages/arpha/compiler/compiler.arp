@@ -7,8 +7,13 @@
 # These constants are probably modified by compiler upon loading
 def version = 1
 
-# Use for debugging - Prints out the ast for the given expression.
+#
+	dumpAST - Prints out the ast for the given expression.
+	dumpDEF - Prints out the information about the definiton which the given expression refers to.
+	Note: Use these for debugging.
+#
 def dumpAST(expression Expression)
+def dumpDEF(expression Expression)
 
 #def currentLocation() int32,int32 
 

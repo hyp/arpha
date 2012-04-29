@@ -25,9 +25,10 @@ struct Variable : PrefixDefinition  {
 
 struct Type: public PrefixDefinition {
 private:	
-	std::vector<Variable> fields;
+	
 	Type* headRecord; ///if this is null, then the type isn't a record
 public:
+	std::vector<Variable> fields;
 	
 
 	Type(SymbolID name,Location& location);
