@@ -24,8 +24,11 @@ TODO
 	assert( false == false)
 #
 
-# Number literals default return type
+# Number literals default return types
 assert( typeof(2) == int32 )
+assert( typeof(3_000_000_000) == uint32 )
+assert( typeof(5_000_000_000) == int64 )
+assert( typeof(10_000_000_000_000_000_000) == uint64 )
 
 # Conditionals
 assert( if true then true else false )
@@ -50,7 +53,7 @@ TODO: make this pass(need multiple resolving passes?)
 	t = true
 #
 
-import export type
+import type
 
 # '.' syntax
 assert( uint16.typeof == compiler.Type )

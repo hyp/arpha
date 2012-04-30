@@ -1,25 +1,23 @@
-#include "common.h"
-#include "scope.h"
-#include "declarations.h"
-#include "syntax/parser.h"
-
-#include "interpreter.h"
-#include "ast/node.h"
-#include "ast/visitor.h"
-#include "compiler.h"
-#include "arpha.h"
+#include "../common.h"
+#include "../scope.h"
+#include "../declarations.h"
+#include "node.h"
+#include "visitor.h"
+#include "../compiler.h"
+#include "../arpha.h"
+#include "evaluate.h"
 
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
 
 namespace {
-	std::map<Function*,Node* (*)(Parser*,CallExpression*,Node*)> functionBindings;
+	std::map<Function*,Node* (*)(CallExpression*,Node*)> functionBindings;
 	Function* realAssert;
 }
 
-void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
+void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 	#define _HANDLE(module,func,type,body)  { \
 		struct Handler { \
-			static Node* handle(Parser* parser,CallExpression* node,Node* argument) body \
+			static Node* handle(CallExpression* node,Node* argument) body \
 	    }; \
 		functionBindings[module->resolve(func,type)] = &(Handler::handle); }
 
@@ -66,15 +64,7 @@ void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
 		if(cnst && cnst->type == arpha::boolean && cnst->u64==1){
 			return node;		
 		}
-		error(parser->currentLocation(),"Test error - Assertion failed");
-		/*node->object = parser->expressionFactory->makeFunctionReference(realAssert);
-		auto args= parser->expressionFactory->makeTuple();
-		args->children.push_back(argument);
-		auto line = parser->expressionFactory->makeConstant();
-		line->u64 = parser->currentLocation().line();
-		line->type = arpha::uint64;
-		args->children.push_back(line);
-		node->arg = parser->evaluate(args);*/
+		error(argument->location,"Test error - Assertion failed");
 		return node;
 	});
 
@@ -94,32 +84,41 @@ void Interpreter::init(Scope* compilerScope,Scope* arphaScope){
 	#undef _HANDLE
 }
 
-Node* evaluateResolvedFunctionCall(Parser* parser,CallExpression* node){
+Node* evaluateResolvedFunctionCall(CallExpression* node){
 	auto function = node->object->asConstantExpression()->refFunction;
 
 	//Try to expand the function
 	auto handler = functionBindings.find(function);
 	if(handler != functionBindings.end()){
 		debug("Expanding a function call %s with %s",function->id,node->arg);
-		return handler->second(parser,node,node->arg);
+		return handler->second(node,node->arg);
 	}
-	/*
-	bool interpret = false;
-
-	if(function->argument == compiler::expression) interpret = true;
-	//else if(node->arg->is<TypeExpression>()) interpret = true;
-
-	
-	if(!interpret) return node;
-	debug("Interpreting function call %s with %s",function->id,node->arg);
-	Interpreter interpreter;
-	interpreter.expressionFactory = parser->expressionFactory;
-	return interpreter.interpret(node);*/
 	return node;
 }
 
 struct AstExpander: NodeVisitor {
-	Parser* parser;
+	Evaluator* evaluator;
+	AstExpander(Evaluator* ev) : evaluator(ev) {}
+	//on a.foo(...)
+	static Node* transformCallOnAccess(CallExpression* node,Type* argumentType,AccessExpression* acessingObject){
+		debug("calling on access! %s with %s",acessingObject,node->arg);
+		//a.foo()
+		if(argumentType == arpha::Nothing){
+			//TODO delete node->arg;
+			node->arg  = acessingObject->object;
+		}
+		//a.foo(bar)
+		else{
+			if(auto isArgRecord = node->arg->asTupleExpression())
+				isArgRecord->children.insert(isArgRecord->children.begin(),acessingObject->object);
+			else
+				node->arg = TupleExpression::create(acessingObject->object,node->arg);
+		}
+		auto newCalleeObject = OverloadSetExpression::create(acessingObject->symbol,acessingObject->scope);
+		//TODO delete_no_children node->object
+		node->object = newCalleeObject;
+		return node;
+	}
 
 	Node* visit(CallExpression* node){
 		//evaluate argument
@@ -134,12 +133,20 @@ struct AstExpander: NodeVisitor {
 					node->object = ConstantExpression::createFunctionReference(func);
 					//TODO function->adjustArgument
 					debug("Overload successfully resolved as %s: %s",func->id,func->argument->id);
-					return evaluateResolvedFunctionCall(parser,node);
+					return evaluateResolvedFunctionCall(node);
 				}else{
 					//TODO mark current block as unresolved!
 				}
-			}else
-				error(node->object->location,"Can't perform a function call onto %s!",node->object);
+			}
+			else if(auto callingCnst = node->object->asConstantExpression()){
+				if(callingCnst->type == compiler::function) return node;//TODO eval function?
+				else error(node->object->location,"Can't perform a function call %s!",node->object);
+			}
+			else if(auto callingAccess = node->object->asAccessExpression()){
+				return transformCallOnAccess(node,argumentType,callingAccess)->accept(this);
+			}
+			else
+				error(node->object->location,"Can't perform a function call %s!",node->object);
 		}
 
 		return node;
@@ -157,13 +164,18 @@ struct AstExpander: NodeVisitor {
 	}
 	Node* visit(AccessExpression* node){
 		node->object = node->object->accept(this);
-
-		auto objectType = node->object->returnType();
-		//TODO type field access & expression '.' call notation
-		//TODO a.foo(2) when def foo(a,b) -> foo(a,2)
-
-		//a.foo when def foo(a) -> foo(a)
-		return CallExpression::create(OverloadSetExpression::create(node->symbol,node->scope),node->object)->accept(this);
+		if(node->passedFirstEval){
+			auto objectType = node->object->returnType();
+			//TODO type field access & expression '.' call notation
+			if(auto field = objectType->lookupField(node->symbol)){
+				//TODO This may need to be done only on 2nd iteration, because there might be setters/getters defined on a later on in the module
+				//TODO - how to mark it??
+				return node;
+			}
+			else return CallExpression::create(OverloadSetExpression::create(node->symbol,node->scope),node->object)->accept(this);
+		}
+		else node->passedFirstEval = true;
+		return node;
 	}
 	Node* visit(TupleExpression* node){
 		if(node->children.size() == 0){ node->type= arpha::Nothing; return node; }
@@ -203,8 +215,7 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 };
-Node* Parser::evaluate(Node* node){
-	AstExpander expander;
-	expander.parser = this;
+Node* Evaluator::eval(Node* node){
+	AstExpander expander(this);
 	return node->accept(&expander);
 }

@@ -188,6 +188,7 @@ AccessExpression* AccessExpression::create(Node* object,SymbolID symbol,Scope* s
 	e->object = object;
 	e->symbol = symbol;
 	e->scope = scope;
+	e->passedFirstEval = false;
 	return e;
 }
 AssignmentExpression* AssignmentExpression::create(Node* object,Node* value){

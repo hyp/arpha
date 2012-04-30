@@ -3,8 +3,8 @@
 #include "scope.h"
 #include "declarations.h"
 #include "syntax/parser.h"
-#include "interpreter.h"
 #include "ast/node.h"
+#include "ast/evaluate.h"
 #include "compiler.h"
 #include "arpha.h"
 
@@ -93,7 +93,7 @@ namespace arpha {
 			BlockExpression* _block;
 			BlockChildParser(BlockExpression* block) : _block(block) {}
 			bool operator ()(Parser* parser){
-				_block->children.push_back(parser->parse());
+				_block->children.push_back(parser->evaluate(parser->parse()));
 				return true;
 			}
 		};
@@ -184,7 +184,7 @@ namespace arpha {
 		}
 		Node* parse(Parser* parser,Node* node){
 			Node* arg;
-			if( parser->match(closingParenthesis) ) arg = ConstantExpression::create(arpha::Nothing);
+			if( parser->match(closingParenthesis) ) arg = ConstantExpression::create(arpha::Nothing);//TODO ???
 			else{
 				arg = parser->parse();
 				parser->expect(closingParenthesis);
@@ -649,7 +649,7 @@ namespace compiler {
 		//Load language definitions.
 		auto arphaModule = newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
 
-		Interpreter::init(scope,arphaModule->second.scope);
+		Evaluator::init(scope,arphaModule->second.scope);
 	
 	}
 

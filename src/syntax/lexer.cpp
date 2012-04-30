@@ -25,11 +25,13 @@ Token Lexer::consume(){
 	Token token;	
 
 	//Skip spaces and tabs.
-	while((*ptr) <= ' ' && (*ptr)!='\0' && (*ptr)!='\n') ptr++; //skip spaces
-	
+	while((*ptr) <= ' ' && (*ptr)!='\0' && (*ptr)!='\n'){
+		ptr++;location.column++; //skip spaces
+	}
 	//
 	if( *ptr == '\n'){
 		token.type = Token::Line;
+		location.lineNumber++;
 		ptr++;	
 	}
 	else if(*ptr ==';' || *ptr == '(' || *ptr==')' || *ptr == ',' || *ptr == '{' || *ptr == '}' || *ptr == ':'){
@@ -42,7 +44,9 @@ Token Lexer::consume(){
 		token.type = Token::Uinteger;
 		//the integer part
 		token.uinteger = int((*ptr) - '0');
-		for(ptr++;isDigit(*ptr);ptr++) token.uinteger = token.uinteger*10 + int((*ptr) -	'0');
+		for(ptr++;isDigit(*ptr) || *ptr == '_';ptr++){
+			if(*ptr != '_') token.uinteger = token.uinteger*10 + int((*ptr) -	'0');
+		}
 		if(*ptr == '.'){ //the fractional part
 			for(ptr++;isDigit(*ptr);ptr++);
 		}
@@ -83,9 +87,11 @@ Token Lexer::consume(){
 }
 
 Token Lexer::peek(){
+	auto loc = location;
 	auto ptr2 = ptr;
 	auto t = consume();
 	ptr = ptr2;
+	location = loc;
 	return t;
 }
 

@@ -126,11 +126,11 @@ Function* errorOnMultipleMatches(std::vector<Function*>& results){
 }
 
 Function* Scope::resolve(const char* name,Type* argumentType){
-	auto argument = new ConstantExpression;
-	argument->type = argumentType;
-	argument->_isLiteral = false;
 	//HACK create a fake constant node of type argumentType
-	return resolveFunction(name,argument);
+	ConstantExpression argument;
+	argument.type = argumentType;
+	argument._isLiteral = false;
+	return resolveFunction(name,&argument);
 }
 Function* Scope::resolveFunction(SymbolID name,const Node* argument){
 	std::vector<Function*> results;

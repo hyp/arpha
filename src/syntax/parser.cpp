@@ -49,6 +49,11 @@ int Parser::expectInteger(){
 	return -1;
 }
 
+Node* Parser::evaluate(Node* node){
+	return evaluator.eval(node);
+}
+
+
 /**
 * Pratt parser is fucking awsome.
 */

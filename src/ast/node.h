@@ -131,6 +131,7 @@ struct AccessExpression : Node {
 	Node* object;
 	SymbolID symbol;
 	Scope* scope;
+	bool passedFirstEval; //On first evaluation don't touch this node!!
 	DECLARE_NODE(AccessExpression);
 };
 

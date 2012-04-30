@@ -6,6 +6,7 @@
 
 #include "token.h"
 #include "lexer.h"
+#include "../ast/evaluate.h"
 
 struct Node;
 struct Scope;
@@ -33,6 +34,7 @@ struct Parser : Lexer {
 	Token  lookedUpToken;
 	Scope* _currentScope;
 	size_t unresolvedExpressions,solvedExpressions;
+	Evaluator evaluator;
 
 	inline Scope* currentScope() const { return _currentScope; }
 };
