@@ -313,7 +313,7 @@ namespace arpha {
 				func->body = nullptr;
 			}
 			else {
-				func->returnType = compiler::inferred;	
+				func->returnType = compiler::Unresolved;	
 				if(!(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
 					func->returnType = parser->expectType(arpha::Precedence::Assignment);
 				}
@@ -674,10 +674,9 @@ namespace compiler {
 
 		expression = builtInType("Expression");
 		type = builtInType("Type");
-		Nothing = builtInType("cAbsolutelyNothing");
+		Nothing = builtInType("void");
 		Error = builtInType("Error");
 		Unresolved = builtInType("Unresolved");
-		inferred = builtInType("inferred");
 		anyType = builtInType("anyType");
 		function = builtInType("funtype");
 		scopeRef = builtInType("scope");

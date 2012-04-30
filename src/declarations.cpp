@@ -8,7 +8,7 @@
 
 //variable
 Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location) {
-	type = compiler::inferred;
+	type = compiler::Unresolved;
 }
 void Variable::inferType(Type* t){
 	debug("Inferred type %s for variable %s",t->id,id);

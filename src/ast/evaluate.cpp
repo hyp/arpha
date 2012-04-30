@@ -57,7 +57,8 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 			System::print("\n");
 		}
 		else if(cnst->type == compiler::function){
-			System::print(format("------------------- DEF dump: ------------------------------\nFunction %s \n",cnst->refFunction->id));
+			System::print(format("------------------- DEF dump: ------------------------------\nFunction %s type %s -> %s \n",
+				cnst->refFunction->id,cnst->refFunction->argument->id,cnst->refFunction->returnType->id));
 			System::print(format("%s",cnst->refFunction->body));
 			System::print("\n");
 		}
@@ -185,7 +186,7 @@ struct AstExpander: NodeVisitor {
 
 		if(node->value->returnType() != compiler::Unresolved){
 			if(auto var = node->object->asVariableExpression()){
-				if(var->returnType() == compiler::inferred) var->variable->inferType(node->value->returnType()); //Infer types for variables
+				if(var->returnType() == compiler::Unresolved) var->variable->inferType(node->value->returnType()); //Infer types for variables
 			}else if(auto access = node->object->asAccessExpression()){
 				//TODO a.foo = .. when foo is field
 				//a.foo = 2 -> foo(a,2)
