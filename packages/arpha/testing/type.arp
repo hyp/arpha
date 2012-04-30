@@ -1,9 +1,4 @@
-#
-	This module provides various tests for testing the type definition.
-	Author: Hyp
-	Version: 1
-	TODO: field access tests
-#
+# Testing the type definition.
 
 type Type0 { var x,y int32 }
 #TODO assert( sizeof(Type0) == 8 )

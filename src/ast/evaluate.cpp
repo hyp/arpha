@@ -143,7 +143,7 @@ struct AstExpander: NodeVisitor {
 		node->object = newCalleeObject;
 		return node;
 	}
-	//Type call -> constructor.
+	//TODO Type call -> constructor.
 	Node* evalTypeCall(Node* node){
 		return node;
 	}

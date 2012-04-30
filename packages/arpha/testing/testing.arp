@@ -69,5 +69,6 @@ assert( sizeof(int64) == sizeof(uint64) == 8 )
 assert( sizeof(2) == sizeof(typeof(2)) == sizeof(int32) )
 #
 
+import variable_scope
 import func
 
