@@ -111,38 +111,6 @@ Type* Type::findRecord(std::vector<std::pair<SymbolID,Type*>>& record){
 
 Type* Type::tuple(std::vector<std::pair<SymbolID,Type*>>& fields){
 	return findRecord(fields);
-	/*assert(fields.size() > 1);
-	//check if such tuple already exists
-	for(std::vector<Type*>::iterator i=tuples.begin();i!=tuples.end();++i){
-		
-		if((*i)->fields.size() == fields.size()){
-			bool exists = true;
-			for(size_t j=0;j < fields.size();++j){
-				if( ( (*i)->fields[j].type != fields[j].second ) || ( (*i)->fields[j].id != fields[j].first ) ) exists=false;
-			}
-			if(exists) return *i;
-		}
-	}
-
-	char buffer1[1024] = "tuple";
-	char buffer2[1024];
-	for(size_t i=0;i<fields.size();i++){
-		sprintf(buffer2,"%c%s:%s",i == 0 ? '(' : ',',fields[i].first.isNull() ? "_" : fields[i].first.ptr(),fields[i].second->id.ptr());
-		strcat(buffer1,buffer2);
-	}
-	strcat(buffer1,")");
-	debug("Tuple created: %s",buffer1);
-
-	Type* tuple=new Type(buffer1,Location());
-	tuple->isTuple = true;
-	auto var=Variable(SymbolID(),Location());
-	for(size_t i=0;i<fields.size();i++){
-		var.id = fields[i].first;
-		var.type = fields[i].second;
-		tuple->add(var);
-	}
-	tuples.push_back(tuple);
-	return tuple;*/
 }
 
 //function

@@ -7,6 +7,9 @@
 # These constants are probably modified by compiler upon loading
 def version = 1
 
+# Reports a compilation error!
+def error(string String)
+
 #
 	dumpAST - Prints out the ast for the given expression.
 	dumpDEF - Prints out the information about the definiton which the given expression refers to.

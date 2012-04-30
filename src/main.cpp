@@ -184,7 +184,7 @@ namespace arpha {
 		}
 		Node* parse(Parser* parser,Node* node){
 			Node* arg;
-			if( parser->match(closingParenthesis) ) arg = ConstantExpression::create(arpha::Nothing);//TODO ???
+			if( parser->match(closingParenthesis) ) arg = ConstantExpression::create(arpha::Nothing);//TODO ??? compiler.nothing
 			else{
 				arg = parser->parse();
 				parser->expect(closingParenthesis);
@@ -248,7 +248,7 @@ namespace arpha {
 		func->bodyScope = new Scope(parser->currentScope());
 
 		//parse arguments
-		func->argument = compiler::Nothing;
+		func->argument = arpha::Nothing; ///??? compiler.nothing?
 		if(!parser->match(")")){
 
 			std::vector<Function::Argument> arguments;

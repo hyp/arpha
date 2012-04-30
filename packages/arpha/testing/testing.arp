@@ -55,6 +55,7 @@ import type
 # '.' syntax
 assert( uint16.typeof == compiler.Type )
 assert( uint32.typeof() == compiler.Type )
+assert( int64.equals(int64) )
 
 # Assignment operator
 assert( typeof( x = 2 ) == uint8 ) #It must return the type of rhs, not lhs!
@@ -67,3 +68,6 @@ assert( sizeof(int32) == sizeof(uint32) == 4 )
 assert( sizeof(int64) == sizeof(uint64) == 8 )
 assert( sizeof(2) == sizeof(typeof(2)) == sizeof(int32) )
 #
+
+import func
+

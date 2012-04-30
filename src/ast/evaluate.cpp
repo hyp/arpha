@@ -23,7 +23,6 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 
 	#define HANDLE(func,type,body) _HANDLE(compilerScope,func,type,body)
 		
-	//TODO HANDLE("resolve")
 	std::vector<std::pair<SymbolID,Type*>> r(2,std::make_pair(SymbolID(),arpha::constantString));
 	r[1] = std::make_pair(SymbolID(),compiler::type);
 	auto string_type = Type::tuple(r);
@@ -33,6 +32,10 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 		auto f = scope->resolve(r->children[0]->asConstantExpression()->string.ptr(),r->children[1]->asConstantExpression()->refType);
 		System::print(format("compiler.Resolved %s %s!\n",argument,f->id));
 		return ConstantExpression::createFunctionReference(f);
+	});
+	HANDLE("error",arpha::constantString,{ 
+		error(node->location,argument->asConstantExpression()->string.ptr());
+		return argument; 
 	});
 	HANDLE("dumpAST",compiler::expression,{ 
 		System::print(format("------------------- AST dump: ------------------------------\n%s\n\n",argument));
@@ -177,6 +180,11 @@ struct AstExpander: NodeVisitor {
 		if(node->value->returnType() != compiler::Unresolved){
 			if(auto var = node->object->asVariableExpression()){
 				if(var->returnType() == compiler::inferred) var->variable->inferType(node->value->returnType()); //Infer types for variables
+			}else if(auto access = node->object->asAccessExpression()){
+				//TODO a.foo = .. when foo is field
+				//a.foo = 2 -> foo(a,2)
+				auto args = TupleExpression::create(access->object,node->value);
+				return CallExpression::create(OverloadSetExpression::create(access->symbol,access->scope),args)->accept(this);
 			}
 			else error(node->location,"Can't assign to %s!",node->object);
 		}

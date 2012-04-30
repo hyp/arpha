@@ -6,8 +6,6 @@
 
 import export qualified compiler
 
-def this_is_awsome = 2
-
 # An unsigned integer representing CPU's word.
 # It is equivalent to size_t from C/C++.
 def natural = if true then uint32 else uint64
