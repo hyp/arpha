@@ -31,9 +31,9 @@ assert( typeof(5_000_000_000) == int64 )
 assert( typeof(10_000_000_000_000_000_000) == uint64 )
 
 # Conditionals
-assert( if true then true else false )
-assert( if false then false else true )
-assert( if int32 == int32 then true else false )
+assert( if (true) true else false )
+assert( if (false) false else true )
+assert( if (int32 == int32) true else false )
 
 # Variable definition with type inferring
 var x uint8

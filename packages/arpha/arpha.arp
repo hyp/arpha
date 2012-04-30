@@ -8,7 +8,7 @@ import export qualified compiler
 
 # An unsigned integer representing CPU's word.
 # It is equivalent to size_t from C/C++.
-def natural = if true then uint32 else uint64
+def natural = if(true) uint32 else uint64
 
 # Literal constant strings
 def stringLiteral = String #HACK type "String" is temporary for now

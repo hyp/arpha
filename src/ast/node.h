@@ -163,7 +163,7 @@ struct IfExpression : Node {
 
 	Node* condition;
 	Node* consequence;
-	Node* alternative;
+	Node* alternative; //Can be null
 	DECLARE_NODE(IfExpression);
 };
 

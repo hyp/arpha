@@ -116,6 +116,7 @@ Type* AssignmentExpression::returnType() const {
 	return object->returnType();
 }
 Type* IfExpression::returnType() const {
+	if(!alternative) return compiler::Nothing;
 	return consequence->returnType();
 }
 

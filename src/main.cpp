@@ -388,7 +388,7 @@ namespace arpha {
 		}
 	};
 
-	/// ::= 'operator' <name> [with priority <number>] = functionName
+	/// ::= 'operator' <name> ['with' 'priority' <number>] = functionName
 	struct OperatorParser: PrefixDefinition {
 		OperatorParser(): PrefixDefinition("operator",Location()) {}
 		Node* parse(Parser* parser){
@@ -420,15 +420,16 @@ namespace arpha {
 		}
 	};
 
-	/// ::= 'if' condition 'then' trueExpression 'else' falseExpression
+	/// ::= 'if' '(' condition ')' consequence [ 'else' alternative ]
 	struct IfParser: PrefixDefinition {
 		IfParser(): PrefixDefinition("if",Location()) {}
 		Node* parse(Parser* parser){
+			parser->expect("(");
 			auto condition = parser->parse();
-			parser->expect("then");
-			auto expr = parser->parse();
-			Node* elseExpr = parser->match("else") ? parser->parse() : nullptr;
-			return IfExpression::create(condition,expr,elseExpr);
+			parser->expect(")");
+			auto consq = parser->parse();
+			Node* alt = parser->match("else") ? parser->parse() : nullptr;
+			return IfExpression::create(condition,consq,alt);
 		}
 	};
 
