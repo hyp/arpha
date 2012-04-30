@@ -124,6 +124,11 @@ Node* evaluateResolvedFunctionCall(Scope* scope,CallExpression* node){
 struct AstExpander: NodeVisitor {
 	Evaluator* evaluator;
 	AstExpander(Evaluator* ev) : evaluator(ev) {}
+
+	Node* visit(VariableExpression* node){
+		return node->variable->value ? node->variable->value : node;
+	}
+
 	//on a.foo(...)
 	static Node* transformCallOnAccess(CallExpression* node,Type* argumentType,AccessExpression* acessingObject){
 		debug("calling on access! %s with %s",acessingObject,node->arg);

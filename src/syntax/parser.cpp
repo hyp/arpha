@@ -142,9 +142,6 @@ Type* Parser::matchType(int stickiness){
 Node* ImportedScope::parse(Parser* parser) {
 	return ConstantExpression::createScopeReference(scope);
 }
-Node* Substitute::parse(Parser* parser){
-	return expression; //TODO duplicate
-}
 
 Node* Variable::parse(Parser* parser){
 	return VariableExpression::create(this);

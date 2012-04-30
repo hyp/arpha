@@ -4,15 +4,6 @@
 struct Node;
 struct Parser;
 struct BlockExpression;
-
-struct Substitute : PrefixDefinition {
-	Substitute(SymbolID name,Location& location) : PrefixDefinition(name,location) {}
-	
-	Node* parse(Parser* parser);
-
-	Node* expression;
-};
-
 struct Type;
 
 struct Variable : PrefixDefinition  {
@@ -22,6 +13,8 @@ struct Variable : PrefixDefinition  {
 	Node* parse(Parser* parser);
 
 	Type* type;
+	//Value(can be null) - for constant variables this is the constant value
+	Node* value;
 };
 
 struct Type: public PrefixDefinition {

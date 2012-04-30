@@ -329,10 +329,10 @@ namespace arpha {
 			if(parser->match("(")) return function(name,location,parser);
 			else{
 				parser->expect("=");
-				auto sub = new Substitute(name,location);
-				sub->expression = parser->parse(arpha::Precedence::Tuple);
+				auto sub = new Variable(name,location);
+				sub->value = parser->parse(arpha::Precedence::Tuple);
 				parser->currentScope()->define(sub);
-				return sub->expression;
+				return sub->value;
 			}
 		}
 	};
@@ -536,15 +536,15 @@ namespace arpha {
 		auto value = ConstantExpression::create(boolean);
 		value->u64 = 1;
 		//TOREVIEW the need to set isLiteral
-		auto constant = new Substitute("true",location);
-		constant->expression = value;
+		auto constant = new Variable("true",location);
+		constant->value = value;
 		scope->define(constant);
 
 		value = ConstantExpression::create(boolean);
 		value->u64 = 0;
 		//TOREVIEW the need to set isLiteral
-		constant = new Substitute("false",location);
-		constant->expression = value;
+		constant = new Variable("false",location);
+		constant->value = value;
 		scope->define(constant);
 
 	}

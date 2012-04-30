@@ -9,6 +9,7 @@
 //variable
 Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location) {
 	type = compiler::Unresolved;
+	value = nullptr;
 }
 void Variable::inferType(Type* t){
 	debug("Inferred type %s for variable %s",t->id,id);
@@ -119,13 +120,13 @@ Function::Argument::Argument(Variable* var) : variable(var) {
 }
 
 Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,location){
-	argument = arpha::Nothing;
-	returnType   = arpha::Nothing;
+	argument = compiler::Nothing;
+	returnType   = compiler::Nothing;
 	bodyScope = nullptr;
 	body = nullptr;
 }
 
-//opreator
+//operators
 
 PrefixOperator::PrefixOperator(SymbolID name,Location& location) : PrefixDefinition(name,location) {
 }

@@ -25,6 +25,7 @@ struct NodeToString: NodeVisitor {
 	}
 	Node* visit(VariableExpression* node){
 		stream<<"variable "<<node->variable->id;
+		if(node->variable->value) stream<<" with value "<<node->variable->value;
 		return node;
 	}
 	Node* visit(OverloadSetExpression* node){
