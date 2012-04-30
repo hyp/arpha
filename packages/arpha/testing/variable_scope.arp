@@ -1,0 +1,14 @@
+# Testing the correct scope symbol lookup.
+
+var a int32
+assert(typeof(a) == int32 )
+{
+	var a int16
+	assert(typeof(a) == int16 )
+	{
+		var a int64
+		assert( typeof(a) == int64 )
+	}
+	assert(typeof(a) == int16 )
+}
+assert(typeof(a) == int32 )
