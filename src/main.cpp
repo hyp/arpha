@@ -481,7 +481,7 @@ namespace arpha {
 		::arpha::scope = scope;
 
 		blockParser = new BlockParser;
-		//scope->define(blockParser);
+		scope->define(blockParser);
 		scope->define(new ParenthesisParser);
 		scope->define(new CallParser);
 		scope->define(new TupleParser);

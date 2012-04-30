@@ -245,7 +245,7 @@ struct AstExpander: NodeVisitor {
 	Node* visit(IfExpression* node){
 		node->condition = node->condition->accept(this);
 		node->consequence = node->consequence->accept(this);
-		node->alternative = node->alternative->accept(this);
+		if(node->alternative) node->alternative = node->alternative->accept(this);
 		auto constantCondition = node->condition->asConstantExpression();
 		if(constantCondition && constantCondition->type == arpha::boolean){ //TODO interpret properly
 			return constantCondition->u64 ? node->consequence : node->alternative;

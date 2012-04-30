@@ -48,7 +48,8 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(IfExpression* node){
-		stream<<node->condition<<'?'<<node->consequence<<':'<<node->alternative;
+		stream<<"if "<<node->condition<<" then "<<node->consequence;
+		if(node->alternative) stream<<" else "<<node->alternative;
 		return node;
 	}
 	Node* visit(TupleExpression* node){
