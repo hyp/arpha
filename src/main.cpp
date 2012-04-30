@@ -242,75 +242,91 @@ namespace arpha {
 		}
 	};
 
-	Node* parseFunction(SymbolID name,Location location,Parser* parser){
-		//Function
-		auto func = new Function(name,location);
-		func->bodyScope = new Scope(parser->currentScope());
-
-		//parse arguments
-		func->argument = arpha::Nothing; ///??? compiler.nothing?
-		if(!parser->match(")")){
-
-			std::vector<Function::Argument> arguments;
-			while(1){
-				//parse argument's name
-				SymbolID argName = parser->expectName();
-				auto var = Variable(argName,parser->previousLocation());
-				var.type = compiler::anyType;
-				arguments.push_back(Function::Argument(var));
-
-				if(parser->match(")")) break;
-				if(!parser->match(",")){
-					//parse additional information, like argument's type	
-					arguments.back().variable.type = parser->expectType(arpha::Precedence::Tuple);
-					if(parser->match(")")) break;
-					parser->expect(",");
-				}
-			}
-			func->arguments = arguments;
-
-			//give the argument an appropriate type representation
-			if(arguments.size()>1){
-				std::vector<std::pair<SymbolID,Type*>> fields;
-				for(auto i=arguments.begin();i!=arguments.end();++i) fields.push_back(std::make_pair((*i).variable.id,(*i).variable.type));
-				func->argument = Type::tuple(fields);
-			}else func->argument = arguments.begin()->variable.type;
-		}
-		debug("Function's argumentType = %s",func->argument->id);
-		parser->currentScope()->defineFunction(func);
-
-		//parse returnType
-		func->returnType = compiler::inferred;									//def f(...) = 2             #returns int32, as indicated by 2
-		if(parser->peek().isLine() || parser->peek().isEOF()) func->returnType = compiler::Nothing; //def definitionOnly(...);   #returns void
-		else if(auto t = parser->matchType(arpha::Precedence::Assignment)) func->returnType = t;	    //def foo(...) int32 { ... } #returns int32
-		debug("Function's returnType = %s",func->returnType->id);
-
-		//parse body
-		if(!(parser->peek().isLine() || parser->peek().isEOF())){
-			func->body = BlockExpression::create(func->bodyScope);
-			auto oldScope = parser->currentScope();
-			parser->currentScope(func->bodyScope);
-			if(parser->match("="))
-				func->body->children.push_back(parser->evaluate(ReturnExpression::create(parser->parse())));
-			else {
-				parser->expect("{");
-				blockParser->body(parser,BlockParser::BlockChildParser(func->body));
-			}
-		}
-		else func->body = nullptr;
-		//
-		return ConstantExpression::create(compiler::Nothing);
-	}
-
-	/// := 'def' <name> '=' expression
+	/// ::= 'def' <name> '=' expression
+	/// ::= 'def' <name> '(' args ')' [returnType] body
 	struct DefParser: PrefixDefinition {
 		DefParser(): PrefixDefinition("def",Location()) {  }
+
+		/// body ::= [nothing|'=' expression|'{' block '}']
+		static void functionBody(Function* func,Parser* parser){
+			auto token = parser->peek();
+			if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
+				func->body = nullptr;
+			}else{
+				func->body = BlockExpression::create(func->bodyScope);
+				auto oldScope = parser->currentScope();
+				parser->currentScope(func->bodyScope);
+				if(parser->match("="))
+					func->body->children.push_back(parser->evaluate(ReturnExpression::create(parser->parse())));
+				else {
+					parser->expect("{");
+					blockParser->body(parser,BlockParser::BlockChildParser(func->body));
+				}
+				parser->currentScope(oldScope);
+			}
+		}
+
+
+		static Node* function(SymbolID name,Location location,Parser* parser){
+			//Function
+			auto func = new Function(name,location);
+			func->bodyScope = new Scope(parser->currentScope());
+
+			//parse arguments
+			func->argument = arpha::Nothing; ///??? compiler.nothing?
+			if(!parser->match(")")){
+
+				std::vector<Function::Argument> arguments;
+				while(1){
+					//parse argument's name
+					auto loc = parser->currentLocation();
+					auto argName = parser->expectName();
+					auto var = new Variable(argName,loc);
+					var->type = compiler::anyType;
+					func->bodyScope->define(var);
+					arguments.push_back(Function::Argument(var));
+
+					if(parser->match(")")) break;
+					if(!parser->match(",")){
+						//parse additional information, like argument's type	
+						arguments.back().variable->type = parser->expectType(arpha::Precedence::Tuple);
+						if(parser->match(")")) break;
+						parser->expect(",");
+					}
+				}
+				func->arguments = arguments;
+
+				//give the argument an appropriate type representation
+				if(arguments.size()>1){
+					std::vector<std::pair<SymbolID,Type*>> fields;
+					for(auto i=arguments.begin();i!=arguments.end();++i) fields.push_back(std::make_pair((*i).variable->id,(*i).variable->type));
+					func->argument = Type::tuple(fields);
+				}else func->argument = arguments.begin()->variable->type;
+			}
+			debug("Function's argumentType = %s",func->argument->id);
+			parser->currentScope()->defineFunction(func);
+
+			//return type & body
+			auto token = parser->peek();
+			if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
+				func->returnType = compiler::Nothing;
+				func->body = nullptr;
+			}
+			else {
+				func->returnType = compiler::inferred;	
+				if(!(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
+					func->returnType = parser->expectType(arpha::Precedence::Assignment);
+				}
+				debug("Function's returnType = %s",func->returnType->id);
+				functionBody(func,parser);
+			}
+			return ConstantExpression::createFunctionReference(func);
+		}
+
 		Node* parse(Parser* parser){
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
-			if(parser->match("(")){ 
-				return parseFunction(name,location,parser);
-			}
+			if(parser->match("(")) return function(name,location,parser);
 			else{
 				parser->expect("=");
 				auto sub = new Substitute(name,location);

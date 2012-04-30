@@ -115,7 +115,7 @@ Type* Type::tuple(std::vector<std::pair<SymbolID,Type*>>& fields){
 
 //function
 
-Function::Argument::Argument(const Variable& var) : variable(var) {
+Function::Argument::Argument(Variable* var) : variable(var) {
 }
 
 Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,location){

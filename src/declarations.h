@@ -60,11 +60,11 @@ private:
 struct Function: public PrefixDefinition {
 
 	struct Argument {
-		Variable variable;			 // so that code inside the functions has access to arguments
+		Variable* variable;			 // so that code inside the functions has access to arguments
 		//FunctionDef* typeConstraint; // Arithmetic
 		//Definition* valueConstraint; // x <- int32 //can be type or function!
 		
-		Argument(const Variable& var);
+		Argument(Variable* var);
 	};
 
 	Function(SymbolID name,Location& location);
