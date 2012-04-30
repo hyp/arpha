@@ -31,7 +31,8 @@ struct NodeVisitor;
 	X(AssignmentExpression)  \
 	X(ReturnExpression)      \
 	X(IfExpression)          \
-	X(BlockExpression)       
+	X(BlockExpression)       \
+	X(WhileExpression) 
 
 //Forward declaration of node types
 struct Node;
@@ -110,6 +111,8 @@ struct TupleExpression : Node {
 struct OverloadSetExpression : Node {
 	static OverloadSetExpression* create(SymbolID symbol,Scope* scope);
 
+	//Scope in which to look for resolving. 
+	//NB: This doesn't have to be the scope that the expression was created in, so don't use it as a current scope indicator!
 	Scope* scope;
 	SymbolID symbol;
 	DECLARE_NODE(OverloadSetExpression);
@@ -170,6 +173,14 @@ struct BlockExpression : Node {
 	std::vector<Node*> children;
 	Scope* scope;
 	DECLARE_NODE(BlockExpression);
+};
+
+struct WhileExpression : Node {
+	static WhileExpression* create(Node* condition,Node* body);
+
+	Node* condition;
+	Node* body;
+	DECLARE_NODE(WhileExpression);
 };
 
 

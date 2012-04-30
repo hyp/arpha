@@ -38,11 +38,8 @@ assert( if int32 == int32 then true else false )
 # Variable definition with type inferring
 var x uint8
 assert( typeof(x) == uint8 )
-#
-TODO: make this pass
-	var y = 2
-	assert( typeof(y) == int32 )
-#
+var y = 2
+assert( typeof(y) == int32 )
 var z
 z = false
 assert( typeof(z) == bool )
@@ -57,6 +54,7 @@ import type
 
 # '.' syntax
 assert( uint16.typeof == compiler.Type )
+assert( uint32.typeof() == compiler.Type )
 
 # Assignment operator
 assert( typeof( x = 2 ) == uint8 ) #It must return the type of rhs, not lhs!

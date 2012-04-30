@@ -15,8 +15,9 @@ namespace memory {
 	Block Block::duplicate() const{
 		assert(ptr());
 		if(!length()) assert(false);
-		void* mem = System::malloc(length());
+		void* mem = System::malloc(length()+1);
 		memcpy(mem,ptr(),length());
+		(static_cast<char*>(mem))[length()] = '\0';
 		Block _;
 		_._ptr=static_cast<const char*>(mem);
 		_._length=length();

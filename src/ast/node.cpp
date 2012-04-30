@@ -67,6 +67,10 @@ struct NodeToString: NodeVisitor {
 		stream<<"}";
 		return node;
 	}
+	Node* visit(WhileExpression* node){
+		stream<<"while "<<node->condition<<" do "<<node->body;
+		return node;
+	}
 };
 std::ostream& operator<< (std::ostream& stream,Node* node){
 	stream<<'(';
@@ -212,5 +216,11 @@ IfExpression* IfExpression::create(Node* condition,Node* consequence,Node* alter
 BlockExpression* BlockExpression::create(Scope* scope){
 	auto e = new BlockExpression;
 	e->scope = scope;
+	return e;
+}
+WhileExpression* WhileExpression::create(Node* condition,Node* body){
+	auto e = new WhileExpression;
+	e->condition = condition;
+	e->body = body;
 	return e;
 }

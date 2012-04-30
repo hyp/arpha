@@ -2,7 +2,6 @@
 	This module defines arpha's syntax.
 	Author: Hyp
 	Version: 1
-	TODO: import syntax
 #
 
 import export qualified compiler

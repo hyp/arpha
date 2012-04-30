@@ -3,6 +3,7 @@
 
 struct Node;
 struct Parser;
+struct BlockExpression;
 
 struct Substitute : PrefixDefinition {
 	Substitute(SymbolID name,Location& location) : PrefixDefinition(name,location) {}
@@ -73,7 +74,7 @@ struct Function: public PrefixDefinition {
 	Type* argument;
 	Type* returnType;
 	Scope* bodyScope;
-	Node* body;
+	BlockExpression* body;
 	std::vector<Argument> arguments;
 };
 

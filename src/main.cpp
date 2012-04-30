@@ -141,9 +141,9 @@ namespace arpha {
 		Node* parse(Parser* parser){
 			auto oldScope = parser->currentScope();
 			BlockExpression* block = BlockExpression::create(new Scope(oldScope));
-			parser->_currentScope = block->scope;
+			parser->currentScope(block->scope);
 			body(parser,BlockChildParser(block));
-			parser->_currentScope = oldScope;
+			parser->currentScope(oldScope);
 			return block;
 		}
 	};
@@ -153,7 +153,7 @@ namespace arpha {
 	// parses an arpha module
 	// ::= {EOF|block.body EOF}
 	BlockExpression* parseModule(Parser* parser,Scope* scope){
-		parser->_currentScope = scope;
+		parser->currentScope(scope);
 		BlockExpression* block = BlockExpression::create(scope);
 		blockParser->body(parser,BlockParser::BlockChildParser(block),false,true); //Ignore '}' and end on EOF
 		return block;
@@ -245,6 +245,7 @@ namespace arpha {
 	Node* parseFunction(SymbolID name,Location location,Parser* parser){
 		//Function
 		auto func = new Function(name,location);
+		func->bodyScope = new Scope(parser->currentScope());
 
 		//parse arguments
 		func->argument = compiler::Nothing;
@@ -260,12 +261,8 @@ namespace arpha {
 
 				if(parser->match(")")) break;
 				if(!parser->match(",")){
-					//parse additional information, like argument's type
-					auto node = parser->parse(arpha::Precedence::Tuple);
-					const ConstantExpression* val;
-					if( (val = node->asConstantExpression()) && val->type == compiler::type) arguments.back().variable.type = val->refType;
-					else error(node->location,"a valid type is expected instead of %s",node);
-
+					//parse additional information, like argument's type	
+					arguments.back().variable.type = parser->expectType(arpha::Precedence::Tuple);
 					if(parser->match(")")) break;
 					parser->expect(",");
 				}
@@ -285,11 +282,22 @@ namespace arpha {
 		//parse returnType
 		func->returnType = compiler::inferred;									//def f(...) = 2             #returns int32, as indicated by 2
 		if(parser->peek().isLine() || parser->peek().isEOF()) func->returnType = compiler::Nothing; //def definitionOnly(...);   #returns void
-		else if(auto t = parser->matchType()) func->returnType = t;	    //def foo(...) int32 { ... } #returns int32
+		else if(auto t = parser->matchType(arpha::Precedence::Assignment)) func->returnType = t;	    //def foo(...) int32 { ... } #returns int32
 		debug("Function's returnType = %s",func->returnType->id);
 
 		//parse body
-	
+		if(!(parser->peek().isLine() || parser->peek().isEOF())){
+			func->body = BlockExpression::create(func->bodyScope);
+			auto oldScope = parser->currentScope();
+			parser->currentScope(func->bodyScope);
+			if(parser->match("="))
+				func->body->children.push_back(parser->evaluate(ReturnExpression::create(parser->parse())));
+			else {
+				parser->expect("{");
+				blockParser->body(parser,BlockParser::BlockChildParser(func->body));
+			}
+		}
+		else func->body = nullptr;
 		//
 		return ConstantExpression::create(compiler::Nothing);
 	}
@@ -321,7 +329,7 @@ namespace arpha {
 			std::vector<std::pair<SymbolID,Location>> vars;
 			do vars.push_back(std::make_pair(parser->expectName(),parser->previousLocation()));
 			while(parser->match(","));
-			auto t = parser->expectType();
+			auto t = parser->expectType(arpha::Precedence::Assignment);
 			for(auto i = vars.begin(); i != vars.end(); ++i){
 				Variable v((*i).first,(*i).second);
 				v.inferType(t);
@@ -365,11 +373,11 @@ namespace arpha {
 			do{
 				auto name = parser->expectName();
 				auto var = new Variable(name,parser->previousLocation());
-				parser->_currentScope->define(var);
+				parser->currentScope()->define(var);
 				vars.push_back(VariableExpression::create(var));
 			}while(parser->match(","));
 
-			if(auto type = parser->matchType()){
+			if(auto type = parser->matchType(arpha::Precedence::Assignment)){
 				for(auto i = vars.begin();i!=vars.end();++i) (*i)->asVariableExpression()->variable->inferType(type);
 			}
 
@@ -421,6 +429,16 @@ namespace arpha {
 			auto expr = parser->parse();
 			Node* elseExpr = parser->match("else") ? parser->parse() : nullptr;
 			return IfExpression::create(condition,expr,elseExpr);
+		}
+	};
+
+	/// ::= 'while' condition body
+	struct WhileParser: PrefixDefinition {
+		WhileParser(): PrefixDefinition("while",Location()) {}
+		Node* parse(Parser* parser){
+			auto condition = parser->parse();
+			auto body = parser->parse();
+			return WhileExpression::create(condition,body);
 		}
 	};
 
@@ -477,6 +495,7 @@ namespace arpha {
 
 		scope->define(new ReturnParser);
 		scope->define(new IfParser);
+		scope->define(new WhileParser);
 
 
 		Nothing = builtInType("Nothing",0);
@@ -562,7 +581,7 @@ namespace compiler {
 		currentModule->second.scope = scope;
 
 
-		Parser parser(source,scope);
+		Parser parser(source);
 		currentModule->second.body = arpha::parseModule(&parser,scope);
 
 		debug("------------------- AST: ------------------------------");

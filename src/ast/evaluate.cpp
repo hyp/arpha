@@ -10,20 +10,30 @@
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
 
 namespace {
-	std::map<Function*,Node* (*)(CallExpression*,Node*)> functionBindings;
+	std::map<Function*,Node* (*)(Scope*,CallExpression*,Node*)> functionBindings;
 	Function* realAssert;
 }
 
 void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 	#define _HANDLE(module,func,type,body)  { \
 		struct Handler { \
-			static Node* handle(CallExpression* node,Node* argument) body \
+			static Node* handle(Scope* scope,CallExpression* node,Node* argument) body \
 	    }; \
 		functionBindings[module->resolve(func,type)] = &(Handler::handle); }
 
 	#define HANDLE(func,type,body) _HANDLE(compilerScope,func,type,body)
 		
 	//TODO HANDLE("resolve")
+	std::vector<std::pair<SymbolID,Type*>> r(2,std::make_pair(SymbolID(),arpha::constantString));
+	r[1] = std::make_pair(SymbolID(),compiler::type);
+	auto string_type = Type::tuple(r);
+	HANDLE("resolve",string_type,{ 
+		
+		auto r = argument->asTupleExpression();
+		auto f = scope->resolve(r->children[0]->asConstantExpression()->string.ptr(),r->children[1]->asConstantExpression()->refType);
+		System::print(format("compiler.Resolved %s %s!\n",argument,f->id));
+		return ConstantExpression::createFunctionReference(f);
+	});
 	HANDLE("dumpAST",compiler::expression,{ 
 		System::print(format("------------------- AST dump: ------------------------------\n%s\n\n",argument));
 		return argument; 
@@ -37,8 +47,13 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 			}
 			System::print("\n");
 		}
+		else if(cnst->type == compiler::function){
+			System::print(format("------------------- DEF dump: ------------------------------\nFunction %s \n",cnst->refFunction->id));
+			System::print(format("%s",cnst->refFunction->body));
+			System::print("\n");
+		}
 		else if(cnst->type == compiler::scopeRef){
-			System::print(format("------------------- DEF dump: ------------------------------\nScope \n",cnst->refType->id,cnst->refType->size));
+			System::print(format("------------------- DEF dump: ------------------------------\nScope \n"));
 			System::print("\n");
 		}
 		return argument; 
@@ -84,14 +99,14 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 	#undef _HANDLE
 }
 
-Node* evaluateResolvedFunctionCall(CallExpression* node){
+Node* evaluateResolvedFunctionCall(Scope* scope,CallExpression* node){
 	auto function = node->object->asConstantExpression()->refFunction;
 
 	//Try to expand the function
 	auto handler = functionBindings.find(function);
 	if(handler != functionBindings.end()){
 		debug("Expanding a function call %s with %s",function->id,node->arg);
-		return handler->second(node,node->arg);
+		return handler->second(scope,node,node->arg);
 	}
 	return node;
 }
@@ -119,6 +134,10 @@ struct AstExpander: NodeVisitor {
 		node->object = newCalleeObject;
 		return node;
 	}
+	//Type call -> constructor.
+	Node* evalTypeCall(Node* node){
+		return node;
+	}
 
 	Node* visit(CallExpression* node){
 		//evaluate argument
@@ -133,13 +152,14 @@ struct AstExpander: NodeVisitor {
 					node->object = ConstantExpression::createFunctionReference(func);
 					//TODO function->adjustArgument
 					debug("Overload successfully resolved as %s: %s",func->id,func->argument->id);
-					return evaluateResolvedFunctionCall(node);
+					return evaluateResolvedFunctionCall(evaluator->currentScope(),node);
 				}else{
 					//TODO mark current block as unresolved!
 				}
 			}
 			else if(auto callingCnst = node->object->asConstantExpression()){
 				if(callingCnst->type == compiler::function) return node;//TODO eval function?
+				else if(callingCnst->type == compiler::type) return evalTypeCall(node); //->accept(this) ???
 				else error(node->object->location,"Can't perform a function call %s!",node->object);
 			}
 			else if(auto callingAccess = node->object->asAccessExpression()){
@@ -204,6 +224,10 @@ struct AstExpander: NodeVisitor {
 			node->children[i] = node->children[i]->accept(this);
 		return node;
 	}
+	Node* visit(ReturnExpression* node){
+		//TODO function return type inferring
+		return node;
+	}
 	Node* visit(IfExpression* node){
 		node->condition = node->condition->accept(this);
 		node->consequence = node->consequence->accept(this);
@@ -212,6 +236,11 @@ struct AstExpander: NodeVisitor {
 		if(constantCondition && constantCondition->type == arpha::boolean){ //TODO interpret properly
 			return constantCondition->u64 ? node->consequence : node->alternative;
 		}
+		return node;
+	}
+	Node* visit(WhileExpression* node){
+		node->condition = node->condition->accept(this);
+		node->body = node->body->accept(this);
 		return node;
 	}
 };

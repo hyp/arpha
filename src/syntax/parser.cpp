@@ -7,7 +7,13 @@
 #include "../compiler.h"
 #include "../arpha.h"
 
-Parser::Parser(const char* src,Scope* scope) : Lexer(src) { _currentScope=scope; }
+Parser::Parser(const char* src) : Lexer(src) {  
+}
+
+void Parser::currentScope(Scope* scope){
+	_currentScope=scope;
+	firstRoundEvaluator.currentScope(scope);
+}
 
 void Parser::expect(SymbolID token){
 	Token tok = consume();
@@ -50,7 +56,7 @@ int Parser::expectInteger(){
 }
 
 Node* Parser::evaluate(Node* node){
-	return evaluator.eval(node);
+	return firstRoundEvaluator.eval(node);
 }
 
 
@@ -110,19 +116,20 @@ Node* Parser::parse(int stickiness){
 	return expression;	
 }
 
-Type* Parser::expectType(){
+Type* Parser::expectType(int stickiness){
 	auto loc = currentLocation();
-	auto node = parse(arpha::Precedence::Assignment);
+	auto node = parse(stickiness);
 	const ConstantExpression* val;
 	if( (val = node->asConstantExpression()) && val->type == compiler::type) return val->refType;
 	error(loc,"Expected a valid type instead of %s!",node);
 	return compiler::Error;
 }
-Type* Parser::matchType(){
+Type* Parser::matchType(int stickiness){
+	//TODO disbale error reporting upon matching
 	auto next = peek();
 	if(next.isEOF() || next.isLine()) return nullptr;
 	const char* prevptr = ptr;
-	auto node = parse(arpha::Precedence::Assignment);
+	auto node = parse(stickiness);
 	const ConstantExpression* val;
 	if( (val = node->asConstantExpression()) && val->type == compiler::type) return val->refType;
 	ptr = prevptr;
