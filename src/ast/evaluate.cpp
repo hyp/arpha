@@ -37,6 +37,12 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 		error(node->location,argument->asConstantExpression()->string.ptr());
 		return argument; 
 	});
+	HANDLE("constexpr",compiler::expression,{ 
+		if(!argument->asConstantExpression()){
+			error(node->location,"Expected a constant expression instead of %s!",argument);
+		}
+		return argument; 
+	});
 	HANDLE("dumpAST",compiler::expression,{ 
 		System::print(format("------------------- AST dump: ------------------------------\n%s\n\n",argument));
 		return argument; 
