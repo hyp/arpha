@@ -23,6 +23,7 @@ struct NodeVisitor;
 //This is a list of node types. TODO refactor into NODETYPE_LIST
 #define NODE_LIST(X) \
 	X(ConstantExpression)    \
+	X(TypeReference)         \
 	X(VariableExpression)    \
 	X(TupleExpression)       \
 	X(OverloadSetExpression) \
@@ -34,7 +35,6 @@ struct NodeVisitor;
 	X(BlockExpression)       \
 	X(WhileExpression)       \
 	X(VariableDeclaration)   \
-	X(UnresolvedDeclaration) \
 	X(TypeDeclaration)       \
 	X(FunctionDeclaration)       
 
@@ -68,7 +68,6 @@ struct ConstantExpression : Node {
 	static ConstantExpression* create(Type* constantType);
 	static ConstantExpression* createScopeReference(Scope* scope);
 	static ConstantExpression* createFunctionReference(Function* func);
-	static ConstantExpression* createTypeReference(Type* type);
 
 	Type* returnType() const;
 
@@ -78,7 +77,6 @@ struct ConstantExpression : Node {
 		uint64  u64;
 		double  f64;
 		Scope*  refScope;
-		Type*   refType;
 		Function* refFunction;
 		memory::Block string;
 	};
@@ -89,6 +87,16 @@ struct ConstantExpression : Node {
 
 	DECLARE_NODE(ConstantExpression);
 
+};
+
+struct TypeReference : Node {
+	static TypeReference* create(Type* type);
+
+	Type* returnType() const;
+	Type* type() const;
+
+	Type* _type;
+	DECLARE_NODE(TypeReference);
 };
 
 struct VariableExpression : Node {
@@ -198,16 +206,6 @@ struct VariableDeclaration : Node {
 	std::vector<Variable*> variables;
 	Node* typeExpression;  //Can be null for inferred variable type
 	DECLARE_NODE(VariableDeclaration);
-};
-
-//an unresolved type/function this acts as a proxy node
-struct UnresolvedDeclaration : Node {
-	static UnresolvedDeclaration* create(Type* type);
-
-	Type* returnType() const;
-
-	Type* unresolvedType;
-	DECLARE_NODE(UnresolvedDeclaration);
 };
 
 struct TypeDeclaration : Node {

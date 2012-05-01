@@ -351,7 +351,6 @@ namespace arpha {
 		TypeParser(): PrefixDefinition("type",Location()) {  }
 		// fields ::= {'var'|'val'} <name>,... {type ['=' initialValue]|['=' initialValue]}
 		static void fields(TypeDeclaration* decl,Parser* parser){
-			std::vector<std::pair<SymbolID,Location>> vars;
 			TypeDeclaration::FieldDefinition fields;
 			fields.firstFieldID = decl->type->fields.size();
 			fields.count = 0;

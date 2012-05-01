@@ -13,7 +13,6 @@ struct NodeToString: NodeVisitor {
 		else if(node->type == arpha::int64) stream<<node->i64;
 		else if(node->type == arpha::float64) stream<<node->f64;
 		else if(node->type == arpha::constantString) stream<<'"'<<node->string<<'"';
-		else if(node->type == compiler::type) stream<<"type "<<node->refType->id;
 		else if(node->type == compiler::function) stream<<"func "<<node->refFunction->id;
 		else if(node->type == compiler::scopeRef) stream<<"scope";
 		else if(node->type == compiler::Error)   stream<<"error";
@@ -21,6 +20,10 @@ struct NodeToString: NodeVisitor {
 		else if(node->type == arpha::Nothing) stream<<"nothing";
 		else if(node->type == arpha::boolean) stream<<(node->u64?"true":"false");
 		else assert(false);
+		return node;
+	}
+	Node* visit(TypeReference* node){
+		stream<<"type "<<node->type()->id;
 		return node;
 	}
 	Node* visit(VariableExpression* node){
@@ -89,10 +92,6 @@ struct NodeToString: NodeVisitor {
 			
 		return node;
 	}
-	Node* visit(UnresolvedDeclaration* node){
-		stream<<"unresolved "<<node->unresolvedType->id;
-		return node;
-	}
 };
 std::ostream& operator<< (std::ostream& stream,Node* node){
 	stream<<'(';
@@ -121,6 +120,12 @@ static Type* literalConstantReturnType(const ConstantExpression* node){
 Type* ConstantExpression::returnType() const {
 	return isLiteral() ? literalConstantReturnType(this) : type;
 }
+Type* TypeReference::returnType() const {
+	return _type->resolved() ? compiler::type : compiler::Unresolved;
+}
+Type* TypeReference::type() const {
+	return _type->resolved() ? _type : compiler::Unresolved;
+}
 Type* VariableExpression::returnType() const {
 	return variable->type ? variable->type : compiler::Unresolved;
 }
@@ -145,9 +150,6 @@ Type* VariableDeclaration::returnType() const {
 	return compiler::Unresolved;
 }
 Type* TypeDeclaration::returnType() const {
-	return compiler::Unresolved;
-}
-Type* UnresolvedDeclaration::returnType() const {
 	return compiler::Unresolved;
 }
 
@@ -181,9 +183,9 @@ ConstantExpression* ConstantExpression::createFunctionReference(Function* func){
 	e->refFunction = func;
 	return e;
 }
-ConstantExpression* ConstantExpression::createTypeReference(Type* type){
-	auto e = create(compiler::type);
-	e->refType = type;
+TypeReference* TypeReference::create(Type* type){
+	auto e = new TypeReference;
+	e->_type = type;
 	return e;
 }
 VariableExpression* VariableExpression::create(Variable* variable){
@@ -254,11 +256,6 @@ WhileExpression* WhileExpression::create(Node* condition,Node* body){
 	auto e = new WhileExpression;
 	e->condition = condition;
 	e->body = body;
-	return e;
-}
-UnresolvedDeclaration* UnresolvedDeclaration::create(Type* type){
-	auto e = new UnresolvedDeclaration;
-	e->unresolvedType = type;
 	return e;
 }
 

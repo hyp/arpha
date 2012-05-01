@@ -119,35 +119,10 @@ Node* Parser::parse(int stickiness){
 Type* Parser::expectType(int stickiness){
 	auto loc = currentLocation();
 	auto node = parse(stickiness);
-	const ConstantExpression* val;
-	if( (val = node->asConstantExpression()) && val->type == compiler::type) return val->refType;
+	if( auto val = node->asTypeReference()) return val->type();
 	error(loc,"Expected a valid type instead of %s!",node);
 	return compiler::Error;
 }
-Type* Parser::matchType(int stickiness){
-	//TODO disbale error reporting upon matching
-	auto next = peek();
-	if(next.isEOF() || next.isLine()) return nullptr;
-	const char* prevptr = ptr;
-	auto node = parse(stickiness);
-	const ConstantExpression* val;
-	if( (val = node->asConstantExpression()) && val->type == compiler::type) return val->refType;
-	ptr = prevptr;
-	return nullptr;
-}
-std::pair<Type*,Node*> Parser::expectTypeOrUnresolved(int stickiness){
-	auto loc = currentLocation();
-	auto node = parse(stickiness);
-	auto t = node->returnType();
-	const ConstantExpression* val;
-	if( (val = node->asConstantExpression()) && t == compiler::type) return std::make_pair(val->refType,nullptr);
-	else {
-		if(t == compiler::Unresolved || t == compiler::type) return std::make_pair(nullptr,node);
-	}
-	error(loc,"Expected a valid type instead of %s!",node);
-	return std::make_pair(compiler::Error,nullptr);
-}
-
 
 //parsing declarations
 
@@ -160,7 +135,7 @@ Node* Variable::parse(Parser* parser){
 }
 
 Node* Type::parse(Parser* parser){
-	return _resolved? static_cast<Node*>(ConstantExpression::createTypeReference(this)) : static_cast<Node*>(UnresolvedDeclaration::create(this));
+	return TypeReference::create(this);
 }
 
 Node* Function::parse(Parser* parser){

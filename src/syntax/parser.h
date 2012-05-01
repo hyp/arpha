@@ -23,8 +23,6 @@ struct Parser : Lexer {
 	bool match(int tokenType);
 
 	Type* expectType(int stickiness);
-	Type* matchType(int stickiness);
-	std::pair<Type*,Node*> expectTypeOrUnresolved(int stickiness);
 
 	Node* parse(int stickiness =  0);
 

@@ -13,7 +13,6 @@ struct TranslatorImplementation: NodeVisitor {
 		else if(node->type == arpha::int64) stream<<node->i64;
 		else if(node->type == arpha::float64) stream<<node->f64;
 		else if(node->type == arpha::constantString) stream<<'"'<<node->string<<'"';
-		else if(node->type == compiler::type) stream<<node->refType->id;
 		else if(node->type == compiler::function) stream<<node->refFunction->id;
 		else if(node->type == arpha::Nothing) stream<<"void";
 		else if(node->type == arpha::boolean) stream<<(node->u64?"true":"false");

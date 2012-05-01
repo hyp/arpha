@@ -26,7 +26,6 @@ Type::Type(SymbolID name,Location& location) : PrefixDefinition(name,location) {
 }
 
 Variable* Type::lookupField(const SymbolID fieldName){
-	assert(!_resolved);
 	for(auto i = fields.begin();i!=fields.end();++i){
 		if( (*i).id == fieldName ) return i._Ptr;
 	}

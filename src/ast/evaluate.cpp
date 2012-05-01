@@ -29,7 +29,7 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 	HANDLE("resolve",string_type,{ 
 		
 		auto r = argument->asTupleExpression();
-		auto f = scope->resolve(r->children[0]->asConstantExpression()->string.ptr(),r->children[1]->asConstantExpression()->refType);
+		auto f = scope->resolve(r->children[0]->asConstantExpression()->string.ptr(),r->children[1]->asTypeReference()->type());
 		System::print(format("compiler.Resolved %s %s!\n",argument,f->id));
 		return ConstantExpression::createFunctionReference(f);
 	});
@@ -49,9 +49,9 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 	});
 	HANDLE("dumpDEF",compiler::expression,{ 
 		auto cnst = argument->asConstantExpression();
-		if(cnst->type == compiler::type){
-			System::print(format("------------------- DEF dump: ------------------------------\nType %s (sizeof %s)\n",cnst->refType->id,cnst->refType->size()));
-			for(auto i = cnst->refType->fields.begin();i!=cnst->refType->fields.end();++i){
+		if(auto typeRef = argument->asTypeReference()){
+			System::print(format("------------------- DEF dump: ------------------------------\nType %s (sizeof %s)\n",typeRef->type()->id,typeRef->type()->size()));
+			for(auto i = typeRef->type()->fields.begin();i!=typeRef->type()->fields.end();++i){
 				System::print(format("  field %s of type %s\n",(*i).id,(*i).type->id));
 			}
 			System::print("\n");
@@ -73,12 +73,14 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 	#define HANDLE(func,type,body) _HANDLE(arphaScope,func,type,body)
 
 	HANDLE("typeof",compiler::expression,{ 
-		return ConstantExpression::createTypeReference(argument->returnType()); 
+		return TypeReference::create(argument->returnType()); 
 	});
 	HANDLE("sizeof",compiler::expression,{ 
 		auto size = ConstantExpression::create(arpha::uint64);//TODO arpha.natural
-		auto cnstArgument = argument->asConstantExpression();
-		size->u64  = uint64( ( cnstArgument->type == compiler::type ? cnstArgument->refType : argument->returnType() )->size() );
+		auto typeRef = argument->asTypeReference();
+		assert(typeRef ? typeRef->type() != compiler::Unresolved : true);
+		size->u64  = uint64( (typeRef?typeRef->type():argument->returnType())->size() );
+		//TODO isLiteral?
 		return size;
 	});
 	//TODO - implement
@@ -98,8 +100,8 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 	auto type_type = Type::tuple(record);
 	HANDLE("equals",type_type,{
 		auto twoTypes = argument->asTupleExpression();
-		auto t1 = twoTypes->children[0]->asConstantExpression()->refType;
-		auto t2 = twoTypes->children[1]->asConstantExpression()->refType;
+		auto t1 = twoTypes->children[0]->asTypeReference()->type();
+		auto t2 = twoTypes->children[1]->asTypeReference()->type();
 		auto result = ConstantExpression::create(arpha::boolean);
 		result->u64 =  t1 == t2 ? 1 : 0; //TODO tuple comparsion as well
 		return result;
@@ -270,11 +272,11 @@ struct AstExpander: NodeVisitor {
 			resolved = true;
 			type = nullptr; //inferred
 		}else{
-			auto typeExpr = node->typeExpression = node->typeExpression->accept(this);
-			ConstantExpression* cnst;
-			if((cnst = typeExpr->asConstantExpression()) && cnst->type == compiler::type){
+			node->typeExpression = node->typeExpression->accept(this);
+			TypeReference* typeRef;
+			if((typeRef = node->typeExpression->asTypeReference()) && typeRef->type()!=compiler::Unresolved){
 				resolved = true;
-				type = cnst->refType;
+				type = typeRef->type();
 			}
 		}
 		//return
@@ -294,29 +296,21 @@ struct AstExpander: NodeVisitor {
 	Node* visit(TypeDeclaration* node){
 		bool resolved = true;
 		for(auto i = node->fields.begin();i!=node->fields.end();i++){
-			auto typeExpr = (*i).typeExpression = (*i).typeExpression->accept(this);
-			ConstantExpression* cnst;
-			if((cnst = typeExpr->asConstantExpression()) && cnst->type == compiler::type){ 
+			(*i).typeExpression = (*i).typeExpression->accept(this);
+			TypeReference* typeRef;
+			if((typeRef = (*i).typeExpression->asTypeReference()) && typeRef->type()!=compiler::Unresolved){
 				//Apply the resolved type to fields
 				const int limit = (*i).firstFieldID + (*i).count;
 				for(auto j = (*i).firstFieldID;j < limit;j++){
-					node->type->fields[j].type = cnst->refType;
+					node->type->fields[j].type = typeRef->type();
 				}
 			}
 			else resolved = false;
 		}
 		if(resolved){
 			node->type->updateOnSolving();
-			auto ref = ConstantExpression::createTypeReference(node->type);
+			auto ref = TypeReference::create(node->type);
 			//delete all node->typeExpression
-			//delete node
-			return ref;
-		}
-		return node;
-	}
-	Node* visit(UnresolvedDeclaration* node){
-		if(node->unresolvedType->resolved()){
-			auto ref = ConstantExpression::createTypeReference(node->unresolvedType);
 			//delete node
 			return ref;
 		}
