@@ -16,6 +16,10 @@ operator ! = not
 
 # Infix operators
 
+## Logical group
+operator && with priority 23 = and
+operator || with priority 23 = or
+
 ## Comparison group
 operator == with priority 25 = equals
 operator != with priority 25 = not_equals
@@ -28,3 +32,6 @@ operator - with priority 30 = subtract
 operator * with priority 35 = multiply
 operator / with priority 35 = divide
 operator % with priority 35 = mod
+
+## Power
+operator ** with priority 40 = pow

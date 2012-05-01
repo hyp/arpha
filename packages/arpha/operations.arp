@@ -4,6 +4,14 @@
 	Version: 1
 #
 
+# Boolean operations
+def not(x bool) bool
+def and(x bool,y bool) bool
+def or(x bool,y bool) bool
+def equals(x bool,y bool) bool
+def not_equals(x,y) = not(x==y)
+
+# Arithmetics
 def minus(x int32) int32
 
 def add(x int32,y int32) int32
