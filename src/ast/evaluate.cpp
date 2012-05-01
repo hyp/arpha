@@ -31,7 +31,7 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 		auto r = argument->asTupleExpression();
 		auto f = scope->resolve(r->children[0]->asConstantExpression()->string.ptr(),r->children[1]->asTypeReference()->type());
 		System::print(format("compiler.Resolved %s %s!\n",argument,f->id));
-		return ConstantExpression::createFunctionReference(f);
+		return FunctionReference::create(f);
 	});
 	HANDLE("error",arpha::constantString,{ 
 		error(node->location,argument->asConstantExpression()->string.ptr());
@@ -56,10 +56,11 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 			}
 			System::print("\n");
 		}
-		else if(cnst->type == compiler::function){
+		else if(auto funcRef = argument->asFunctionReference()){
+			auto f = funcRef->function();
 			System::print(format("------------------- DEF dump: ------------------------------\nFunction %s type %s -> %s \n",
-				cnst->refFunction->id,cnst->refFunction->argument->id,cnst->refFunction->returnType->id));
-			System::print(format("%s",cnst->refFunction->body));
+				f->id,f->argument->id,f->returnType->id));
+			System::print(format("%s",f->body));
 			System::print("\n");
 		}
 		else if(cnst->type == compiler::scopeRef){
@@ -112,7 +113,7 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 }
 
 Node* evaluateResolvedFunctionCall(Scope* scope,CallExpression* node){
-	auto function = node->object->asConstantExpression()->refFunction;
+	auto function = node->object->asFunctionReference()->function();
 
 	//Try to expand the function
 	auto handler = functionBindings.find(function);
@@ -166,7 +167,7 @@ struct AstExpander: NodeVisitor {
 			if(auto callingOverloadSet = node->object->asOverloadSetExpression()){
 				auto func = callingOverloadSet->scope->resolveFunction(callingOverloadSet->symbol,node->arg);
 				if(func){
-					node->object = ConstantExpression::createFunctionReference(func);
+					node->object = FunctionReference::create(func);
 					//TODO function->adjustArgument
 					debug("Overload successfully resolved as %s: %s",func->id,func->argument->id);
 					return evaluateResolvedFunctionCall(evaluator->currentScope(),node);
@@ -174,11 +175,10 @@ struct AstExpander: NodeVisitor {
 					//TODO mark current block as unresolved!
 				}
 			}
-			else if(auto callingCnst = node->object->asConstantExpression()){
-				if(callingCnst->type == compiler::function) return node;//TODO eval function?
-				else if(callingCnst->type == compiler::type) return evalTypeCall(node); //->accept(this) ???
-				else error(node->object->location,"Can't perform a function call %s!",node->object);
-			}
+			else if(auto callingFunc = node->object->asFunctionReference())
+				return node;	//TODO eval?
+			else if(auto callingType = node->object->asTypeReference())
+				return evalTypeCall(node);
 			else if(auto callingAccess = node->object->asAccessExpression()){
 				return transformCallOnAccess(node,argumentType,callingAccess)->accept(this);
 			}

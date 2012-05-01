@@ -25,7 +25,6 @@ struct Type: public PrefixDefinition {
 private:	
 	
 	Type* headRecord; ///if this is null, then the type isn't a record
-	
 	bool _resolved;
 public:
 	size_t _size;
@@ -64,6 +63,8 @@ private:
 	static Type* findRecord(std::vector<std::pair<SymbolID,Type*>>& record);
 };
 
+std::ostream& operator<< (std::ostream& stream,Type* type);
+
 struct Function: public PrefixDefinition {
 
 	struct Argument {
@@ -74,9 +75,15 @@ struct Function: public PrefixDefinition {
 		Argument(Variable* var);
 	};
 
+
+
 	Function(SymbolID name,Location& location);
 
 	Node* parse(Parser* parser);
+
+	//Function's properties
+	bool resolved(){ return true; }
+	Type* type();
 
 	Type* argument;
 	Type* returnType;

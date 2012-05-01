@@ -13,7 +13,6 @@ struct NodeToString: NodeVisitor {
 		else if(node->type == arpha::int64) stream<<node->i64;
 		else if(node->type == arpha::float64) stream<<node->f64;
 		else if(node->type == arpha::constantString) stream<<'"'<<node->string<<'"';
-		else if(node->type == compiler::function) stream<<"func "<<node->refFunction->id;
 		else if(node->type == compiler::scopeRef) stream<<"scope";
 		else if(node->type == compiler::Error)   stream<<"error";
 		else if(node->type == compiler::Nothing) stream<<"statement";
@@ -23,7 +22,11 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(TypeReference* node){
-		stream<<"type "<<node->type()->id;
+		stream<<"ref "<<node->type();
+		return node;
+	}
+	Node* visit(FunctionReference* node){
+		stream<<"ref func "<<node->function()->id;
 		return node;
 	}
 	Node* visit(VariableExpression* node){
@@ -126,6 +129,13 @@ Type* TypeReference::returnType() const {
 Type* TypeReference::type() const {
 	return _type->resolved() ? _type : compiler::Unresolved;
 }
+Type* FunctionReference::returnType() const {
+	return _function->resolved() ? _function->type() : compiler::Unresolved;
+}
+Function* FunctionReference::function() const {
+	assert(_function->resolved());
+	return _function;
+}
 Type* VariableExpression::returnType() const {
 	return variable->type ? variable->type : compiler::Unresolved;
 }
@@ -178,14 +188,14 @@ ConstantExpression* ConstantExpression::createScopeReference(Scope* scope){
 	e->refScope = scope;
 	return e;
 }
-ConstantExpression* ConstantExpression::createFunctionReference(Function* func){
-	auto e = create(compiler::function);
-	e->refFunction = func;
-	return e;
-}
 TypeReference* TypeReference::create(Type* type){
 	auto e = new TypeReference;
 	e->_type = type;
+	return e;
+}
+FunctionReference* FunctionReference::create(Function* func){
+	auto e = new FunctionReference;
+	e->_function = func;
 	return e;
 }
 VariableExpression* VariableExpression::create(Variable* variable){

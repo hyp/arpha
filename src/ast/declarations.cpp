@@ -54,6 +54,18 @@ size_t Type::size(){
 	return _size;
 }
 
+std::ostream& operator<< (std::ostream& stream,Type* type){
+	if(type->isRecord()){
+		stream<<"RecordType";
+		for(size_t i = 0;i < type->fields.size();i++){
+			stream<<(i == 0 ? '(' : ',')<<type->fields[i].id<<":"<<type->fields[i].type;
+		}
+		stream<<')';
+	}
+	else stream<<"Type "<<type->id<<"(?"<<(type->resolved()?'t':'f')<<")";
+	return stream;
+}
+
 /**
 *Organized as
 *  record(int32,int32) <-- headRecord
@@ -65,7 +77,7 @@ std::vector<std::pair<Type*,std::vector<Type*>>> records;
 
 Type* Type::createRecordType(std::vector<std::pair<SymbolID,Type*>>& record,Type* headRecord){
 	std::string typeName = "record";
-	for(size_t i=0;i<record.size();i++)
+	for(size_t i=0;i<record.size();i++)//TODO change this ludicrous display
 		typeName+=format("%c%s:%s",i == 0 ? '(' : ',',headRecord ? record[i].first.ptr() : "_",record[i].second->id.ptr());
 	typeName+=')';
 	debug("Tuple created: %s",typeName);
@@ -144,6 +156,9 @@ Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,loc
 	returnType   = compiler::Nothing;
 	bodyScope = nullptr;
 	body = nullptr;
+}
+Type* Function::type(){
+	return compiler::function;//TODO
 }
 
 //operators

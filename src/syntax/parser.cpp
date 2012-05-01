@@ -139,7 +139,7 @@ Node* Type::parse(Parser* parser){
 }
 
 Node* Function::parse(Parser* parser){
-	return ConstantExpression::createFunctionReference(this);//TODO remove?
+	return FunctionReference::create(this);//TODO remove?
 }
 
 Node* Overloadset::parse(Parser* parser){

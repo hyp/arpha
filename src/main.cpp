@@ -329,7 +329,7 @@ namespace arpha {
 				debug("Function's returnType = %s",func->returnType->id);
 				functionBody(func,parser);
 			}
-			return ConstantExpression::createFunctionReference(func);
+			return FunctionReference::create(func);
 		}
 
 		Node* parse(Parser* parser){

@@ -13,7 +13,6 @@ struct TranslatorImplementation: NodeVisitor {
 		else if(node->type == arpha::int64) stream<<node->i64;
 		else if(node->type == arpha::float64) stream<<node->f64;
 		else if(node->type == arpha::constantString) stream<<'"'<<node->string<<'"';
-		else if(node->type == compiler::function) stream<<node->refFunction->id;
 		else if(node->type == arpha::Nothing) stream<<"void";
 		else if(node->type == arpha::boolean) stream<<(node->u64?"true":"false");
 		else assert(false);
@@ -35,12 +34,7 @@ struct TranslatorImplementation: NodeVisitor {
 		return node;
 	}
 	Node* visit(CallExpression* node){
-		auto cnst = node->object->asConstantExpression();
-		if(auto f = cnst->type == compiler::function ? cnst->refFunction : nullptr ){
-			stream<<f->id<<'(';
-			node->arg->accept(this);
-			stream<<')';
-		}
+		
 		return node;
 	}
 	Node* visit(AssignmentExpression* node){

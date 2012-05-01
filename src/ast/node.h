@@ -24,6 +24,7 @@ struct NodeVisitor;
 #define NODE_LIST(X) \
 	X(ConstantExpression)    \
 	X(TypeReference)         \
+	X(FunctionReference)     \
 	X(VariableExpression)    \
 	X(TupleExpression)       \
 	X(OverloadSetExpression) \
@@ -67,7 +68,6 @@ struct ConstantExpression : Node {
 	//constructors
 	static ConstantExpression* create(Type* constantType);
 	static ConstantExpression* createScopeReference(Scope* scope);
-	static ConstantExpression* createFunctionReference(Function* func);
 
 	Type* returnType() const;
 
@@ -97,6 +97,16 @@ struct TypeReference : Node {
 
 	Type* _type;
 	DECLARE_NODE(TypeReference);
+};
+
+struct FunctionReference : Node {
+	static FunctionReference* create(Function* function);
+
+	Type* returnType() const;
+	Function* function() const;
+
+	Function* _function;
+	DECLARE_NODE(FunctionReference);
 };
 
 struct VariableExpression : Node {
