@@ -233,6 +233,16 @@ struct TypeDeclaration : Node {
 };
 
 struct FunctionDeclaration : Node {
+	static FunctionDeclaration* create(Function* fn);
+
+	Type* returnType() const;
+
+	Function* fn;
+	struct Parameter {
+		Node* typeExpression;
+	};
+	std::vector<Parameter> parameters;
+	Node* returnTypeExpression;//Can be null for inferred type
 	DECLARE_NODE(FunctionDeclaration);
 };
 

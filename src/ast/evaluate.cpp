@@ -316,6 +316,37 @@ struct AstExpander: NodeVisitor {
 		}
 		return node;
 	}
+	Node* visit(FunctionDeclaration* node){
+		bool resolved = true;
+		//Return type?
+		if(node->returnTypeExpression){
+			node->returnTypeExpression = node->returnTypeExpression->accept(this);
+			TypeReference* typeRef;
+			if((typeRef = node->returnTypeExpression->asTypeReference()) && typeRef->type()!=compiler::Unresolved){
+				node->fn->returnType = typeRef->type();
+				//delete node->returnTypeExpression
+				node->returnTypeExpression = nullptr;
+			}
+			else resolved  = false;
+		}
+		//Parameters
+		for(size_t i = 0;i<node->parameters.size();i++){
+			auto expr = node->parameters[i].typeExpression = node->parameters[i].typeExpression->accept(this);
+			TypeReference* typeRef;
+			if((typeRef = expr->asTypeReference()) && typeRef->type()!=compiler::Unresolved){
+				node->fn->arguments[i].variable->type = typeRef->type();
+			}
+			else resolved = false;
+		}
+		if(resolved){
+			node->fn->updateOnSolving();
+			auto ref = FunctionReference::create(node->fn);
+			//delete all node->parameterstypeExpression
+			//delete node
+			return ref;
+		}
+		return node;
+	}
 };
 Node* Evaluator::eval(Node* node){
 	AstExpander expander(this);

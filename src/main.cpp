@@ -279,42 +279,31 @@ namespace arpha {
 		static Node* function(SymbolID name,Location location,Parser* parser){
 			//Function
 			auto func = new Function(name,location);
+			parser->currentScope()->defineFunction(func);
+			auto declaration = FunctionDeclaration::create(func);
+			declaration->returnTypeExpression = nullptr;
 			func->bodyScope = new Scope(parser->currentScope());
 
 			//parse arguments
-			func->argument = arpha::Nothing; ///??? compiler.nothing?
 			if(!parser->match(")")){
-
-				std::vector<Function::Argument> arguments;
 				while(1){
-					//parse argument's name
 					auto loc = parser->currentLocation();
 					auto argName = parser->expectName();
-					auto var = new Variable(argName,loc);
-					var->type = compiler::anyType;
-					func->bodyScope->define(var);
-					arguments.push_back(Function::Argument(var));
-
-					if(parser->match(")")) break;
-					if(!parser->match(",")){
-						//parse additional information, like argument's type	
-						arguments.back().variable->type = parser->expectType(arpha::Precedence::Tuple);
-						if(parser->match(")")) break;
-						parser->expect(",");
+					Function::Argument arg(new Variable(argName,location));
+					func->bodyScope->define(arg.variable);
+					func->arguments.push_back(arg);
+					auto next = parser->peek();
+					FunctionDeclaration::Parameter param;
+					if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")")){
+						param.typeExpression = TypeReference::create(compiler::anyType);
+					}else{
+						param.typeExpression = parser->parse(arpha::Precedence::Tuple);
 					}
+					declaration->parameters.push_back(param);
+					if(parser->match(")")) break;
+					parser->expect(",");
 				}
-				func->arguments = arguments;
-
-				//give the argument an appropriate type representation
-				if(arguments.size()>1){
-					std::vector<std::pair<SymbolID,Type*>> fields;
-					for(auto i=arguments.begin();i!=arguments.end();++i) fields.push_back(std::make_pair((*i).variable->id,(*i).variable->type));
-					func->argument = Type::tuple(fields);
-				}else func->argument = arguments.begin()->variable->type;
 			}
-			debug("Function's argumentType = %s",func->argument->id);
-			parser->currentScope()->defineFunction(func);
-
 			//return type & body
 			auto token = parser->peek();
 			if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
@@ -324,12 +313,11 @@ namespace arpha {
 			else {
 				func->returnType = compiler::Unresolved;	
 				if(!(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
-					func->returnType = parser->expectType(arpha::Precedence::Assignment);
+					declaration->returnTypeExpression = parser->parse(arpha::Precedence::Assignment);
 				}
-				debug("Function's returnType = %s",func->returnType->id);
 				functionBody(func,parser);
 			}
-			return FunctionReference::create(func);
+			return declaration;
 		}
 
 		Node* parse(Parser* parser){

@@ -85,6 +85,9 @@ struct Function: public PrefixDefinition {
 	bool resolved(){ return true; }
 	Type* type();
 
+	//Calculate's properties when the type is fully resolved.
+	void updateOnSolving();
+
 	Type* argument;
 	Type* returnType;
 	Scope* bodyScope;

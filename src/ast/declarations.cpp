@@ -161,6 +161,19 @@ Type* Function::type(){
 	return compiler::function;//TODO
 }
 
+void Function::updateOnSolving(){
+	//TODO
+	//calculate argument type
+	if(arguments.size() == 0) argument = compiler::Nothing;
+	else if(arguments.size()>1){
+		std::vector<std::pair<SymbolID,Type*>> fields;
+		for(auto i=arguments.begin();i!=arguments.end();++i) fields.push_back(std::make_pair((*i).variable->id,(*i).variable->type));
+		argument = Type::tuple(fields);
+	}
+	else argument = arguments.front().variable->type;
+	debug("Updating function's %s state (arg: %s) ret %s",id,argument,returnType);
+}
+
 //operators
 
 PrefixOperator::PrefixOperator(SymbolID name,Location& location) : PrefixDefinition(name,location) {

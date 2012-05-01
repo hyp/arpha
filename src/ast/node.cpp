@@ -95,6 +95,10 @@ struct NodeToString: NodeVisitor {
 			
 		return node;
 	}
+	Node* visit(FunctionDeclaration* node){
+		stream<<"Function declaration "<<node->fn->id<<" .. -> "<<node->returnTypeExpression;
+		return node;
+	}
 };
 std::ostream& operator<< (std::ostream& stream,Node* node){
 	stream<<'(';
@@ -160,6 +164,9 @@ Type* VariableDeclaration::returnType() const {
 	return compiler::Unresolved;
 }
 Type* TypeDeclaration::returnType() const {
+	return compiler::Unresolved;
+}
+Type* FunctionDeclaration::returnType() const {
 	return compiler::Unresolved;
 }
 
@@ -272,5 +279,11 @@ WhileExpression* WhileExpression::create(Node* condition,Node* body){
 TypeDeclaration* TypeDeclaration::create(Type* type){
 	auto e = new TypeDeclaration;
 	e->type = type;
+	return e;
+}
+
+FunctionDeclaration* FunctionDeclaration::create(Function* fn){
+	auto e = new FunctionDeclaration;
+	e->fn = fn;
 	return e;
 }
