@@ -23,6 +23,7 @@ private:
 	
 	Type* headRecord; ///if this is null, then the type isn't a record
 public:
+	bool resolved;
 	std::vector<Variable> fields;
 	
 
@@ -32,6 +33,8 @@ public:
 
 	Variable* lookupField(const SymbolID fieldName);
 	void add(const Variable& var); //adds a field to the type
+
+	void updateState();
 
 
 	//unique record construction

@@ -135,21 +135,17 @@ Type* Parser::matchType(int stickiness){
 	ptr = prevptr;
 	return nullptr;
 }
-std::pair<Type*,Node*> Parser::matchTypeOrUnresolved(int stickiness){
-	//TODO disbale error reporting upon matching
-	auto next = peek();
-	if(next.isEOF() || next.isLine()) return std::make_pair(nullptr,nullptr);
-	const char* prevptr = ptr;
+std::pair<Type*,Node*> Parser::expectTypeOrUnresolved(int stickiness){
+	auto loc = currentLocation();
 	auto node = parse(stickiness);
+	auto t = node->returnType();
 	const ConstantExpression* val;
-	if( (val = node->asConstantExpression()) && val->type == compiler::type) return std::make_pair(val->refType,nullptr);
+	if( (val = node->asConstantExpression()) && t == compiler::type) return std::make_pair(val->refType,nullptr);
 	else {
-		auto t = node->returnType();
-		//TODO Can expressions returning compiler::type already be returnrned as type,null?
 		if(t == compiler::Unresolved || t == compiler::type) return std::make_pair(nullptr,node);
 	}
-	ptr = prevptr;
-	return std::make_pair(nullptr,nullptr);
+	error(loc,"Expected a valid type instead of %s!",node);
+	return std::make_pair(compiler::Error,nullptr);
 }
 
 
@@ -164,11 +160,11 @@ Node* Variable::parse(Parser* parser){
 }
 
 Node* Type::parse(Parser* parser){
-	return ConstantExpression::createTypeReference(this);
+	return resolved? static_cast<Node*>(ConstantExpression::createTypeReference(this)) : static_cast<Node*>(UnresolvedDeclaration::create(this));
 }
 
 Node* Function::parse(Parser* parser){
-	return ConstantExpression::createFunctionReference(this);
+	return ConstantExpression::createFunctionReference(this);//TODO remove?
 }
 
 Node* Overloadset::parse(Parser* parser){

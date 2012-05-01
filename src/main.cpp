@@ -342,26 +342,36 @@ namespace arpha {
 	struct TypeParser: PrefixDefinition {
 		TypeParser(): PrefixDefinition("type",Location()) {  }
 		// fields ::= {'var'|'val'} <name>,... {type ['=' initialValue]|['=' initialValue]}
-		static void fields(Type* type,Parser* parser){
+		static void fields(Type* type,TypeDeclaration** decl,Parser* parser){
 			std::vector<std::pair<SymbolID,Location>> vars;
 			do vars.push_back(std::make_pair(parser->expectName(),parser->previousLocation()));
 			while(parser->match(","));
-			auto t = parser->expectType(arpha::Precedence::Assignment);
+			auto typeOrFutureType = parser->expectTypeOrUnresolved(arpha::Precedence::Assignment);
+			Type* fieldsType;
+			if(typeOrFutureType.first) fieldsType= typeOrFutureType.first;
+			else{
+				fieldsType = compiler::Unresolved;
+				if(!(*decl)) *decl = TypeDeclaration::create(type);
+				(*decl)->unresolvedTypeExpressions.push_back(std::make_pair(typeOrFutureType.second,
+					std::make_pair((int)type->fields.size(),(int)type->fields.size() + vars.size())));
+			}
+			//Add fields to type
 			for(auto i = vars.begin(); i != vars.end(); ++i){
 				Variable v((*i).first,(*i).second);
-				v.inferType(t);
+				v.type = fieldsType;
 				type->add(v);
 			}
 		}
 		// body ::= '{' fields ';' fields ... '}'
 		struct BodyParser {
 			Type* _type;
-			BodyParser(Type* type) : _type(type) {}
+			TypeDeclaration** decl;
+			BodyParser(Type* type,TypeDeclaration** typeDecl) : _type(type),decl(typeDecl) {}
 			bool operator()(Parser* parser){
 				auto token = parser->consume();
 				if(token.isSymbol()){
 					if(token.symbol == "var"){
-						fields(_type,parser);
+						fields(_type,decl,parser);
 						return true;
 					}
 				}
@@ -375,10 +385,11 @@ namespace arpha {
 			auto name = parser->expectName();
 			auto type = new Type(name,location);
 			parser->currentScope()->define(type);
+			TypeDeclaration* possibleTypeDeclaration = nullptr;
 			//fields
-			if(parser->match("{")) blockParser->body(parser,BodyParser(type));
-
-			return type->parse(parser);
+			if(parser->match("{")) blockParser->body(parser,BodyParser(type,&possibleTypeDeclaration));
+			if(possibleTypeDeclaration) return possibleTypeDeclaration;
+			else return type->parse(parser);
 		}
 	};
 
@@ -403,11 +414,14 @@ namespace arpha {
 				result = tuple;
 			}
 			//::= [type|unresolvedExpression (hopefully) resolving to type|Nothing]
-			auto typeOrFutureType = parser->matchTypeOrUnresolved(arpha::Precedence::Assignment);
-			if(typeOrFutureType.second)
-				return VariableDeclaration::create(result,typeOrFutureType.second);	
-			if(typeOrFutureType.first){
-				for(auto i = vars.begin();i!=vars.end();++i) (*i)->asVariableExpression()->variable->inferType(typeOrFutureType.first);
+			auto token = parser->peek();
+			if(!(token.isEOF() || token.isLine() || (token.isSymbol() && (token.symbol == blockParser->lineAlternative || token.symbol == "="))) ){
+				auto typeOrFutureType = parser->expectTypeOrUnresolved(arpha::Precedence::Assignment);
+				if(typeOrFutureType.second)
+					return VariableDeclaration::create(result,typeOrFutureType.second);	
+				else{
+					for(auto i = vars.begin();i!=vars.end();++i) (*i)->asVariableExpression()->variable->inferType(typeOrFutureType.first);
+				}
 			}
 			return result;
 		}

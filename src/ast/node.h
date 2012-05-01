@@ -34,6 +34,7 @@ struct NodeVisitor;
 	X(BlockExpression)       \
 	X(WhileExpression)       \
 	X(VariableDeclaration)   \
+	X(UnresolvedDeclaration) \
 	X(TypeDeclaration)       \
 	X(FunctionDeclaration)       
 
@@ -187,7 +188,8 @@ struct WhileExpression : Node {
 };
 
 /**
-* Declaration nodes are needed to declare definitions with unresolved types
+* Normally when declaring a type/variable/function a given type can be resolved on a first pass.
+* But because this isn't always possible, we have to provide dummy type-solver declaration nodes for future passes when the types can be resolved.
 */
 
 struct VariableDeclaration : Node {
@@ -203,7 +205,23 @@ struct VariableDeclaration : Node {
 	DECLARE_NODE(VariableDeclaration);
 };
 
+//an unresolved type/function this acts as a proxy node
+struct UnresolvedDeclaration : Node {
+	static UnresolvedDeclaration* create(Type* type);
+
+	Type* returnType() const;
+
+	Type* unresolvedType;
+	DECLARE_NODE(UnresolvedDeclaration);
+};
+
 struct TypeDeclaration : Node {
+	static TypeDeclaration* create(Type* type);
+
+	Type* returnType() const;
+
+	Type* type;
+	std::vector<std::pair<Node*,std::pair<int,int> > > unresolvedTypeExpressions;//Stores unresolved types for variable fields i to j
 	DECLARE_NODE(TypeDeclaration);
 };
 

@@ -77,6 +77,16 @@ struct NodeToString: NodeVisitor {
 		stream<<"variables_declaration "<<node->variables<<" with unsolved type "<<node->unresolvedTypeExpression;
 		return node;
 	}
+	Node* visit(TypeDeclaration* node){
+		stream<<"type_declaration "<<node->type->id<<" with unsolved fields' types: ";
+		for(auto i = node->unresolvedTypeExpressions.begin();i!=node->unresolvedTypeExpressions.end();i++)
+			stream<<"Fields["<<(*i).second.first<<".."<<(*i).second.second<<"] of "<<(*i).first;
+		return node;
+	}
+	Node* visit(UnresolvedDeclaration* node){
+		stream<<"unresolved "<<node->unresolvedType->id;
+		return node;
+	}
 };
 std::ostream& operator<< (std::ostream& stream,Node* node){
 	stream<<'(';
@@ -126,6 +136,12 @@ Type* IfExpression::returnType() const {
 	return consequence->returnType();
 }
 Type* VariableDeclaration::returnType() const {
+	return compiler::Unresolved;
+}
+Type* TypeDeclaration::returnType() const {
+	return compiler::Unresolved;
+}
+Type* UnresolvedDeclaration::returnType() const {
 	return compiler::Unresolved;
 }
 
@@ -246,5 +262,16 @@ VariableDeclaration* VariableDeclaration::create(Node* variables,Node* unresolve
 	e->variables = variables;
 	e->unresolvedTypeExpression = unresolvedTypeExpression;
 	e->resolveType(compiler::Unresolved);
+	return e;
+}
+UnresolvedDeclaration* UnresolvedDeclaration::create(Type* type){
+	auto e = new UnresolvedDeclaration;
+	e->unresolvedType = type;
+	return e;
+}
+
+TypeDeclaration* TypeDeclaration::create(Type* type){
+	auto e = new TypeDeclaration;
+	e->type = type;
 	return e;
 }

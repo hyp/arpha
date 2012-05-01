@@ -24,7 +24,7 @@ struct Parser : Lexer {
 
 	Type* expectType(int stickiness);
 	Type* matchType(int stickiness);
-	std::pair<Type*,Node*> matchTypeOrUnresolved(int stickiness);
+	std::pair<Type*,Node*> expectTypeOrUnresolved(int stickiness);
 
 	Node* parse(int stickiness =  0);
 

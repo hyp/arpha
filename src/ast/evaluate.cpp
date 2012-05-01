@@ -265,12 +265,43 @@ struct AstExpander: NodeVisitor {
 	}
 	Node* visit(VariableDeclaration* node){
 		node->unresolvedTypeExpression = node->unresolvedTypeExpression->accept(this);
-		auto type = node->unresolvedTypeExpression->returnType();
-		if(type != compiler::Unresolved){
-			debug("Resolved type %s for variables %s",type,node->variables);
+		ConstantExpression* resolved;
+		if((resolved = node->unresolvedTypeExpression->asConstantExpression()) && resolved->type == compiler::type){
+			auto type= resolved->refType;
+			debug("Resolved type %s for variables %s",type->id,node->variables);
 			node->resolveType(type);
 			//delete node->unresolvedTypeExpression
+			//delete node
 			return node->variables;
+		}
+		return node;
+	}
+	Node* visit(TypeDeclaration* node){
+		bool allSolved = true;
+		for(auto i = node->unresolvedTypeExpressions.begin();i!=node->unresolvedTypeExpressions.end();i++){
+			(*i).first = (*i).first->accept(this);
+			ConstantExpression* resolved;
+			if((resolved = (*i).first->asConstantExpression()) && resolved->type == compiler::type){
+				debug("Resolved type %s for %s's fields %s..%s",resolved->refType,node->type,(*i).second.first,(*i).second.second);
+				for(int j=(*i).second.first;j<(*i).second.second;j++) node->type->fields[j].type = resolved->refType;
+			}
+			else allSolved = false;
+		}
+		if(allSolved){
+			node->type->resolved = true;
+			node->type->updateState();
+			auto ref = ConstantExpression::createTypeReference(node->type);
+			//delete all node->unresolvedTypeExpression.first
+			//delete node
+			return ref;
+		}
+		return node;
+	}
+	Node* visit(UnresolvedDeclaration* node){
+		if(node->unresolvedType->resolved){
+			auto ref = ConstantExpression::createTypeReference(node->unresolvedType);
+			//delete node
+			return ref;
 		}
 		return node;
 	}

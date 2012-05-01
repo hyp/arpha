@@ -22,6 +22,7 @@ void Variable::inferType(Type* t){
 Type::Type(SymbolID name,Location& location) : PrefixDefinition(name,location) {
 	size = 0;
 	headRecord = nullptr;
+	resolved = true;
 }
 
 Variable* Type::lookupField(const SymbolID fieldName){
@@ -32,8 +33,15 @@ Variable* Type::lookupField(const SymbolID fieldName){
 }
 
 void Type::add(const Variable& var){
+	if(var.type == compiler::Unresolved) resolved = false;
 	fields.push_back(var);
 	size += var.type->size;
+}
+void Type::updateState(){
+	if(resolved){
+		debug("Updating type's state");
+		//TODO sizeof etc
+	}
 }
 
 /**
