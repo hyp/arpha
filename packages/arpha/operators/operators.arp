@@ -2,25 +2,12 @@
 	This package defines arpha's operators and their precendence.
 	Author: Hyp
 	Version: 1
-	TODO: ASAP precedence constants including the implementation defined ones.
 	Note:
 		Operator definitions are located in the order of increasing priority in this module.
 		Operators '=' '.' ',' are defined by the compiler implementation.
 #
 
-#
-	def assignment   = 1  # x = y
-	def tuple        = 2  # ,
-	def logical      = 3  # and or
-	def equality     = 4  # == !=
-	def comparison   = 5  # < > <= >=
-	def term         = 6  # + -
-	def product      = 7  # * / %
-	def power        = 8  # **
-	def unary        = 9  # - !
-	def call         = 10 # f()
-	def access       = 11 # a.b
-#
+import export qualified precedence
 
 # Prefix operators
 operator - = minus

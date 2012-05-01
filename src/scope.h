@@ -11,7 +11,8 @@ struct Node;
 namespace Visibility {
 	enum {
 		Public = 0,
-		Private
+		PublicOnDirectLookup, //used for exported imports
+		Private,	
 	};
 }
 
@@ -58,15 +59,15 @@ struct Scope: memory::ManagedDefinition {
 			QUALIFIED = 0x2   //Qualified import - the symbols from the scope are accessed only via the qualified scope alias i.e. foo.bar
 		};
 	};
-	void import(ImportedScope* alias,int flags = 0);
+	void import(ImportedScope* alias,int flags = 0,bool def = true);
 
 	PrefixDefinition* lookupPrefix(SymbolID name);
-	PrefixDefinition* lookupImportedPrefix(SymbolID name);
+	PrefixDefinition* lookupImportedPrefix(SymbolID name,int tolerance = Visibility::PublicOnDirectLookup);
 	PrefixDefinition* containsPrefix(SymbolID name);
 	void define(PrefixDefinition* definition);
 
 	InfixDefinition* lookupInfix(SymbolID name);
-	InfixDefinition* lookupImportedInfix(SymbolID name);
+	InfixDefinition* lookupImportedInfix(SymbolID name,int tolerance = Visibility::PublicOnDirectLookup);
 	InfixDefinition* containsInfix(SymbolID name);
 	void define(InfixDefinition* definition);
 

@@ -1,0 +1,14 @@
+#Operator precedence constants
+
+def assignment   = 1  # x = y
+def tuple        = 2  # ,
+def logical      = 3  # and or
+def equality     = 4  # == !=
+def comparison   = 5  # < > <= >=
+def term         = 6  # + -
+def product      = 7  # * / %
+def power        = 8  # **
+def unary        = 9  # - !
+def index        = 10 # a[]
+def call         = 11 # f()
+def access       = 12 # a.b

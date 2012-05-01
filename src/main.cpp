@@ -578,11 +578,17 @@ namespace compiler {
 		}else if((packageDir + "/arpha/arpha.arp") == moduleName){
 			scope = new Scope(nullptr);
 			arpha::defineCoreSyntax(scope);
+			//import 'compiler' by default
+			auto def = new ImportedScope("compiler",Location(-1,0),findModule("compiler"));
+			scope->import(def);
 		}
 		else {
 			scope = new Scope(nullptr);
+			//import 'compiler' by default
+			auto def = new ImportedScope("compiler",Location(-2,0),::compiler::scope);
+			scope->import(def);
 			//import 'arpha' by default
-			auto def = new ImportedScope("arpha",Location(-1,0),findModule("arpha"));
+			def = new ImportedScope("arpha",Location(-1,0),findModule("arpha"));
 			scope->import(def);
 		}
 		currentModule->second.scope = scope;

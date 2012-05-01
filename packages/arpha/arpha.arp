@@ -4,8 +4,6 @@
 	Version: 1
 #
 
-import export qualified compiler
-
 # An unsigned integer representing CPU's word.
 # It is equivalent to size_t from C/C++.
 def natural = if(true) uint32 else uint64

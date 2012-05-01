@@ -20,40 +20,44 @@ Scope::Scope(Scope* parent){
 	this->parent = parent;
 }
 
-void Scope::import(ImportedScope* alias,int flags){
+//TODO write properly
+void Scope::import(ImportedScope* alias,int flags,bool def ){
 	auto c = containsPrefix(alias->id);
 	if(c){
 		error(alias->location,"Symbol '%s' is already defined! Failed to import scope '%s'.",alias->id,alias->id);
 		return;
 	}
-	debug("Importing scope %s with flags %d",alias->id,flags);
-	if(!(flags & ImportFlags::QUALIFIED)){
+	const bool qualifiedImport = (flags & ImportFlags::QUALIFIED)!=0;
+	const bool broadcastedImport = (flags & ImportFlags::BROADCAST)!=0;
+	debug("Importing scope %s with flags %d,%d,%d",alias->id,qualifiedImport,broadcastedImport,def);
+	if(!qualifiedImport){
 		imports.push_back(alias->scope);
 		//import broadcasted scopes
 		for(auto i=alias->scope->broadcastedImports.begin();i!=alias->scope->broadcastedImports.end();++i){
-			debug("Broadcasting a scope aliased as %s",(*i)->id);
-			import(*i,(*i)->importFlags);
+			debug("Broadcasting a scope aliased as %s flags %s",(*i)->id,(*i)->importFlags);
+			import(*i,(*i)->importFlags,false);
 		}
 	}
-	if(flags & ImportFlags::BROADCAST){
+	if(broadcastedImport){
 		debug("defining public import");
-		broadcastedImports.push_back(alias);
+		alias->visibilityMode = Visibility::PublicOnDirectLookup;
+		if(!qualifiedImport) broadcastedImports.push_back(alias);
 		alias->importFlags = flags & (~ImportFlags::BROADCAST); //retrieve other flags
 	}
-	define(alias);
+	if(def) define(alias);
 }
 
 #define LOOKUP_IMPORTED(t,c) \
 	auto var = t##Definitions.find(name); \
-	if (var != t##Definitions.end() && var->second->visibilityMode == Visibility::Public) return var->second; \
+	if (var != t##Definitions.end() && (int)var->second->visibilityMode <= tolerance) return var->second; \
 	if(parent) return parent->lookupImported##c(name); \
 	return nullptr
 
-PrefixDefinition* Scope::lookupImportedPrefix(SymbolID name){
+PrefixDefinition* Scope::lookupImportedPrefix(SymbolID name,int tolerance){
 	LOOKUP_IMPORTED(prefix,Prefix);
 }
 
-InfixDefinition* Scope::lookupImportedInfix(SymbolID name){
+InfixDefinition* Scope::lookupImportedInfix(SymbolID name,int tolerance){
 	LOOKUP_IMPORTED(infix,Infix);
 }
 
@@ -62,7 +66,7 @@ InfixDefinition* Scope::lookupImportedInfix(SymbolID name){
 	if (var != t##Definitions.end()) return var->second; \
 	c##Definition* def = nullptr; \
 	for(auto i = imports.begin();i!=imports.end();++i){ \
-		auto d = (*i)->lookupImported##c(name); \
+		auto d = (*i)->lookupImported##c(name,Visibility::Public); \
 		if(d){ \
 			if(def) error(d->location,"'%s' Symbol import conflict",d->id); /*TODO os conflict resolvement*/\
 			else def = d; \
