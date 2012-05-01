@@ -74,13 +74,19 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(VariableDeclaration* node){
-		stream<<"variables_declaration "<<node->variables<<" with unsolved type "<<node->unresolvedTypeExpression;
+		stream<<"Declaration of variables ";
+		for(auto i=node->variables.begin();i!=node->variables.end();i++){
+			stream<<(*i)->id<<" ";
+		}
+		if(node->typeExpression) stream<<" with type expr "<<node->typeExpression;
 		return node;
 	}
 	Node* visit(TypeDeclaration* node){
-		stream<<"type_declaration "<<node->type->id<<" with unsolved fields' types: ";
-		for(auto i = node->unresolvedTypeExpressions.begin();i!=node->unresolvedTypeExpressions.end();i++)
-			stream<<"Fields["<<(*i).second.first<<".."<<(*i).second.second<<"] of "<<(*i).first;
+		stream<<"Type declaration "<<node->type->id<<" with fields: ";
+		for(auto i = node->fields.begin();i!=node->fields.end();i++){
+			stream<<"Fields "<<(*i).firstFieldID<<" with type expr "<<(*i).typeExpression;
+		}
+			
 		return node;
 	}
 	Node* visit(UnresolvedDeclaration* node){
@@ -248,20 +254,6 @@ WhileExpression* WhileExpression::create(Node* condition,Node* body){
 	auto e = new WhileExpression;
 	e->condition = condition;
 	e->body = body;
-	return e;
-}
-void VariableDeclaration::resolveType(Type* type){
-	if(auto t = variables->asTupleExpression()){
-		for(auto i = t->children.begin();i!=t->children.end();i++) 
-			(*i)->asVariableExpression()->variable->type = type;
-	}
-	else variables->asVariableExpression()->variable->type = type;
-}
-VariableDeclaration* VariableDeclaration::create(Node* variables,Node* unresolvedTypeExpression){
-	auto e = new VariableDeclaration;
-	e->variables = variables;
-	e->unresolvedTypeExpression = unresolvedTypeExpression;
-	e->resolveType(compiler::Unresolved);
 	return e;
 }
 UnresolvedDeclaration* UnresolvedDeclaration::create(Type* type){

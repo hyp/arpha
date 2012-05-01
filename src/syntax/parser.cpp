@@ -160,7 +160,7 @@ Node* Variable::parse(Parser* parser){
 }
 
 Node* Type::parse(Parser* parser){
-	return resolved? static_cast<Node*>(ConstantExpression::createTypeReference(this)) : static_cast<Node*>(UnresolvedDeclaration::create(this));
+	return _resolved? static_cast<Node*>(ConstantExpression::createTypeReference(this)) : static_cast<Node*>(UnresolvedDeclaration::create(this));
 }
 
 Node* Function::parse(Parser* parser){

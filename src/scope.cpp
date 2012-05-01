@@ -107,14 +107,14 @@ void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& resul
 		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
 		auto argumentType = argument->returnType();
 		if((*i)->argument == argumentType){
-			debug("-d");
+			//debug("-d");
 			results.push_back(*i);
 		}
 		else if(argumentType->isRecord() && Type::recordsSameTypes((*i)->argument, argumentType) ){
-			debug("-dr");
+			//debug("-dr");
 			results.push_back(*i);
 		}
-		else if((*i)->argument == compiler::expression){ debug("-c"); exprMatch = *i; }
+		else if((*i)->argument == compiler::expression){ /*debug("-c");*/ exprMatch = *i; }
 	}
 	if(exprMatch && results.size()==0) results.push_back( exprMatch );//TODO careful with imports
 }

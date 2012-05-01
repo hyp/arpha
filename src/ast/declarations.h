@@ -1,3 +1,6 @@
+/**
+* This module contains the amin declarations such as function, type and variable.
+*/
 #ifndef DECLARATIONS_H
 #define DECLARATIONS_H
 
@@ -22,8 +25,11 @@ struct Type: public PrefixDefinition {
 private:	
 	
 	Type* headRecord; ///if this is null, then the type isn't a record
+	
+	bool _resolved;
 public:
-	bool resolved;
+	size_t _size;
+	
 	std::vector<Variable> fields;
 	
 
@@ -34,15 +40,19 @@ public:
 	Variable* lookupField(const SymbolID fieldName);
 	void add(const Variable& var); //adds a field to the type
 
-	void updateState();
+	//Type's properties
+	bool resolved();
+	size_t size();
+	
+	//Calculate's properties when the type is fully resolved.
+	void updateOnSolving();
+
+	
 
 
 	//unique record construction
 	static Type* tuple(std::vector<std::pair<SymbolID,Type*>>& fields);
 
-	uint32 size;
-	uint32 alignment;
-	
 
 	bool isRecord() const { return headRecord != nullptr; }
 

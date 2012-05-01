@@ -189,19 +189,14 @@ struct WhileExpression : Node {
 
 /**
 * Normally when declaring a type/variable/function a given type can be resolved on a first pass.
-* But because this isn't always possible, we have to provide dummy type-solver declaration nodes for future passes when the types can be resolved.
+* But because this isn't always possible, we have to provide dummy declaration nodes for future passes when the types can be resolved.
 */
 
 struct VariableDeclaration : Node {
-	static VariableDeclaration* create(Node* variables,Node* unresolvedTypeExpression);
-
 	Type* returnType() const;
 
-	//Sets the variables' type to type. Used only on creation or evaluation
-	void resolveType(Type* type);
-
-	Node* variables; //Either 1 variable or tuple
-	Node* unresolvedTypeExpression;
+	std::vector<Variable*> variables;
+	Node* typeExpression;  //Can be null for inferred variable type
 	DECLARE_NODE(VariableDeclaration);
 };
 
@@ -221,7 +216,11 @@ struct TypeDeclaration : Node {
 	Type* returnType() const;
 
 	Type* type;
-	std::vector<std::pair<Node*,std::pair<int,int> > > unresolvedTypeExpressions;//Stores unresolved types for variable fields i to j
+	struct FieldDefinition {
+		int firstFieldID,count;
+		Node* typeExpression;
+	};
+	std::vector<FieldDefinition> fields;
 	DECLARE_NODE(TypeDeclaration);
 };
 

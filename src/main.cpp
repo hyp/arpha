@@ -72,7 +72,8 @@ namespace arpha {
 
 	Type* builtInType(const char* name,int size){
 		auto t = new Type(SymbolID(name),Location());
-		t->size = size;
+		t->_size = size;
+		t->updateOnSolving();
 		scope->define(t);
 		return t;
 	}
@@ -243,6 +244,13 @@ namespace arpha {
 		}
 	};
 
+	bool isEndExpression(const Token& token){
+		return token.isEOF() || token.isLine() || (token.isSymbol() && token.symbol == blockParser->lineAlternative );
+	}
+	bool isEndExpressionEquals(const Token& token){
+		return isEndExpression(token) || (token.isSymbol() && token.symbol == "=");
+	}
+
 	/// ::= 'def' <name> '=' expression
 	/// ::= 'def' <name> '(' args ')' [returnType] body
 	struct DefParser: PrefixDefinition {
@@ -342,40 +350,32 @@ namespace arpha {
 	struct TypeParser: PrefixDefinition {
 		TypeParser(): PrefixDefinition("type",Location()) {  }
 		// fields ::= {'var'|'val'} <name>,... {type ['=' initialValue]|['=' initialValue]}
-		static void fields(Type* type,TypeDeclaration** decl,Parser* parser){
+		static void fields(TypeDeclaration* decl,Parser* parser){
 			std::vector<std::pair<SymbolID,Location>> vars;
-			do vars.push_back(std::make_pair(parser->expectName(),parser->previousLocation()));
+			TypeDeclaration::FieldDefinition fields;
+			fields.firstFieldID = decl->type->fields.size();
+			fields.count = 0;
+			do {
+				decl->type->add(Variable(parser->expectName(),parser->previousLocation()));
+				fields.count++;
+			}
 			while(parser->match(","));
-			auto typeOrFutureType = parser->expectTypeOrUnresolved(arpha::Precedence::Assignment);
-			Type* fieldsType;
-			if(typeOrFutureType.first) fieldsType= typeOrFutureType.first;
-			else{
-				fieldsType = compiler::Unresolved;
-				if(!(*decl)) *decl = TypeDeclaration::create(type);
-				(*decl)->unresolvedTypeExpressions.push_back(std::make_pair(typeOrFutureType.second,
-					std::make_pair((int)type->fields.size(),(int)type->fields.size() + vars.size())));
-			}
-			//Add fields to type
-			for(auto i = vars.begin(); i != vars.end(); ++i){
-				Variable v((*i).first,(*i).second);
-				v.type = fieldsType;
-				type->add(v);
-			}
+			fields.typeExpression = parser->parse(arpha::Precedence::Assignment);
+			decl->fields.push_back(fields);
 		}
 		// body ::= '{' fields ';' fields ... '}'
 		struct BodyParser {
-			Type* _type;
-			TypeDeclaration** decl;
-			BodyParser(Type* type,TypeDeclaration** typeDecl) : _type(type),decl(typeDecl) {}
+			TypeDeclaration* decl;
+			BodyParser(TypeDeclaration* typeDecl) : decl(typeDecl) {}
 			bool operator()(Parser* parser){
 				auto token = parser->consume();
 				if(token.isSymbol()){
 					if(token.symbol == "var"){
-						fields(_type,decl,parser);
+						fields(decl,parser);
 						return true;
 					}
 				}
-				error(parser->previousLocation(),"Unexpected %s - a var is expected inside a type %s body!",token,_type->id);
+				error(parser->previousLocation(),"Unexpected %s - a var is expected inside a type %s body!",token,decl->type->id);
 				return false;
 			}
 		};
@@ -384,12 +384,11 @@ namespace arpha {
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
 			auto type = new Type(name,location);
+			auto declaration = TypeDeclaration::create(type);
 			parser->currentScope()->define(type);
-			TypeDeclaration* possibleTypeDeclaration = nullptr;
 			//fields
-			if(parser->match("{")) blockParser->body(parser,BodyParser(type,&possibleTypeDeclaration));
-			if(possibleTypeDeclaration) return possibleTypeDeclaration;
-			else return type->parse(parser);
+			if(parser->match("{")) blockParser->body(parser,BodyParser(declaration));
+			return declaration;
 		}
 	};
 
@@ -397,33 +396,16 @@ namespace arpha {
 	struct VarParser: PrefixDefinition {
 		VarParser(): PrefixDefinition("var",Location()) {}
 		Node* parse(Parser* parser){
-			std::vector<Node*> vars;
-			do{
-				auto name = parser->expectName();
-				auto var = new Variable(name,parser->previousLocation());
+			auto declaration = new VariableDeclaration;
+			do {
+				auto var = new Variable(parser->expectName(),parser->previousLocation());
 				parser->currentScope()->define(var);
-				vars.push_back(VariableExpression::create(var));
-			}while(parser->match(","));
-			//variable references expression
-			Node* result;
-			if(vars.size() == 1) 
-				result = vars[0];
-			else{  
-				auto tuple = TupleExpression::create();
-				tuple->children = vars;
-				result = tuple;
+				declaration->variables.push_back(var);
 			}
-			//::= [type|unresolvedExpression (hopefully) resolving to type|Nothing]
-			auto token = parser->peek();
-			if(!(token.isEOF() || token.isLine() || (token.isSymbol() && (token.symbol == blockParser->lineAlternative || token.symbol == "="))) ){
-				auto typeOrFutureType = parser->expectTypeOrUnresolved(arpha::Precedence::Assignment);
-				if(typeOrFutureType.second)
-					return VariableDeclaration::create(result,typeOrFutureType.second);	
-				else{
-					for(auto i = vars.begin();i!=vars.end();++i) (*i)->asVariableExpression()->variable->inferType(typeOrFutureType.first);
-				}
-			}
-			return result;
+			while(parser->match(","));
+			if(!isEndExpressionEquals(parser->peek())) declaration->typeExpression = parser->parse(arpha::Precedence::Assignment);
+			else declaration->typeExpression = nullptr;
+			return declaration;
 		}
 	};
 
@@ -681,6 +663,7 @@ namespace compiler {
 	Type* builtInType(const char* name){
 		auto t = new Type(SymbolID(name),Location());
 		scope->define(t);
+		t->updateOnSolving();
 		return t;
 	}
 

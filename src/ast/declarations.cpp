@@ -20,12 +20,13 @@ void Variable::inferType(Type* t){
 //type
 
 Type::Type(SymbolID name,Location& location) : PrefixDefinition(name,location) {
-	size = 0;
+	_size = 0;
 	headRecord = nullptr;
-	resolved = true;
+	_resolved = false;
 }
 
 Variable* Type::lookupField(const SymbolID fieldName){
+	assert(!_resolved);
 	for(auto i = fields.begin();i!=fields.end();++i){
 		if( (*i).id == fieldName ) return i._Ptr;
 	}
@@ -33,15 +34,25 @@ Variable* Type::lookupField(const SymbolID fieldName){
 }
 
 void Type::add(const Variable& var){
-	if(var.type == compiler::Unresolved) resolved = false;
+	assert(!_resolved);
+	//if(var.type == compiler::Unresolved) _resolved = false;
 	fields.push_back(var);
-	size += var.type->size;
 }
-void Type::updateState(){
-	if(resolved){
-		debug("Updating type's state");
-		//TODO sizeof etc
+void Type::updateOnSolving(){
+	_resolved = true;
+	debug("Updating type's %s state",id);
+	_size = 0;
+	for(auto i = fields.begin();i!=fields.end();++i){
+		assert((*i).type != compiler::Unresolved);
+		_size += (*i).type->_size;
 	}
+}
+bool Type::resolved(){
+	return _resolved;
+}
+size_t Type::size(){
+	assert(_resolved);
+	return _size;
 }
 
 /**
@@ -68,6 +79,7 @@ Type* Type::createRecordType(std::vector<std::pair<SymbolID,Type*>>& record,Type
 		var.type = record[i].second;
 		type->add(var);
 	}
+	type->updateOnSolving();
 	return type;
 }
 

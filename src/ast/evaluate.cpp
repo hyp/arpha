@@ -50,7 +50,7 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 	HANDLE("dumpDEF",compiler::expression,{ 
 		auto cnst = argument->asConstantExpression();
 		if(cnst->type == compiler::type){
-			System::print(format("------------------- DEF dump: ------------------------------\nType %s (sizeof %s)\n",cnst->refType->id,cnst->refType->size));
+			System::print(format("------------------- DEF dump: ------------------------------\nType %s (sizeof %s)\n",cnst->refType->id,cnst->refType->size()));
 			for(auto i = cnst->refType->fields.begin();i!=cnst->refType->fields.end();++i){
 				System::print(format("  field %s of type %s\n",(*i).id,(*i).type->id));
 			}
@@ -78,7 +78,7 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 	HANDLE("sizeof",compiler::expression,{ 
 		auto size = ConstantExpression::create(arpha::uint64);//TODO arpha.natural
 		auto cnstArgument = argument->asConstantExpression();
-		size->u64  = uint64( ( cnstArgument->type == compiler::type ? cnstArgument->refType : argument->returnType() )->size );
+		size->u64  = uint64( ( cnstArgument->type == compiler::type ? cnstArgument->refType : argument->returnType() )->size() );
 		return size;
 	});
 	//TODO - implement
@@ -264,41 +264,58 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 	Node* visit(VariableDeclaration* node){
-		node->unresolvedTypeExpression = node->unresolvedTypeExpression->accept(this);
-		ConstantExpression* resolved;
-		if((resolved = node->unresolvedTypeExpression->asConstantExpression()) && resolved->type == compiler::type){
-			auto type= resolved->refType;
-			debug("Resolved type %s for variables %s",type->id,node->variables);
-			node->resolveType(type);
-			//delete node->unresolvedTypeExpression
+		bool resolved = false;
+		Type* type;
+		if(!node->typeExpression){
+			resolved = true;
+			type = nullptr; //inferred
+		}else{
+			auto typeExpr = node->typeExpression = node->typeExpression->accept(this);
+			ConstantExpression* cnst;
+			if((cnst = typeExpr->asConstantExpression()) && cnst->type == compiler::type){
+				resolved = true;
+				type = cnst->refType;
+			}
+		}
+		//return
+		if(resolved){
+			debug("Resolved type %s for variables %s...",type ? type->id : "inferred",node->variables[0]->id);
+			const bool tuplify = node->variables.size() > 1;
+			auto tuple = tuplify ? TupleExpression::create() : nullptr;
+			for(auto i = node->variables.begin();i!=node->variables.end();i++){
+				(*i)->type = type;
+				if(tuplify) tuple->children.push_back(VariableExpression::create(*i));
+			}
 			//delete node
-			return node->variables;
+			return tuplify ? static_cast<Node*>(tuple) : static_cast<Node*>(VariableExpression::create(node->variables[0]));
 		}
 		return node;
 	}
 	Node* visit(TypeDeclaration* node){
-		bool allSolved = true;
-		for(auto i = node->unresolvedTypeExpressions.begin();i!=node->unresolvedTypeExpressions.end();i++){
-			(*i).first = (*i).first->accept(this);
-			ConstantExpression* resolved;
-			if((resolved = (*i).first->asConstantExpression()) && resolved->type == compiler::type){
-				debug("Resolved type %s for %s's fields %s..%s",resolved->refType,node->type,(*i).second.first,(*i).second.second);
-				for(int j=(*i).second.first;j<(*i).second.second;j++) node->type->fields[j].type = resolved->refType;
+		bool resolved = true;
+		for(auto i = node->fields.begin();i!=node->fields.end();i++){
+			auto typeExpr = (*i).typeExpression = (*i).typeExpression->accept(this);
+			ConstantExpression* cnst;
+			if((cnst = typeExpr->asConstantExpression()) && cnst->type == compiler::type){ 
+				//Apply the resolved type to fields
+				const int limit = (*i).firstFieldID + (*i).count;
+				for(auto j = (*i).firstFieldID;j < limit;j++){
+					node->type->fields[j].type = cnst->refType;
+				}
 			}
-			else allSolved = false;
+			else resolved = false;
 		}
-		if(allSolved){
-			node->type->resolved = true;
-			node->type->updateState();
+		if(resolved){
+			node->type->updateOnSolving();
 			auto ref = ConstantExpression::createTypeReference(node->type);
-			//delete all node->unresolvedTypeExpression.first
+			//delete all node->typeExpression
 			//delete node
 			return ref;
 		}
 		return node;
 	}
 	Node* visit(UnresolvedDeclaration* node){
-		if(node->unresolvedType->resolved){
+		if(node->unresolvedType->resolved()){
 			auto ref = ConstantExpression::createTypeReference(node->unresolvedType);
 			//delete node
 			return ref;
