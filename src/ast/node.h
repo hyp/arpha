@@ -9,7 +9,7 @@
 #include "../syntax/location.h"
 
 #include "../scope.h"
-#include "../declarations.h"
+#include "declarations.h"
 
 struct NodeVisitor;
 

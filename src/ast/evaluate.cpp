@@ -1,6 +1,6 @@
 #include "../common.h"
 #include "../scope.h"
-#include "../declarations.h"
+#include "../ast/declarations.h"
 #include "node.h"
 #include "visitor.h"
 #include "../compiler.h"

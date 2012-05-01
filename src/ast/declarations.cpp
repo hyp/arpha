@@ -1,10 +1,10 @@
-#include "common.h"
-#include "scope.h"
+#include "../common.h"
+#include "../scope.h"
 #include "declarations.h"
-#include "syntax/parser.h"
-#include "ast/node.h"
-#include "compiler.h"
-#include "arpha.h"
+#include "../syntax/parser.h"
+#include "node.h"
+#include "../compiler.h"
+#include "../arpha.h"
 
 //variable
 Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location) {
