@@ -135,6 +135,22 @@ Type* Parser::matchType(int stickiness){
 	ptr = prevptr;
 	return nullptr;
 }
+std::pair<Type*,Node*> Parser::matchTypeOrUnresolved(int stickiness){
+	//TODO disbale error reporting upon matching
+	auto next = peek();
+	if(next.isEOF() || next.isLine()) return std::make_pair(nullptr,nullptr);
+	const char* prevptr = ptr;
+	auto node = parse(stickiness);
+	const ConstantExpression* val;
+	if( (val = node->asConstantExpression()) && val->type == compiler::type) return std::make_pair(val->refType,nullptr);
+	else {
+		auto t = node->returnType();
+		//TODO Can expressions returning compiler::type already be returnrned as type,null?
+		if(t == compiler::Unresolved || t == compiler::type) return std::make_pair(nullptr,node);
+	}
+	ptr = prevptr;
+	return std::make_pair(nullptr,nullptr);
+}
 
 
 //parsing declarations

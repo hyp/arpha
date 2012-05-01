@@ -263,6 +263,17 @@ struct AstExpander: NodeVisitor {
 		node->body = node->body->accept(this);
 		return node;
 	}
+	Node* visit(VariableDeclaration* node){
+		node->unresolvedTypeExpression = node->unresolvedTypeExpression->accept(this);
+		auto type = node->unresolvedTypeExpression->returnType();
+		if(type != compiler::Unresolved){
+			debug("Resolved type %s for variables %s",type,node->variables);
+			node->resolveType(type);
+			//delete node->unresolvedTypeExpression
+			return node->variables;
+		}
+		return node;
+	}
 };
 Node* Evaluator::eval(Node* node){
 	AstExpander expander(this);

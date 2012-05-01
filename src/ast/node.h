@@ -32,7 +32,10 @@ struct NodeVisitor;
 	X(ReturnExpression)      \
 	X(IfExpression)          \
 	X(BlockExpression)       \
-	X(WhileExpression) 
+	X(WhileExpression)       \
+	X(VariableDeclaration)   \
+	X(TypeDeclaration)       \
+	X(FunctionDeclaration)       
 
 //Forward declaration of node types
 struct Node;
@@ -181,6 +184,31 @@ struct WhileExpression : Node {
 	Node* condition;
 	Node* body;
 	DECLARE_NODE(WhileExpression);
+};
+
+/**
+* Declaration nodes are needed to declare definitions with unresolved types
+*/
+
+struct VariableDeclaration : Node {
+	static VariableDeclaration* create(Node* variables,Node* unresolvedTypeExpression);
+
+	Type* returnType() const;
+
+	//Sets the variables' type to type. Used only on creation or evaluation
+	void resolveType(Type* type);
+
+	Node* variables; //Either 1 variable or tuple
+	Node* unresolvedTypeExpression;
+	DECLARE_NODE(VariableDeclaration);
+};
+
+struct TypeDeclaration : Node {
+	DECLARE_NODE(TypeDeclaration);
+};
+
+struct FunctionDeclaration : Node {
+	DECLARE_NODE(FunctionDeclaration);
 };
 
 

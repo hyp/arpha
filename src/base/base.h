@@ -19,7 +19,7 @@ typedef unsigned int uint32;
 typedef unsigned char uint8;
 
 typedef unsigned char U8Char;
-typedef wchar_t U16Char;
+typedef wchar_t U16Char; //TODO what if wchar_t isn't 2 bytes on other system???
 typedef unsigned int UnicodeChar;
 
 //Assertion macro

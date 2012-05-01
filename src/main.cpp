@@ -58,6 +58,7 @@ unittest(scope){
 }
 
 
+
 //TODO functions arguments vector!
 namespace arpha {
 	Scope *scope;
@@ -381,7 +382,7 @@ namespace arpha {
 		}
 	};
 
-	/// ::= 'var' <names> [type]
+	/// ::= 'var' <names> [type|unresolvedExpression (hopefully) resolving to type|Nothing]
 	struct VarParser: PrefixDefinition {
 		VarParser(): PrefixDefinition("var",Location()) {}
 		Node* parse(Parser* parser){
@@ -392,15 +393,23 @@ namespace arpha {
 				parser->currentScope()->define(var);
 				vars.push_back(VariableExpression::create(var));
 			}while(parser->match(","));
-
-			if(auto type = parser->matchType(arpha::Precedence::Assignment)){
-				for(auto i = vars.begin();i!=vars.end();++i) (*i)->asVariableExpression()->variable->inferType(type);
+			//variable references expression
+			Node* result;
+			if(vars.size() == 1) 
+				result = vars[0];
+			else{  
+				auto tuple = TupleExpression::create();
+				tuple->children = vars;
+				result = tuple;
 			}
-
-			if(vars.size() == 1) return vars[0];
-			auto tuple = TupleExpression::create();
-			tuple->children = vars;
-			return tuple;
+			//::= [type|unresolvedExpression (hopefully) resolving to type|Nothing]
+			auto typeOrFutureType = parser->matchTypeOrUnresolved(arpha::Precedence::Assignment);
+			if(typeOrFutureType.second)
+				return VariableDeclaration::create(result,typeOrFutureType.second);	
+			if(typeOrFutureType.first){
+				for(auto i = vars.begin();i!=vars.end();++i) (*i)->asVariableExpression()->variable->inferType(typeOrFutureType.first);
+			}
+			return result;
 		}
 	};
 
@@ -535,14 +544,12 @@ namespace arpha {
 		//true & false
 		auto value = ConstantExpression::create(boolean);
 		value->u64 = 1;
-		//TOREVIEW the need to set isLiteral
 		auto constant = new Variable("true",location);
 		constant->value = value;
 		scope->define(constant);
 
 		value = ConstantExpression::create(boolean);
 		value->u64 = 0;
-		//TOREVIEW the need to set isLiteral
 		constant = new Variable("false",location);
 		constant->value = value;
 		scope->define(constant);
@@ -652,7 +659,6 @@ namespace compiler {
 	Type* Nothing; 
 	Type* Error;
 	Type* Unresolved;
-	Type* inferred;
 	Type* anyType; 
 
 	Type* function;

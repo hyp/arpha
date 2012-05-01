@@ -73,6 +73,10 @@ struct NodeToString: NodeVisitor {
 		stream<<"while "<<node->condition<<" do "<<node->body;
 		return node;
 	}
+	Node* visit(VariableDeclaration* node){
+		stream<<"variables_declaration "<<node->variables<<" with unsolved type "<<node->unresolvedTypeExpression;
+		return node;
+	}
 };
 std::ostream& operator<< (std::ostream& stream,Node* node){
 	stream<<'(';
@@ -102,7 +106,7 @@ Type* ConstantExpression::returnType() const {
 	return isLiteral() ? literalConstantReturnType(this) : type;
 }
 Type* VariableExpression::returnType() const {
-	return variable->type;
+	return variable->type ? variable->type : compiler::Unresolved;
 }
 Type* TupleExpression::returnType() const {
 	assert(type);
@@ -120,6 +124,9 @@ Type* AssignmentExpression::returnType() const {
 Type* IfExpression::returnType() const {
 	if(!alternative) return compiler::Nothing;
 	return consequence->returnType();
+}
+Type* VariableDeclaration::returnType() const {
+	return compiler::Unresolved;
 }
 
 //Injects visitor callback and dynamic cast function into a node structure
@@ -225,5 +232,19 @@ WhileExpression* WhileExpression::create(Node* condition,Node* body){
 	auto e = new WhileExpression;
 	e->condition = condition;
 	e->body = body;
+	return e;
+}
+void VariableDeclaration::resolveType(Type* type){
+	if(auto t = variables->asTupleExpression()){
+		for(auto i = t->children.begin();i!=t->children.end();i++) 
+			(*i)->asVariableExpression()->variable->type = type;
+	}
+	else variables->asVariableExpression()->variable->type = type;
+}
+VariableDeclaration* VariableDeclaration::create(Node* variables,Node* unresolvedTypeExpression){
+	auto e = new VariableDeclaration;
+	e->variables = variables;
+	e->unresolvedTypeExpression = unresolvedTypeExpression;
+	e->resolveType(compiler::Unresolved);
 	return e;
 }

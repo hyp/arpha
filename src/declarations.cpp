@@ -8,10 +8,11 @@
 
 //variable
 Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location) {
-	type = compiler::Unresolved;
+	type  = nullptr;
 	value = nullptr;
 }
 void Variable::inferType(Type* t){
+	assert(type == nullptr);
 	debug("Inferred type %s for variable %s",t->id,id);
 	type = t;
 }

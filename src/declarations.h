@@ -12,6 +12,7 @@ struct Variable : PrefixDefinition  {
 
 	Node* parse(Parser* parser);
 
+	//Type(can be null for inferred type);
 	Type* type;
 	//Value(can be null) - for constant variables this is the constant value
 	Node* value;
