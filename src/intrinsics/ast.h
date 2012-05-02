@@ -8,6 +8,8 @@ namespace intrinsics {
 	namespace ast {
 		extern Type* Expression;
 
+		extern Function* mixin;
+
 		void init(Scope* moduleScope);
 	};
 };

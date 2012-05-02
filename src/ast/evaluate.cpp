@@ -134,6 +134,14 @@ struct AstExpander: NodeVisitor {
 		return node->variable->value ? node->variable->value : node;
 	}
 
+	Node* visit(ExpressionReference* node){
+		if(evaluator->evaluateExpressionReferences){
+			//delete node
+			return node->expression->accept(this);
+		}
+		return node;
+	}
+
 	//on a.foo(...)
 	static Node* transformCallOnAccess(CallExpression* node,Type* argumentType,AccessExpression* acessingObject){
 		debug("calling on access! %s with %s",acessingObject,node->arg);
@@ -163,6 +171,7 @@ struct AstExpander: NodeVisitor {
 			//delte node
 			return r;
 		}
+		if(node->arg->returnType() == compiler::Nothing) error(node->arg->location,"Can't perform type call onto a statement!");
 		return node;
 	}
 
@@ -170,7 +179,11 @@ struct AstExpander: NodeVisitor {
 		//evaluate argument
 		node->arg = node->arg->accept(this);
 		auto argumentType = node->arg->returnType();
-	
+
+		if(auto callingType = node->object->asTypeReference()){
+			return evalTypeCall(node,callingType->type());
+		}
+
 		if(argumentType == compiler::Nothing) error(node->arg->location,"Can't perform function call on a statement!");
 		else if(argumentType != compiler::Unresolved){
 			if(auto callingOverloadSet = node->object->asOverloadSetExpression()){
@@ -179,15 +192,17 @@ struct AstExpander: NodeVisitor {
 					node->object = FunctionReference::create(func);
 					//TODO function->adjustArgument
 					debug("Overload successfully resolved as %s: %s",func->id,func->argument->id);
+					if(func == intrinsics::ast::mixin){
+						evaluator->evaluateExpressionReferences = true;
+						auto e = node->arg->accept(this);
+						evaluator->evaluateExpressionReferences = false;
+						return e;
+					}
 					return evaluateResolvedFunctionCall(evaluator->currentScope(),node);
-				}else{
-					//TODO mark current block as unresolved!
 				}
 			}
 			else if(auto callingFunc = node->object->asFunctionReference())
 				return node;	//TODO eval?
-			else if(auto callingType = node->object->asTypeReference())
-				return evalTypeCall(node,callingType->type());
 			else if(auto callingAccess = node->object->asAccessExpression()){
 				return transformCallOnAccess(node,argumentType,callingAccess)->accept(this);
 			}

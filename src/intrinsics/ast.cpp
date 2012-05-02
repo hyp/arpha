@@ -23,14 +23,14 @@ static Node* returnType(CallExpression* node){
 	//delete node
 	return t;
 }
+//Not really relevant
 static Node* mixin(CallExpression* node){
-	auto e = node->arg->asExpressionReference()->expression;
-	//delete node
-	return e;
+	return node;
 }
 
 namespace intrinsics {
 	Type* ast::Expression = nullptr;
+	Function* ast::mixin = nullptr;
 
 
 	void ast::init(Scope* moduleScope){
@@ -38,5 +38,6 @@ namespace intrinsics {
 
 		INTRINSIC_FUNC(returnType,Expression);
 		INTRINSIC_FUNC(mixin,Expression);
+		ast::mixin = mixin;
 	}
 };

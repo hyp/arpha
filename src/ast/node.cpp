@@ -157,8 +157,8 @@ Type* TupleExpression::returnType() const {
 	return type;
 }
 Type* CallExpression::returnType() const {
-	if( auto cnst = object->asConstantExpression()){
-		if(cnst->type == compiler::function ) return cnst->refFunction->returnType;
+	if( auto refFunc = object->asFunctionReference()){
+		return refFunc->function()->returnType;
 	}
 	return compiler::Unresolved;
 }

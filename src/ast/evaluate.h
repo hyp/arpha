@@ -10,11 +10,15 @@ struct Scope;
 
 struct Evaluator {
 	Node* eval(Node* node);
+	
 
 	static void init(Scope* compilerScope,Scope* arphaScope);
 private:
 	Scope* _currentScope;
+	
 public:
+	bool evaluateExpressionReferences;
+	Evaluator() : evaluateExpressionReferences(false) {}
 	inline Scope* currentScope() const { return _currentScope; }
 	void currentScope(Scope* scope){ _currentScope = scope; }
 };
