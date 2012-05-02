@@ -7,6 +7,7 @@
 struct Node;
 struct Parser;
 struct BlockExpression;
+struct CallExpression;
 struct Type;
 
 struct Variable : PrefixDefinition  {
@@ -65,6 +66,7 @@ private:
 
 std::ostream& operator<< (std::ostream& stream,Type* type);
 
+
 struct Function: public PrefixDefinition {
 
 	struct Argument {
@@ -92,6 +94,7 @@ struct Function: public PrefixDefinition {
 	Type* returnType;
 	Scope* bodyScope;
 	BlockExpression* body;
+	Node* (*intrinsicEvaluator)(CallExpression*);
 	std::vector<Argument> arguments;
 };
 

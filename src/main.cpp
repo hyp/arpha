@@ -7,6 +7,7 @@
 #include "ast/evaluate.h"
 #include "compiler.h"
 #include "arpha.h"
+#include "intrinsics/ast.h"
 
 unittest(scope){
 	auto scope = new Scope(0);
@@ -375,11 +376,18 @@ namespace arpha {
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
 			auto type = new Type(name,location);
-			auto declaration = TypeDeclaration::create(type);
 			parser->currentScope()->define(type);
-			//fields
-			if(parser->match("{")) blockParser->body(parser,BodyParser(declaration));
-			return declaration;
+			if(parser->match("intrinsic")){
+				debug("Defined intrinsic type %s",name);
+				type->updateOnSolving();
+				return TypeReference::create(type);
+			}else{
+				auto declaration = TypeDeclaration::create(type);		
+				//fields
+				if(parser->match("{")) blockParser->body(parser,BodyParser(declaration));
+				return declaration;
+			}
+			
 		}
 	};
 
@@ -591,13 +599,13 @@ namespace compiler {
 			arpha::defineCoreSyntax(scope);
 			//import 'compiler' by default
 			auto def = new ImportedScope("compiler",Location(-1,0),findModule("compiler"));
-			scope->import(def);
+			scope->import(def,Scope::ImportFlags::QUALIFIED);
 		}
 		else {
 			scope = new Scope(nullptr);
 			//import 'compiler' by default
 			auto def = new ImportedScope("compiler",Location(-2,0),::compiler::scope);
-			scope->import(def);
+			scope->import(def,Scope::ImportFlags::QUALIFIED);
 			//import 'arpha' by default
 			def = new ImportedScope("arpha",Location(-1,0),findModule("arpha"));
 			scope->import(def);
@@ -607,6 +615,10 @@ namespace compiler {
 
 		Parser parser(source);
 		currentModule->second.body = arpha::parseModule(&parser,scope);
+		//TODO rm hACKS
+		if((packageDir + "/arpha/ast/ast.arp") == moduleName){
+			intrinsics::ast::init(scope);
+		}
 
 		debug("------------------- AST: ------------------------------");
 		debug("%s\n",currentModule->second.body);

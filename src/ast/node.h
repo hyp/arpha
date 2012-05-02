@@ -23,6 +23,7 @@ struct NodeVisitor;
 //This is a list of node types. TODO refactor into NODETYPE_LIST
 #define NODE_LIST(X) \
 	X(ConstantExpression)    \
+	X(ExpressionReference)   \
 	X(TypeReference)         \
 	X(FunctionReference)     \
 	X(VariableExpression)    \
@@ -87,6 +88,15 @@ struct ConstantExpression : Node {
 
 	DECLARE_NODE(ConstantExpression);
 
+};
+
+struct ExpressionReference : Node {
+	static ExpressionReference* create(Node* expression);
+
+	Type* returnType() const;
+
+	Node* expression;
+	DECLARE_NODE(ExpressionReference);
 };
 
 struct TypeReference : Node {

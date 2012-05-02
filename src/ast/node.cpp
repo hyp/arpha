@@ -2,6 +2,7 @@
 #include "visitor.h"
 #include "../compiler.h"
 #include "../arpha.h"
+#include "../intrinsics/ast.h"
 
 struct NodeToString: NodeVisitor {
 	std::ostream& stream;
@@ -19,6 +20,10 @@ struct NodeToString: NodeVisitor {
 		else if(node->type == arpha::Nothing) stream<<"nothing";
 		else if(node->type == arpha::boolean) stream<<(node->u64?"true":"false");
 		else assert(false);
+		return node;
+	}
+	Node* visit(ExpressionReference* node){
+		stream<<"eref "<<node->expression;
 		return node;
 	}
 	Node* visit(TypeReference* node){
@@ -96,7 +101,8 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(FunctionDeclaration* node){
-		stream<<"Function declaration "<<node->fn->id<<" .. -> "<<node->returnTypeExpression;
+		stream<<"Function declaration "<<node->fn->id<<" .. -> ";
+		if(node->returnTypeExpression) stream<<node->returnTypeExpression;
 		return node;
 	}
 };
@@ -126,6 +132,9 @@ static Type* literalConstantReturnType(const ConstantExpression* node){
 }
 Type* ConstantExpression::returnType() const {
 	return isLiteral() ? literalConstantReturnType(this) : type;
+}
+Type* ExpressionReference::returnType() const{
+	return intrinsics::ast::Expression;
 }
 Type* TypeReference::returnType() const {
 	return _type->resolved() ? compiler::type : compiler::Unresolved;
@@ -193,6 +202,11 @@ ConstantExpression* ConstantExpression::create(Type* constantType){
 ConstantExpression* ConstantExpression::createScopeReference(Scope* scope){
 	auto e = create(compiler::scopeRef);
 	e->refScope = scope;
+	return e;
+}
+ExpressionReference* ExpressionReference::create(Node* expression){
+	auto e = new ExpressionReference;
+	e->expression = expression;
 	return e;
 }
 TypeReference* TypeReference::create(Type* type){

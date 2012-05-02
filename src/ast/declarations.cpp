@@ -58,7 +58,7 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 	if(type->isRecord()){
 		stream<<"RecordType";
 		for(size_t i = 0;i < type->fields.size();i++){
-			stream<<(i == 0 ? '(' : ',')<<type->fields[i].id<<":"<<type->fields[i].type;
+			stream<<(i == 0 ? '(' : ',')<<(type->fields[i].id.isNull()?"_":type->fields[i].id)<<":"<<type->fields[i].type;
 		}
 		stream<<')';
 	}
@@ -156,6 +156,7 @@ Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,loc
 	returnType   = compiler::Nothing;
 	bodyScope = nullptr;
 	body = nullptr;
+	intrinsicEvaluator = nullptr;
 }
 Type* Function::type(){
 	return compiler::function;//TODO

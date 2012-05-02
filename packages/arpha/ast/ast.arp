@@ -1,0 +1,19 @@
+#
+	This module contains the necessary definitions to perform compile-time AST manipulation.
+	Author: Hyp
+	Version: 1
+#
+
+#temporary aliases TODO fix later
+def Type = compiler.Type
+
+# Expression is a single AST node
+# To construct an AST node object from a given source use Expression(..)
+type Expression intrinsic
+
+# The return type of the expression
+def returnType(expression Expression) Type
+# Duplicates a given expression
+def duplicate(expression Expression) Expression
+# Mixins a given expression into the AST
+def mixin(expression Expression)

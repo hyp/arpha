@@ -6,6 +6,7 @@
 #include "../compiler.h"
 #include "../arpha.h"
 #include "evaluate.h"
+#include "../intrinsics/ast.h"
 
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
 
@@ -120,7 +121,8 @@ Node* evaluateResolvedFunctionCall(Scope* scope,CallExpression* node){
 	if(handler != functionBindings.end()){
 		debug("Expanding a function call %s with %s",function->id,node->arg);
 		return handler->second(scope,node,node->arg);
-	}
+	}else if(function->intrinsicEvaluator) 
+		return function->intrinsicEvaluator(node);
 	return node;
 }
 
@@ -153,7 +155,14 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 	//TODO Type call -> constructor.
-	Node* evalTypeCall(Node* node){
+	Node* evalTypeCall(CallExpression* node,Type* type){
+		assert(type != compiler::Unresolved);
+		if(type == intrinsics::ast::Expression){
+			debug("Expression of");
+			auto r = ExpressionReference::create(node->arg);
+			//delte node
+			return r;
+		}
 		return node;
 	}
 
@@ -178,7 +187,7 @@ struct AstExpander: NodeVisitor {
 			else if(auto callingFunc = node->object->asFunctionReference())
 				return node;	//TODO eval?
 			else if(auto callingType = node->object->asTypeReference())
-				return evalTypeCall(node);
+				return evalTypeCall(node,callingType->type());
 			else if(auto callingAccess = node->object->asAccessExpression()){
 				return transformCallOnAccess(node,argumentType,callingAccess)->accept(this);
 			}
