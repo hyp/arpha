@@ -205,9 +205,13 @@ namespace arpha {
 
 	/// ::= expression ',' expression
 	struct TupleParser: InfixDefinition {
-		TupleParser(): InfixDefinition(",",arpha::Precedence::Tuple,Location()) {}
+		TupleParser(): InfixDefinition(",",arpha::Precedence::Tuple-1,Location()) {}
 		Node* parse(Parser* parser,Node* node){
-			return TupleExpression::create(node,parser->parse(arpha::Precedence::Tuple)); 
+			auto tuple = TupleExpression::create();
+			tuple->children.push_back(node);
+			do tuple->children.push_back(parser->parse(arpha::Precedence::Tuple));
+			while(parser->match(","));
+			return tuple;
 		}
 	};
 
@@ -452,6 +456,13 @@ namespace arpha {
 	};
 
 	/// TODO ::= match expr { to pattern: ... }
+	struct MatchParser: PrefixDefinition {
+		MatchParser(): PrefixDefinition("match",Location()){}
+		Node* parse(Parser* parser){
+			//TODO
+			return nullptr;
+		}
+	};
 
 	/// TODO ::= 'for' values 'in' sequence expression
 
@@ -505,7 +516,7 @@ namespace arpha {
 		scope->define(new ReturnParser);
 		scope->define(new IfParser);
 		scope->define(new WhileParser);
-
+		scope->define(new MatchParser);
 
 		Nothing = builtInType("Nothing",0);
 
