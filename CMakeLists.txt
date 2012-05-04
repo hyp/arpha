@@ -1,3 +1,3 @@
 cmake_minimum_required (VERSION 2.6)
 project (arpha)
-add_executable(arpha src/base/base.cpp src/base/format.cpp src/base/symbol.cpp src/base/memory.cpp src/base/system.cpp src/base/utf.cpp src/syntax/token.cpp src/syntax/lexer.cpp src/syntax/parser.cpp src/ast/node.cpp src/ast/declarations.cpp src/ast/evaluate.cpp src/main.cpp src/scope.cpp src/backend/c.cpp src/testing/tests.cpp src/intrinsics/ast.cpp)
+add_executable(arpha src/base/base.cpp src/base/bigint.cpp src/base/format.cpp src/base/symbol.cpp src/base/memory.cpp src/base/system.cpp src/base/utf.cpp src/syntax/token.cpp src/syntax/lexer.cpp src/syntax/parser.cpp src/ast/node.cpp src/ast/declarations.cpp src/ast/evaluate.cpp src/main.cpp src/scope.cpp src/backend/c.cpp src/testing/tests.cpp src/intrinsics/ast.cpp src/intrinsics/types.cpp)

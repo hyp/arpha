@@ -1,0 +1,21 @@
+#
+	This module defines arpha's core integer and floating-point types.
+	Author: Hyp
+	Version: 1
+	TODO:
+		max/min information in here.
+#
+
+type bool integer
+
+type int8 integer
+type int16 integer
+type int32 integer
+type int64 integer
+
+type uint8 integer
+type uint16 integer
+type uint32 integer
+type uint64 integer
+
+# utf32 char type char integer

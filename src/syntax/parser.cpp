@@ -46,10 +46,8 @@ SymbolID Parser::expectName(){
 
 int Parser::expectInteger(){
 	auto node = parse(arpha::Precedence::Tuple);
-	if(auto c= node->asConstantExpression()){
-		if(arpha::isInteger(c->type)){
-			return int(c->u64);
-		}
+	if(auto c= node->asIntegerLiteral()){
+		return int(c->integer.u64); //TODO this is potentially unsafe
 	}
 	error(node->location,"Expected an integer constant instead of %s!",node);
 	return -1;
@@ -71,29 +69,20 @@ Node* Parser::parse(int stickiness){
 	Location location = currentLocation();
 	lookedUpToken = consume();
 	if(lookedUpToken.isUinteger()){
-		auto cnst = ConstantExpression::create(arpha::uint64);
-		expression = static_cast<Node*>(cnst);
-		cnst->_isLiteral = true;
-		cnst->u64    = lookedUpToken.uinteger;
-	}
-	else if(lookedUpToken.isString()){
-		auto cnst = ConstantExpression::create(arpha::constantString);
-		expression = static_cast<Node*>(cnst);
-		cnst->_isLiteral = true;
-		cnst->string.aquire(lookedUpToken.string);
+		expression = new IntegerLiteral(BigInt(lookedUpToken.uinteger));
 	}
 	else if(lookedUpToken.isSymbol()){
 		auto prefixDefinition = _currentScope->lookupPrefix(lookedUpToken.symbol);
 		if(!prefixDefinition){ 
 			error(location,"Can't prefix parse %s!",lookedUpToken); 
-			expression = ConstantExpression::create(compiler::Error);
+			expression = ErrorExpression::getInstance();
 		}else{
 			expression = prefixDefinition->parse(this);
 		}
 	}
 	else {
 		error(location,"Can't prefix parse %s!",lookedUpToken);
-		expression = ConstantExpression::create(compiler::Error);
+		expression = ErrorExpression::getInstance();
 	}
 	expression->location = location;
 	expression = evaluate(expression);
@@ -116,26 +105,23 @@ Node* Parser::parse(int stickiness){
 	return expression;	
 }
 
-Type* Parser::expectType(int stickiness){
-	auto loc = currentLocation();
-	auto node = parse(stickiness);
-	if( auto val = node->asTypeReference()) return val->type();
-	error(loc,"Expected a valid type instead of %s!",node);
-	return compiler::Error;
-}
 
 //parsing declarations
 
 Node* ImportedScope::parse(Parser* parser) {
-	return ConstantExpression::createScopeReference(scope);
+	return nullptr;//TODo ConstantExpression::createScopeReference(scope);
 }
 
 Node* Variable::parse(Parser* parser){
-	return VariableExpression::create(this);
+	return new VariableReference(this);
 }
 
 Node* Type::parse(Parser* parser){
 	return TypeReference::create(this);
+}
+
+Node* IntegerType::parse(Parser* parser){
+	return new TypeExpression(this);
 }
 
 Node* Function::parse(Parser* parser){
@@ -151,7 +137,7 @@ Node* PrefixOperator::parse(Parser* parser){
 }
 
 Node* InfixOperator::parse(Parser* parser,Node* node){
-	auto tuple = TupleExpression::create();
+	auto tuple = new TupleExpression;
 	tuple->children.push_back(node);
 	tuple->children.push_back(parser->parse(stickiness));
 	return CallExpression::create(OverloadSetExpression::create(function,parser->currentScope()),tuple);

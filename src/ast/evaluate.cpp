@@ -7,6 +7,7 @@
 #include "../arpha.h"
 #include "evaluate.h"
 #include "../intrinsics/ast.h"
+#include "../intrinsics/types.h"
 
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
 
@@ -24,22 +25,23 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 
 	#define HANDLE(func,type,body) _HANDLE(compilerScope,func,type,body)
 		
-	std::vector<std::pair<SymbolID,Type*>> r(2,std::make_pair(SymbolID(),arpha::constantString));
+/*	std::vector<std::pair<SymbolID,Type*>> r(2,std::make_pair(SymbolID(),arpha::constantString));
 	r[1] = std::make_pair(SymbolID(),compiler::type);
 	auto string_type = Type::tuple(r);
 	HANDLE("resolve",string_type,{ 
 		
-		auto r = argument->asTupleExpression();
-		auto f = scope->resolve(r->children[0]->asConstantExpression()->string.ptr(),r->children[1]->asTypeReference()->type());
-		System::print(format("compiler.Resolved %s %s!\n",argument,f->id));
-		return FunctionReference::create(f);
+		//auto r = argument->asTupleExpression();
+		//auto f = scope->resolve(r->children[0]->asConstantExpression()->string.ptr(),r->children[1]->asTypeReference()->type());
+		//System::print(format("compiler.Resolved %s %s!\n",argument,f->id));
+		//return FunctionReference::create(f);
+		return node;
 	});
 	HANDLE("error",arpha::constantString,{ 
-		error(node->location,argument->asConstantExpression()->string.ptr());
+		//error(node->location,argument->asConstantExpression()->string.ptr());
 		return argument; 
 	});
 	HANDLE("constexpr",compiler::expression,{ 
-		if(!argument->asConstantExpression()){
+		/*if(!argument->asConstantExpression()){
 			error(node->location,"Expected a constant expression instead of %s!",argument);
 		}
 		return argument; 
@@ -49,7 +51,6 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 		return argument; 
 	});
 	HANDLE("dumpDEF",compiler::expression,{ 
-		auto cnst = argument->asConstantExpression();
 		if(auto typeRef = argument->asTypeReference()){
 			System::print(format("------------------- DEF dump: ------------------------------\nType %s (sizeof %s)\n",typeRef->type()->id,typeRef->type()->size()));
 			for(auto i = typeRef->type()->fields.begin();i!=typeRef->type()->fields.end();++i){
@@ -64,10 +65,6 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 			System::print(format("%s",f->body));
 			System::print("\n");
 		}
-		else if(cnst->type == compiler::scopeRef){
-			System::print(format("------------------- DEF dump: ------------------------------\nScope \n"));
-			System::print("\n");
-		}
 		return argument; 
 	});
 
@@ -78,21 +75,22 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 		return TypeReference::create(argument->returnType()); 
 	});
 	HANDLE("sizeof",compiler::expression,{ 
-		auto size = ConstantExpression::create(arpha::uint64);//TODO arpha.natural
+		/*auto size = ConstantExpression::create(arpha::uint64);//TODO arpha.natural
 		auto typeRef = argument->asTypeReference();
 		assert(typeRef ? typeRef->type() != compiler::Unresolved : true);
 		size->u64  = uint64( (typeRef?typeRef->type():argument->returnType())->size() );
 		//TODO isLiteral?
 		return size;
+		return node;
 	});
 	//TODO - implement
 	//realAssert = arphaScope->resolve("assert",arpha::boolean);
 	//TODO - implement in Arpha
 	HANDLE("assert",compiler::expression,{
-		auto cnst = argument->asConstantExpression();
-		if(cnst && cnst->type == arpha::boolean && cnst->u64==1){
-			return node;		
-		}
+		//auto cnst = argument->asConstantExpression();
+		//if(cnst && cnst->type == arpha::boolean && cnst->u64==1){
+		//	return node;		
+		//}
 		error(argument->location,"Test error - Assertion failed");
 		return node;
 	});
@@ -101,13 +99,14 @@ void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
 	std::vector<std::pair<SymbolID,Type*>> record(2,std::make_pair(SymbolID(),compiler::type));
 	auto type_type = Type::tuple(record);
 	HANDLE("equals",type_type,{
-		auto twoTypes = argument->asTupleExpression();
+		/*auto twoTypes = argument->asTupleExpression();
 		auto t1 = twoTypes->children[0]->asTypeReference()->type();
 		auto t2 = twoTypes->children[1]->asTypeReference()->type();
 		auto result = ConstantExpression::create(arpha::boolean);
 		result->u64 =  t1 == t2 ? 1 : 0; //TODO tuple comparsion as well
 		return result;
-	});
+		return node;
+	});*/
 
 	#undef HANDLE
 	#undef _HANDLE
@@ -130,9 +129,6 @@ struct AstExpander: NodeVisitor {
 	Evaluator* evaluator;
 	AstExpander(Evaluator* ev) : evaluator(ev) {}
 
-	Node* visit(VariableExpression* node){
-		return node->variable->value ? node->variable->value : node;
-	}
 
 	Node* visit(ExpressionReference* node){
 		if(evaluator->evaluateExpressionReferences){
@@ -144,7 +140,7 @@ struct AstExpander: NodeVisitor {
 
 	//on a.foo(...)
 	static Node* transformCallOnAccess(CallExpression* node,Type* argumentType,AccessExpression* acessingObject){
-		debug("calling on access! %s with %s",acessingObject,node->arg);
+		/*debug("calling on access! %s with %s",acessingObject,node->arg);
 		//a.foo()
 		if(argumentType == arpha::Nothing){
 			//TODO delete node->arg;
@@ -160,17 +156,18 @@ struct AstExpander: NodeVisitor {
 		auto newCalleeObject = OverloadSetExpression::create(acessingObject->symbol,acessingObject->scope);
 		//TODO delete_no_children node->object
 		node->object = newCalleeObject;
+		return node;*/
 		return node;
 	}
 	//TODO Type call -> constructor.
 	Node* evalTypeCall(CallExpression* node,Type* type){
 		assert(type != compiler::Unresolved);
-		if(type == intrinsics::ast::Expression){
+		/*if(type == intrinsics::ast::Expression){
 			debug("Expression of");
 			auto r = ExpressionReference::create(node->arg);
 			//delte node
 			return r;
-		}
+		}*/
 		if(node->arg->returnType() == compiler::Nothing) error(node->arg->location,"Can't perform type call onto a statement!");
 		return node;
 	}
@@ -193,9 +190,10 @@ struct AstExpander: NodeVisitor {
 					//TODO function->adjustArgument
 					debug("Overload successfully resolved as %s: %s",func->id,func->argument->id);
 					if(func == intrinsics::ast::mixin){
+						auto oldSetting = evaluator->evaluateExpressionReferences;
 						evaluator->evaluateExpressionReferences = true;
 						auto e = node->arg->accept(this);
-						evaluator->evaluateExpressionReferences = false;
+						evaluator->evaluateExpressionReferences = oldSetting;
 						return e;
 					}
 					return evaluateResolvedFunctionCall(evaluator->currentScope(),node);
@@ -212,22 +210,120 @@ struct AstExpander: NodeVisitor {
 
 		return node;
 	}
+
+	
+	Node* assign(Node* object,Node* value,bool* error){
+		auto valuesType = value->_returnType();
+		if(valuesType  == intrinsics::types::Unresolved) return nullptr;
+		//Assigning values to variables
+		if(auto var = object->asVariableReference()){
+			auto variablesType = var->variable->_type;
+			if(variablesType == intrinsics::types::Inferred){ //inferred
+				var->variable->_type = valuesType;
+				debug("Inferred %s for variable %s",valuesType,var->variable->id);
+				return value;
+			}
+			else if(variablesType->resolved()){
+				//If variable has a constant type, assign only at place of declaration
+				if(variablesType->type == TypeExpression::CONSTANT){
+					if(var->isDefinedHere){
+						variablesType = variablesType->next;//remove const
+						//check again for inferred %_%
+						if(variablesType == intrinsics::types::Inferred){
+							var->variable->_type->next = valuesType;
+							debug("Inferred %s for variable %s",valuesType,var->variable->id);
+							return value;
+						}
+					}
+					else {
+						error(value->location,"Can't assign %s to %s - constant variables can only be assigned at declaration!",value,object);
+						*error = true;
+						return nullptr;
+					}
+				}
+				if(auto canBeAssigned = variablesType->assignableFrom(value,valuesType)) return canBeAssigned;
+				else {
+					error(value->location,"Can't assign %s to %s - the types don't match!",value,object);
+					*error = true;
+					return nullptr;
+				}
+			}
+			else return nullptr; //Trying to assign to a variable with unresolved type.. that's a no no!
+		}
+		return nullptr;
+	}
 	Node* visit(AssignmentExpression* node){
 		node->value = node->value->accept(this);
+		if(node->value->_returnType()  == intrinsics::types::Unresolved) return node;//Don't bother until the value is fully resolved
+		bool error = false;
 
+		if(auto t1 = node->object->asTupleExpression()){
+			if(auto t2 = node->value->asTupleExpression()){
+				if(t1->children.size() == t2->children.size()){
+					for(size_t i=0;i<t1->children.size();i++){
+						auto newValue = assign(t1->children[i],t2->children[i],&error);
+						if(newValue) t2->children[i] = newValue;
+					}
+				}
+				else{
+					error(node->location,"Can't assign between tuples of different length");
+					error = true;
+				}
+			}
+			else{
+				error(node->location,"Can't assign a tuple to a non-tuple");
+				error = true;
+			}
+		}else{
+			//A non-tuple assignment or a tuple to a single variable assignment
+			auto newValue = assign(node->object,node->value,&error);
+			if(newValue) node->value = newValue;
+		}
+
+		if(error){
+			//TODO delete tuple's children
+			delete node;
+			return ErrorExpression::getInstance();
+		}
+		else return node;
+		
+		/*auto valueReturns = node->value->_returnType();
 		if(node->value->returnType() != compiler::Unresolved){
-			if(auto var = node->object->asVariableExpression()){
-				if(var->returnType() == compiler::Unresolved) var->variable->inferType(node->value->returnType()); //Infer types for variables
-			}else if(auto access = node->object->asAccessExpression()){
+			//Assigning to variables
+			if(auto var = node->object->asVariableReference()){
+				if(var->variable->_type == nullptr){ //inferred
+					var->variable->_type = node->value->_returnType();
+				}
+				else if(var->variable->_type->resolved()){
+					auto varType = var->variable->_type;
+					//if constant, assign only at place of declaration
+					if(varType->type == TypeExpression::CONSTANT){
+						if(var->isDefinedHere) varType = varType->next;//remove const
+						else {
+							error(node->location,"Can't assign to %s - constant variables can only be assigned at declaration!",node->value,node->object);
+							return ErrorExpression::getInstance();
+						}
+					}
+					if(auto canBeAssigned = varType->assignableFrom(node->value,valueReturns)) node->value = canBeAssigned;
+					else {
+						error(node->location,"Can't assign to %s - the types don't match!",node->value,node->object);
+						delete node;
+						return ErrorExpression::getInstance();
+					}
+				}
+			}
+			//Assigning to fields | properties
+			else if(auto access = node->object->asAccessExpression()){
 				//TODO a.foo = .. when foo is field
 				//a.foo = 2 -> foo(a,2)
-				auto args = TupleExpression::create(access->object,node->value);
+				auto args = new TupleExpression(access->object,node->value);
 				return CallExpression::create(OverloadSetExpression::create(access->symbol,access->scope),args)->accept(this);
 			}
 			else error(node->location,"Can't assign to %s!",node->object);
 		}
-		return node;
+		return node;*/
 	}
+	
 	Node* visit(AccessExpression* node){
 		node->object = node->object->accept(this);
 		if(node->passedFirstEval){
@@ -244,25 +340,31 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 	Node* visit(TupleExpression* node){
-		if(node->children.size() == 0){ node->type= arpha::Nothing; return node; }
-	
+		if(node->children.size() == 1){
+			auto child = node->children[0];
+			delete node;
+			return child;
+		}else if(node->children.size() == 0){
+			delete node;
+			return UnitExpression::getInstance();
+		}
 		std::vector<std::pair<SymbolID,Type*>> fields;
 	
 		node->type = nullptr;
-		Type* returns;
+		TypeExpression* returns;
 		for(size_t i =0;i<node->children.size();i++){
 			node->children[i] = node->children[i]->accept(this);
-			returns = node->children[i]->returnType();
+			returns = node->children[i]->_returnType();
 
-			if(returns == compiler::Nothing){
-				error(node->children[i]->location,"a tuple can't have a statement member");
-				node->type = compiler::Error;
+			if(returns == intrinsics::types::Void){
+				error(node->children[i]->location,"A tuple can't contain an expression returning void!");
+				node->type = intrinsics::types::Unresolved;
 			}
-			else if(returns == compiler::Unresolved) node->type = compiler::Unresolved;
-			else fields.push_back(std::make_pair(SymbolID(),returns));
+			else if(returns == intrinsics::types::Unresolved) node->type = intrinsics::types::Unresolved;
+			else fields.push_back(std::make_pair(SymbolID(),node->children[i]->returnType())); //TODO fix
 		}
 
-		if(!node->type) node->type = Type::tuple(fields);
+		if(!node->type) node->type = new TypeExpression(Type::tuple(fields));
 		return node;
 	}
 	Node* visit(BlockExpression* node){
@@ -278,43 +380,15 @@ struct AstExpander: NodeVisitor {
 		node->condition = node->condition->accept(this);
 		node->consequence = node->consequence->accept(this);
 		if(node->alternative) node->alternative = node->alternative->accept(this);
-		auto constantCondition = node->condition->asConstantExpression();
-		if(constantCondition && constantCondition->type == arpha::boolean){ //TODO interpret properly
-			return constantCondition->u64 ? node->consequence : node->alternative;
-		}
+		//auto constantCondition = node->condition->asConstantExpression();
+		//if(constantCondition && constantCondition->type == arpha::boolean){ //TODO interpret properly
+		//	return constantCondition->u64 ? node->consequence : node->alternative;
+		//}
 		return node;
 	}
 	Node* visit(WhileExpression* node){
 		node->condition = node->condition->accept(this);
 		node->body = node->body->accept(this);
-		return node;
-	}
-	Node* visit(VariableDeclaration* node){
-		bool resolved = false;
-		Type* type;
-		if(!node->typeExpression){
-			resolved = true;
-			type = nullptr; //inferred
-		}else{
-			node->typeExpression = node->typeExpression->accept(this);
-			TypeReference* typeRef;
-			if((typeRef = node->typeExpression->asTypeReference()) && typeRef->type()!=compiler::Unresolved){
-				resolved = true;
-				type = typeRef->type();
-			}
-		}
-		//return
-		if(resolved){
-			debug("Resolved type %s for variables %s...",type ? type->id : "inferred",node->variables[0]->id);
-			const bool tuplify = node->variables.size() > 1;
-			auto tuple = tuplify ? TupleExpression::create() : nullptr;
-			for(auto i = node->variables.begin();i!=node->variables.end();i++){
-				(*i)->type = type;
-				if(tuplify) tuple->children.push_back(VariableExpression::create(*i));
-			}
-			//delete node
-			return tuplify ? static_cast<Node*>(tuple) : static_cast<Node*>(VariableExpression::create(node->variables[0]));
-		}
 		return node;
 	}
 	Node* visit(TypeDeclaration* node){
@@ -327,6 +401,7 @@ struct AstExpander: NodeVisitor {
 				const int limit = (*i).firstFieldID + (*i).count;
 				for(auto j = (*i).firstFieldID;j < limit;j++){
 					node->type->fields[j].type = typeRef->type();
+					if((*i).extender) node->type->extenders.push_back(j);
 				}
 			}
 			else resolved = false;

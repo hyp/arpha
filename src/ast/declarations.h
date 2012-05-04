@@ -9,17 +9,19 @@ struct Parser;
 struct BlockExpression;
 struct CallExpression;
 struct Type;
+struct TypeExpression;
+
+#include "../base/bigint.h"
 
 struct Variable : PrefixDefinition  {
 	Variable(SymbolID name,Location& location);
-	void inferType(Type* t);
 
 	Node* parse(Parser* parser);
 
+	//Type(use intrinsincs::types::Inferred for inferred)
+	TypeExpression* _type;
 	//Type(can be null for inferred type);
 	Type* type;
-	//Value(can be null) - for constant variables this is the constant value
-	Node* value;
 };
 
 struct Type: public PrefixDefinition {
@@ -27,11 +29,12 @@ private:
 	
 	Type* headRecord; ///if this is null, then the type isn't a record
 	bool _resolved;
+	
 public:
 	size_t _size;
 	
 	std::vector<Variable> fields;
-	
+	std::vector<int> extenders;
 
 	Type(SymbolID name,Location& location);
 
@@ -39,6 +42,10 @@ public:
 
 	Variable* lookupField(const SymbolID fieldName);
 	void add(const Variable& var); //adds a field to the type
+
+	//Type's extenders
+	//Returns the id of field which is extended or -1
+	int extendsType(Type* type);
 
 	//Type's properties
 	bool resolved();
@@ -66,6 +73,30 @@ private:
 
 std::ostream& operator<< (std::ostream& stream,Type* type);
 
+struct TypeBase : PrefixDefinition {
+public:
+	TypeBase(SymbolID name,Location& location) : PrefixDefinition(name,location) {}
+
+	virtual size_t size() const = 0;
+
+};
+
+//An integral type
+struct IntegerType: TypeBase {
+	IntegerType(SymbolID name,Location& location);
+
+	size_t size() const;
+	bool isValid(BigInt& value) const;
+	bool isUnsigned() const;
+	Node* assignableFrom(Node* expression,IntegerType* type);
+
+	Node* parse(Parser* parser);
+	BigInt max,min;
+private:
+	
+	size_t _size;
+	bool _unsigned;
+};
 
 struct Function: public PrefixDefinition {
 

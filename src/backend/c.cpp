@@ -7,19 +7,7 @@ struct TranslatorImplementation: NodeVisitor {
 	std::ostream& stream;
 
 	TranslatorImplementation(std::ostream& str) : stream(str) {}
-	Node* visit(ConstantExpression* node){
-		stream<<'(';
-		if(node->type == arpha::uint64)       stream<<node->u64;
-		else if(node->type == arpha::int64) stream<<node->i64;
-		else if(node->type == arpha::float64) stream<<node->f64;
-		else if(node->type == arpha::constantString) stream<<'"'<<node->string<<'"';
-		else if(node->type == arpha::Nothing) stream<<"void";
-		else if(node->type == arpha::boolean) stream<<(node->u64?"true":"false");
-		else assert(false);
-		stream<<')';
-		return node;
-	}
-	Node* visit(VariableExpression* node){
+	Node* visit(VariableReference* node){
 		stream<<'('<<node->variable->id<<')';
 		return node;
 	}

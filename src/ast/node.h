@@ -22,21 +22,24 @@ struct NodeVisitor;
 
 //This is a list of node types. TODO refactor into NODETYPE_LIST
 #define NODE_LIST(X) \
-	X(ConstantExpression)    \
+	X(IntegerLiteral)    \
+	X(UnitExpression)    \
+	X(ErrorExpression)       \
 	X(ExpressionReference)   \
+	X(VariableReference) \
 	X(TypeReference)         \
 	X(FunctionReference)     \
-	X(VariableExpression)    \
+	X(TypeExpression)        \
 	X(TupleExpression)       \
 	X(OverloadSetExpression) \
 	X(CallExpression)        \
 	X(AccessExpression)      \
 	X(AssignmentExpression)  \
 	X(ReturnExpression)      \
+	X(MatchExpression)      \
 	X(IfExpression)          \
 	X(BlockExpression)       \
 	X(WhileExpression)       \
-	X(VariableDeclaration)   \
 	X(TypeDeclaration)       \
 	X(FunctionDeclaration)       
 
@@ -53,8 +56,12 @@ struct Node {
 	//Returns expressions return type
 	virtual Type* returnType() const;
 
+	virtual TypeExpression* _returnType() const;
+
 	//Accepts an ast visitor
 	virtual Node* accept(NodeVisitor* visitor) = 0;
+
+	virtual Node* duplicate() const { return 0; } //TODO = 0
 
 	//Dynamic casts
 #define CAST(T) virtual T* as##T() { return nullptr; }
@@ -65,38 +72,116 @@ struct Node {
 //Node to string
 std::ostream& operator<< (std::ostream& stream,Node* node);
 
-struct ConstantExpression : Node {
-	//constructors
-	static ConstantExpression* create(Type* constantType);
-	static ConstantExpression* createScopeReference(Scope* scope);
-
-	Type* returnType() const;
-
-	//
-	union {
-		int64   i64;
-		uint64  u64;
-		double  f64;
-		Scope*  refScope;
-		Function* refFunction;
-		memory::Block string;
-	};
-	Type* type;
-	bool _isLiteral;
-
-	inline const bool isLiteral() const { return _isLiteral; }
-
-	DECLARE_NODE(ConstantExpression);
-
+//(0..9)+ : integer
+struct IntegerLiteral : Node {
+	IntegerLiteral(const BigInt& integer);
+	TypeExpression* _returnType() const;
+	Node* duplicate() const;
+	
+	BigInt integer;
+	TypeExpression* _type;//optional
+	DECLARE_NODE(IntegerLiteral);
 };
 
-struct ExpressionReference : Node {
-	static ExpressionReference* create(Node* expression);
+//(error):unresolved
+struct ErrorExpression : Node {
+	TypeExpression* _returnType() const;
 
-	Type* returnType() const;
+	Node* duplicate() const;
+	static ErrorExpression* getInstance(); //avoid multiple creations
+
+	DECLARE_NODE(ErrorExpression);
+};
+
+//():void
+struct UnitExpression : Node {
+	TypeExpression* _returnType() const;
+	
+	Node* duplicate() const;
+	static UnitExpression* getInstance(); //avoid multiple creations
+
+	DECLARE_NODE(UnitExpression);
+};
+
+//: intrinsics::types::Expression
+struct ExpressionReference : Node {
+	ExpressionReference(Node* node);
+	
+	TypeExpression* _returnType() const;
+	Node* duplicate() const;
 
 	Node* expression;
 	DECLARE_NODE(ExpressionReference);
+};
+
+//(type ...): intrinsics::types::Type | intrinsics::types::Unresolved
+struct TypeExpression : Node {
+	enum {
+		RECORD,
+		INTEGER,
+		POINTER,
+		CONSTANT,
+		FUNCTION,
+		INTRINSIC_TYPE,
+		UNRESOLVED
+	};
+
+	TypeExpression();
+	TypeExpression(int type,TypeExpression* next);
+	TypeExpression(IntegerType* integer);
+	TypeExpression(Type* record);
+	TypeExpression(Node* unresolved);
+
+	bool resolved() const;
+	TypeExpression* _returnType() const;
+	Node* duplicate() const;
+	size_t size() const;
+
+	/**
+	* This is the one of the key functions of the type system.
+	* Given an expression and its type, this function will check if the 'this' type can be assigned from expression's type.
+	* If such an assignment is possible, it will return the resulting expression with possible conversions.
+	* If not, it will return null.
+	*/
+	Node* assignableFrom(Node* expression,TypeExpression* type);
+
+	DECLARE_NODE(TypeExpression);
+public:
+	int type;
+	union {
+		TypeExpression* next;
+		Type* record;
+		IntegerType* integer;
+		Node* unresolved;
+	};
+	friend std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
+};
+std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
+
+//: variable->type
+struct VariableReference : Node {
+	VariableReference(Variable* variable,bool definitionHere = false);
+
+	TypeExpression* _returnType() const;
+	Node* duplicate() const;
+
+	Variable* variable;
+	bool isDefinedHere;
+	DECLARE_NODE(VariableReference);
+};
+
+//
+struct TupleExpression : Node {
+	TupleExpression();
+	TupleExpression(Node* a,Node* b);
+
+	TypeExpression* _returnType() const;
+	Node* duplicate() const;
+
+	std::vector<Node*> children;
+	TypeExpression* type;
+
+	DECLARE_NODE(TupleExpression);
 };
 
 struct TypeReference : Node {
@@ -119,26 +204,7 @@ struct FunctionReference : Node {
 	DECLARE_NODE(FunctionReference);
 };
 
-struct VariableExpression : Node {
-	static VariableExpression* create(Variable* variable);
 
-	Type* returnType() const;
-
-	Variable* variable;
-	DECLARE_NODE(VariableExpression);
-};
-
-struct TupleExpression : Node {
-	static TupleExpression* create();
-	static TupleExpression* create(Node* a,Node* b);
-
-	Type* returnType() const;
-
-	std::vector<Node*> children;
-	Type* type;
-
-	DECLARE_NODE(TupleExpression);
-};
 
 struct OverloadSetExpression : Node {
 	static OverloadSetExpression* create(SymbolID symbol,Scope* scope);
@@ -171,9 +237,10 @@ struct AccessExpression : Node {
 };
 
 struct AssignmentExpression : Node {
-	static AssignmentExpression* create(Node* object,Node* value);
+	AssignmentExpression(Node* object,Node* value);
 
-	Type* returnType() const;
+	TypeExpression* _returnType() const;
+	Node* duplicate() const;
 
 	Node* object;
 	Node* value;
@@ -181,11 +248,30 @@ struct AssignmentExpression : Node {
 };
 
 struct ReturnExpression : Node {
-	static ReturnExpression* create(Node* expression);
+	ReturnExpression(Node* expression);
+	Node* duplicate() const;
 
 	Node* value;
-	//Scope* currentBlock;
 	DECLARE_NODE(ReturnExpression);
+};
+
+struct MatchExpression : Node {
+	MatchExpression(Node* object);
+
+	TypeExpression* _returnType() const;
+	Node* duplicate();
+
+	Node* object;
+	struct Case {	
+		enum {
+			VALUE,
+			DEFAULT
+		};
+		int type;
+		Node* node;
+	};
+	std::vector<Case> cases;
+	DECLARE_NODE(MatchExpression);
 };
 
 struct IfExpression : Node {
@@ -219,15 +305,6 @@ struct WhileExpression : Node {
 * Normally when declaring a type/variable/function a given type can be resolved on a first pass.
 * But because this isn't always possible, we have to provide dummy declaration nodes for future passes when the types can be resolved.
 */
-
-struct VariableDeclaration : Node {
-	Type* returnType() const;
-
-	std::vector<Variable*> variables;
-	Node* typeExpression;  //Can be null for inferred variable type
-	DECLARE_NODE(VariableDeclaration);
-};
-
 struct TypeDeclaration : Node {
 	static TypeDeclaration* create(Type* type);
 
@@ -237,6 +314,7 @@ struct TypeDeclaration : Node {
 	struct FieldDefinition {
 		int firstFieldID,count;
 		Node* typeExpression;
+		bool extender;
 	};
 	std::vector<FieldDefinition> fields;
 	DECLARE_NODE(TypeDeclaration);

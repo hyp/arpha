@@ -8,6 +8,7 @@
 #include "compiler.h"
 #include "arpha.h"
 #include "intrinsics/ast.h"
+#include "intrinsics/types.h"
 
 unittest(scope){
 	auto scope = new Scope(0);
@@ -66,8 +67,6 @@ namespace arpha {
 
 	//core types & functions
 	Type* Nothing;
-	Type *int8,*uint8,*int16,*uint16,*int32,*uint32,*int64,*uint64;
-	Type *float64,*float32;
 	Type *boolean;	
 	Type *constantString;
 
@@ -169,10 +168,8 @@ namespace arpha {
 			closingParenthesis = ")";
 		}
 		Node* parse(Parser* parser){
-			if( parser->match(closingParenthesis) ){
-				error(parser->previousLocation(),"() is an illegal expression!");
-				return ConstantExpression::create(compiler::Error);
-			}
+			if( parser->match(closingParenthesis) )
+				return UnitExpression::getInstance();
 			auto e = parser->parse();
 			parser->expect(closingParenthesis);
 			return e;
@@ -187,7 +184,7 @@ namespace arpha {
 		}
 		Node* parse(Parser* parser,Node* node){
 			Node* arg;
-			if( parser->match(closingParenthesis) ) arg = ConstantExpression::create(arpha::Nothing);//TODO ??? compiler.nothing
+			if( parser->match(closingParenthesis) ) arg = UnitExpression::getInstance();
 			else{
 				arg = parser->parse();
 				parser->expect(closingParenthesis);
@@ -208,7 +205,7 @@ namespace arpha {
 	struct TupleParser: InfixDefinition {
 		TupleParser(): InfixDefinition(",",arpha::Precedence::Tuple-1,Location()) {}
 		Node* parse(Parser* parser,Node* node){
-			auto tuple = TupleExpression::create();
+			auto tuple = new TupleExpression;
 			tuple->children.push_back(node);
 			do tuple->children.push_back(parser->parse(arpha::Precedence::Tuple));
 			while(parser->match(","));
@@ -223,12 +220,12 @@ namespace arpha {
 			parser->lookedUpToken.type = Token::Symbol;
 			parser->lookedUpToken.symbol = parser->expectName();
 			//scope.something
-			if(auto val = node->asConstantExpression()){
+			/*if(auto val = node->asConstantExpression()){
 				if(val->type == compiler::scopeRef){
-					auto def = val->refScope->lookupImportedPrefix(parser->lookedUpToken.symbol);
+					//auto def = val->refScope->lookupImportedPrefix(parser->lookedUpToken.symbol);
 					if(!def){
 						error(node->location,"Unresolved symbol - '%s' isn't defined in module!",parser->lookedUpToken.symbol);
-						return ConstantExpression::create(compiler::Error);
+						return ErrorExpression::getInstance();
 					}
 					debug("accessing '%s'",def->id);
 					auto expression = def->parse(parser);
@@ -236,7 +233,7 @@ namespace arpha {
 					if(auto overloadSet = expression->asOverloadSetExpression()) overloadSet->scope = val->refScope;
 					return expression;
 				}
-			}
+			}*/
 			return AccessExpression::create(node,parser->lookedUpToken.symbol,parser->currentScope());
 		}
 	};
@@ -245,7 +242,7 @@ namespace arpha {
 	struct AssignmentParser: InfixDefinition {
 		AssignmentParser(): InfixDefinition("=",arpha::Precedence::Assignment,Location()) {}
 		Node* parse(Parser* parser,Node* node){
-			return AssignmentExpression::create(node,parser->parse(arpha::Precedence::Assignment)); 
+			return new AssignmentExpression(node,parser->parse(arpha::Precedence::Assignment)); 
 		}
 	};
 
@@ -255,6 +252,30 @@ namespace arpha {
 	bool isEndExpressionEquals(const Token& token){
 		return isEndExpression(token) || (token.isSymbol() && token.symbol == "=");
 	}
+
+	/// ::= 'var' <names> [type|unresolvedExpression (hopefully) resolving to type|Nothing]
+	struct VarParser: PrefixDefinition {
+		VarParser(): PrefixDefinition("var",Location()) {}
+		Node* parse(Parser* parser){
+			std::vector<Node*> references;
+			do {
+				auto var = new Variable(parser->expectName(),parser->previousLocation());
+				parser->currentScope()->define(var);
+				references.push_back(new VariableReference(var,true));
+			}
+			while(parser->match(","));
+			TypeExpression* typeExpression = intrinsics::types::Inferred;
+			if(!isEndExpressionEquals(parser->peek())){
+				auto node = parser->parse(arpha::Precedence::Assignment);
+				if(!(typeExpression = node->asTypeExpression())) typeExpression = new TypeExpression(node);
+			}
+			for(auto i=references.begin();i!=references.end();i++) (*i)->asVariableReference()->variable->_type = typeExpression;
+			if(references.size() == 1) return references[0];
+			auto tuple = new TupleExpression;
+			tuple->children = references;
+			return tuple;
+		}
+	};
 
 	/// ::= 'def' <name> '=' expression
 	/// ::= 'def' <name> '(' args ')' [returnType] body
@@ -271,7 +292,7 @@ namespace arpha {
 				auto oldScope = parser->currentScope();
 				parser->currentScope(func->bodyScope);
 				if(parser->match("="))
-					func->body->children.push_back(parser->evaluate(ReturnExpression::create(parser->parse())));
+					func->body->children.push_back(parser->evaluate(new ReturnExpression(parser->parse())));
 				else {
 					parser->expect("{");
 					blockParser->body(parser,BlockParser::BlockChildParser(func->body));
@@ -330,11 +351,10 @@ namespace arpha {
 			auto name = parser->expectName();
 			if(parser->match("(")) return function(name,location,parser);
 			else{
-				parser->expect("=");
 				auto sub = new Variable(name,location);
-				sub->value = parser->parse(arpha::Precedence::Tuple);
+				sub->_type =new TypeExpression(TypeExpression::CONSTANT,intrinsics::types::Inferred);
 				parser->currentScope()->define(sub);
-				return sub->value;
+				return new VariableReference(sub,true);
 			}
 		}
 	};
@@ -342,11 +362,12 @@ namespace arpha {
 	/// ::= 'type' <name> {body|'=' type}
 	struct TypeParser: PrefixDefinition {
 		TypeParser(): PrefixDefinition("type",Location()) {  }
-		// fields ::= {'var'|'val'} <name>,... {type ['=' initialValue]|['=' initialValue]}
-		static void fields(TypeDeclaration* decl,Parser* parser){
+		// fields ::= ['extends'] {'var'|'val'} <name>,... {type ['=' initialValue]|['=' initialValue]}
+		static void fields(TypeDeclaration* decl,Parser* parser,bool val = false,bool extender = false){
 			TypeDeclaration::FieldDefinition fields;
 			fields.firstFieldID = decl->type->fields.size();
 			fields.count = 0;
+			fields.extender = extender;
 			do {
 				decl->type->add(Variable(parser->expectName(),parser->previousLocation()));
 				fields.count++;
@@ -362,10 +383,16 @@ namespace arpha {
 			bool operator()(Parser* parser){
 				auto token = parser->consume();
 				if(token.isSymbol()){
+					bool extender = false;
+					if(token.symbol == "extends"){
+						extender = true;
+						token = parser->consume();
+					}
 					if(token.symbol == "var"){
-						fields(decl,parser);
+						fields(decl,parser,false,extender);
 						return true;
 					}
+
 				}
 				error(parser->previousLocation(),"Unexpected %s - a var is expected inside a type %s body!",token,decl->type->id);
 				return false;
@@ -375,6 +402,13 @@ namespace arpha {
 		Node* parse(Parser* parser){
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
+
+			if(parser->match("integer")){
+				debug("defined integer type");
+				auto type = new IntegerType(name,location);
+				parser->currentScope()->define(type);
+				return new TypeExpression(type);
+			}
 			auto type = new Type(name,location);
 			parser->currentScope()->define(type);
 			if(parser->match("intrinsic")){
@@ -385,26 +419,13 @@ namespace arpha {
 				auto declaration = TypeDeclaration::create(type);		
 				//fields
 				if(parser->match("{")) blockParser->body(parser,BodyParser(declaration));
+				else {
+					parser->expect("=");
+					auto typeExpre = parser->parse();
+				}
 				return declaration;
 			}
 			
-		}
-	};
-
-	/// ::= 'var' <names> [type|unresolvedExpression (hopefully) resolving to type|Nothing]
-	struct VarParser: PrefixDefinition {
-		VarParser(): PrefixDefinition("var",Location()) {}
-		Node* parse(Parser* parser){
-			auto declaration = new VariableDeclaration;
-			do {
-				auto var = new Variable(parser->expectName(),parser->previousLocation());
-				parser->currentScope()->define(var);
-				declaration->variables.push_back(var);
-			}
-			while(parser->match(","));
-			if(!isEndExpressionEquals(parser->peek())) declaration->typeExpression = parser->parse(arpha::Precedence::Assignment);
-			else declaration->typeExpression = nullptr;
-			return declaration;
 		}
 	};
 
@@ -428,7 +449,7 @@ namespace arpha {
 				op->function = parser->expectName();
 				parser->currentScope()->define(op);
 			}
-			return ConstantExpression::create(compiler::Nothing);
+			return UnitExpression::getInstance();
 		}
 	};
 
@@ -436,7 +457,7 @@ namespace arpha {
 	struct ReturnParser: PrefixDefinition {
 		ReturnParser(): PrefixDefinition("return",Location()) {}
 		Node* parse(Parser* parser){
-			return ReturnExpression::create(parser->parse());
+			return new ReturnExpression(parser->parse());
 		}
 	};
 
@@ -499,7 +520,7 @@ namespace arpha {
 					error(location,"module '%s' wasn't found!",modulePath);
 				}
 			}while(parser->match(","));
-			return ConstantExpression::create(compiler::Nothing);
+			return UnitExpression::getInstance();
 		}
 	};
 
@@ -526,35 +547,8 @@ namespace arpha {
 		scope->define(new WhileParser);
 		scope->define(new MatchParser);
 
-		Nothing = builtInType("Nothing",0);
-
-		boolean = builtInType("bool",1);
-		int8 = builtInType("int8",1);
-		uint8 = builtInType("uint8",1);
-		int16 = builtInType("int16",2);
-		uint16 = builtInType("uint16",2);
-		int32 = builtInType("int32",4);
-		uint32 = builtInType("uint32",4);
-		int64 = builtInType("int64",8);
-		uint64 = builtInType("uint64",8);
-		float64 = builtInType("double",8);
-		float32 = builtInType("float",4);
-
-
-		constantString = builtInType("String",0);
 
 		//true & false
-		auto value = ConstantExpression::create(boolean);
-		value->u64 = 1;
-		auto constant = new Variable("true",location);
-		constant->value = value;
-		scope->define(constant);
-
-		value = ConstantExpression::create(boolean);
-		value->u64 = 0;
-		constant = new Variable("false",location);
-		constant->value = value;
-		scope->define(constant);
 
 	}
 };
@@ -618,6 +612,8 @@ namespace compiler {
 		//TODO rm hACKS
 		if((packageDir + "/arpha/ast/ast.arp") == moduleName){
 			intrinsics::ast::init(scope);
+		}else if((packageDir + "/arpha/types.arp") == moduleName){
+			intrinsics::types::init(scope);
 		}
 
 		debug("------------------- AST: ------------------------------");
@@ -669,7 +665,6 @@ namespace compiler {
 	Type* expression;
 	Type* type;
 	Type* Nothing; 
-	Type* Error;
 	Type* Unresolved;
 	Type* anyType; 
 
@@ -694,11 +689,12 @@ namespace compiler {
 		expression = builtInType("Expression");
 		type = builtInType("Type");
 		Nothing = builtInType("void");
-		Error = builtInType("Error");
 		Unresolved = builtInType("Unresolved");
 		anyType = builtInType("anyType");
 		function = builtInType("funtype");
 		scopeRef = builtInType("scope");
+
+		intrinsics::types::preinit();
 
 		//Load language definitions.
 		auto arphaModule = newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
@@ -726,16 +722,19 @@ int main(int argc, char * const argv[]){
 	if(argc < 2){
 
 		System::print("\nWelcome to arpha code console. Type in the code and press return twice to compile it!\n");
-		std::string source = "import arpha.testing.testing\n";
+		std::string source = "";//"import arpha.testing.testing\n";
 		char buf[1024];
 		while(true){
 			std::cout<<"> ";
 			std::cin.getline(buf,1024);
-			if(buf[0]=='\0') break;
+			if(buf[0]=='\0'){
+				 auto mod = compiler::newModule("source",source.c_str());
+				 source = "";
+				 continue;
+			}
 			source+=buf;
 			source+="\n";
 		}
-		auto mod = compiler::newModule("source",source.c_str());
 	}else{
 		System::print("\nSorry, can't accept files yet!\n");
 	}

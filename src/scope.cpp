@@ -106,7 +106,7 @@ void Scope::define(InfixDefinition* definition){
 void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& results,const Node* argument,bool enforcePublic = false){
 	Type* argumentType = argument->returnType();
 	Function *implicitMatch = nullptr,*inferMatch = nullptr,*exprMatch = nullptr;//lastResort
-
+	int extender;
 	for(auto i=overloads.begin();i!=overloads.end();++i){
 		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
 		auto argumentType = argument->returnType();
@@ -116,6 +116,10 @@ void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& resul
 		}
 		else if(argumentType->isRecord() && Type::recordsSameTypes((*i)->argument, argumentType) ){
 			//debug("-dr");
+			results.push_back(*i);
+		}
+		else if((extender = argumentType->extendsType((*i)->argument)) != -1){
+			debug("e-m");
 			results.push_back(*i);
 		}
 		else if((*i)->argument == compiler::expression){ /*debug("-c");*/ exprMatch = *i; }
@@ -131,10 +135,11 @@ Function* errorOnMultipleMatches(std::vector<Function*>& results){
 
 Function* Scope::resolve(const char* name,Type* argumentType){
 	//HACK create a fake constant node of type argumentType
-	ConstantExpression argument;
-	argument.type = argumentType;
-	argument._isLiteral = false;
-	return resolveFunction(name,&argument);
+	//ConstantExpression argument;
+	//argument.type = argumentType;
+	//argument._isLiteral = false;
+	//return resolveFunction(name,&argument);
+	return nullptr;
 }
 Function* Scope::resolveFunction(SymbolID name,const Node* argument){
 	std::vector<Function*> results;

@@ -9,12 +9,73 @@
 //variable
 Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location) {
 	type  = nullptr;
-	value = nullptr;
 }
-void Variable::inferType(Type* t){
-	assert(type == nullptr);
-	debug("Inferred type %s for variable %s",t->id,id);
-	type = t;
+
+
+//integer type
+
+IntegerType::IntegerType(SymbolID name,Location& location) : TypeBase(name,location){
+	//temporary TODO move to arpha package source files
+	_unsigned = false;
+	if(name == "bool"){
+		_unsigned = true;
+		min = 0;
+		max = 1;
+		_size = 1;
+	}
+	else if(name == "int32"){
+		min = std::numeric_limits<int>::min();
+		max = std::numeric_limits<int>::max();
+		_size = 4;
+	}
+	else if(name == "int64"){
+		min = std::numeric_limits<int64>::min();
+		max = std::numeric_limits<int64>::max();
+		_size = 8;
+	}
+	else if(name == "int8"){
+		min = std::numeric_limits<signed char>::min();
+		max = std::numeric_limits<signed char>::max();
+		_size = 1;
+	}
+	else if(name == "int16"){
+		min = std::numeric_limits<signed short>::min();
+		max = std::numeric_limits<signed short>::max();
+		_size = 2;
+	}
+	else{
+		min = 0;
+		_unsigned = true;
+		if(name == "uint32"){
+			max = (uint64)std::numeric_limits<uint32>::max();
+			_size = 4;
+		}
+		else if(name == "uint64"){
+			max = std::numeric_limits<uint64>::max();
+			_size = 8;
+		}
+		else if(name == "uint8"){
+			max = std::numeric_limits<uint8>::max();
+			_size = 1;
+		}
+		else if(name == "uint16"){
+			max = std::numeric_limits<unsigned short>::max();
+			_size = 2;
+		}
+	}
+}
+
+size_t IntegerType::size() const {
+	return _size;
+}
+bool IntegerType::isValid(BigInt& value) const {
+	return min<=value && value<=max;
+}
+bool IntegerType::isUnsigned() const {
+	return _unsigned;
+}
+Node* IntegerType::assignableFrom(Node* expression,IntegerType* type){
+	return expression;//TODO
 }
 
 //type
@@ -52,6 +113,12 @@ bool Type::resolved(){
 size_t Type::size(){
 	assert(_resolved);
 	return _size;
+}
+int Type::extendsType(Type* type){
+	for(auto i=extenders.begin();i!=extenders.end();i++){
+		if(fields[*i].type == type) return *i;
+	}
+	return -1;
 }
 
 std::ostream& operator<< (std::ostream& stream,Type* type){
@@ -159,7 +226,7 @@ Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,loc
 	intrinsicEvaluator = nullptr;
 }
 Type* Function::type(){
-	return compiler::function;//TODO
+	return nullptr;//compiler::function;//TODO
 }
 
 void Function::updateOnSolving(){

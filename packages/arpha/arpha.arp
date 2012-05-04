@@ -4,6 +4,12 @@
 	Version: 1
 #
 
+import export types
+
+#TODO def
+var true,false bool = 1,0
+
+#
 # An unsigned integer representing CPU's word.
 # It is equivalent to size_t from C/C++.
 def natural = if(true) uint32 else uint64
@@ -31,3 +37,4 @@ def sizeof(expression compiler.Expression) natural
 def assert(file stringLiteral,line natural,expression stringLiteral)
 # Wrapper, currently implemented by compiler
 def assert(expression compiler.Expression)
+#

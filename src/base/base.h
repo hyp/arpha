@@ -26,6 +26,13 @@ typedef unsigned int UnicodeChar;
 void _assert(const char* file, int line, const char* what);
 #define assert(what) ((what) ? (void)0 : _assert( __FILE__, __LINE__, (#what)))
 
+template<typename T>
+inline T* _ensure(int line,const char* file,T* x){
+	if(!x) _assert(file,line,"Expected a non-null result!");
+	return x;
+}
+#define ensure(x) _ensure(__LINE__,__FILE__,x)
+
 //class non copyable
 #define NOCOPY(t) \
 	t(const t &); \
