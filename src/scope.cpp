@@ -104,7 +104,7 @@ void Scope::define(InfixDefinition* definition){
 }
 
 void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& results,const Node* argument,bool enforcePublic = false){
-	Type* argumentType = argument->returnType();
+	/*Type* argumentType = argument->returnType();
 	Function *implicitMatch = nullptr,*inferMatch = nullptr,*exprMatch = nullptr;//lastResort
 	int extender;
 	for(auto i=overloads.begin();i!=overloads.end();++i){
@@ -122,9 +122,9 @@ void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& resul
 			debug("e-m");
 			results.push_back(*i);
 		}
-		else if((*i)->argument == compiler::expression){ /*debug("-c");*/ exprMatch = *i; }
+		else if((*i)->argument == compiler::expression){ /*debug("-c"); exprMatch = *i; }
 	}
-	if(exprMatch && results.size()==0) results.push_back( exprMatch );//TODO careful with imports
+	if(exprMatch && results.size()==0) results.push_back( exprMatch );//TODO careful with imports*/
 }
 
 Function* errorOnMultipleMatches(std::vector<Function*>& results){

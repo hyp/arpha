@@ -42,8 +42,6 @@ void runTests(){
 		assert(type4->resolved());
 		assert(type4->_returnType() == intrinsics::types::Type);
 		assert(type4->size() == 4);
-
-
 	}
 	unittest(_theEndDummy);
 }

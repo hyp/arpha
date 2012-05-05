@@ -65,19 +65,6 @@ unittest(scope){
 namespace arpha {
 	Scope *scope;
 
-	//core types & functions
-	Type* Nothing;
-	Type *boolean;	
-	Type *constantString;
-
-	Type* builtInType(const char* name,int size){
-		auto t = new Type(SymbolID(name),Location());
-		t->_size = size;
-		t->updateOnSolving();
-		scope->define(t);
-		return t;
-	}
-
 
 	// parses blocks and whatnot
 	// body ::= {';'|newline}* expression {';'|newline}+ expressions...
@@ -253,6 +240,16 @@ namespace arpha {
 		return isEndExpression(token) || (token.isSymbol() && token.symbol == "=");
 	}
 
+	TypeExpression* expectTypeExpression(Parser* parser,int stickiness){
+		TypeExpression* result;
+		auto oldSetting = parser->evaluator()->evaluateTypeTuplesAsTypes;
+		parser->evaluator()->evaluateTypeTuplesAsTypes = true;
+		auto node = parser->parse(stickiness);
+		parser->evaluator()->evaluateTypeTuplesAsTypes = oldSetting;
+		if(!(result = node->asTypeExpression())) result = new TypeExpression(node);//unresolved type
+		return result;
+	}
+
 	/// ::= 'var' <names> [type|unresolvedExpression (hopefully) resolving to type|Nothing]
 	struct VarParser: PrefixDefinition {
 		VarParser(): PrefixDefinition("var",Location()) {}
@@ -265,10 +262,8 @@ namespace arpha {
 			}
 			while(parser->match(","));
 			TypeExpression* typeExpression = intrinsics::types::Inferred;
-			if(!isEndExpressionEquals(parser->peek())){
-				auto node = parser->parse(arpha::Precedence::Assignment);
-				if(!(typeExpression = node->asTypeExpression())) typeExpression = new TypeExpression(node);
-			}
+			if(!isEndExpressionEquals(parser->peek())) typeExpression = expectTypeExpression(parser,arpha::Precedence::Assignment);
+
 			for(auto i=references.begin();i!=references.end();i++) (*i)->asVariableReference()->variable->_type = typeExpression;
 			if(references.size() == 1) return references[0];
 			auto tuple = new TupleExpression;
@@ -303,7 +298,7 @@ namespace arpha {
 
 
 		static Node* function(SymbolID name,Location location,Parser* parser){
-			//Function
+			/*Function
 			auto func = new Function(name,location);
 			parser->currentScope()->defineFunction(func);
 			auto declaration = FunctionDeclaration::create(func);
@@ -343,7 +338,8 @@ namespace arpha {
 				}
 				functionBody(func,parser);
 			}
-			return declaration;
+			return declaration;*/
+			return nullptr;
 		}
 
 		Node* parse(Parser* parser){
@@ -363,23 +359,22 @@ namespace arpha {
 	struct TypeParser: PrefixDefinition {
 		TypeParser(): PrefixDefinition("type",Location()) {  }
 		// fields ::= ['extends'] {'var'|'val'} <name>,... {type ['=' initialValue]|['=' initialValue]}
-		static void fields(TypeDeclaration* decl,Parser* parser,bool val = false,bool extender = false){
-			TypeDeclaration::FieldDefinition fields;
-			fields.firstFieldID = decl->type->fields.size();
-			fields.count = 0;
-			fields.extender = extender;
+		static void fields(Record* record,Parser* parser,bool val = false,bool extender = false){
+			size_t i = record->fields.size();
 			do {
-				decl->type->add(Variable(parser->expectName(),parser->previousLocation()));
-				fields.count++;
+				auto field = Record::Field(parser->expectName(),intrinsics::types::Unresolved);
+				field.isExtending = extender;
+				record->add(field);
 			}
 			while(parser->match(","));
-			fields.typeExpression = parser->parse(arpha::Precedence::Assignment);
-			decl->fields.push_back(fields);
+			auto typeExpression = expectTypeExpression(parser,arpha::Precedence::Assignment);
+			record->_resolved = typeExpression->resolved();
+			for(;i<record->fields.size();i++) record->fields[i].type = typeExpression;
 		}
 		// body ::= '{' fields ';' fields ... '}'
 		struct BodyParser {
-			TypeDeclaration* decl;
-			BodyParser(TypeDeclaration* typeDecl) : decl(typeDecl) {}
+			Record* record;
+			BodyParser(Record* _record) : record(_record) {}
 			bool operator()(Parser* parser){
 				auto token = parser->consume();
 				if(token.isSymbol()){
@@ -389,12 +384,11 @@ namespace arpha {
 						token = parser->consume();
 					}
 					if(token.symbol == "var"){
-						fields(decl,parser,false,extender);
+						fields(record,parser,false,extender);
 						return true;
 					}
-
 				}
-				error(parser->previousLocation(),"Unexpected %s - a var is expected inside a type %s body!",token,decl->type->id);
+				error(parser->previousLocation(),"Unexpected %s - a var is expected inside type's %s body!",token,record->id);
 				return false;
 			}
 		};
@@ -408,24 +402,24 @@ namespace arpha {
 				auto type = new IntegerType(name,location);
 				parser->currentScope()->define(type);
 				return new TypeExpression(type);
-			}
-			auto type = new Type(name,location);
-			parser->currentScope()->define(type);
-			if(parser->match("intrinsic")){
+			}else if(parser->match("intrinsic")){
 				debug("Defined intrinsic type %s",name);
-				type->updateOnSolving();
-				return TypeReference::create(type);
-			}else{
-				auto declaration = TypeDeclaration::create(type);		
-				//fields
-				if(parser->match("{")) blockParser->body(parser,BodyParser(declaration));
-				else {
-					parser->expect("=");
-					auto typeExpre = parser->parse();
-				}
-				return declaration;
+				return nullptr;//TODO
 			}
-			
+			auto record = new Record(name,location);
+			record->_resolved = true;
+			parser->currentScope()->define(record);
+		
+			//fields
+			if(parser->match("{")){
+				blockParser->body(parser,BodyParser(record));
+			}
+			else {
+				parser->expect("=");
+				auto typeExpre = parser->parse();//TODO
+			}
+			if(record->_resolved) record->updateOnSolving();
+			return new TypeExpression(record);
 		}
 	};
 
@@ -470,7 +464,7 @@ namespace arpha {
 			parser->expect(")");
 			auto consq = parser->parse();
 			Node* alt = parser->match("else") ? parser->parse() : nullptr;
-			return IfExpression::create(condition,consq,alt);
+			return nullptr;//TODO//IfExpression::create(condition,consq,alt);
 		}
 	};
 
@@ -662,21 +656,6 @@ namespace compiler {
 
 	Scope* scope;
 
-	Type* expression;
-	Type* type;
-	Type* Nothing; 
-	Type* Unresolved;
-	Type* anyType; 
-
-	Type* function;
-	Type* scopeRef;
-
-	Type* builtInType(const char* name){
-		auto t = new Type(SymbolID(name),Location());
-		scope->define(t);
-		t->updateOnSolving();
-		return t;
-	}
 
 	void init(){
 		compilerModule = currentModule = modules.end();
@@ -685,14 +664,6 @@ namespace compiler {
 		
 		//scope for compiler module
 		scope = new Scope(nullptr);
-
-		expression = builtInType("Expression");
-		type = builtInType("Type");
-		Nothing = builtInType("void");
-		Unresolved = builtInType("Unresolved");
-		anyType = builtInType("anyType");
-		function = builtInType("funtype");
-		scopeRef = builtInType("scope");
 
 		intrinsics::types::preinit();
 

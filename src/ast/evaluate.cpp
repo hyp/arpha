@@ -139,7 +139,7 @@ struct AstExpander: NodeVisitor {
 	}
 
 	//on a.foo(...)
-	static Node* transformCallOnAccess(CallExpression* node,Type* argumentType,AccessExpression* acessingObject){
+	static Node* transformCallOnAccess(CallExpression* node,TypeExpression* argumentType,AccessExpression* acessingObject){
 		/*debug("calling on access! %s with %s",acessingObject,node->arg);
 		//a.foo()
 		if(argumentType == arpha::Nothing){
@@ -160,35 +160,35 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 	//TODO Type call -> constructor.
-	Node* evalTypeCall(CallExpression* node,Type* type){
-		assert(type != compiler::Unresolved);
+	Node* evalTypeCall(CallExpression* node,TypeExpression* type){
+		assert(type != intrinsics::types::Unresolved);
 		/*if(type == intrinsics::ast::Expression){
 			debug("Expression of");
 			auto r = ExpressionReference::create(node->arg);
 			//delte node
 			return r;
 		}*/
-		if(node->arg->returnType() == compiler::Nothing) error(node->arg->location,"Can't perform type call onto a statement!");
+		if(node->arg->_returnType() == intrinsics::types::Void) error(node->arg->location,"Can't perform type call onto a statement!");
 		return node;
 	}
 
 	Node* visit(CallExpression* node){
 		//evaluate argument
 		node->arg = node->arg->accept(this);
-		auto argumentType = node->arg->returnType();
+		auto argumentType = node->arg->_returnType();
 
-		if(auto callingType = node->object->asTypeReference()){
-			return evalTypeCall(node,callingType->type());
+		if(auto callingType = node->object->asTypeExpression()){
+			return evalTypeCall(node,callingType);
 		}
 
-		if(argumentType == compiler::Nothing) error(node->arg->location,"Can't perform function call on a statement!");
-		else if(argumentType != compiler::Unresolved){
+		if(argumentType == intrinsics::types::Void) error(node->arg->location,"Can't perform function call on a statement!");
+		else if(argumentType != intrinsics::types::Unresolved){
 			if(auto callingOverloadSet = node->object->asOverloadSetExpression()){
 				auto func = callingOverloadSet->scope->resolveFunction(callingOverloadSet->symbol,node->arg);
 				if(func){
-					node->object = FunctionReference::create(func);
+					node->object = new FunctionReference(func);
 					//TODO function->adjustArgument
-					debug("Overload successfully resolved as %s: %s",func->id,func->argument->id);
+					debug("Overload successfully resolved as %s: %s",func->id,func->argument);
 					if(func == intrinsics::ast::mixin){
 						auto oldSetting = evaluator->evaluateExpressionReferences;
 						evaluator->evaluateExpressionReferences = true;
@@ -250,6 +250,13 @@ struct AstExpander: NodeVisitor {
 			}
 			else return nullptr; //Trying to assign to a variable with unresolved type.. that's a no no!
 		}
+		else if(auto access = object->asAccessExpression()){
+			//TODO
+		}
+		else{
+			error(object->location,"Can't perform an assignment to %s - only variables and fields are assignable!",object);
+			*error = true;
+		}
 		return nullptr;
 	}
 	Node* visit(AssignmentExpression* node){
@@ -257,6 +264,7 @@ struct AstExpander: NodeVisitor {
 		if(node->value->_returnType()  == intrinsics::types::Unresolved) return node;//Don't bother until the value is fully resolved
 		bool error = false;
 
+		//TODO flatten tuples
 		if(auto t1 = node->object->asTupleExpression()){
 			if(auto t2 = node->value->asTupleExpression()){
 				if(t1->children.size() == t2->children.size()){
@@ -271,7 +279,7 @@ struct AstExpander: NodeVisitor {
 				}
 			}
 			else{
-				error(node->location,"Can't assign a tuple to a non-tuple");
+				error(node->location,"Can't assign a non-tuple to a tuple");
 				error = true;
 			}
 		}else{
@@ -327,14 +335,14 @@ struct AstExpander: NodeVisitor {
 	Node* visit(AccessExpression* node){
 		node->object = node->object->accept(this);
 		if(node->passedFirstEval){
-			auto objectType = node->object->returnType();
+			auto objectType = node->object->_returnType();
 			//TODO type field access & expression '.' call notation
-			if(auto field = objectType->lookupField(node->symbol)){
+			/*if(auto field = objectType->lookupField(node->symbol)){
 				//TODO This may need to be done only on 2nd iteration, because there might be setters/getters defined on a later on in the module
 				//TODO - how to mark it??
 				return node;
 			}
-			else return CallExpression::create(OverloadSetExpression::create(node->symbol,node->scope),node->object)->accept(this);
+			else*/ return CallExpression::create(OverloadSetExpression::create(node->symbol,node->scope),node->object)->accept(this);
 		}
 		else node->passedFirstEval = true;
 		return node;
@@ -348,7 +356,8 @@ struct AstExpander: NodeVisitor {
 			delete node;
 			return UnitExpression::getInstance();
 		}
-		std::vector<std::pair<SymbolID,Type*>> fields;
+
+		std::vector<Record::Field> fields;
 	
 		node->type = nullptr;
 		TypeExpression* returns;
@@ -361,10 +370,25 @@ struct AstExpander: NodeVisitor {
 				node->type = intrinsics::types::Unresolved;
 			}
 			else if(returns == intrinsics::types::Unresolved) node->type = intrinsics::types::Unresolved;
-			else fields.push_back(std::make_pair(SymbolID(),node->children[i]->returnType())); //TODO fix
+			else fields.push_back(Record::Field(SymbolID(),returns));
 		}
-
-		if(!node->type) node->type = new TypeExpression(Type::tuple(fields));
+		if(!node->type){
+			if(evaluator->evaluateTypeTuplesAsTypes){
+				bool allTypes = true;
+				for(auto i=fields.begin();i!=fields.end();i++){
+					if((*i).type != intrinsics::types::Type) allTypes = false;
+				}
+				if(allTypes){
+					//int32,int32
+					for(size_t i =0;i<node->children.size();i++){
+						fields[i].type = node->children[i]->asTypeExpression();
+					}
+					delete node;
+					return new TypeExpression(Record::findAnonymousRecord(fields));
+				}
+			}
+			node->type = new TypeExpression(Record::findAnonymousRecord(fields));
+		}
 		return node;
 	}
 	Node* visit(BlockExpression* node){
@@ -376,76 +400,13 @@ struct AstExpander: NodeVisitor {
 		//TODO function return type inferring
 		return node;
 	}
-	Node* visit(IfExpression* node){
-		node->condition = node->condition->accept(this);
-		node->consequence = node->consequence->accept(this);
-		if(node->alternative) node->alternative = node->alternative->accept(this);
-		//auto constantCondition = node->condition->asConstantExpression();
-		//if(constantCondition && constantCondition->type == arpha::boolean){ //TODO interpret properly
-		//	return constantCondition->u64 ? node->consequence : node->alternative;
-		//}
-		return node;
-	}
+
 	Node* visit(WhileExpression* node){
 		node->condition = node->condition->accept(this);
 		node->body = node->body->accept(this);
 		return node;
 	}
-	Node* visit(TypeDeclaration* node){
-		bool resolved = true;
-		for(auto i = node->fields.begin();i!=node->fields.end();i++){
-			(*i).typeExpression = (*i).typeExpression->accept(this);
-			TypeReference* typeRef;
-			if((typeRef = (*i).typeExpression->asTypeReference()) && typeRef->type()!=compiler::Unresolved){
-				//Apply the resolved type to fields
-				const int limit = (*i).firstFieldID + (*i).count;
-				for(auto j = (*i).firstFieldID;j < limit;j++){
-					node->type->fields[j].type = typeRef->type();
-					if((*i).extender) node->type->extenders.push_back(j);
-				}
-			}
-			else resolved = false;
-		}
-		if(resolved){
-			node->type->updateOnSolving();
-			auto ref = TypeReference::create(node->type);
-			//delete all node->typeExpression
-			//delete node
-			return ref;
-		}
-		return node;
-	}
-	Node* visit(FunctionDeclaration* node){
-		bool resolved = true;
-		//Return type?
-		if(node->returnTypeExpression){
-			node->returnTypeExpression = node->returnTypeExpression->accept(this);
-			TypeReference* typeRef;
-			if((typeRef = node->returnTypeExpression->asTypeReference()) && typeRef->type()!=compiler::Unresolved){
-				node->fn->returnType = typeRef->type();
-				//delete node->returnTypeExpression
-				node->returnTypeExpression = nullptr;
-			}
-			else resolved  = false;
-		}
-		//Parameters
-		for(size_t i = 0;i<node->parameters.size();i++){
-			auto expr = node->parameters[i].typeExpression = node->parameters[i].typeExpression->accept(this);
-			TypeReference* typeRef;
-			if((typeRef = expr->asTypeReference()) && typeRef->type()!=compiler::Unresolved){
-				node->fn->arguments[i].variable->type = typeRef->type();
-			}
-			else resolved = false;
-		}
-		if(resolved){
-			node->fn->updateOnSolving();
-			auto ref = FunctionReference::create(node->fn);
-			//delete all node->parameterstypeExpression
-			//delete node
-			return ref;
-		}
-		return node;
-	}
+
 };
 Node* Evaluator::eval(Node* node){
 	AstExpander expander(this);

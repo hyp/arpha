@@ -116,8 +116,8 @@ Node* Variable::parse(Parser* parser){
 	return new VariableReference(this);
 }
 
-Node* Type::parse(Parser* parser){
-	return TypeReference::create(this);
+Node* Record::parse(Parser* parser){
+	return new TypeExpression(this);
 }
 
 Node* IntegerType::parse(Parser* parser){
@@ -125,7 +125,7 @@ Node* IntegerType::parse(Parser* parser){
 }
 
 Node* Function::parse(Parser* parser){
-	return FunctionReference::create(this);//TODO remove?
+	return nullptr;//FunctionReference::create(this);//TODO remove?
 }
 
 Node* Overloadset::parse(Parser* parser){

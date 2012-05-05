@@ -1,7 +1,9 @@
+#include "../base/base.h"
+#include "../base/format.h"
+#include "../base/bigint.h"
 #include "node.h"
+#include "declarations.h"
 #include "visitor.h"
-#include "../compiler.h"
-#include "../arpha.h"
 #include "../intrinsics/ast.h"
 #include "../intrinsics/types.h"
 
@@ -27,10 +29,6 @@ struct NodeToString: NodeVisitor {
 	}
 	Node* visit(VariableReference* node){
 		stream<<"variable "<<node->variable->id;
-		return node;
-	}
-	Node* visit(TypeReference* node){
-		stream<<"ref "<<node->type();
 		return node;
 	}
 	Node* visit(FunctionReference* node){
@@ -62,11 +60,6 @@ struct NodeToString: NodeVisitor {
 		stream<<"match "<<node->object;
 		return node;
 	}
-	Node* visit(IfExpression* node){
-		stream<<"if "<<node->condition<<" then "<<node->consequence;
-		if(node->alternative) stream<<" else "<<node->alternative;
-		return node;
-	}
 	Node* visit(TupleExpression* node){
 		auto i = node->children.begin();
 		while(1){
@@ -87,19 +80,6 @@ struct NodeToString: NodeVisitor {
 		stream<<"while "<<node->condition<<" do "<<node->body;
 		return node;
 	}
-	Node* visit(TypeDeclaration* node){
-		stream<<"Type declaration "<<node->type->id<<" with fields: ";
-		for(auto i = node->fields.begin();i!=node->fields.end();i++){
-			stream<<"Fields "<<(*i).firstFieldID<<" with type expr "<<(*i).typeExpression;
-		}
-			
-		return node;
-	}
-	Node* visit(FunctionDeclaration* node){
-		stream<<"Function declaration "<<node->fn->id<<" .. -> ";
-		if(node->returnTypeExpression) stream<<node->returnTypeExpression;
-		return node;
-	}
 	Node* visit(TypeExpression* node){
 		stream<<node;
 		return node;
@@ -113,7 +93,6 @@ std::ostream& operator<< (std::ostream& stream,Node* node){
 	return stream;
 }
 
-Type* Node::returnType() const { return compiler::Nothing; }
 TypeExpression* Node::_returnType() const {
 	return intrinsics::types::Void;
 }
@@ -173,7 +152,7 @@ VariableReference::VariableReference(Variable* variable,bool definitionHere){
 	isDefinedHere = definitionHere;
 }
 TypeExpression* VariableReference::_returnType() const {
-	return variable->_type != intrinsics::types::Inferred ? variable->_type : intrinsics::types::Unresolved;
+	return variable->_type != intrinsics::types::Inferred ? (variable->_type->resolved()? variable->_type : intrinsics::types::Unresolved ) : intrinsics::types::Unresolved;
 }
 Node* VariableReference::duplicate() const {
 	return new VariableReference(variable,isDefinedHere);
@@ -229,41 +208,29 @@ Node* MatchExpression::duplicate(){
 	auto dup = new MatchExpression(object);
 	for(auto i = cases.begin();i!=cases.end();i++){
 		Case _case;
-		_case.type = (*i).type;
 		_case.node = (*i).node->duplicate();
+		_case.consequence = (*i).consequence ? (*i).consequence->duplicate() : nullptr;
 		dup->cases.push_back(_case);
 	}
 	return dup;
 }
 
-Type* TypeReference::returnType() const {
-	return _type->resolved() ? compiler::type : compiler::Unresolved;
+FunctionReference::FunctionReference(Function* function) : _function(function) {
 }
-Type* TypeReference::type() const {
-	return _type->resolved() ? _type : compiler::Unresolved;
-}
-Type* FunctionReference::returnType() const {
-	return _function->resolved() ? _function->type() : compiler::Unresolved;
+TypeExpression* FunctionReference::_returnType() const {
+	return intrinsics::types::Unresolved;//TODO;
 }
 Function* FunctionReference::function() const {
 	assert(_function->resolved());
 	return _function;
 }
-Type* CallExpression::returnType() const {
+
+
+TypeExpression* CallExpression::_returnType() const {
 	if( auto refFunc = object->asFunctionReference()){
 		return refFunc->function()->returnType;
 	}
-	return compiler::Unresolved;
-}
-Type* IfExpression::returnType() const {
-	if(!alternative) return compiler::Nothing;
-	return consequence->returnType();
-}
-Type* TypeDeclaration::returnType() const {
-	return compiler::Unresolved;
-}
-Type* FunctionDeclaration::returnType() const {
-	return compiler::Unresolved;
+	return intrinsics::types::Unresolved;
 }
 
 //Injects visitor callback and dynamic cast function into a node structure
@@ -279,17 +246,6 @@ NODE_LIST(DECLARE_NODE_IMPLEMENTATION)
 #undef DECLARE_NODE_IMPLEMENTATION
 
 //Constructors
-
-TypeReference* TypeReference::create(Type* type){
-	auto e = new TypeReference;
-	e->_type = type;
-	return e;
-}
-FunctionReference* FunctionReference::create(Function* func){
-	auto e = new FunctionReference;
-	e->_function = func;
-	return e;
-}
 
 OverloadSetExpression* OverloadSetExpression::create(SymbolID symbol,Scope* scope){
 	auto e = new OverloadSetExpression;
@@ -311,13 +267,7 @@ AccessExpression* AccessExpression::create(Node* object,SymbolID symbol,Scope* s
 	e->passedFirstEval = false;
 	return e;
 }
-IfExpression* IfExpression::create(Node* condition,Node* consequence,Node* alternative){
-	auto e = new IfExpression;
-	e->condition = condition;
-	e->consequence = consequence;
-	e->alternative = alternative;
-	return e;
-}
+
 BlockExpression* BlockExpression::create(Scope* scope){
 	auto e = new BlockExpression;
 	e->scope = scope;
@@ -330,17 +280,6 @@ WhileExpression* WhileExpression::create(Node* condition,Node* body){
 	return e;
 }
 
-TypeDeclaration* TypeDeclaration::create(Type* type){
-	auto e = new TypeDeclaration;
-	e->type = type;
-	return e;
-}
-
-FunctionDeclaration* FunctionDeclaration::create(Function* fn){
-	auto e = new FunctionDeclaration;
-	e->fn = fn;
-	return e;
-}
 
 //
 TypeExpression::TypeExpression() : type(UNRESOLVED),unresolved(nullptr) {}
@@ -351,15 +290,22 @@ TypeExpression::TypeExpression(int type,TypeExpression* next) {
 TypeExpression::TypeExpression(IntegerType* integer) : type(INTEGER) {
 	this->integer = integer;
 }
-TypeExpression::TypeExpression(Type* record): type(RECORD) { this->record = record; }
+TypeExpression::TypeExpression(Record* record): type(RECORD) { this->record = record; }
 TypeExpression::TypeExpression(Node* unresolved) : type(UNRESOLVED) {
 	this->unresolved = unresolved;
 }
 bool TypeExpression::resolved() const {
-	return type != UNRESOLVED;
+	switch(type){
+		case RECORD: return record->resolved();
+		case CONSTANT: return next->resolved();
+		case POINTER: return next->resolved();
+		case UNRESOLVED:
+			return false;
+	}
+	return true;
 }
 TypeExpression* TypeExpression::_returnType() const {
-	return type == UNRESOLVED ? intrinsics::types::Unresolved : intrinsics::types::Type;
+	return resolved() ? intrinsics::types::Type : intrinsics::types::Unresolved ;
 }
 Node* TypeExpression::duplicate() const {
 	switch(type){
@@ -384,13 +330,26 @@ size_t TypeExpression::size() const {
 		case INTEGER: return integer->size();
 		case FUNCTION:
 		case POINTER: return 4;//TODO proper
+		case INTRINSIC_TYPE:
+			return 0;
 		default:
 			throw std::runtime_error("Can't evaluate size of an unresolved type expression!");
 	}
 }
+bool TypeExpression::isSame(TypeExpression* other){
+	assert(type != UNRESOLVED);
+	assert(other->type != UNRESOLVED);
+	if((type == CONSTANT && other->type == CONSTANT) || (type == POINTER && other->type == POINTER))
+		return next->isSame(other->next);
+	if(type == INTEGER && other->type == INTEGER) return integer == other->integer;
+	return false;
+}
 Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 	assert(this->type != UNRESOLVED);
 	assert(type->type != UNRESOLVED);
+
+	//remove constant qualifier
+	if(type->type == CONSTANT) type = type->next;
 	
 	if(this->type == INTEGER && type->type == INTEGER){
 		if(this->integer == type->integer) return expression;//Absolutely same types.
@@ -402,12 +361,19 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 	else if(this->type == RECORD && type->type == RECORD){
 		if(this->record == type->record) return expression;//Absolutely same types.
 	}
+	else if(type->type == RECORD){
+		//record extenders
+		for(auto i=type->record->fields.begin();i!=type->record->fields.end();i++){
+			//create a fake access expression
+			//TODO
+		}
+	}
 
 	return nullptr;
 }
 std::ostream& operator<< (std::ostream& stream,TypeExpression* node){
 	switch(node->type){
-	case TypeExpression::RECORD: stream<<"record "<<node->record->id; break;
+	case TypeExpression::RECORD: stream<<node->record; break;
 	case TypeExpression::INTEGER: stream<<node->integer->id; break;
 	case TypeExpression::CONSTANT: stream<<"const "<<node->next; break;
 	case TypeExpression::POINTER: stream<<"* "<<node->next; break;

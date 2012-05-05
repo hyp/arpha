@@ -1,24 +1,19 @@
 #include "../common.h"
+#include "../syntax/parser.h"
 #include "../scope.h"
 #include "declarations.h"
-#include "../syntax/parser.h"
 #include "node.h"
-#include "../compiler.h"
-#include "../arpha.h"
+#include "../intrinsics/types.h"
 
 //variable
 Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location) {
-	type  = nullptr;
 }
-
 
 //integer type
 
 IntegerType::IntegerType(SymbolID name,Location& location) : TypeBase(name,location){
 	//temporary TODO move to arpha package source files
-	_unsigned = false;
 	if(name == "bool"){
-		_unsigned = true;
 		min = 0;
 		max = 1;
 		_size = 1;
@@ -45,7 +40,6 @@ IntegerType::IntegerType(SymbolID name,Location& location) : TypeBase(name,locat
 	}
 	else{
 		min = 0;
-		_unsigned = true;
 		if(name == "uint32"){
 			max = (uint64)std::numeric_limits<uint32>::max();
 			_size = 4;
@@ -72,7 +66,7 @@ bool IntegerType::isValid(BigInt& value) const {
 	return min<=value && value<=max;
 }
 bool IntegerType::isUnsigned() const {
-	return _unsigned;
+	return !(min<BigInt((uint64)0));
 }
 Node* IntegerType::assignableFrom(Node* expression,IntegerType* type){
 	return expression;//TODO
@@ -80,56 +74,50 @@ Node* IntegerType::assignableFrom(Node* expression,IntegerType* type){
 
 //type
 
-Type::Type(SymbolID name,Location& location) : PrefixDefinition(name,location) {
+Record::Record(SymbolID name,Location& location) : TypeBase(name,location) {
 	_size = 0;
 	headRecord = nullptr;
 	_resolved = false;
 }
 
-Variable* Type::lookupField(const SymbolID fieldName){
+Record::Field* Record::lookupField(const SymbolID fieldName){
 	for(auto i = fields.begin();i!=fields.end();++i){
-		if( (*i).id == fieldName ) return i._Ptr;
+		if( (*i).name == fieldName ) return i._Ptr;
 	}
 	return nullptr;
 }
-
-void Type::add(const Variable& var){
-	assert(!_resolved);
-	//if(var.type == compiler::Unresolved) _resolved = false;
+void Record::add(const Field& var){
+	//assert(!_resolved);
 	fields.push_back(var);
 }
-void Type::updateOnSolving(){
+void Record::updateOnSolving(){
 	_resolved = true;
-	debug("Updating type's %s state",id);
+	
 	_size = 0;
 	for(auto i = fields.begin();i!=fields.end();++i){
-		assert((*i).type != compiler::Unresolved);
-		_size += (*i).type->_size;
+		assert((*i).type->resolved());
+		_size += (*i).type->size();
 	}
+	debug("Updating type's %s state - sizeof %s",id,_size);
 }
-bool Type::resolved(){
+bool Record::resolved(){
 	return _resolved;
 }
-size_t Type::size(){
+size_t Record::size() const{
 	assert(_resolved);
 	return _size;
 }
-int Type::extendsType(Type* type){
-	for(auto i=extenders.begin();i!=extenders.end();i++){
-		if(fields[*i].type == type) return *i;
-	}
-	return -1;
-}
 
-std::ostream& operator<< (std::ostream& stream,Type* type){
-	if(type->isRecord()){
-		stream<<"RecordType";
+std::ostream& operator<< (std::ostream& stream,Record* type){
+	stream<<"record ";
+	if(type->isAnonymous()){
+		stream<<"_"; 
 		for(size_t i = 0;i < type->fields.size();i++){
-			stream<<(i == 0 ? '(' : ',')<<(type->fields[i].id.isNull()?"_":type->fields[i].id)<<":"<<type->fields[i].type;
+			stream<<(i == 0 ? '(' : ',')<<(type->fields[i].name.isNull()?"_":type->fields[i].name)<<":"<<type->fields[i].type;
 		}
 		stream<<')';
 	}
-	else stream<<"Type "<<type->id<<"(?"<<(type->resolved()?'t':'f')<<")";
+	else stream<<type->id<<"(resolved?"<<(type->resolved()?'t':'f')<<")";
 	return stream;
 }
 
@@ -140,34 +128,31 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 *     record(width: int32, height: int32)
 *  record(int32,bool)
 */
-std::vector<std::pair<Type*,std::vector<Type*>>> records;
+std::vector<std::pair<Record*,std::vector<Record*> > > records;
 
-Type* Type::createRecordType(std::vector<std::pair<SymbolID,Type*>>& record,Type* headRecord){
+Record* Record::createRecordType(std::vector<Field>& record,Record* headRecord){
 	std::string typeName = "record";
 	for(size_t i=0;i<record.size();i++)//TODO change this ludicrous display
-		typeName+=format("%c%s:%s",i == 0 ? '(' : ',',headRecord ? record[i].first.ptr() : "_",record[i].second->id.ptr());
+		typeName+=format("%c%s:%s",i == 0 ? '(' : ',',headRecord ? record[i].name.ptr() : "_",record[i].type);
 	typeName+=')';
 	debug("Tuple created: %s",typeName);
 
-	Type* type=new Type(typeName.c_str(),Location());
+	auto type=new Record(typeName.c_str(),Location());
 	type->headRecord = headRecord ? headRecord : type;
-	auto var=Variable(SymbolID(),Location()); //NOTE: Non-new definition construction
 	for(size_t i=0;i<record.size();i++){
-		if(headRecord) var.id = record[i].first;
-		var.type = record[i].second;
-		type->add(var);
+		type->add(Field(headRecord!=nullptr?(record[i].name):(SymbolID()),record[i].type->duplicate()->asTypeExpression()));
 	}
 	type->updateOnSolving();
 	return type;
 }
 
-Type* Type::findSubRecord(Type* headRecord,std::vector<Type*>& subRecords,std::vector<std::pair<SymbolID,Type*>>& record){
+Record* Record::findSubRecord(Record* headRecord,std::vector<Record*>& subRecords,std::vector<Field>& record){
 	//Match the names to the corresponding record
 	for(auto i=subRecords.begin();i!=subRecords.end();i++){
 		auto subRecord = *i;
 		auto areFieldsSameName = true;
 		for(size_t j=0;j < record.size();j++){
-			if(subRecord->fields[j].id != record[j].first) areFieldsSameName = false;
+			if(subRecord->fields[j].name != record[j].name) areFieldsSameName = false;
 		}
 		if(areFieldsSameName) return subRecord;
 	}
@@ -177,13 +162,13 @@ Type* Type::findSubRecord(Type* headRecord,std::vector<Type*>& subRecords,std::v
 	return t;
 }
 
-Type* Type::findRecord(std::vector<std::pair<SymbolID,Type*>>& record){
+Record* Record::findAnonymousRecord(std::vector<Field>& record){
 	assert(record.size() > 1);
 
 	//Check to see if the record has named fields
 	auto areFieldsUnnamed = true;
 	for(size_t j=0;j < record.size();j++){
-		if(!record[j].first.isNull()) areFieldsUnnamed = false;
+		if(!record[j].name.isNull()) areFieldsUnnamed = false;
 	}
 
 	//Check to see if the following record already exists.
@@ -193,7 +178,7 @@ Type* Type::findRecord(std::vector<std::pair<SymbolID,Type*>>& record){
 		if(headRecord->fields.size() == record.size()){
 			auto areFieldsSameType = true;			
 			for(size_t j=0;j < record.size();j++){
-				if(!(headRecord->fields[j].type == record[j].second)) areFieldsSameType = false;
+				if(!(headRecord->fields[j].type->isSame(record[j].type))) areFieldsSameType = false;
 			}
 			//Match the names to the corresponding record
 			if(areFieldsSameType) return areFieldsUnnamed ? headRecord : findSubRecord(headRecord,(*i).second,record);
@@ -202,15 +187,11 @@ Type* Type::findRecord(std::vector<std::pair<SymbolID,Type*>>& record){
 
 	//If the record doesn't exist we have to add it to head and sub records
 	auto t = createRecordType(record);
-	records.push_back(std::make_pair(t,std::vector<Type*>()));
+	records.push_back(std::make_pair(t,std::vector<Record*>()));
 	if(areFieldsUnnamed) return t;
 	t = createRecordType(record,t);
 	records.back().second.push_back(t);
 	return t;
-}
-
-Type* Type::tuple(std::vector<std::pair<SymbolID,Type*>>& fields){
-	return findRecord(fields);
 }
 
 //function
@@ -219,27 +200,27 @@ Function::Argument::Argument(Variable* var) : variable(var) {
 }
 
 Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,location){
-	argument = compiler::Nothing;
-	returnType   = compiler::Nothing;
+	argument = intrinsics::types::Void;
+	returnType   = intrinsics::types::Void;
 	bodyScope = nullptr;
 	body = nullptr;
 	intrinsicEvaluator = nullptr;
 }
-Type* Function::type(){
+TypeExpression* Function::type(){
 	return nullptr;//compiler::function;//TODO
 }
 
 void Function::updateOnSolving(){
 	//TODO
 	//calculate argument type
-	if(arguments.size() == 0) argument = compiler::Nothing;
+	/*if(arguments.size() == 0) argument = compiler::Nothing;
 	else if(arguments.size()>1){
 		std::vector<std::pair<SymbolID,Type*>> fields;
 		for(auto i=arguments.begin();i!=arguments.end();++i) fields.push_back(std::make_pair((*i).variable->id,(*i).variable->type));
 		argument = Type::tuple(fields);
 	}
 	else argument = arguments.front().variable->type;
-	debug("Updating function's %s state (arg: %s) ret %s",id,argument,returnType);
+	debug("Updating function's %s state (arg: %s) ret %s",id,argument,returnType);*/
 }
 
 //operators

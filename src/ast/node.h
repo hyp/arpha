@@ -25,11 +25,10 @@ struct NodeVisitor;
 	X(IntegerLiteral)    \
 	X(UnitExpression)    \
 	X(ErrorExpression)       \
+	X(TypeExpression)         \
 	X(ExpressionReference)   \
 	X(VariableReference) \
-	X(TypeReference)         \
 	X(FunctionReference)     \
-	X(TypeExpression)        \
 	X(TupleExpression)       \
 	X(OverloadSetExpression) \
 	X(CallExpression)        \
@@ -37,11 +36,8 @@ struct NodeVisitor;
 	X(AssignmentExpression)  \
 	X(ReturnExpression)      \
 	X(MatchExpression)      \
-	X(IfExpression)          \
 	X(BlockExpression)       \
-	X(WhileExpression)       \
-	X(TypeDeclaration)       \
-	X(FunctionDeclaration)       
+	X(WhileExpression)          
 
 //Forward declaration of node types
 struct Node;
@@ -52,9 +48,6 @@ struct Node;
 //An AST node
 struct Node {
 	Location location;
-
-	//Returns expressions return type
-	virtual Type* returnType() const;
 
 	virtual TypeExpression* _returnType() const;
 
@@ -116,6 +109,7 @@ struct ExpressionReference : Node {
 
 //(type ...): intrinsics::types::Type | intrinsics::types::Unresolved
 struct TypeExpression : Node {
+
 	enum {
 		RECORD,
 		INTEGER,
@@ -129,13 +123,15 @@ struct TypeExpression : Node {
 	TypeExpression();
 	TypeExpression(int type,TypeExpression* next);
 	TypeExpression(IntegerType* integer);
-	TypeExpression(Type* record);
+	TypeExpression(Record* record);
 	TypeExpression(Node* unresolved);
 
 	bool resolved() const;
 	TypeExpression* _returnType() const;
 	Node* duplicate() const;
 	size_t size() const;
+
+	bool isSame(TypeExpression* other);
 
 	/**
 	* This is the one of the key functions of the type system.
@@ -150,7 +146,7 @@ public:
 	int type;
 	union {
 		TypeExpression* next;
-		Type* record;
+		Record* record;
 		IntegerType* integer;
 		Node* unresolved;
 	};
@@ -170,7 +166,7 @@ struct VariableReference : Node {
 	DECLARE_NODE(VariableReference);
 };
 
-//
+//: record
 struct TupleExpression : Node {
 	TupleExpression();
 	TupleExpression(Node* a,Node* b);
@@ -184,28 +180,17 @@ struct TupleExpression : Node {
 	DECLARE_NODE(TupleExpression);
 };
 
-struct TypeReference : Node {
-	static TypeReference* create(Type* type);
-
-	Type* returnType() const;
-	Type* type() const;
-
-	Type* _type;
-	DECLARE_NODE(TypeReference);
-};
-
 struct FunctionReference : Node {
-	static FunctionReference* create(Function* function);
+	FunctionReference(Function* function);
 
-	Type* returnType() const;
+	TypeExpression* _returnType() const;
 	Function* function() const;
 
 	Function* _function;
 	DECLARE_NODE(FunctionReference);
 };
 
-
-
+//: intrinsics::types::Unresolved
 struct OverloadSetExpression : Node {
 	static OverloadSetExpression* create(SymbolID symbol,Scope* scope);
 
@@ -219,7 +204,7 @@ struct OverloadSetExpression : Node {
 struct CallExpression : Node {
 	static CallExpression* create(Node* object,Node* argument);
 
-	Type* returnType() const;
+	TypeExpression* _returnType() const;
 
 	Node* object;
 	Node* arg;
@@ -263,26 +248,11 @@ struct MatchExpression : Node {
 
 	Node* object;
 	struct Case {	
-		enum {
-			VALUE,
-			DEFAULT
-		};
-		int type;
 		Node* node;
+		Node* consequence;//can be null for immediate fallthrough
 	};
 	std::vector<Case> cases;
 	DECLARE_NODE(MatchExpression);
-};
-
-struct IfExpression : Node {
-	static IfExpression* create(Node* condition,Node* consequence,Node* alternative);
-
-	Type* returnType() const;
-
-	Node* condition;
-	Node* consequence;
-	Node* alternative; //Can be null
-	DECLARE_NODE(IfExpression);
 };
 
 struct BlockExpression : Node {
@@ -300,39 +270,5 @@ struct WhileExpression : Node {
 	Node* body;
 	DECLARE_NODE(WhileExpression);
 };
-
-/**
-* Normally when declaring a type/variable/function a given type can be resolved on a first pass.
-* But because this isn't always possible, we have to provide dummy declaration nodes for future passes when the types can be resolved.
-*/
-struct TypeDeclaration : Node {
-	static TypeDeclaration* create(Type* type);
-
-	Type* returnType() const;
-
-	Type* type;
-	struct FieldDefinition {
-		int firstFieldID,count;
-		Node* typeExpression;
-		bool extender;
-	};
-	std::vector<FieldDefinition> fields;
-	DECLARE_NODE(TypeDeclaration);
-};
-
-struct FunctionDeclaration : Node {
-	static FunctionDeclaration* create(Function* fn);
-
-	Type* returnType() const;
-
-	Function* fn;
-	struct Parameter {
-		Node* typeExpression;
-	};
-	std::vector<Parameter> parameters;
-	Node* returnTypeExpression;//Can be null for inferred type
-	DECLARE_NODE(FunctionDeclaration);
-};
-
 
 #endif

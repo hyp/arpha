@@ -22,22 +22,22 @@ struct Parser : Lexer {
 	bool match(SymbolID token);
 	bool match(int tokenType);
 
-	Type* expectType(int stickiness);
-
 	Node* parse(int stickiness =  0);
 
 	/// Resolve symbols, find the matching function call overloads, constant fold
 	Node* evaluate(Node* node);
 
+	
+
 	//Current parsing state
 	Token  lookedUpToken;
 private:
 	Scope* _currentScope;
-	size_t unresolvedExpressions,solvedExpressions;
 	Evaluator firstRoundEvaluator;
 public:
 
 	inline Scope* currentScope() const { return _currentScope; }
+	inline Evaluator* evaluator() { return &firstRoundEvaluator; }
 	void currentScope(Scope* scope);
 };
 

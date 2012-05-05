@@ -20,58 +20,7 @@ struct Variable : PrefixDefinition  {
 
 	//Type(use intrinsincs::types::Inferred for inferred)
 	TypeExpression* _type;
-	//Type(can be null for inferred type);
-	Type* type;
 };
-
-struct Type: public PrefixDefinition {
-private:	
-	
-	Type* headRecord; ///if this is null, then the type isn't a record
-	bool _resolved;
-	
-public:
-	size_t _size;
-	
-	std::vector<Variable> fields;
-	std::vector<int> extenders;
-
-	Type(SymbolID name,Location& location);
-
-	Node* parse(Parser* parser);
-
-	Variable* lookupField(const SymbolID fieldName);
-	void add(const Variable& var); //adds a field to the type
-
-	//Type's extenders
-	//Returns the id of field which is extended or -1
-	int extendsType(Type* type);
-
-	//Type's properties
-	bool resolved();
-	size_t size();
-	
-	//Calculate's properties when the type is fully resolved.
-	void updateOnSolving();
-
-	
-
-
-	//unique record construction
-	static Type* tuple(std::vector<std::pair<SymbolID,Type*>>& fields);
-
-
-	bool isRecord() const { return headRecord != nullptr; }
-
-	//Determines whether two records have the same field types or not
-	inline static bool recordsSameTypes(Type* r1,Type* r2){ return r1->headRecord == r2->headRecord; }
-private:
-	static Type* createRecordType(std::vector<std::pair<SymbolID,Type*>>& record,Type* headRecord = nullptr);
-	static Type* findSubRecord(Type* headRecord,std::vector<Type*>& subRecords,std::vector<std::pair<SymbolID,Type*>>& record);
-	static Type* findRecord(std::vector<std::pair<SymbolID,Type*>>& record);
-};
-
-std::ostream& operator<< (std::ostream& stream,Type* type);
 
 struct TypeBase : PrefixDefinition {
 public:
@@ -82,7 +31,7 @@ public:
 };
 
 //An integral type
-struct IntegerType: TypeBase {
+struct IntegerType: public TypeBase {
 	IntegerType(SymbolID name,Location& location);
 
 	size_t size() const;
@@ -92,11 +41,66 @@ struct IntegerType: TypeBase {
 
 	Node* parse(Parser* parser);
 	BigInt max,min;
+		
 private:
 	
 	size_t _size;
-	bool _unsigned;
 };
+
+//A record type
+struct Record: public TypeBase {
+private:	
+	
+	Record* headRecord; ///if this is null, then the type isn't an unonymous record
+	
+	
+public:
+
+	struct Field {
+		SymbolID name;
+		TypeExpression* type;
+		bool isExtending; //a field aliased as this
+
+		Field(SymbolID id,TypeExpression* typ) : name(id),type(typ),isExtending(false) {}
+	};
+	bool _resolved;
+	size_t _size;
+	
+	std::vector<Field> fields;
+
+	Record(SymbolID name,Location& location);
+
+	Node* parse(Parser* parser);
+
+	Field* lookupField(const SymbolID fieldName);
+	void add(const Field& var); //adds a field to the type
+
+	//Type's properties
+	bool resolved();
+	size_t size() const;
+	
+	//Calculate's properties when the type is fully resolved.
+	void updateOnSolving();
+
+	
+
+
+	//unique anonymous record construction
+	static Record* findAnonymousRecord(std::vector<Field>& record);
+
+	//An anonymous record
+	inline bool isAnonymous() const { return headRecord != nullptr; }
+	//Determines whether two records have the same field types or not
+	inline static bool anonymousRecordsSameTypes(Record* r1,Record* r2){ return r1->headRecord == r2->headRecord; }
+private:
+	static Record* createRecordType(std::vector<Field>& record,Record* headRecord = nullptr);
+	static Record* findSubRecord(Record* headRecord,std::vector<Record*>& subRecords,std::vector<Field>& record);
+	
+};
+
+
+
+std::ostream& operator<< (std::ostream& stream,Record* type);
 
 struct Function: public PrefixDefinition {
 
@@ -116,13 +120,13 @@ struct Function: public PrefixDefinition {
 
 	//Function's properties
 	bool resolved(){ return true; }
-	Type* type();
+	TypeExpression* type();
 
 	//Calculate's properties when the type is fully resolved.
 	void updateOnSolving();
 
-	Type* argument;
-	Type* returnType;
+	TypeExpression* argument;
+	TypeExpression* returnType;
 	Scope* bodyScope;
 	BlockExpression* body;
 	Node* (*intrinsicEvaluator)(CallExpression*);

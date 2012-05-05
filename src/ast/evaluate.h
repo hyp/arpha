@@ -18,7 +18,10 @@ private:
 	
 public:
 	bool evaluateExpressionReferences;
-	Evaluator() : evaluateExpressionReferences(false) {}
+	bool evaluateTypeTuplesAsTypes;
+
+	Evaluator() : evaluateExpressionReferences(false),evaluateTypeTuplesAsTypes(false) {}
+
 	inline Scope* currentScope() const { return _currentScope; }
 	void currentScope(Scope* scope){ _currentScope = scope; }
 };
