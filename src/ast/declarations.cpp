@@ -94,11 +94,11 @@ Record::Record(SymbolID name,Location& location) : TypeBase(name,location),_refe
 	_resolved = false;
 }
 
-Record::Field* Record::lookupField(const SymbolID fieldName){
-	for(auto i = fields.begin();i!=fields.end();++i){
-		if( (*i).name == fieldName ) return i._Ptr;
+int Record::lookupField(const SymbolID fieldName){
+	for(int i = 0;i<fields.size();i++){
+		if( fields[i].name == fieldName ) return i;
 	}
-	return nullptr;
+	return -1;
 }
 void Record::add(const Field& var){
 	//assert(!_resolved);

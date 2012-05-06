@@ -37,6 +37,7 @@ struct NodeVisitor;
 	X(TupleExpression)       \
 	X(OverloadSetExpression) \
 	X(CallExpression)        \
+	X(FieldAccessExpression)      \
 	X(AccessExpression)      \
 	X(AssignmentExpression)  \
 	X(ReturnExpression)      \
@@ -233,12 +234,25 @@ struct CallExpression : Node {
 	DECLARE_NODE(CallExpression);
 };
 
+struct FieldAccessExpression : Node {
+	FieldAccessExpression(Node* object,int field);
+
+	TypeExpression* _returnType() const;
+	Node* duplicate() const;
+
+	Node* object;
+	int field;
+	DECLARE_NODE(FieldAccessExpression);
+};
+
 struct AccessExpression : Node {
-	static AccessExpression* create(Node* object,SymbolID symbol,Scope* scope);
+	AccessExpression(Node* object,SymbolID symbol);
+
+	TypeExpression* _returnType() const;
+	Node* duplicate() const;
 	
 	Node* object;
 	SymbolID symbol;
-	Scope* scope;
 	bool passedFirstEval; //On first evaluation don't touch this node!!
 	DECLARE_NODE(AccessExpression);
 };
@@ -254,6 +268,7 @@ struct AssignmentExpression : Node {
 	DECLARE_NODE(AssignmentExpression);
 };
 
+// : intrinsics::types::Void
 struct ReturnExpression : Node {
 	ReturnExpression(Node* expression);
 	Node* duplicate() const;
@@ -270,23 +285,31 @@ struct MatchExpression : Node {
 
 	Node* object;
 	struct Case {	
-		Node* node;
-		Node* consequence;//can be null for immediate fallthrough
+		Node* pattern;
+		Node* consequence;
+		bool fallThrough; // = false
+
+
 	};
 	std::vector<Case> cases;
 	DECLARE_NODE(MatchExpression);
 };
 
+// : intrinsics::types::Void
 struct BlockExpression : Node {
-	static BlockExpression* create(Scope* scope);
+	BlockExpression(Scope* scope);
+	Node* duplicate() const;
 
 	std::vector<Node*> children;
 	Scope* scope;
 	DECLARE_NODE(BlockExpression);
 };
 
+// : intrinsics::types::Void
 struct WhileExpression : Node {
-	static WhileExpression* create(Node* condition,Node* body);
+	WhileExpression(Node* condition,Node* body);
+
+	Node* duplicate() const;
 
 	Node* condition;
 	Node* body;

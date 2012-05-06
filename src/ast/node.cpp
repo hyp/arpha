@@ -44,6 +44,10 @@ struct NodeToString: NodeVisitor {
 		stream<<"call "<<node->object<<" with "<<node->arg;
 		return node;
 	}
+	Node* visit(FieldAccessExpression* node){
+		stream<<node->object<<" f. "<<node->object->_returnType()->record->fields[node->field].name;
+		return node;
+	}
 	Node* visit(AccessExpression* node){
 		stream<<node->object<<" . "<<node->symbol;
 		return node;
@@ -202,14 +206,13 @@ Node* AssignmentExpression::duplicate() const {
 // Return expression
 ReturnExpression::ReturnExpression(Node* expression) : value(expression) {}
 Node* ReturnExpression::duplicate() const {
-	return new ReturnExpression(value);
-}
-
-MatchExpression::MatchExpression(Node* object){
-	this->object = object;
+	return new ReturnExpression(value->duplicate());
 }
 
 // Match expression
+MatchExpression::MatchExpression(Node* object){
+	this->object = object;
+}
 TypeExpression* MatchExpression::_returnType() const {
 	return intrinsics::types::Void;//TODO
 }
@@ -217,12 +220,14 @@ Node* MatchExpression::duplicate(){
 	auto dup = new MatchExpression(object);
 	for(auto i = cases.begin();i!=cases.end();i++){
 		Case _case;
-		_case.node = (*i).node->duplicate();
+		_case.pattern = (*i).pattern->duplicate();
 		_case.consequence = (*i).consequence ? (*i).consequence->duplicate() : nullptr;
+		_case.fallThrough = (*i).fallThrough;
 		dup->cases.push_back(_case);
 	}
 	return dup;
 }
+
 
 FunctionReference::FunctionReference(Function* function) : _function(function) {
 }
@@ -234,12 +239,59 @@ Function* FunctionReference::function() const {
 	return _function;
 }
 
+// Field access expression
+FieldAccessExpression::FieldAccessExpression(Node* object,int field){
+	this->object = object;
+	this->field = field;
+	assert(object->_returnType()->type == TypeExpression::RECORD);
+}
+TypeExpression* FieldAccessExpression::_returnType() const {
+	return object->_returnType()->record->fields[field].type.type();
+}
+Node* FieldAccessExpression::duplicate() const {
+	return new FieldAccessExpression(object->duplicate(),field);
+}
+
+// Access expression
+AccessExpression::AccessExpression(Node* object,SymbolID symbol){
+	this->object = object;
+	this->symbol = symbol;
+	this->passedFirstEval = false;
+}
+TypeExpression* AccessExpression::_returnType() const{
+	return intrinsics::types::Unresolved;
+}
+Node* AccessExpression::duplicate() const {
+	return new AccessExpression(object->duplicate(),symbol);//duplicate passed first eval??? - no
+}
+
+
 
 TypeExpression* CallExpression::_returnType() const {
 	if( auto refFunc = object->asFunctionReference()){
 		return refFunc->function()->returnType;
 	}
 	return intrinsics::types::Unresolved;
+}
+
+//While expression
+WhileExpression::WhileExpression(Node* condition,Node* body){
+	this->condition = condition;
+	this->body = body;
+}
+Node* WhileExpression::duplicate() const{
+	return new WhileExpression(condition->duplicate(),body->duplicate());
+}
+
+// Block expression
+BlockExpression::BlockExpression(Scope* scope){
+	this->scope = scope;
+}
+Node* BlockExpression::duplicate() const {
+	auto dup = new BlockExpression(scope);//scope->dup???
+	dup->children.reserve(children.size());//Single alocation
+	for(auto i=children.begin();i!=children.end();i++) dup->children.push_back((*i)->duplicate());
+	return dup;
 }
 
 //Injects visitor callback and dynamic cast function into a node structure
@@ -266,26 +318,6 @@ CallExpression* CallExpression::create(Node* object,Node* argument){
 	auto e = new CallExpression;
 	e->object = object;
 	e->arg = argument;
-	return e;
-}
-AccessExpression* AccessExpression::create(Node* object,SymbolID symbol,Scope* scope){
-	auto e = new AccessExpression;
-	e->object = object;
-	e->symbol = symbol;
-	e->scope = scope;
-	e->passedFirstEval = false;
-	return e;
-}
-
-BlockExpression* BlockExpression::create(Scope* scope){
-	auto e = new BlockExpression;
-	e->scope = scope;
-	return e;
-}
-WhileExpression* WhileExpression::create(Node* condition,Node* body){
-	auto e = new WhileExpression;
-	e->condition = condition;
-	e->body = body;
 	return e;
 }
 
@@ -353,6 +385,16 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 		//literal integer constants.. check to see if the type can accept it's value
 		if(auto intConst = expression->asIntegerLiteral()){
 			if(!intConst->_type && this->integer->isValid(intConst->integer)) return expression;
+		}
+	}else if(type->type == RECORD){
+		//Extenders fields
+		for(size_t i = 0;i < type->record->fields.size();i++){
+			Record::Field* field = &type->record->fields[i];
+			if(field->isExtending && field->type.resolved()){
+				auto dummyFieldAcess = new FieldAccessExpression(expression,i);
+				if(auto assigns = this->assignableFrom(dummyFieldAcess,field->type.type())) return assigns;
+				delete dummyFieldAcess;
+			}
 		}
 	}
 

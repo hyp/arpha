@@ -32,7 +32,7 @@ namespace arpha {
 			BlockExpression* _block;
 			BlockChildParser(BlockExpression* block) : _block(block) {}
 			bool operator ()(Parser* parser){
-				_block->children.push_back(parser->evaluate(parser->parse()));
+				_block->children.push_back(parser->parse());
 				return true;
 			}
 		};
@@ -79,7 +79,7 @@ namespace arpha {
 		//On '{'
 		Node* parse(Parser* parser){
 			auto oldScope = parser->currentScope();
-			BlockExpression* block = BlockExpression::create(new Scope(oldScope));
+			BlockExpression* block = new BlockExpression(new Scope(oldScope));
 			parser->currentScope(block->scope);
 			body(parser,BlockChildParser(block));
 			parser->currentScope(oldScope);
@@ -93,7 +93,7 @@ namespace arpha {
 	// ::= {EOF|block.body EOF}
 	BlockExpression* parseModule(Parser* parser,Scope* scope){
 		parser->currentScope(scope);
-		BlockExpression* block = BlockExpression::create(scope);
+		BlockExpression* block = new BlockExpression(scope);
 		blockParser->body(parser,BlockParser::BlockChildParser(block),false,true); //Ignore '}' and end on EOF
 		return block;
 	}
@@ -171,7 +171,7 @@ namespace arpha {
 					return expression;
 				}
 			}*/
-			return AccessExpression::create(node,parser->lookedUpToken.symbol,parser->currentScope());
+			return new AccessExpression(node,parser->lookedUpToken.symbol);
 		}
 	};
 
@@ -226,7 +226,7 @@ namespace arpha {
 			if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
 				func->body = nullptr;
 			}else{
-				func->body = BlockExpression::create(func->bodyScope);
+				func->body = new BlockExpression(func->bodyScope);
 				auto oldScope = parser->currentScope();
 				parser->currentScope(func->bodyScope);
 				if(parser->match("="))
@@ -434,16 +434,19 @@ namespace arpha {
 		Node* parse(Parser* parser){
 			auto condition = parser->parse();
 			auto body = parser->parse();
-			return WhileExpression::create(condition,body);
+			return new WhileExpression(condition,body);
 		}
 	};
 
-	/// TODO ::= match expr { to pattern: ... }
+	/// TODO ::= match expr { |pattern: ... }
 	struct MatchParser: PrefixDefinition {
 		MatchParser(): PrefixDefinition("match",Location()){}
 		Node* parse(Parser* parser){
-			//TODO
-			return nullptr;
+			auto expr = new MatchExpression(parser->parse());
+			parser->expect("{");
+
+			parser->expect("}");
+			return expr;
 		}
 	};
 

@@ -215,6 +215,19 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}	
 
+
+	Node* fieldAccessFromAccess(AccessExpression* node){
+		auto returns = node->object->_returnType();
+		assert(returns->type == TypeExpression::RECORD);
+		auto field = returns->record->lookupField(node->symbol);
+		if(field != -1){
+			auto expr = new FieldAccessExpression(node->object,field);
+			delete node;
+			return expr;
+		}
+		else return nullptr;
+	}
+
 	Node* assign(AssignmentExpression* assignment,Node* object,Node* value,bool* error){
 		if(auto t1 = object->asTupleExpression()){
 			if(auto t2 = value->asTupleExpression()){
@@ -329,22 +342,23 @@ struct AstExpander: NodeVisitor {
 		}
 		return node;*/
 	}
-	
 	Node* visit(AccessExpression* node){
 		node->object = node->object->accept(this);
 		if(node->passedFirstEval){
 			auto objectType = node->object->_returnType();
+			if(auto fa = fieldAccessFromAccess(node)) return fa;
 			//TODO type field access & expression '.' call notation
 			/*if(auto field = objectType->lookupField(node->symbol)){
 				//TODO This may need to be done only on 2nd iteration, because there might be setters/getters defined on a later on in the module
 				//TODO - how to mark it??
 				return node;
-			}
-			else*/ return CallExpression::create(OverloadSetExpression::create(node->symbol,node->scope),node->object)->accept(this);
+			}*/
+			else return CallExpression::create(OverloadSetExpression::create(node->symbol,evaluator->currentScope()),node->object)->accept(this);
 		}
 		else node->passedFirstEval = true;
 		return node;
 	}
+
 	Node* visit(TupleExpression* node){
 		if(node->type && node->type!=intrinsics::types::Unresolved) return node;//Don't evaluate it again
 		if(node->children.size() == 1){
@@ -397,6 +411,37 @@ struct AstExpander: NodeVisitor {
 	}
 	Node* visit(ReturnExpression* node){
 		//TODO function return type inferring
+		return node;
+	}
+
+	Node* evaluateIntegerMatch(IntegerLiteral* value,MatchExpression* node){
+
+		//TODO
+		for(auto i =node->cases.begin();i!=node->cases.end();i++){
+			auto intLiteral = (*i).pattern->asIntegerLiteral();
+			assert(intLiteral);
+			if(value->integer == intLiteral->integer) return (*i).consequence;
+		}
+		return node;
+	}
+
+	Node* visit(MatchExpression* node){
+		node->object = node->object->accept(this);
+		auto objectReturns = node->object->_returnType();
+		if(objectReturns == intrinsics::types::Unresolved) return node;
+		//Resolve cases
+		bool allCasesResolved = true;
+		for(auto i =node->cases.begin();i!=node->cases.end();i++){
+			(*i).pattern = (*i).pattern->accept(this);
+			(*i).consequence = (*i).consequence->accept(this);
+			if((*i).pattern->_returnType() == intrinsics::types::Unresolved || (*i).consequence->_returnType() == intrinsics::types::Unresolved) allCasesResolved = false;
+		}
+		
+		//Evaluate constant match
+		if(allCasesResolved){
+			if(auto intLiteral = objectReturns->asIntegerLiteral()) return evaluateIntegerMatch(intLiteral,node);
+		}
+
 		return node;
 	}
 

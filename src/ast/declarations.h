@@ -100,14 +100,16 @@ public:
 
 	Node* parse(Parser* parser);
 
-	Field* lookupField(const SymbolID fieldName);
-	void add(const Field& var); //adds a field to the type
+	// Returns -1 if field isn't found
+	int lookupField(const SymbolID fieldName);
+	// Adds a field to the record
+	void add(const Field& var); 
 
-	//Type's properties
+	//Record's properties
 	bool resolved();
 	size_t size() const;
 	
-	//Calculate's properties when the type is fully resolved.
+	//Calculate's properties when the record is fully resolved.
 	void updateOnSolving();
 
 	
