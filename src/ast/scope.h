@@ -1,9 +1,10 @@
-#ifndef SCOPE_H
-#define SCOPE_H
+/**
+* This module provides a scope class which acts as a dictionary for prefix and infix definitions.
+*/
+#ifndef ARPHA_SCOPE_H
+#define ARPHA_SCOPE_H
 
-#include "base/memory.h"
-#include "base/symbol.h"
-#include "syntax/location.h"
+#include "../base/memory.h"
 
 struct Parser;
 struct Node;

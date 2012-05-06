@@ -1,6 +1,8 @@
 #include "../base/base.h"
 #include "../base/format.h"
 #include "../base/bigint.h"
+#include "../base/symbol.h"
+#include "../syntax/location.h"
 #include "node.h"
 #include "declarations.h"
 #include "visitor.h"

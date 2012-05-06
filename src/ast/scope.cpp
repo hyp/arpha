@@ -1,8 +1,9 @@
-#include "compiler.h"
+#include "../compiler.h"
+#include "../base/symbol.h"
+#include "../base/bigint.h"
 #include "scope.h"
-#include "ast/declarations.h"
-#include "syntax/parser.h"
-#include "ast/node.h"
+#include "node.h"
+#include "declarations.h"
 
 PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){
 	this->id = name;this->location = location;

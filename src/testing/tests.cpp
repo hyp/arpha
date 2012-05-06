@@ -6,10 +6,13 @@
 #include "../base/memory.h"
 #include "../base/system.h"
 #include "../base/symbol.h"
+#include "../base/bigint.h"
 
-#include "../scope.h"
-#include "../ast/declarations.h"
+#include "../syntax/location.h"
+
+#include "../ast/scope.h"
 #include "../ast/node.h"
+#include "../ast/declarations.h"
 
 #include "../intrinsics/types.h"
 

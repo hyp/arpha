@@ -1,8 +1,9 @@
 #include "../compiler.h"
-#include "../syntax/parser.h"
-#include "../scope.h"
-#include "declarations.h"
+#include "../base/symbol.h"
+#include "../base/bigint.h"
+#include "scope.h"
 #include "node.h"
+#include "declarations.h"
 #include "../intrinsics/types.h"
 
 //variable

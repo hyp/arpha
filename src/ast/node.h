@@ -8,7 +8,7 @@
 #include "../base/memory.h"
 #include "../syntax/location.h"
 
-#include "../scope.h"
+#include "scope.h"
 
 struct Variable;
 struct IntegerType;

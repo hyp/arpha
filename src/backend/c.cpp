@@ -1,6 +1,11 @@
 #include "../base/base.h"
+#include "../base/symbol.h"
 #include "../base/bigint.h"
+
+#include "../syntax/location.h"
 #include "c.h"
+#include "../ast/scope.h"
+#include "../ast/node.h"
 #include "../ast/declarations.h"
 #include "../ast/visitor.h"
 
