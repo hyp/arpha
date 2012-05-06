@@ -7,13 +7,24 @@
 #include "ast/node.h"
 #include "ast/evaluate.h"
 #include "compiler.h"
-#include "arpha.h"
 #include "intrinsics/ast.h"
 #include "intrinsics/types.h"
 
 //TODO functions arguments vector!
 namespace arpha {
 	Scope *scope;
+
+	namespace Precedence {
+		enum {
+			Assignment = 10, // =
+			Tuple = 15, // ,
+			Call = 90, //()
+			Access = 100, //.
+		};
+	}
+
+
+	void defineCoreSyntax(Scope* scope);
 
 
 	// parses blocks and whatnot

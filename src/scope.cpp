@@ -3,7 +3,6 @@
 #include "ast/declarations.h"
 #include "syntax/parser.h"
 #include "ast/node.h"
-#include "arpha.h"
 
 PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){
 	this->id = name;this->location = location;
