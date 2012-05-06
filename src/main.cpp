@@ -17,9 +17,9 @@ namespace arpha {
 	namespace Precedence {
 		enum {
 			Assignment = 10, // =
-			Tuple = 15, // ,
-			Call = 90, //()
-			Access = 100, //.
+			Tuple = 20, // ,
+			Call = 110, //()
+			Access = 120, //.
 		};
 	}
 
@@ -198,7 +198,7 @@ struct AccessParser: InfixDefinition {
 struct AssignmentParser: InfixDefinition {
 	AssignmentParser(): InfixDefinition("=",arpha::Precedence::Assignment,Location()) {}
 	Node* parse(Parser* parser,Node* node){
-		return new AssignmentExpression(node,parser->parse(arpha::Precedence::Assignment)); 
+		return new AssignmentExpression(node,parser->parse(arpha::Precedence::Assignment-1)); 
 	}
 };
 
@@ -480,7 +480,7 @@ struct MatchParser: PrefixDefinition {
 				node->cases.push_back(MatchExpression::Case(pattern,consq,fallthrough));
 				return true;
 			}
-			error(parser->previousLocation(),"Unexpected %s - to pattern : consequence is expected!",token);
+			error(parser->previousLocation(),"Unexpected %s - to <pattern> : <consequence> is expected inside match's body!",token);
 			return false;
 		}
 	};
