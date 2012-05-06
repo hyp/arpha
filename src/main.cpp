@@ -10,6 +10,7 @@
 #include "syntax/parser.h"
 #include "intrinsics/ast.h"
 #include "intrinsics/types.h"
+#include "intrinsics/compiler.h"
 
 namespace arpha {
 	Scope *scope;
@@ -448,6 +449,7 @@ struct IfParser: PrefixDefinition {
 };
 
 /// ::= 'while' condition body
+//TODO should it be '(' condition ')' ???
 struct WhileParser: PrefixDefinition {
 	WhileParser(): PrefixDefinition("while",Location()) {}
 	Node* parse(Parser* parser){
@@ -457,11 +459,16 @@ struct WhileParser: PrefixDefinition {
 	}
 };
 
-/// TODO ::= match expr { to pattern: ... }
+/// ::= match expr { to pattern: ... }
 struct MatchParser: PrefixDefinition {
 	MatchParser(): PrefixDefinition("match",Location()){}
-
-	// body ::= '{' to pattern: consequence... '}'
+	
+	// pattern ::= '_'|expression
+	static Node* pattern(Parser* parser){
+		if(parser->match("_")) return WildcardExpression::getInstance();
+		else return parser->parse();
+	}
+	// body ::= '{' 'to' pattern ':' consequence... '}'
 	struct BodyParser {
 		MatchExpression* node;
 		BodyParser(MatchExpression* expr) : node(expr) {}
@@ -469,10 +476,8 @@ struct MatchParser: PrefixDefinition {
 			auto token = parser->consume();
 			if(token.isSymbol() && token.symbol == "to"){
 				bool fallthrough = true;
-				Node* pattern;
 				Node* consq = nullptr;
-				if(parser->match("_")) pattern = WildcardExpression::getInstance();
-				else pattern = parser->parse();
+				auto pattern = MatchParser::pattern(parser);
 				if(parser->match(":")){
 					fallthrough = false;
 					consq = parser->parse();
@@ -585,12 +590,12 @@ namespace compiler {
 			scope = new Scope(nullptr);
 			arpha::defineCoreSyntax(scope);
 			//import 'compiler' by default
-			scope->import(findModule("compiler"),"compiler");
+			//scope->import(findModule("compiler"),"compiler");
 		}
 		else {
 			scope = new Scope(nullptr);
 			//import 'compiler' by default
-			scope->import(::compiler::scope,"compiler",true);
+			//scope->import(::compiler::scope,"compiler",true);
 			//import 'arpha' by default
 			scope->import(findModule("arpha"),"arpha");
 		}
@@ -604,6 +609,8 @@ namespace compiler {
 			intrinsics::ast::init(scope);
 		}else if((packageDir + "/arpha/types.arp") == moduleName){
 			intrinsics::types::init(scope);
+		}else if((packageDir + "/arpha/compiler/compiler.arp") == moduleName){
+			intrinsics::compiler::init(scope);
 		}
 
 		debug("------------------- AST: ------------------------------");

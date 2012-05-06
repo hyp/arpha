@@ -450,6 +450,8 @@ struct AstExpander: NodeVisitor {
 				if((*i).consequence->_returnType() == intrinsics::types::Unresolved) allCasesResolved = false;
 			}
 		}
+
+		//Typecheck
 		
 		//Evaluate constant match
 		if(allCasesResolved){
@@ -469,7 +471,7 @@ struct AstExpander: NodeVisitor {
 			if(auto conditionalExpression = intrinsics::types::boolean->assignableFrom(node->condition,condReturns)){
 				node->condition = conditionalExpression;
 			}else{
-				error(node->location,"Expect a boolean expression instead of %s for loop's condition!",node->condition);
+				error(node->location,"Expected a boolean expression instead of %s for loop's condition!",node->condition);
 				//delete node
 				return ErrorExpression::getInstance();
 			}

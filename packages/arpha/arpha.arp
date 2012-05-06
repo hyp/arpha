@@ -20,6 +20,8 @@ def stringLiteral = String #HACK type "String" is temporary for now
 
 import export operators
 
+import export qualified compiler
+
 #
 import export operations
 

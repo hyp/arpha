@@ -1,7 +1,7 @@
 #include "../base/base.h"
-#include "../scope.h"
-#include "../ast/declarations.h"
 #include "../ast/node.h"
+#include "../ast/scope.h"
+#include "../ast/declarations.h"
 #include "types.h"
 
 #define INTRINSIC_INTTYPE(x) x = (ensure( dynamic_cast<IntegerType*>(moduleScope->lookupPrefix(#x)) ))->reference()

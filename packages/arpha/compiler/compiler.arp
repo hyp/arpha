@@ -4,7 +4,9 @@
 	Version: 1
 #
 
-# These constants are probably modified by compiler upon loading
+# These constants are modified by compiler upon loading
+def debug bool
+def version int32
 
 # Reports a compilation error!
 #def error(string String)
