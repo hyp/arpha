@@ -384,7 +384,10 @@ struct AstExpander: NodeVisitor {
 				error(node->children[i]->location,"A tuple can't contain an expression returning void!");
 				node->type = intrinsics::types::Unresolved;
 			}
-			else if(returns == intrinsics::types::Unresolved) node->type = intrinsics::types::Unresolved;
+			else if(returns == intrinsics::types::Unresolved){
+				node->type = intrinsics::types::Unresolved;
+				evaluator->unresolvedExpressions++;
+			}
 			else fields.push_back(Record::Field(SymbolID(),returns));
 		}
 		if(!node->type){
@@ -407,8 +410,12 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 	Node* visit(BlockExpression* node){
+		auto scp = evaluator->currentScope();
+		//TODO scope->resolveDefinitions();
+		evaluator->currentScope(node->scope);
 		for(size_t i =0;i<node->children.size();i++)
 			node->children[i] = node->children[i]->accept(this);
+		evaluator->currentScope(scp);
 		return node;
 	}
 	Node* visit(ReturnExpression* node){
@@ -453,7 +460,23 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
+
 };
+
+void InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
+	if(kind == Unresolved){
+		auto oldSetting = evaluator->evaluateTypeTuplesAsTypes;
+		evaluator->evaluateTypeTuplesAsTypes = true;
+		auto isTypeExpr = evaluator->eval(unresolvedExpression)->asTypeExpression();
+		evaluator->evaluateTypeTuplesAsTypes = oldSetting;
+
+		if(isTypeExpr && isTypeExpr->resolved()){
+			kind = Type;
+			_type = isTypeExpr;
+		}
+	}
+}
+
 Node* Evaluator::eval(Node* node){
 	AstExpander expander(this);
 	return node->accept(&expander);

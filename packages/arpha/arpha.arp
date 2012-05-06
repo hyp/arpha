@@ -16,12 +16,12 @@ def natural = if(true) uint32 else uint64
 
 # Literal constant strings
 def stringLiteral = String #HACK type "String" is temporary for now
+#
 
 import export operators
 
+#
 import export operations
-
-var x
 
 # Returns true if two given types are the same type. TOCONSIDER move to compiler
 def equals(x compiler.Type,y compiler.Type) bool

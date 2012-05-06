@@ -17,8 +17,8 @@ operator ! = not
 # Infix operators
 
 ## Logical group
-operator && with priority 23 = and
-operator || with priority 23 = or
+operator && with priority 1 = and
+operator || with priority 1 = or
 
 ## Comparison group
 operator == with priority 25 = equals

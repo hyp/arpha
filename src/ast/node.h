@@ -17,6 +17,7 @@ struct Record;
 struct Function;
 
 struct NodeVisitor;
+struct Evaluator;
 
 //Injects visitor callback and dynamic cast function into a node structure
 //Note: only does the definitions, the appropriate implementations are done by traversing NODE_LIST
@@ -132,6 +133,7 @@ struct InferredUnresolvedTypeExpression {
 	TypeExpression* type();
 
 	void infer(TypeExpression* type);
+	void resolve(Evaluator* evaluator);
 	void parse(Parser* parser,int stickiness);
 
 	inline bool isInferred(){ return kind == Inferred; }

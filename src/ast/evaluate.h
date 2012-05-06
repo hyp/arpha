@@ -19,8 +19,9 @@ private:
 public:
 	bool evaluateExpressionReferences;
 	bool evaluateTypeTuplesAsTypes;
+	size_t unresolvedExpressions;
 
-	Evaluator() : evaluateExpressionReferences(false),evaluateTypeTuplesAsTypes(false) {}
+	Evaluator() : evaluateExpressionReferences(false),evaluateTypeTuplesAsTypes(false),unresolvedExpressions(0) {}
 
 	inline Scope* currentScope() const { return _currentScope; }
 	void currentScope(Scope* scope){ _currentScope = scope; }
