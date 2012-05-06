@@ -106,13 +106,42 @@ void Record::add(const Field& var){
 	//assert(!_resolved);
 	fields.push_back(var);
 }
+
+//Collects all the extenders field from the record extender hierarchy
+static bool insertUniqueExtender(std::vector<TypeExpression*>& collection,TypeExpression* extender){
+	for(auto i = collection.begin();i!=collection.end();i++){
+		if((*i)->isSame(extender)){
+			collection.push_back(extender);
+			return false;
+		}
+	}
+	collection.push_back(extender);
+	return true;
+}
+static bool traverseExtenderHierarchy(Record* record,std::vector<TypeExpression*>& collection){
+	for(auto i = record->fields.begin();i!=record->fields.end();i++){
+		if((*i).isExtending){
+			if(!insertUniqueExtender(collection,(*i).type.type())) return false;
+		}
+		if((*i).type.type()->type == TypeExpression::RECORD)
+			if(!traverseExtenderHierarchy((*i).type.type()->record,collection)) return false;
+	}
+	return true;
+}
+
 void Record::updateOnSolving(){
 	_resolved = true;
 	
+
 	_size = 0;
 	for(auto i = fields.begin();i!=fields.end();++i){
 		assert((*i).type.resolved());
 		_size += (*i).type.type()->size();
+	}
+	std::vector<TypeExpression* > collection;
+	if(!traverseExtenderHierarchy(this,collection)){
+			error(location,"Faulty type extension hierarchy - The type %s features multiple path to type %s",id,collection.back());
+			_resolved = false;
 	}
 	debug("Updating type's %s state - sizeof %s",id,_size);
 }
