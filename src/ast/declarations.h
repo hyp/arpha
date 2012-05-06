@@ -128,9 +128,16 @@ private:
 	
 };
 
-
-
 std::ostream& operator<< (std::ostream& stream,Record* type);
+
+//An overload set consists of function with the same name, whcih are defined in the same scope
+struct Overloadset: public PrefixDefinition {
+	Overloadset(Function* firstFunction);
+
+	Node* parse(Parser* parser);
+	
+	std::vector<Function*> functions;
+};
 
 struct Function: public PrefixDefinition {
 
@@ -163,6 +170,22 @@ struct Function: public PrefixDefinition {
 	std::vector<Argument> arguments;
 };
 
+// A single node in an import symbol tree
+//a -> actual scope
+//b -> bogus scope
+//b.a -> actual scope
+struct ImportedScope : PrefixDefinition {
+	ImportedScope(SymbolID name,Location& location);
+
+	Node* parse(Parser* parser);
+
+	Scope* scope;
+	std::map<SymbolID,ImportedScope*> importTree;
+	//A single reference expression
+	ImportedScopeReference _reference;
+	inline ImportedScopeReference* reference(){ return &_reference; }
+};
+
 struct PrefixOperator : public PrefixDefinition {
 
 	PrefixOperator(SymbolID name,Location& location);
@@ -181,5 +204,6 @@ struct InfixOperator : public InfixDefinition {
 	SymbolID function;
 };
 	
+
 
 #endif

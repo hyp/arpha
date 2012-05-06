@@ -19,44 +19,73 @@ Scope::Scope(Scope* parent){
 	this->parent = parent;
 }
 
-//TODO write properly
-void Scope::import(ImportedScope* alias,int flags,bool def ){
-	auto c = containsPrefix(alias->id);
-	if(c){
-		error(alias->location,"Symbol '%s' is already defined! Failed to import scope '%s'.",alias->id,alias->id);
-		return;
+void Scope::import(Scope* scope,const char* alias,bool qualified,bool exported){
+	//alias in a form of single file
+	const char* path = alias;
+	ImportedScope* importTree = nullptr;
+	SymbolID componentName;
+	while(true){
+		
+		auto pair = System::path::firstComponent(&path);
+		componentName = SymbolID(pair.first,pair.second);
+		//Import tree is null at first round
+		if(!importTree){
+			auto c = containsPrefix(componentName);
+			if(c){
+				if(!(importTree = dynamic_cast<ImportedScope*>(c))){
+					error(Location(),"Symbol '%s' is already defined in the current scope! Failed to import module '%s'.",componentName,alias);
+					return;
+				}
+			}
+			if(!importTree){
+				importTree = new ImportedScope(componentName,Location());
+				define(importTree);
+			}
+		}
+		// A subsequent iteration
+		else{
+			auto var = importTree->importTree.find(componentName);
+			if (var != importTree->importTree.end()) importTree = var->second;
+			else{
+				auto newImportTree = new ImportedScope(componentName,Location());
+				importTree->importTree[componentName] = newImportTree;
+				importTree = newImportTree;
+			}
+		}
+
+		if(*path == '\0') break;
+		else path++;	
 	}
-	const bool qualifiedImport = (flags & ImportFlags::QUALIFIED)!=0;
-	const bool broadcastedImport = (flags & ImportFlags::BROADCAST)!=0;
-	debug("Importing scope %s with flags %d,%d,%d",alias->id,qualifiedImport,broadcastedImport,def);
-	if(!qualifiedImport){
-		imports.push_back(alias->scope);
-		//import broadcasted scopes
-		for(auto i=alias->scope->broadcastedImports.begin();i!=alias->scope->broadcastedImports.end();++i){
-			debug("Broadcasting a scope aliased as %s flags %s",(*i)->id,(*i)->importFlags);
-			import(*i,(*i)->importFlags,false);
+
+	//Found last component!
+	importTree->scope = scope;
+	debug("Importing scope %s with flags %s,%s",componentName,qualified?"qualified":"_",exported?"exported":"_");
+	//Qualified imports can only access the imported scope via alias
+	if(!qualified){
+		imports.push_back(scope);
+		//import exported scopes
+		for(auto i=scope->exportedImports.begin();i!=scope->exportedImports.end();++i){
+			std::string fullName = std::string(alias) + '/' + std::string((*i).second.first.ptr());
+			import((*i).first,fullName.c_str(),(*i).second.second,false);
 		}
 	}
-	if(broadcastedImport){
-		debug("defining public import");
-		alias->visibilityMode = Visibility::PublicOnDirectLookup;
-		if(!qualifiedImport) broadcastedImports.push_back(alias);
-		alias->importFlags = flags & (~ImportFlags::BROADCAST); //retrieve other flags
+	if(exported){
+		debug("defining public import %s",alias);
+		exportedImports.push_back(std::make_pair(scope,std::make_pair(alias,qualified)));
 	}
-	if(def) define(alias);
 }
 
 #define LOOKUP_IMPORTED(t,c) \
 	auto var = t##Definitions.find(name); \
-	if (var != t##Definitions.end() && (int)var->second->visibilityMode <= tolerance) return var->second; \
+	if (var != t##Definitions.end() && (int)var->second->visibilityMode == Visibility::Public) return var->second; \
 	if(parent) return parent->lookupImported##c(name); \
 	return nullptr
 
-PrefixDefinition* Scope::lookupImportedPrefix(SymbolID name,int tolerance){
+PrefixDefinition* Scope::lookupImportedPrefix(SymbolID name){
 	LOOKUP_IMPORTED(prefix,Prefix);
 }
 
-InfixDefinition* Scope::lookupImportedInfix(SymbolID name,int tolerance){
+InfixDefinition* Scope::lookupImportedInfix(SymbolID name){
 	LOOKUP_IMPORTED(infix,Infix);
 }
 
@@ -65,7 +94,7 @@ InfixDefinition* Scope::lookupImportedInfix(SymbolID name,int tolerance){
 	if (var != t##Definitions.end()) return var->second; \
 	c##Definition* def = nullptr; \
 	for(auto i = imports.begin();i!=imports.end();++i){ \
-		auto d = (*i)->lookupImported##c(name,Visibility::Public); \
+		auto d = (*i)->lookupImported##c(name); \
 		if(d){ \
 			if(def) error(d->location,"'%s' Symbol import conflict",d->id); /*TODO os conflict resolvement*/\
 			else def = d; \
@@ -194,17 +223,6 @@ void Scope::reach(){
 	for(auto i=broadcastedImports.begin();i!=broadcastedImports.end();++i) memory::reach(*i);
 	for(auto i=prefixDefinitions.begin();i!=prefixDefinitions.end();++i) memory::reach(i->second);
 	for(auto i=infixDefinitions.begin();i!=infixDefinitions.end();++i) memory::reach(i->second);
-}
-
-Overloadset::Overloadset(Function* firstFunction) : PrefixDefinition(firstFunction->id,firstFunction->location) {
-	declarationType = DeclarationType::OverloadSet;
-	visibilityMode = Visibility::Public;//!important // TODO module a type foo, module b private def foo() //<-- conflict
-	functions.push_back(firstFunction);
-}
-
-ImportedScope::ImportedScope(SymbolID name,Location& location,Scope* scope) : PrefixDefinition(name,location) {
-	this->scope = scope;
-	visibilityMode = Visibility::Private;
 }
 
 	

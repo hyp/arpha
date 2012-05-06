@@ -12,7 +12,6 @@ struct Node;
 namespace Visibility {
 	enum {
 		Public = 0,
-		PublicOnDirectLookup, //used for exported imports
 		Private,	
 	};
 }
@@ -54,21 +53,22 @@ struct Scope: memory::ManagedDefinition {
 
 	Scope(Scope* parent);
 
-	struct ImportFlags {
-		enum {
-			BROADCAST = 0x1,  //Broadcasted import - the import will be imported into scopes importing the current scope
-			QUALIFIED = 0x2   //Qualified import - the symbols from the scope are accessed only via the qualified scope alias i.e. foo.bar
-		};
-	};
-	void import(ImportedScope* alias,int flags = 0,bool def = true);
+	/**
+	*Imports a scope aliased to string alias
+	*Options:
+	*	Exported import - the import will be imported into scopes importing the current scope
+	*	Qualified import - the symbols from the scope are accessed only via the qualified scope alias i.e. foo.bar
+	*/
+	void import(Scope* scope,const char* alias,bool qualified = false,bool exported = false);
+
 
 	PrefixDefinition* lookupPrefix(SymbolID name);
-	PrefixDefinition* lookupImportedPrefix(SymbolID name,int tolerance = Visibility::PublicOnDirectLookup);
+	PrefixDefinition* lookupImportedPrefix(SymbolID name);
 	PrefixDefinition* containsPrefix(SymbolID name);
 	void define(PrefixDefinition* definition);
 
 	InfixDefinition* lookupInfix(SymbolID name);
-	InfixDefinition* lookupImportedInfix(SymbolID name,int tolerance = Visibility::PublicOnDirectLookup);
+	InfixDefinition* lookupImportedInfix(SymbolID name);
 	InfixDefinition* containsInfix(SymbolID name);
 	void define(InfixDefinition* definition);
 
@@ -80,7 +80,9 @@ struct Scope: memory::ManagedDefinition {
 
 private:
 
+
 	std::vector<Scope*> imports;
+	std::vector<std::pair<Scope*,std::pair<SymbolID,bool> > > exportedImports;
 	std::vector<ImportedScope*> broadcastedImports;
 
 	std::map<SymbolID,PrefixDefinition*> prefixDefinitions;
@@ -88,22 +90,5 @@ private:
 	void reach();
 };
 
-//
-struct ImportedScope : PrefixDefinition {
-	ImportedScope(SymbolID name,Location& location,Scope* scope);
-	Node* parse(Parser* parser);
-
-	Scope* scope;
-	int importFlags; //To apply the correct import of broadcasted imports
-};
-
-//
-struct Overloadset: public PrefixDefinition {
-	Overloadset(Function* firstFunction);
-
-	Node* parse(Parser* parser);
-	
-	std::vector<Function*> functions;
-};
 
 #endif

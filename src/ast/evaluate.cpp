@@ -230,6 +230,7 @@ struct AstExpander: NodeVisitor {
 		else return nullptr;
 	}
 
+
 	Node* assign(AssignmentExpression* assignment,Node* object,Node* value,bool* error){
 		if(auto t1 = object->asTupleExpression()){
 			if(auto t2 = value->asTupleExpression()){
@@ -259,9 +260,9 @@ struct AstExpander: NodeVisitor {
 				if(var->variable->type.isInferred()){
 					var->variable->type.infer(valuesType);
 					debug("Inferred %s for variable %s",valuesType,var->variable->id);
-					return value;
+					if(var->variable->isMutable) return value;
 				}
-				else if(var->variable->type.resolved()){
+				if(var->variable->type.resolved()){
 					if(auto canBeAssigned = var->variable->type.type()->assignableFrom(value,valuesType)){
 						if(!var->variable->isMutable) {
 							//If variable has a constant type, assign only at place of declaration

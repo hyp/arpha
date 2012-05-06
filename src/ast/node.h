@@ -14,7 +14,9 @@ struct Variable;
 struct IntegerType;
 struct IntrinsicType;
 struct Record;
+struct Overloadset;
 struct Function;
+struct ImportedScope;
 
 struct NodeVisitor;
 struct Evaluator;
@@ -33,6 +35,7 @@ struct Evaluator;
 	X(ErrorExpression)       \
 	X(TypeExpression)         \
 	X(ExpressionReference)   \
+	X(ImportedScopeReference)   \
 	X(VariableReference) \
 	X(FunctionReference)     \
 	X(TupleExpression)       \
@@ -112,6 +115,17 @@ struct ExpressionReference : Node {
 
 	Node* expression;
 	DECLARE_NODE(ExpressionReference);
+};
+
+//: intrinsics::types::Scope
+struct ImportedScopeReference : Node {
+	ImportedScopeReference(ImportedScope* scope);
+
+	TypeExpression* _returnType() const;
+	Node* duplicate() const;
+
+	ImportedScope* scope;
+	DECLARE_NODE(ImportedScopeReference);
 };
 
 // Inferred [i.e. no type expression given] | Unresolved expression | valid type expression

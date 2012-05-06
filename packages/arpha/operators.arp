@@ -1,0 +1,43 @@
+#
+	This module defines arpha's operators.
+	Author: Hyp
+	Version: 1
+	Note:
+		Operator definitions are located in the order of increasing priority in this module.
+		Operators '=' '.' ',' are defined by the compiler implementation.
+#
+
+import qualified precedence
+
+# Prefix operators
+operator - = minus
+operator + = plus
+operator ! = not
+
+# Infix operators
+
+## Logical group
+operator && with priority precedence.logical = and
+operator || with priority precedence.logical = or
+
+## Equality group
+operator == with priority precedence.equality = equals
+operator != with priority precedence.equality = not_equals
+
+## Comparison group
+operator < with priority precedence.comparison = less
+operator > with priority precedence.comparison = greater
+operator <= with priority precedence.comparison = lessEquals
+operator => with priority precedence.comparison = greaterEquals
+
+## Sum group
+operator + with priority precedence.term = add
+operator - with priority precedence.term = subtract
+
+## Product group
+operator * with priority precedence.product = multiply
+operator / with priority precedence.product = divide
+operator % with priority precedence.product = mod
+
+## Power
+operator ** with priority precedence.power = pow

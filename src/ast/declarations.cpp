@@ -13,6 +13,7 @@ void Variable::setImmutableValue(AssignmentExpression* node,Node* value){
 	assert(isMutable == false);
 	assert(value->_returnType() != intrinsics::types::Unresolved);
 	this->value = value;
+	debug("Setting value %s to variable %s",value,id);
 	if(value->asIntegerLiteral()){
 		this->value->asIntegerLiteral()->_type = type.type();
 		expandMe = true;
@@ -210,7 +211,15 @@ Record* Record::findAnonymousRecord(std::vector<Field>& record){
 	return t;
 }
 
-//function
+//Overload set
+
+Overloadset::Overloadset(Function* firstFunction) : PrefixDefinition(firstFunction->id,firstFunction->location) {
+	declarationType = DeclarationType::OverloadSet;
+	visibilityMode = Visibility::Public;//!important // TODO import module a type foo, module b private def foo() //<-- conflict
+	functions.push_back(firstFunction);
+}
+
+//Function
 
 Function::Argument::Argument(Variable* var) : variable(var) {
 }
@@ -237,6 +246,11 @@ void Function::updateOnSolving(){
 	}
 	else argument = arguments.front().variable->type;
 	debug("Updating function's %s state (arg: %s) ret %s",id,argument,returnType);*/
+}
+
+//Imported scope
+ImportedScope::ImportedScope(SymbolID name,Location& location) : PrefixDefinition(name,location),scope(nullptr),_reference(this) {
+	visibilityMode = Visibility::Private;
 }
 
 //operators

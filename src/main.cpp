@@ -169,20 +169,27 @@ struct AccessParser: InfixDefinition {
 		parser->lookedUpToken.type = Token::Symbol;
 		parser->lookedUpToken.symbol = parser->expectName();
 		//scope.something
-		/*if(auto val = node->asConstantExpression()){
-			if(val->type == compiler::scopeRef){
-				//auto def = val->refScope->lookupImportedPrefix(parser->lookedUpToken.symbol);
+		if(auto val = node->asImportedScopeReference()){
+			//next in import tree?
+			auto var = val->scope->importTree.find(parser->lookedUpToken.symbol);
+			if (var != val->scope->importTree.end()){
+				return var->second->reference();
+			}
+			else if(val->scope->scope){
+				auto def = val->scope->scope->lookupImportedPrefix(parser->lookedUpToken.symbol);
 				if(!def){
-					error(node->location,"Unresolved symbol - '%s' isn't defined in module!",parser->lookedUpToken.symbol);
+					error(node->location,"Symbol '%s' isn't defined in module '%s'!",parser->lookedUpToken.symbol,val->scope->id);
 					return ErrorExpression::getInstance();
 				}
-				debug("accessing '%s'",def->id);
-				auto expression = def->parse(parser);
+				auto expression = parser->evaluate(def->parse(parser));
 				//apply the correct overload lookup scope
-				if(auto overloadSet = expression->asOverloadSetExpression()) overloadSet->scope = val->refScope;
+				if(auto overloadSet = expression->asOverloadSetExpression()) overloadSet->scope = val->scope->scope;
 				return expression;
+			}else{
+				error(node->location,"A module '%s' isn't imported from package '%s'!",parser->lookedUpToken.symbol,val->scope->id);
+				return ErrorExpression::getInstance();
 			}
-		}*/
+		}
 		return new AccessExpression(node,parser->lookedUpToken.symbol);
 	}
 };
@@ -470,9 +477,9 @@ struct ImportParser: PrefixDefinition {
 	Node* parse(Parser* parser){
 		Location location;
 		SymbolID moduleName;
-		int flags = 0;
-		if(parser->match("export")) flags |= Scope::ImportFlags::BROADCAST;
-		if(parser->match("qualified")) flags |= Scope::ImportFlags::QUALIFIED;
+		bool qualified = false,exported = false;
+		if(parser->match("export")) exported = true;
+		if(parser->match("qualified")) qualified = true;
 		do {
 			location = parser->currentLocation();
 			auto initial = parser->expectName();
@@ -483,7 +490,7 @@ struct ImportParser: PrefixDefinition {
 			}
 			if(auto moduleScope = compiler::findModule(modulePath.c_str())){
 				debug("Importing %s.",modulePath);
-				parser->currentScope()->import(new ImportedScope(modulePath.c_str(),parser->previousLocation(),moduleScope),flags);
+				parser->currentScope()->import(moduleScope,modulePath.c_str(),qualified,exported);
 			}else{
 				//Error
 				error(location,"module '%s' wasn't found!",modulePath);
@@ -550,23 +557,19 @@ namespace compiler {
 			compilerModule = currentModule;
 			scope = ::compiler::scope;
 			//import 'arpha' by default
-			auto def = new ImportedScope("arpha",Location(-1,0),::arpha::scope);
-			scope->import(def);
+			scope->import(::arpha::scope,"arpha");
 		}else if((packageDir + "/arpha/arpha.arp") == moduleName){
 			scope = new Scope(nullptr);
 			arpha::defineCoreSyntax(scope);
 			//import 'compiler' by default
-			auto def = new ImportedScope("compiler",Location(-1,0),findModule("compiler"));
-			scope->import(def,Scope::ImportFlags::QUALIFIED);
+			scope->import(findModule("compiler"),"compiler");
 		}
 		else {
 			scope = new Scope(nullptr);
 			//import 'compiler' by default
-			auto def = new ImportedScope("compiler",Location(-2,0),::compiler::scope);
-			scope->import(def,Scope::ImportFlags::QUALIFIED);
+			scope->import(::compiler::scope,"compiler",true);
 			//import 'arpha' by default
-			def = new ImportedScope("arpha",Location(-1,0),findModule("arpha"));
-			scope->import(def);
+			scope->import(findModule("arpha"),"arpha");
 		}
 		currentModule->second.scope = scope;
 
@@ -602,7 +605,7 @@ namespace compiler {
 		auto filename = dir + "/" + name + ".arp";
 		if(!System::fileExists(filename.c_str())){
 			//Try package way
-			filename = dir + "/" + name + "/" + name + ".arp";
+			filename = dir + "/" + name + "/" + name + ".arp";//TODO last path component for 2nd name
 			if(!System::fileExists(filename.c_str())) return nullptr;
 		}
 		//load module

@@ -88,12 +88,31 @@ namespace System {
 			}while(i != 0);
 			return path;
 		}	
+
+		std::pair<const char*,const char*> firstComponent(const char** path){
+			std::pair<const char*,const char*> result;
+			const char* p = *path;
+			result.first = p;
+			for(;*p!='/' && *p!='\0';p++){}
+			result.second = p;
+			*path = p;
+			return result;
+		}
 	}
 
-	unittest(path_directory){
+	unittest(path){
 		assert(path::directory("packages/arpha/arpha.arp") == "packages/arpha");
 		assert(path::directory("/glasgow") == "");
 		assert(path::directory("foo") == "foo");
+
+		const char* name = "arpha/arpha.arp";
+		auto component = path::firstComponent(&name);
+		assert(std::string(component.first,size_t(component.second-component.first)) == "arpha");
+		assert(std::string(name) == "/arpha.arp");
+		name++;
+		component = path::firstComponent(&name);
+		assert(std::string(component.first,size_t(component.second-component.first)) == "arpha.arp");
+		assert(*name == '\0');
 	}
 }
 

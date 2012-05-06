@@ -1,8 +1,9 @@
 #include "../base/base.h"
+#include "../base/symbol.h"
 #include "../base/bigint.h"
-#include "../scope.h"
-#include "../ast/declarations.h"
 #include "../ast/node.h"
+#include "../ast/scope.h"
+#include "../ast/declarations.h"
 #include "parser.h"
 #include "../compiler.h"
 
@@ -104,7 +105,7 @@ Node* Parser::parse(int stickiness){
 //parsing declarations
 
 Node* ImportedScope::parse(Parser* parser) {
-	return nullptr;//TODo ConstantExpression::createScopeReference(scope);
+	return reference();
 }
 
 void InferredUnresolvedTypeExpression::parse(Parser* parser,int stickiness){

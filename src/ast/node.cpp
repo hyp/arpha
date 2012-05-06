@@ -29,6 +29,10 @@ struct NodeToString: NodeVisitor {
 		stream<<"eref "<<node->expression;
 		return node;
 	}
+	Node* visit(ImportedScopeReference* node){
+		stream<<"scope-ref "<<node->scope->id;
+		return node;
+	}
 	Node* visit(VariableReference* node){
 		stream<<"variable "<<node->variable->id;
 		return node;
@@ -157,6 +161,18 @@ TypeExpression* ExpressionReference::_returnType() const {
 Node* ExpressionReference::duplicate() const {
 	return new ExpressionReference(expression->duplicate());
 };
+
+//Scope reference
+ImportedScopeReference::ImportedScopeReference(ImportedScope* scope){
+	this->scope = scope;
+}
+TypeExpression* ImportedScopeReference::_returnType() const {
+	return intrinsics::types::Unresolved;
+}
+Node* ImportedScopeReference::duplicate() const {
+	return scope->reference();
+}
+
 
 // Variable reference
 VariableReference::VariableReference(Variable* variable){

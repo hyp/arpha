@@ -1,4 +1,8 @@
-#Operator precedence constants
+#
+	This module defines arpha's expression parsing precedence constants.
+	Author: Hyp
+	Version: 1
+#
 
 def assignment   = 1  # x = y
 def tuple        = 2  # ,
