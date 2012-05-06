@@ -462,6 +462,19 @@ struct AstExpander: NodeVisitor {
 	Node* visit(WhileExpression* node){
 		node->condition = node->condition->accept(this);
 		node->body = node->body->accept(this);
+
+		//Typecheck
+		auto condReturns = node->condition->_returnType();
+		if(condReturns != intrinsics::types::Unresolved){
+			if(auto conditionalExpression = intrinsics::types::boolean->assignableFrom(node->condition,condReturns)){
+				node->condition = conditionalExpression;
+			}else{
+				error(node->location,"Expect a boolean expression instead of %s for loop's condition!",node->condition);
+				//delete node
+				return ErrorExpression::getInstance();
+			}
+		}
+
 		return node;
 	}
 
