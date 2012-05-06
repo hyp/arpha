@@ -25,6 +25,10 @@ struct NodeToString: NodeVisitor {
 		stream<<"()";
 		return node;
 	}
+	Node* visit(WildcardExpression* node){
+		stream<<"_";
+		return node;
+	}
 	Node* visit(ExpressionReference* node){
 		stream<<"eref "<<node->expression;
 		return node;
@@ -156,6 +160,19 @@ Node* UnitExpression::duplicate() const {
 UnitExpression* UnitExpression::getInstance() {
 	if(unitInstance) return unitInstance;
 	else return unitInstance = new UnitExpression;
+}
+
+// Wildcard expression
+TypeExpression* WildcardExpression::_returnType() const {
+	return intrinsics::types::Void;//???
+}
+WildcardExpression* wildInstance = nullptr;
+Node* WildcardExpression::duplicate() const {
+	return wildInstance;
+};
+WildcardExpression* WildcardExpression::getInstance() {
+	if(wildInstance) return wildInstance;
+	else return wildInstance = new WildcardExpression;
 }
 
 // Expression reference

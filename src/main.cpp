@@ -469,8 +469,10 @@ struct MatchParser: PrefixDefinition {
 			auto token = parser->consume();
 			if(token.isSymbol() && token.symbol == "to"){
 				bool fallthrough = true;
-				auto pattern = parser->parse();
+				Node* pattern;
 				Node* consq = nullptr;
+				if(parser->match("_")) pattern = WildcardExpression::getInstance();
+				else pattern = parser->parse();
 				if(parser->match(":")){
 					fallthrough = false;
 					consq = parser->parse();

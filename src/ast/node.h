@@ -33,6 +33,7 @@ struct Evaluator;
 	X(IntegerLiteral)    \
 	X(UnitExpression)    \
 	X(ErrorExpression)       \
+	X(WildcardExpression)       \
 	X(TypeExpression)         \
 	X(ExpressionReference)   \
 	X(ImportedScopeReference)   \
@@ -94,6 +95,9 @@ struct ErrorExpression : Node {
 	static ErrorExpression* getInstance(); //avoid multiple creations
 
 	DECLARE_NODE(ErrorExpression);
+private:
+	ErrorExpression(){}
+	ErrorExpression(const ErrorExpression& other){}
 };
 
 //():void
@@ -104,6 +108,22 @@ struct UnitExpression : Node {
 	static UnitExpression* getInstance(); //avoid multiple creations
 
 	DECLARE_NODE(UnitExpression);
+private:
+	UnitExpression(){}
+	UnitExpression(const UnitExpression& other){}
+};
+
+//_:void
+struct WildcardExpression : Node {
+	TypeExpression* _returnType() const;
+	
+	Node* duplicate() const;
+	static WildcardExpression* getInstance(); //avoid multiple creations
+
+	DECLARE_NODE(WildcardExpression);
+private:
+	WildcardExpression(){}
+	WildcardExpression(const WildcardExpression& other){}
 };
 
 //: intrinsics::types::Expression
