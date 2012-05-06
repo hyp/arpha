@@ -362,6 +362,7 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
+
 	Node* visit(TupleExpression* node){
 		if(node->type && node->type!=intrinsics::types::Unresolved) return node;//Don't evaluate it again
 		if(node->children.size() == 1){
@@ -425,7 +426,7 @@ struct AstExpander: NodeVisitor {
 	}
 
 	Node* evaluateIntegerMatch(IntegerLiteral* value,MatchExpression* node){
-
+		
 		//TODO
 		for(auto i =node->cases.begin();i!=node->cases.end();i++){
 			auto intLiteral = (*i).pattern->asIntegerLiteral();
@@ -443,13 +444,16 @@ struct AstExpander: NodeVisitor {
 		bool allCasesResolved = true;
 		for(auto i =node->cases.begin();i!=node->cases.end();i++){
 			(*i).pattern = (*i).pattern->accept(this);
-			(*i).consequence = (*i).consequence->accept(this);
-			if((*i).pattern->_returnType() == intrinsics::types::Unresolved || (*i).consequence->_returnType() == intrinsics::types::Unresolved) allCasesResolved = false;
+			if((*i).pattern->_returnType() == intrinsics::types::Unresolved) allCasesResolved = false;
+			if((*i).consequence){
+				(*i).consequence = (*i).consequence->accept(this);
+				if((*i).consequence->_returnType() == intrinsics::types::Unresolved) allCasesResolved = false;
+			}
 		}
 		
 		//Evaluate constant match
 		if(allCasesResolved){
-			if(auto intLiteral = objectReturns->asIntegerLiteral()) return evaluateIntegerMatch(intLiteral,node);
+			if(auto intLiteral = node->object->asIntegerLiteral()) return evaluateIntegerMatch(intLiteral,node);
 		}
 
 		return node;

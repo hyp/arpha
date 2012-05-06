@@ -305,7 +305,7 @@ struct MatchExpression : Node {
 		Node* consequence;
 		bool fallThrough; // = false
 
-
+		Case(Node* pat,Node* consq,bool fallthrough) : pattern(pat),consequence(consq),fallThrough(fallthrough) {}
 	};
 	std::vector<Case> cases;
 	DECLARE_NODE(MatchExpression);

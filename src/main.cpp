@@ -457,14 +457,35 @@ struct WhileParser: PrefixDefinition {
 	}
 };
 
-/// TODO ::= match expr { |pattern: ... }
+/// TODO ::= match expr { to pattern: ... }
 struct MatchParser: PrefixDefinition {
 	MatchParser(): PrefixDefinition("match",Location()){}
+
+	// body ::= '{' to pattern: consequence... '}'
+	struct BodyParser {
+		MatchExpression* node;
+		BodyParser(MatchExpression* expr) : node(expr) {}
+		bool operator()(Parser* parser){
+			auto token = parser->consume();
+			if(token.isSymbol() && token.symbol == "to"){
+				bool fallthrough = true;
+				auto pattern = parser->parse();
+				Node* consq = nullptr;
+				if(parser->match(":")){
+					fallthrough = false;
+					consq = parser->parse();
+				}
+				node->cases.push_back(MatchExpression::Case(pattern,consq,fallthrough));
+				return true;
+			}
+			error(parser->previousLocation(),"Unexpected %s - to pattern : consequence is expected!",token);
+			return false;
+		}
+	};
 	Node* parse(Parser* parser){
 		auto expr = new MatchExpression(parser->parse());
 		parser->expect("{");
-
-		parser->expect("}");
+		blockParser->body(parser,BodyParser(expr));
 		return expr;
 	}
 };

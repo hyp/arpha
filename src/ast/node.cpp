@@ -68,6 +68,11 @@ struct NodeToString: NodeVisitor {
 	}
 	Node* visit(MatchExpression* node){
 		stream<<"match "<<node->object;
+		for(auto i=node->cases.begin();i!=node->cases.end();i++){
+			stream<<'|'<<(*i).pattern<<" => ";
+			if((*i).consequence) stream<<(*i).consequence<<' ';
+			if((*i).fallThrough) stream<<"fallthrough";
+		}
 		return node;
 	}
 	Node* visit(TupleExpression* node){
@@ -236,12 +241,9 @@ TypeExpression* MatchExpression::_returnType() const {
 }
 Node* MatchExpression::duplicate(){
 	auto dup = new MatchExpression(object);
+	dup->cases.reserve(cases.size());
 	for(auto i = cases.begin();i!=cases.end();i++){
-		Case _case;
-		_case.pattern = (*i).pattern->duplicate();
-		_case.consequence = (*i).consequence ? (*i).consequence->duplicate() : nullptr;
-		_case.fallThrough = (*i).fallThrough;
-		dup->cases.push_back(_case);
+		dup->cases.push_back(Case((*i).pattern->duplicate(),(*i).consequence ? (*i).consequence->duplicate() : nullptr,(*i).fallThrough));
 	}
 	return dup;
 }
