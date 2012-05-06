@@ -211,78 +211,80 @@ struct AstExpander: NodeVisitor {
 
 	Node* visit(VariableReference* node){
 		if(node->variable->expandMe)
-			return node->variable->value;
+			return node->variable->value->duplicate();//TODO is duplicate really needed?
 		return node;
 	}	
-	Node* assign(Node* object,Node* value,bool* error){
-		auto valuesType = value->_returnType();
-		if(valuesType  == intrinsics::types::Unresolved) return nullptr;
-		//Assigning values to variables
-		if(auto var = object->asVariableReference()){
-			auto variablesType = var->variable->type;
-			if(var->variable->type.isInferred()){
-				var->variable->type.infer(valuesType);
-				debug("Inferred %s for variable %s",valuesType,var->variable->id);
-				return value;
-			}
-			else if(var->variable->type.resolved()){
-				//If variable has a constant type, assign only at place of declaration
-				if(!var->variable->isMutable){
-					if(!var->variable->value){
-						var->variable->setImmutableValue(value);//TODo fix
+
+	Node* assign(AssignmentExpression* assignment,Node* object,Node* value,bool* error){
+		if(auto t1 = object->asTupleExpression()){
+			if(auto t2 = value->asTupleExpression()){
+				if(t1->children.size() == t2->children.size()){
+					for(size_t i=0;i<t1->children.size();i++){
+						auto newValue = assign(assignment,t1->children[i],t2->children[i],error);
+						if(newValue) t2->children[i] = newValue;
 					}
-					else {
-						error(value->location,"Can't assign %s to %s - immutable variables can only be assigned at declaration!",value,object);
-						*error = true;
-						return nullptr;
-					}
+					return t2;
 				}
-				if(auto canBeAssigned = var->variable->type.type()->assignableFrom(value,valuesType)) return canBeAssigned;
-				else {
-					error(value->location,"Can't assign %s to %s - the types don't match!",value,object);
+				else{
+					error(assignment->location,"Can't assign between tuples of different length");
 					*error = true;
 					return nullptr;
 				}
 			}
-			else return nullptr; //Trying to assign to a variable with unresolved type.. that's a no no!
-		}
-		else if(auto access = object->asAccessExpression()){
-			//TODO
-		}
-		else{
-			error(object->location,"Can't perform an assignment to %s - only variables and fields are assignable!",object);
-			*error = true;
-		}
-		return nullptr;
+			else{
+				error(assignment->location,"Can't assign a non-tuple to a tuple");
+				*error = true;
+				return nullptr;
+			}
+		}else{
+			auto valuesType = value->_returnType();
+			if(valuesType  == intrinsics::types::Unresolved) return nullptr;
+			//Assigning values to variables
+			if(auto var = object->asVariableReference()){
+				if(var->variable->type.isInferred()){
+					var->variable->type.infer(valuesType);
+					debug("Inferred %s for variable %s",valuesType,var->variable->id);
+					return value;
+				}
+				else if(var->variable->type.resolved()){
+					if(auto canBeAssigned = var->variable->type.type()->assignableFrom(value,valuesType)){
+						if(!var->variable->isMutable) {
+							//If variable has a constant type, assign only at place of declaration
+							if(!var->variable->value)
+								var->variable->setImmutableValue(assignment,value);
+							else if(var->variable->nodeWhichAssignedMe != assignment){
+								error(value->location,"Can't assign %s to %s - immutable variables can only be assigned at declaration!",value,object);
+								*error = true;
+								return nullptr;
+							}
+						}
+						return canBeAssigned;
+					}
+					else {
+						error(value->location,"Can't assign %s to %s - the types don't match!",value,object);
+						*error = true;
+						return nullptr;
+					}
+				}
+				else return nullptr; //Trying to assign to a variable with unresolved type.. that's a no no!
+			}
+			else if(auto access = object->asAccessExpression()){
+				//TODO
+			}
+			else{
+				error(object->location,"Can't perform an assignment to %s - only variables and fields are assignable!",object);
+				*error = true;
+			}
+			return nullptr;
+		}		
 	}
 	Node* visit(AssignmentExpression* node){
 		node->value = node->value->accept(this);
 		if(node->value->_returnType()  == intrinsics::types::Unresolved) return node;//Don't bother until the value is fully resolved
 		bool error = false;
 
-		//TODO flatten tuples
-		if(auto t1 = node->object->asTupleExpression()){
-			if(auto t2 = node->value->asTupleExpression()){
-				if(t1->children.size() == t2->children.size()){
-					for(size_t i=0;i<t1->children.size();i++){
-						auto newValue = assign(t1->children[i],t2->children[i],&error);
-						if(newValue) t2->children[i] = newValue;
-					}
-				}
-				else{
-					error(node->location,"Can't assign between tuples of different length");
-					error = true;
-				}
-			}
-			else{
-				error(node->location,"Can't assign a non-tuple to a tuple");
-				error = true;
-			}
-		}else{
-			//A non-tuple assignment or a tuple to a single variable assignment
-			auto newValue = assign(node->object,node->value,&error);
-			if(newValue) node->value = newValue;
-		}
+		auto newValue = assign(node,node->object,node->value,&error);
+		if(newValue) node->value = newValue;
 
 		if(error){
 			//TODO delete tuple's children

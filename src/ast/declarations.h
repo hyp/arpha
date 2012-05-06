@@ -19,7 +19,7 @@ struct Variable : PrefixDefinition  {
 
 	Node* parse(Parser* parser);
 
-	void setImmutableValue(Node* value);
+	void setImmutableValue(AssignmentExpression* node,Node* value);
 
 	InferredUnresolvedTypeExpression type;
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
@@ -29,6 +29,7 @@ struct Variable : PrefixDefinition  {
 	
 	bool isMutable; // = true
 	bool expandMe;  // = false // assume value != nullptr
+	AssignmentExpression* nodeWhichAssignedMe; // = nullptr
 };
 
 struct TypeBase : PrefixDefinition {

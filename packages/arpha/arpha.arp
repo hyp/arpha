@@ -6,8 +6,8 @@
 
 import export types
 
-#TODO def
-var true,false bool = 1,0
+def false bool = 0
+def true bool = 1
 
 #
 # An unsigned integer representing CPU's word.

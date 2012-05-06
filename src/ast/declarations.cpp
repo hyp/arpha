@@ -6,15 +6,17 @@
 #include "../intrinsics/types.h"
 
 //variable
-Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location),value(nullptr),_reference(this),isMutable(true),expandMe(false) {
+Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location),value(nullptr),_reference(this),isMutable(true),expandMe(false),nodeWhichAssignedMe(nullptr) {
 }
-void Variable::setImmutableValue(Node* value){
+void Variable::setImmutableValue(AssignmentExpression* node,Node* value){
 	assert(isMutable == false);
 	assert(value->_returnType() != intrinsics::types::Unresolved);
 	this->value = value;
 	if(value->asIntegerLiteral()){
+		this->value->asIntegerLiteral()->_type = type.type();
 		expandMe = true;
 	}
+	this->nodeWhichAssignedMe = node;
 }
 //intrinsic type
 IntrinsicType::IntrinsicType(SymbolID name,Location& location) : TypeBase(name,location),_reference(this) {
