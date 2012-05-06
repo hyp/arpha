@@ -1,4 +1,5 @@
-#include "common.h"
+#include "base/base.h"
+#include "base/symbol.h"
 #include "base/system.h"
 #include "scope.h"
 #include "ast/declarations.h"
@@ -9,57 +10,6 @@
 #include "arpha.h"
 #include "intrinsics/ast.h"
 #include "intrinsics/types.h"
-
-unittest(scope){
-	auto scope = new Scope(0);
-
-	assert(!scope->lookupPrefix("foo"));
-	assert(!scope->lookupPrefix("bar"));
-	assert(!scope->lookupInfix("bar"));
-	assert(!scope->lookupInfix("foo"));
-	assert(!scope->containsPrefix("foo"));
-	assert(!scope->containsPrefix("bar"));
-	assert(!scope->containsInfix("bar"));
-	assert(!scope->containsInfix("foo"));
-
-	//normal scope lookup and contains
-/*	auto pdata = (PrefixDefinition*)0xDEADBEEF;
-	scope->define(Location(),"foo",pdata);
-	auto pdef = scope->lookupPrefix("foo");
-	assert(pdef);
-	assert(pdef == pdata);
-	pdef = scope->containsPrefix("foo");
-	assert(pdef);
-	assert(pdef == pdata);
-
-	auto idata = (InfixDefinition*)0xDEADBEEF;
-	scope->define(Location(),"foo",idata);
-	auto idef = scope->lookupInfix("foo");
-	assert(idef);
-	assert(idef == idata);
-	idef = scope->containsInfix("foo");
-	assert(idef);
-	assert(idef == idata);
-
-	//lookup from parent
-	auto scope2 = new Scope(scope);
-	scope->define(Location(),"bar",pdata);
-	scope->define(Location(),"bar",idata);
-	assert(scope->containsPrefix("bar") && scope->containsInfix("bar"));
-	assert((!scope2->containsPrefix("bar")) && (!scope2->containsInfix("bar")));
-	assert(scope2->lookupPrefix("bar") == scope->containsPrefix("bar"));
-	assert(scope2->lookupInfix("bar") == scope->containsInfix("bar"));*/
-
-	//
-
-
-	//delete scope2;
-	delete scope;
-	//clean up
-	//symbols.~SymbolTable();
-}
-
-
 
 //TODO functions arguments vector!
 namespace arpha {
@@ -240,34 +190,27 @@ namespace arpha {
 		return isEndExpression(token) || (token.isSymbol() && token.symbol == "=");
 	}
 
-	TypeExpression* expectTypeExpression(Parser* parser,int stickiness){
-		TypeExpression* result;
-		auto oldSetting = parser->evaluator()->evaluateTypeTuplesAsTypes;
-		parser->evaluator()->evaluateTypeTuplesAsTypes = true;
-		auto node = parser->parse(stickiness);
-		parser->evaluator()->evaluateTypeTuplesAsTypes = oldSetting;
-		if(!(result = node->asTypeExpression())) result = new TypeExpression(node);//unresolved type
-		return result;
-	}
+
 
 	/// ::= 'var' <names> [type|unresolvedExpression (hopefully) resolving to type|Nothing]
 	struct VarParser: PrefixDefinition {
 		VarParser(): PrefixDefinition("var",Location()) {}
 		Node* parse(Parser* parser){
-			std::vector<Node*> references;
+			std::vector<Variable*> vars;
 			do {
 				auto var = new Variable(parser->expectName(),parser->previousLocation());
 				parser->currentScope()->define(var);
-				references.push_back(new VariableReference(var,true));
+				vars.push_back(var);
 			}
 			while(parser->match(","));
-			TypeExpression* typeExpression = intrinsics::types::Inferred;
-			if(!isEndExpressionEquals(parser->peek())) typeExpression = expectTypeExpression(parser,arpha::Precedence::Assignment);
+			//parse optional type
+			InferredUnresolvedTypeExpression type;
+			if(!isEndExpressionEquals(parser->peek())) type.parse(parser,arpha::Precedence::Assignment);
+			for(auto i=vars.begin();i!=vars.end();i++) (*i)->type = type;
 
-			for(auto i=references.begin();i!=references.end();i++) (*i)->asVariableReference()->variable->_type = typeExpression;
-			if(references.size() == 1) return references[0];
+			if(vars.size() == 1) return vars[0]->reference();
 			auto tuple = new TupleExpression;
-			tuple->children = references;
+			for(auto i=vars.begin();i!=vars.end();i++) tuple->children.push_back((*i)->reference());
 			return tuple;
 		}
 	};
@@ -348,9 +291,13 @@ namespace arpha {
 			if(parser->match("(")) return function(name,location,parser);
 			else{
 				auto sub = new Variable(name,location);
-				sub->_type =new TypeExpression(TypeExpression::CONSTANT,intrinsics::types::Inferred);
+				sub->isMutable = false;
 				parser->currentScope()->define(sub);
-				return new VariableReference(sub,true);
+				//parse optional type
+				InferredUnresolvedTypeExpression type;
+				if(!isEndExpressionEquals(parser->peek())) type.parse(parser,arpha::Precedence::Assignment);
+				sub->type = type;
+				return sub->reference();
 			}
 		}
 	};
@@ -367,9 +314,10 @@ namespace arpha {
 				record->add(field);
 			}
 			while(parser->match(","));
-			auto typeExpression = expectTypeExpression(parser,arpha::Precedence::Assignment);
-			record->_resolved = typeExpression->resolved();
-			for(;i<record->fields.size();i++) record->fields[i].type = typeExpression;
+			InferredUnresolvedTypeExpression type;
+			type.parse(parser,arpha::Precedence::Assignment);
+			record->_resolved = type.resolved();
+			for(;i<record->fields.size();i++) record->fields[i].type = type;
 		}
 		// body ::= '{' fields ';' fields ... '}'
 		struct BodyParser {
@@ -393,6 +341,7 @@ namespace arpha {
 			}
 		};
 		
+
 		Node* parse(Parser* parser){
 			auto location  = parser->previousLocation();
 			auto name = parser->expectName();
@@ -404,7 +353,9 @@ namespace arpha {
 				return new TypeExpression(type);
 			}else if(parser->match("intrinsic")){
 				debug("Defined intrinsic type %s",name);
-				return nullptr;//TODO
+				auto type = new IntrinsicType(name,location);
+				parser->currentScope()->define(type);
+				return new TypeExpression(type);
 			}
 			auto record = new Record(name,location);
 			record->_resolved = true;
@@ -423,6 +374,15 @@ namespace arpha {
 		}
 	};
 
+	int expectInteger(Parser* parser,int stickiness){
+		auto node = parser->parse(stickiness);
+		if(auto c= node->asIntegerLiteral()){
+			return int(c->integer.u64); //TODO this is potentially unsafe
+		}
+		error(node->location,"Expected an integer constant instead of %s!",node);
+		return -1;
+	}
+
 	/// ::= 'operator' <name> ['with' 'priority' <number>] = functionName
 	struct OperatorParser: PrefixDefinition {
 		OperatorParser(): PrefixDefinition("operator",Location()) {}
@@ -436,7 +396,7 @@ namespace arpha {
 			}else{
 				parser->expect("with");
 				parser->expect("priority");
-				auto stickiness = parser->expectInteger();
+				auto stickiness = expectInteger(parser,arpha::Precedence::Tuple);
 				parser->expect("=");
 				auto op = new InfixOperator(name,stickiness,loc);
 				debug("defined operator %d with stickiness %d",name,op->stickiness);

@@ -4,7 +4,6 @@
 #ifndef ARPHA_LEXER_H
 #define ARPHA_LEXER_H
 
-#include "../common.h"
 #include "../base/base.h"
 #include "../base/symbol.h"
 #include "token.h"

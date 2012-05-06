@@ -93,9 +93,12 @@ std::ostream& operator<< (std::ostream& stream,Node* node){
 	return stream;
 }
 
+
 TypeExpression* Node::_returnType() const {
 	return intrinsics::types::Void;
 }
+
+// Error expression
 TypeExpression* ErrorExpression::_returnType() const {
 	return intrinsics::types::Unresolved;
 }
@@ -108,6 +111,7 @@ ErrorExpression* ErrorExpression::getInstance() {
 	else return errorInstance = new ErrorExpression;
 }
 
+// Integer literals
 IntegerLiteral::IntegerLiteral(const BigInt& integer){
 	this->integer = integer;
 	_type = nullptr;
@@ -126,6 +130,7 @@ Node* IntegerLiteral::duplicate() const {
 	return dup;
 };
 
+// Unit expression
 TypeExpression* UnitExpression::_returnType() const {
 	return intrinsics::types::Void;
 }
@@ -138,8 +143,8 @@ UnitExpression* UnitExpression::getInstance() {
 	else return unitInstance = new UnitExpression;
 }
 
+// Expression reference
 ExpressionReference::ExpressionReference(Node* node) : expression(node){}
-
 TypeExpression* ExpressionReference::_returnType() const {
 	return intrinsics::types::Expression;
 }
@@ -147,17 +152,18 @@ Node* ExpressionReference::duplicate() const {
 	return new ExpressionReference(expression->duplicate());
 };
 
-VariableReference::VariableReference(Variable* variable,bool definitionHere){
+// Variable reference
+VariableReference::VariableReference(Variable* variable){
 	this->variable = variable;
-	isDefinedHere = definitionHere;
 }
 TypeExpression* VariableReference::_returnType() const {
-	return variable->_type != intrinsics::types::Inferred ? (variable->_type->resolved()? variable->_type : intrinsics::types::Unresolved ) : intrinsics::types::Unresolved;
+	return variable->type.type();
 }
 Node* VariableReference::duplicate() const {
-	return new VariableReference(variable,isDefinedHere);
+	return variable->reference();
 };
 
+// Tuple expression
 TupleExpression::TupleExpression() : type(nullptr) {}
 TupleExpression::TupleExpression(Node* a,Node* b) : type(nullptr) {
 	if( auto aIsTuple = a->asTupleExpression() ){
@@ -181,6 +187,7 @@ Node* TupleExpression::duplicate() const {
 	return dup;
 };
 
+// Assignment expression
 AssignmentExpression::AssignmentExpression(Node* object,Node* value){
 	this->object = object;
 	this->value = value;
@@ -192,6 +199,7 @@ Node* AssignmentExpression::duplicate() const {
 	return new AssignmentExpression(object->duplicate(),value->duplicate());
 }
 
+// Return expression
 ReturnExpression::ReturnExpression(Node* expression) : value(expression) {}
 Node* ReturnExpression::duplicate() const {
 	return new ReturnExpression(value);
@@ -201,6 +209,7 @@ MatchExpression::MatchExpression(Node* object){
 	this->object = object;
 }
 
+// Match expression
 TypeExpression* MatchExpression::_returnType() const {
 	return intrinsics::types::Void;//TODO
 }
@@ -280,27 +289,33 @@ WhileExpression* WhileExpression::create(Node* condition,Node* body){
 	return e;
 }
 
-
 //
-TypeExpression::TypeExpression() : type(UNRESOLVED),unresolved(nullptr) {}
-TypeExpression::TypeExpression(int type,TypeExpression* next) {
-	this->type = type;
-	this->next = next;
+
+TypeExpression* InferredUnresolvedTypeExpression::type(){
+	return kind == Type ? _type : intrinsics::types::Unresolved;
+}
+void InferredUnresolvedTypeExpression::infer(TypeExpression* type){
+	assert(kind == Inferred);
+	assert(type != intrinsics::types::Unresolved);
+	assert(type->resolved());
+	kind = Type;
+	_type = type;
+}
+
+// TypeExpression
+TypeExpression::TypeExpression(IntrinsicType* intrinsic) : type(INTRINSIC) {
+	this->intrinsic = intrinsic;
 }
 TypeExpression::TypeExpression(IntegerType* integer) : type(INTEGER) {
 	this->integer = integer;
 }
-TypeExpression::TypeExpression(Record* record): type(RECORD) { this->record = record; }
-TypeExpression::TypeExpression(Node* unresolved) : type(UNRESOLVED) {
-	this->unresolved = unresolved;
+TypeExpression::TypeExpression(Record* record): type(RECORD) { 
+	this->record = record; 
 }
+
 bool TypeExpression::resolved() const {
 	switch(type){
 		case RECORD: return record->resolved();
-		case CONSTANT: return next->resolved();
-		case POINTER: return next->resolved();
-		case UNRESOLVED:
-			return false;
 	}
 	return true;
 }
@@ -309,13 +324,9 @@ TypeExpression* TypeExpression::_returnType() const {
 }
 Node* TypeExpression::duplicate() const {
 	switch(type){
-		case RECORD: return new TypeExpression(record);
-		case CONSTANT: return new TypeExpression(CONSTANT,next->duplicate()->asTypeExpression());
-		case POINTER: return new TypeExpression(POINTER,next->duplicate()->asTypeExpression());
-		case INTEGER: return new TypeExpression(integer);
-		case INTRINSIC_TYPE: return const_cast<TypeExpression*>(this);
-		case UNRESOLVED:
-			return new TypeExpression(unresolved);
+		case RECORD: return record->reference();
+		case INTEGER: return integer->reference();
+		case INTRINSIC: return intrinsic->reference();
 		default:
 			throw std::runtime_error("Can't evaluate size of an unresolved type expression!");
 			return nullptr;
@@ -326,46 +337,22 @@ Node* TypeExpression::duplicate() const {
 size_t TypeExpression::size() const {
 	switch(type){
 		case RECORD: return record->size();
-		case CONSTANT: return next->size();
 		case INTEGER: return integer->size();
-		case FUNCTION:
-		case POINTER: return 4;//TODO proper
-		case INTRINSIC_TYPE:
-			return 0;
+		case INTRINSIC: return intrinsic->size();
 		default:
 			throw std::runtime_error("Can't evaluate size of an unresolved type expression!");
 	}
 }
 bool TypeExpression::isSame(TypeExpression* other){
-	assert(type != UNRESOLVED);
-	assert(other->type != UNRESOLVED);
-	if((type == CONSTANT && other->type == CONSTANT) || (type == POINTER && other->type == POINTER))
-		return next->isSame(other->next);
-	if(type == INTEGER && other->type == INTEGER) return integer == other->integer;
-	return false;
+	return this == other;//like a boss
 }
 Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
-	assert(this->type != UNRESOLVED);
-	assert(type->type != UNRESOLVED);
+	if(this == type) return expression;//like a baws
 
-	//remove constant qualifier
-	if(type->type == CONSTANT) type = type->next;
-	
-	if(this->type == INTEGER && type->type == INTEGER){
-		if(this->integer == type->integer) return expression;//Absolutely same types.
+	else if(this->type == INTEGER && type->type == INTEGER){
 		//literal integer constants.. check to see if the type can accept it's value
-		else if(auto intConst = expression->asIntegerLiteral()){
+		if(auto intConst = expression->asIntegerLiteral()){
 			if(!intConst->_type && this->integer->isValid(intConst->integer)) return expression;
-		}
-	}
-	else if(this->type == RECORD && type->type == RECORD){
-		if(this->record == type->record) return expression;//Absolutely same types.
-	}
-	else if(type->type == RECORD){
-		//record extenders
-		for(auto i=type->record->fields.begin();i!=type->record->fields.end();i++){
-			//create a fake access expression
-			//TODO
 		}
 	}
 
@@ -373,21 +360,9 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 }
 std::ostream& operator<< (std::ostream& stream,TypeExpression* node){
 	switch(node->type){
-	case TypeExpression::RECORD: stream<<node->record; break;
-	case TypeExpression::INTEGER: stream<<node->integer->id; break;
-	case TypeExpression::CONSTANT: stream<<"const "<<node->next; break;
-	case TypeExpression::POINTER: stream<<"* "<<node->next; break;
-	case TypeExpression::INTRINSIC_TYPE:
-		if(node == intrinsics::types::Unresolved) stream<<"unresolved";
-		else if(node == intrinsics::types::Void) stream<<"void";
-		else if(node == intrinsics::types::Inferred) stream<<"inferred";
-		else if(node == intrinsics::types::Type) stream<<"type";
-		else if(node == intrinsics::types::Expression) stream<<"expression";
-		break;
-	default: 
-		stream<<"unresolved type expression "; 
-		if(node->unresolved) stream<<node->unresolved;
-		break;
+		case TypeExpression::RECORD: stream<<node->record; break;
+		case TypeExpression::INTEGER: stream<<node->integer->id; break;
+		case TypeExpression::INTRINSIC: stream<<node->intrinsic->id; break;
 	}
 	return stream;
 }

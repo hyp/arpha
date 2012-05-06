@@ -1,4 +1,4 @@
-#include "../common.h"
+#include "../compiler.h"
 #include "../syntax/parser.h"
 #include "../scope.h"
 #include "declarations.h"
@@ -6,12 +6,24 @@
 #include "../intrinsics/types.h"
 
 //variable
-Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location) {
+Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location),value(nullptr),_reference(this),isMutable(true),expandMe(false) {
 }
+void Variable::setImmutableValue(Node* value){
+	assert(isMutable == false);
+	assert(value->_returnType() != intrinsics::types::Unresolved);
+	this->value = value;
+	if(value->asIntegerLiteral()){
+		expandMe = true;
+	}
+}
+//intrinsic type
+IntrinsicType::IntrinsicType(SymbolID name,Location& location) : TypeBase(name,location),_reference(this) {
+}
+size_t IntrinsicType::size() const { return 0; }
 
 //integer type
 
-IntegerType::IntegerType(SymbolID name,Location& location) : TypeBase(name,location){
+IntegerType::IntegerType(SymbolID name,Location& location) : TypeBase(name,location),_reference(this){
 	//temporary TODO move to arpha package source files
 	if(name == "bool"){
 		min = 0;
@@ -74,7 +86,7 @@ Node* IntegerType::assignableFrom(Node* expression,IntegerType* type){
 
 //type
 
-Record::Record(SymbolID name,Location& location) : TypeBase(name,location) {
+Record::Record(SymbolID name,Location& location) : TypeBase(name,location),_reference(this) {
 	_size = 0;
 	headRecord = nullptr;
 	_resolved = false;
@@ -95,8 +107,8 @@ void Record::updateOnSolving(){
 	
 	_size = 0;
 	for(auto i = fields.begin();i!=fields.end();++i){
-		assert((*i).type->resolved());
-		_size += (*i).type->size();
+		assert((*i).type.resolved());
+		_size += (*i).type.type()->size();
 	}
 	debug("Updating type's %s state - sizeof %s",id,_size);
 }
@@ -113,7 +125,7 @@ std::ostream& operator<< (std::ostream& stream,Record* type){
 	if(type->isAnonymous()){
 		stream<<"_"; 
 		for(size_t i = 0;i < type->fields.size();i++){
-			stream<<(i == 0 ? '(' : ',')<<(type->fields[i].name.isNull()?"_":type->fields[i].name)<<":"<<type->fields[i].type;
+			stream<<(i == 0 ? '(' : ',')<<(type->fields[i].name.isNull()?"_":type->fields[i].name)<<":"<<type->fields[i].type.type();
 		}
 		stream<<')';
 	}
@@ -133,14 +145,14 @@ std::vector<std::pair<Record*,std::vector<Record*> > > records;
 Record* Record::createRecordType(std::vector<Field>& record,Record* headRecord){
 	std::string typeName = "record";
 	for(size_t i=0;i<record.size();i++)//TODO change this ludicrous display
-		typeName+=format("%c%s:%s",i == 0 ? '(' : ',',headRecord ? record[i].name.ptr() : "_",record[i].type);
+		typeName+=format("%c%s:%s",i == 0 ? '(' : ',',headRecord ? record[i].name.ptr() : "_",record[i].type.type());
 	typeName+=')';
 	debug("Tuple created: %s",typeName);
 
 	auto type=new Record(typeName.c_str(),Location());
 	type->headRecord = headRecord ? headRecord : type;
 	for(size_t i=0;i<record.size();i++){
-		type->add(Field(headRecord!=nullptr?(record[i].name):(SymbolID()),record[i].type->duplicate()->asTypeExpression()));
+		type->add(Field(headRecord!=nullptr?(record[i].name):(SymbolID()),record[i].type.type() ));
 	}
 	type->updateOnSolving();
 	return type;
@@ -169,6 +181,7 @@ Record* Record::findAnonymousRecord(std::vector<Field>& record){
 	auto areFieldsUnnamed = true;
 	for(size_t j=0;j < record.size();j++){
 		if(!record[j].name.isNull()) areFieldsUnnamed = false;
+		assert(record[j].type.resolved());
 	}
 
 	//Check to see if the following record already exists.
@@ -178,7 +191,7 @@ Record* Record::findAnonymousRecord(std::vector<Field>& record){
 		if(headRecord->fields.size() == record.size()){
 			auto areFieldsSameType = true;			
 			for(size_t j=0;j < record.size();j++){
-				if(!(headRecord->fields[j].type->isSame(record[j].type))) areFieldsSameType = false;
+				if(!(headRecord->fields[j].type.type()->isSame(record[j].type.type()))) areFieldsSameType = false;
 			}
 			//Match the names to the corresponding record
 			if(areFieldsSameType) return areFieldsUnnamed ? headRecord : findSubRecord(headRecord,(*i).second,record);

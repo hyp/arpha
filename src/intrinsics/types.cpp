@@ -4,11 +4,11 @@
 #include "../ast/node.h"
 #include "types.h"
 
-#define INTRINSIC_INTTYPE(x) x = new TypeExpression(ensure( dynamic_cast<IntegerType*>(moduleScope->lookupPrefix(#x)) ))
+#define INTRINSIC_INTTYPE(x) x = (ensure( dynamic_cast<IntegerType*>(moduleScope->lookupPrefix(#x)) ))->reference()
 
 namespace intrinsics {
 	namespace types {
-		TypeExpression *Void,*Unresolved,*AnyType,*Inferred;
+		TypeExpression *Void,*Unresolved,*AnyType;
 
 		TypeExpression *Type,*Expression;
 
@@ -23,18 +23,20 @@ namespace intrinsics {
 		TypeExpression* uint64 = nullptr;
 
 		void preinit(){
-			Void = new TypeExpression(TypeExpression::INTRINSIC_TYPE,nullptr);
-			Unresolved = new TypeExpression(TypeExpression::INTRINSIC_TYPE,nullptr);
-			AnyType = new TypeExpression(TypeExpression::INTRINSIC_TYPE,nullptr);
-			Inferred = new TypeExpression(TypeExpression::INTRINSIC_TYPE,nullptr);
+			auto VoidType = new IntrinsicType("void",Location());
+			auto UnresolvedType = new IntrinsicType("unresolved",Location());
+			auto AnyTypeType = new IntrinsicType("any(_)type",Location());
+			Void = VoidType->reference();
+			Unresolved = UnresolvedType->reference();
+			AnyType = AnyTypeType->reference();
 
-			Type = new TypeExpression(TypeExpression::INTRINSIC_TYPE,nullptr);
-			Expression = new TypeExpression(TypeExpression::INTRINSIC_TYPE,nullptr);
+			Type = (new IntrinsicType("Type",Location()))->reference();
+			Expression = (new IntrinsicType("Expression",Location()))->reference();
 		}
 		void init(Scope* moduleScope){
 
 
-			boolean = new TypeExpression(ensure( dynamic_cast<IntegerType*>(moduleScope->lookupPrefix("bool")) ));
+			boolean = (ensure( dynamic_cast<IntegerType*>(moduleScope->lookupPrefix("bool")) ))->reference();
 			INTRINSIC_INTTYPE(int8);
 			INTRINSIC_INTTYPE(int16);
 			INTRINSIC_INTTYPE(int32);

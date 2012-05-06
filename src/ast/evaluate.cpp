@@ -1,10 +1,8 @@
-#include "../common.h"
+#include "../compiler.h"
 #include "../scope.h"
 #include "../ast/declarations.h"
 #include "node.h"
 #include "visitor.h"
-#include "../compiler.h"
-#include "../arpha.h"
 #include "evaluate.h"
 #include "../intrinsics/ast.h"
 #include "../intrinsics/types.h"
@@ -211,37 +209,35 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
-	
+	Node* visit(VariableReference* node){
+		if(node->variable->expandMe)
+			return node->variable->value;
+		return node;
+	}	
 	Node* assign(Node* object,Node* value,bool* error){
 		auto valuesType = value->_returnType();
 		if(valuesType  == intrinsics::types::Unresolved) return nullptr;
 		//Assigning values to variables
 		if(auto var = object->asVariableReference()){
-			auto variablesType = var->variable->_type;
-			if(variablesType == intrinsics::types::Inferred){ //inferred
-				var->variable->_type = valuesType;
+			auto variablesType = var->variable->type;
+			if(var->variable->type.isInferred()){
+				var->variable->type.infer(valuesType);
 				debug("Inferred %s for variable %s",valuesType,var->variable->id);
 				return value;
 			}
-			else if(variablesType->resolved()){
+			else if(var->variable->type.resolved()){
 				//If variable has a constant type, assign only at place of declaration
-				if(variablesType->type == TypeExpression::CONSTANT){
-					if(var->isDefinedHere){
-						variablesType = variablesType->next;//remove const
-						//check again for inferred %_%
-						if(variablesType == intrinsics::types::Inferred){
-							var->variable->_type->next = valuesType;
-							debug("Inferred %s for variable %s",valuesType,var->variable->id);
-							return value;
-						}
+				if(!var->variable->isMutable){
+					if(!var->variable->value){
+						var->variable->setImmutableValue(value);//TODo fix
 					}
 					else {
-						error(value->location,"Can't assign %s to %s - constant variables can only be assigned at declaration!",value,object);
+						error(value->location,"Can't assign %s to %s - immutable variables can only be assigned at declaration!",value,object);
 						*error = true;
 						return nullptr;
 					}
 				}
-				if(auto canBeAssigned = variablesType->assignableFrom(value,valuesType)) return canBeAssigned;
+				if(auto canBeAssigned = var->variable->type.type()->assignableFrom(value,valuesType)) return canBeAssigned;
 				else {
 					error(value->location,"Can't assign %s to %s - the types don't match!",value,object);
 					*error = true;
@@ -348,6 +344,7 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 	Node* visit(TupleExpression* node){
+		if(node->type && node->type!=intrinsics::types::Unresolved) return node;//Don't evaluate it again
 		if(node->children.size() == 1){
 			auto child = node->children[0];
 			delete node;
@@ -376,7 +373,7 @@ struct AstExpander: NodeVisitor {
 			if(evaluator->evaluateTypeTuplesAsTypes){
 				bool allTypes = true;
 				for(auto i=fields.begin();i!=fields.end();i++){
-					if((*i).type != intrinsics::types::Type) allTypes = false;
+					if((*i).type.type() != intrinsics::types::Type) allTypes = false;
 				}
 				if(allTypes){
 					//int32,int32

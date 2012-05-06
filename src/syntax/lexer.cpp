@@ -1,5 +1,6 @@
 #include "lexer.h"
 #include "../base/utf.h"
+#include "../compiler.h"
 
 
 Lexer::Lexer(const char* source) : location(0,0) {

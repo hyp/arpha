@@ -12,14 +12,23 @@ struct Type;
 struct TypeExpression;
 
 #include "../base/bigint.h"
+#include "node.h"
 
 struct Variable : PrefixDefinition  {
 	Variable(SymbolID name,Location& location);
 
 	Node* parse(Parser* parser);
 
-	//Type(use intrinsincs::types::Inferred for inferred)
-	TypeExpression* _type;
+	void setImmutableValue(Node* value);
+
+	InferredUnresolvedTypeExpression type;
+	Node* value;    // = nullptr // if it's immutable, place the assigned value here
+	//A single reference expression
+	VariableReference _reference;
+	inline VariableReference* reference(){ return &_reference; }
+	
+	bool isMutable; // = true
+	bool expandMe;  // = false // assume value != nullptr
 };
 
 struct TypeBase : PrefixDefinition {
@@ -28,6 +37,18 @@ public:
 
 	virtual size_t size() const = 0;
 
+};
+
+//An intrinsic type
+struct IntrinsicType : public TypeBase {
+	IntrinsicType(SymbolID name,Location& location);
+
+	size_t size() const;
+	Node* parse(Parser* parser);
+
+	//A single reference expression
+	TypeExpression _reference;
+	inline TypeExpression* reference(){ return &_reference; }
 };
 
 //An integral type
@@ -41,7 +62,9 @@ struct IntegerType: public TypeBase {
 
 	Node* parse(Parser* parser);
 	BigInt max,min;
-		
+	//A single reference expression
+	TypeExpression _reference;
+	inline TypeExpression* reference(){ return &_reference; }
 private:
 	
 	size_t _size;
@@ -58,15 +81,19 @@ public:
 
 	struct Field {
 		SymbolID name;
-		TypeExpression* type;
+		InferredUnresolvedTypeExpression type;
 		bool isExtending; //a field aliased as this
 
 		Field(SymbolID id,TypeExpression* typ) : name(id),type(typ),isExtending(false) {}
 	};
 	bool _resolved;
 	size_t _size;
+
 	
 	std::vector<Field> fields;
+	//A single reference expression
+	TypeExpression _reference;
+	inline TypeExpression* reference(){ return &_reference; }
 
 	Record(SymbolID name,Location& location);
 

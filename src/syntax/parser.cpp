@@ -1,11 +1,10 @@
-#include "../common.h"
+#include "../base/base.h"
+#include "../base/bigint.h"
 #include "../scope.h"
 #include "../ast/declarations.h"
-#include "parser.h"
-
 #include "../ast/node.h"
+#include "parser.h"
 #include "../compiler.h"
-#include "../arpha.h"
 
 Parser::Parser(const char* src) : Lexer(src) {  
 }
@@ -17,7 +16,9 @@ void Parser::currentScope(Scope* scope){
 
 void Parser::expect(SymbolID token){
 	Token tok = consume();
-	if(tok.isSymbol()==false || tok.symbol!=token) error(previousLocation(),"'%s' expected!",token);
+	if(tok.isSymbol()==false || tok.symbol!=token){
+		error(previousLocation(),"'%s' expected!",token);
+	}
 }
 
 bool Parser::match(SymbolID token){
@@ -44,46 +45,40 @@ SymbolID Parser::expectName(){
 	return tok.symbol;
 }
 
-int Parser::expectInteger(){
-	auto node = parse(arpha::Precedence::Tuple);
-	if(auto c= node->asIntegerLiteral()){
-		return int(c->integer.u64); //TODO this is potentially unsafe
-	}
-	error(node->location,"Expected an integer constant instead of %s!",node);
-	return -1;
-}
-
 Node* Parser::evaluate(Node* node){
 	return firstRoundEvaluator.eval(node);
 }
 
 
+static Node* parseNotSymbol(Parser* parser){
+	Token& token = parser->lookedUpToken;
+	if(token.isUinteger()){
+		return new IntegerLiteral(BigInt(token.uinteger));
+	}else{
+		error(parser->previousLocation(),"Unexpected token %s!",token);
+		return ErrorExpression::getInstance();
+	}
+}
+
 /**
 * Pratt parser is fucking awsome.
 */
 Node* Parser::parse(int stickiness){
-	
 	Node* expression;
 
 	//prefix	
-	Location location = currentLocation();
+	auto location = currentLocation();
 	lookedUpToken = consume();
-	if(lookedUpToken.isUinteger()){
-		expression = new IntegerLiteral(BigInt(lookedUpToken.uinteger));
-	}
-	else if(lookedUpToken.isSymbol()){
+	if(lookedUpToken.isSymbol()){
 		auto prefixDefinition = _currentScope->lookupPrefix(lookedUpToken.symbol);
 		if(!prefixDefinition){ 
-			error(location,"Can't prefix parse %s!",lookedUpToken); 
+			error(location,"Can't prefix parse %s!",lookedUpToken); //TODO unresolved name
 			expression = ErrorExpression::getInstance();
 		}else{
 			expression = prefixDefinition->parse(this);
 		}
 	}
-	else {
-		error(location,"Can't prefix parse %s!",lookedUpToken);
-		expression = ErrorExpression::getInstance();
-	}
+	else expression = parseNotSymbol(this);
 	expression->location = location;
 	expression = evaluate(expression);
 
@@ -112,16 +107,36 @@ Node* ImportedScope::parse(Parser* parser) {
 	return nullptr;//TODo ConstantExpression::createScopeReference(scope);
 }
 
+void InferredUnresolvedTypeExpression::parse(Parser* parser,int stickiness){
+	auto oldSetting = parser->evaluator()->evaluateTypeTuplesAsTypes;
+	parser->evaluator()->evaluateTypeTuplesAsTypes = true;
+	auto node = parser->parse(stickiness);
+	parser->evaluator()->evaluateTypeTuplesAsTypes = oldSetting;
+
+	auto isTypeExpr = node->asTypeExpression();
+	if(isTypeExpr && isTypeExpr->resolved()){
+		kind = Type;
+		_type = isTypeExpr;
+		return;
+	}
+	kind = Unresolved;
+	unresolvedExpression = node;
+}
+
 Node* Variable::parse(Parser* parser){
-	return new VariableReference(this);
+	return reference();
 }
 
 Node* Record::parse(Parser* parser){
-	return new TypeExpression(this);
+	return reference();
 }
 
 Node* IntegerType::parse(Parser* parser){
-	return new TypeExpression(this);
+	return reference();
+}
+
+Node* IntrinsicType::parse(Parser* parser){
+	return reference();
 }
 
 Node* Function::parse(Parser* parser){

@@ -1,9 +1,8 @@
-#include "common.h"
+#include "compiler.h"
 #include "scope.h"
 #include "ast/declarations.h"
 #include "syntax/parser.h"
 #include "ast/node.h"
-#include "compiler.h"
 #include "arpha.h"
 
 PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){

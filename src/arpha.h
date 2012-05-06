@@ -12,12 +12,8 @@ namespace arpha {
 		};
 	}
 
-	void test();
+
 	void defineCoreSyntax(Scope* scope);
-
-	//core functions
-
-	//core types
 
 
 };

@@ -1,7 +1,9 @@
+#include "../base/base.h"
+#include "../base/bigint.h"
 #include "c.h"
+#include "../ast/declarations.h"
 #include "../ast/visitor.h"
-#include "../compiler.h"
-#include "../arpha.h"
+
 
 struct TranslatorImplementation: NodeVisitor {
 	std::ostream& stream;

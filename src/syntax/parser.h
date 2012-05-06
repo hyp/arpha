@@ -17,7 +17,6 @@ struct Parser : Lexer {
 
 	void expect(SymbolID token);
 	SymbolID expectName();
-	int expectInteger();
 
 	bool match(SymbolID token);
 	bool match(int tokenType);

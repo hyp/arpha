@@ -9,7 +9,12 @@
 #include "../syntax/location.h"
 
 #include "../scope.h"
-#include "declarations.h"
+
+struct Variable;
+struct IntegerType;
+struct IntrinsicType;
+struct Record;
+struct Function;
 
 struct NodeVisitor;
 
@@ -107,24 +112,43 @@ struct ExpressionReference : Node {
 	DECLARE_NODE(ExpressionReference);
 };
 
+// Inferred [i.e. no type expression given] | Unresolved expression | valid type expression
+struct InferredUnresolvedTypeExpression {
+	enum {
+		Inferred,
+		Unresolved,
+		Type
+	};
+	int kind;
+	union {
+		TypeExpression* _type;
+		Node* unresolvedExpression;
+	};
+
+	inline InferredUnresolvedTypeExpression() : kind(Inferred) {}
+	inline InferredUnresolvedTypeExpression(TypeExpression* expr) : kind(Type),_type(expr) {}
+	inline bool resolved(){ return kind == Type; }
+	TypeExpression* type();
+
+	void infer(TypeExpression* type);
+	void parse(Parser* parser,int stickiness);
+
+	inline bool isInferred(){ return kind == Inferred; }
+};
+
 //(type ...): intrinsics::types::Type | intrinsics::types::Unresolved
 struct TypeExpression : Node {
 
 	enum {
 		RECORD,
 		INTEGER,
-		POINTER,
-		CONSTANT,
+		INTRINSIC,
 		FUNCTION,
-		INTRINSIC_TYPE,
-		UNRESOLVED
 	};
 
-	TypeExpression();
-	TypeExpression(int type,TypeExpression* next);
+	TypeExpression(IntrinsicType* intrinsic);
 	TypeExpression(IntegerType* integer);
 	TypeExpression(Record* record);
-	TypeExpression(Node* unresolved);
 
 	bool resolved() const;
 	TypeExpression* _returnType() const;
@@ -145,10 +169,9 @@ struct TypeExpression : Node {
 public:
 	int type;
 	union {
-		TypeExpression* next;
+		IntrinsicType* intrinsic;
 		Record* record;
 		IntegerType* integer;
-		Node* unresolved;
 	};
 	friend std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
 };
@@ -156,13 +179,12 @@ std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
 
 //: variable->type
 struct VariableReference : Node {
-	VariableReference(Variable* variable,bool definitionHere = false);
+	VariableReference(Variable* variable);
 
 	TypeExpression* _returnType() const;
 	Node* duplicate() const;
 
 	Variable* variable;
-	bool isDefinedHere;
 	DECLARE_NODE(VariableReference);
 };
 
