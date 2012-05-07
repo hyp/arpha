@@ -1,8 +1,7 @@
 #include "../base/base.h"
-#include "../base/format.h"
 #include "../base/bigint.h"
 #include "../base/symbol.h"
-#include "../syntax/location.h"
+#include "../compiler.h"
 #include "node.h"
 #include "declarations.h"
 #include "visitor.h"
@@ -55,7 +54,7 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(FieldAccessExpression* node){
-		stream<<node->object<<" f. "<<node->object->_returnType()->record->fields[node->field].name;
+		stream<<node->object<<" f. "<<node->objectsRecord()->fields[node->field].name;
 		return node;
 	}
 	Node* visit(AccessExpression* node){
@@ -266,7 +265,13 @@ PointerOperation::PointerOperation(Node* expression,int type){
 	kind = type;
 }
 TypeExpression* PointerOperation::_returnType() const {
-	return intrinsics::types::Unresolved;//TODO
+	auto next = expression->_returnType();//TODO
+	if(next->type == TypeExpression::INTRINSIC) return intrinsics::types::Unresolved;
+	if(kind == ADDRESS) return new TypeExpression(nullptr,next);//TODO localPointer of local vars
+	else if(kind == DEREFERENCE && next->type == TypeExpression::POINTER){
+		return next->next;
+	}
+	return intrinsics::types::Unresolved;
 }
 Node* PointerOperation::duplicate() const {
 	return new PointerOperation(expression->duplicate(),kind);
@@ -303,10 +308,16 @@ Function* FunctionReference::function() const {
 FieldAccessExpression::FieldAccessExpression(Node* object,int field){
 	this->object = object;
 	this->field = field;
-	assert(object->_returnType()->type == TypeExpression::RECORD);
+	assert(objectsRecord());
+}
+Record* FieldAccessExpression::objectsRecord() const {
+	auto type = object->_returnType();
+	if(type->type == TypeExpression::RECORD) return type->record;
+	else if(type->type == TypeExpression::POINTER && type->next->type == TypeExpression::RECORD) return type->next->record;
+	return nullptr;
 }
 TypeExpression* FieldAccessExpression::_returnType() const {
-	return object->_returnType()->record->fields[field].type.type();
+	return objectsRecord()->fields[field].type.type();
 }
 Node* FieldAccessExpression::duplicate() const {
 	return new FieldAccessExpression(object->duplicate(),field);
@@ -404,10 +415,13 @@ TypeExpression::TypeExpression(IntegerType* integer) : type(INTEGER) {
 TypeExpression::TypeExpression(Record* record): type(RECORD) { 
 	this->record = record; 
 }
-
+TypeExpression::TypeExpression(PointerType* pointer,TypeExpression* next) : type(POINTER) {
+	this->next = next;
+}
 bool TypeExpression::resolved() const {
 	switch(type){
 		case RECORD: return record->resolved();
+		case POINTER: return next->resolved();
 	}
 	return true;
 }
@@ -419,6 +433,8 @@ Node* TypeExpression::duplicate() const {
 		case RECORD: return record->reference();
 		case INTEGER: return integer->reference();
 		case INTRINSIC: return intrinsic->reference();
+		case POINTER:
+			return new TypeExpression(nullptr,next->duplicate()->asTypeExpression());
 		default:
 			throw std::runtime_error("Can't evaluate size of an unresolved type expression!");
 			return nullptr;
@@ -431,12 +447,14 @@ size_t TypeExpression::size() const {
 		case RECORD: return record->size();
 		case INTEGER: return integer->size();
 		case INTRINSIC: return intrinsic->size();
+		case POINTER: return compiler::pointerSize;
 		default:
 			throw std::runtime_error("Can't evaluate size of an unresolved type expression!");
 	}
 }
 bool TypeExpression::isSame(TypeExpression* other){
-	return this == other;//like a boss
+	if(type==POINTER && other->type==POINTER) return next->isSame(other->next);
+	else return this == other;//like a boss
 }
 Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 	if(this == type) return expression;//like a baws
@@ -456,6 +474,19 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 				delete dummyFieldAcess;
 			}
 		}
+	}else if(this->type == POINTER){
+		if(type->type == POINTER){
+
+			if(this->isSame(type)) return expression;
+			else {
+				auto dummyDeref = new PointerOperation(expression,PointerOperation::DEREFERENCE);
+				if(auto assigns = this->next->assignableFrom(dummyDeref,type->next)){
+					debug("YES for pointer exetnder records!");
+					return new PointerOperation(assigns,PointerOperation::ADDRESS);
+				}
+				delete dummyDeref;
+			}
+		}
 	}
 
 	return nullptr;
@@ -465,6 +496,7 @@ std::ostream& operator<< (std::ostream& stream,TypeExpression* node){
 		case TypeExpression::RECORD: stream<<node->record; break;
 		case TypeExpression::INTEGER: stream<<node->integer->id; break;
 		case TypeExpression::INTRINSIC: stream<<node->intrinsic->id; break;
+		case TypeExpression::POINTER: stream<<"Pointer("<<node->next<<')'; break;
 	}
 	return stream;
 }

@@ -399,6 +399,11 @@ struct TypeParser: PrefixDefinition {
 			auto type = new IntrinsicType(name,location);
 			parser->currentScope()->define(type);
 			return new TypeExpression(type);
+		}else if(parser->match("pointer")){
+			debug("Defined pointer type %s",name);
+			auto type = new PointerType(name,location);
+			parser->currentScope()->define(type);
+			return UnitExpression::getInstance();//TODO
 		}
 		auto record = new Record(name,location);
 		parser->currentScope()->define(record);
@@ -689,12 +694,15 @@ namespace compiler {
 		return findModuleFromDirectory(packageDir,name);
 	}
 
-
+	//Settings
+	size_t wordSize,pointerSize;
 
 	void init(){
 		currentModule = modules.end();
 		packageDir = "D:/alex/projects/parser/packages";
 		
+		wordSize = 4;
+		pointerSize = 4;
 
 		intrinsics::types::preinit();
 

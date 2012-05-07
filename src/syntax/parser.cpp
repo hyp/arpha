@@ -139,6 +139,10 @@ Node* IntegerType::parse(Parser* parser){
 Node* IntrinsicType::parse(Parser* parser){
 	return reference();
 }
+#include "../intrinsics/types.h"//hacks
+Node* PointerType::parse(Parser* parser){
+	return new TypeExpression(this,intrinsics::types::int32);//TODO
+}
 
 Node* Function::parse(Parser* parser){
 	return nullptr;//FunctionReference::create(this);//TODO remove?

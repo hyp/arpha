@@ -91,6 +91,11 @@ bool IntegerType::isUnsigned() const {
 	return !(min<BigInt((uint64)0));
 }
 
+// Pointer type
+PointerType::PointerType(SymbolID name,Location& location) : TypeBase(name,location) {
+}
+size_t PointerType::size() const { return 0; } //implemented in typeExpression
+
 //type
 
 Record::Record(SymbolID name,Location& location) : TypeBase(name,location),_reference(this) {

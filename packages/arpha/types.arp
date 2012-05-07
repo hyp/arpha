@@ -19,3 +19,5 @@ type uint32 integer
 type uint64 integer
 
 # utf32 char type char integer
+
+type Pointer pointer

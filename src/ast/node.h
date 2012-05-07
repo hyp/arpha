@@ -15,6 +15,7 @@
 struct Variable;
 struct IntegerType;
 struct IntrinsicType;
+struct PointerType;
 struct Record;
 struct Overloadset;
 struct Function;
@@ -187,11 +188,13 @@ struct TypeExpression : Node {
 		INTEGER,
 		INTRINSIC,
 		FUNCTION,
+		POINTER,
 	};
 
 	TypeExpression(IntrinsicType* intrinsic);
 	TypeExpression(IntegerType* integer);
 	TypeExpression(Record* record);
+	TypeExpression(PointerType* pointer,TypeExpression* next);
 
 	bool resolved() const;
 	TypeExpression* _returnType() const;
@@ -215,6 +218,7 @@ public:
 		IntrinsicType* intrinsic;
 		Record* record;
 		IntegerType* integer;
+		TypeExpression* next;
 	};
 	friend std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
 };
@@ -276,11 +280,16 @@ struct CallExpression : Node {
 	DECLARE_NODE(CallExpression);
 };
 
+// Record.field
+// Pointer(Record).field
 struct FieldAccessExpression : Node {
 	FieldAccessExpression(Node* object,int field);
 
 	TypeExpression* _returnType() const;
 	Node* duplicate() const;
+
+	// Returns record T when object is of type T or pointer T 
+	Record* objectsRecord() const;
 
 	Node* object;
 	int field;

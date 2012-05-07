@@ -72,6 +72,15 @@ private:
 	size_t _size;
 };
 
+//A pointer type
+struct PointerType: public TypeBase {
+	PointerType(SymbolID name,Location& location);
+
+	Node* parse(Parser* parser);
+
+	size_t size() const;
+};
+
 //A record type
 struct Record: public TypeBase {
 private:	

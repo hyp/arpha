@@ -27,6 +27,9 @@ namespace compiler {
 	/// Reports a compilation error
 	void onError(Location& location,std::string message);
 
+	//Target specific settings
+	//4 or 8 bytes for 32 or 64 bits
+	extern size_t wordSize,pointerSize;   
 };
 
 #include "base/format.h"

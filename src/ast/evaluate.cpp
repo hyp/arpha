@@ -220,6 +220,7 @@ struct AstExpander: NodeVisitor {
 
 	Node* fieldAccessFromAccess(AccessExpression* node){
 		auto returns = node->object->_returnType();
+		if(returns->type == TypeExpression::POINTER) returns = returns->next;
 		assert(returns->type == TypeExpression::RECORD);
 		auto field = returns->record->lookupField(node->symbol);
 		if(field != -1){
