@@ -12,7 +12,7 @@ struct Evaluator {
 	Node* eval(Node* node);
 	
 
-	static void init(Scope* compilerScope,Scope* arphaScope);
+	static void init(Scope* arphaScope);
 private:
 	Scope* _currentScope;
 	

@@ -16,7 +16,7 @@ namespace {
 	Function* realAssert;
 }
 
-void Evaluator::init(Scope* compilerScope,Scope* arphaScope){
+void Evaluator::init(Scope* arphaScope){
 	#define _HANDLE(module,func,type,body)  { \
 		struct Handler { \
 			static Node* handle(Scope* scope,CallExpression* node,Node* argument) body \

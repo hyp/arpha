@@ -455,6 +455,7 @@ struct DereferenceParser: PrefixDefinition {
 };
 
 /// ::= 'if' '(' condition ')' consequence [ 'else' alternative ]
+/// TODO implement as macro in arpha
 struct IfParser: PrefixDefinition {
 	IfParser(): PrefixDefinition("if",Location()) {}
 	Node* parse(Parser* parser){
@@ -587,7 +588,6 @@ namespace compiler {
 	typedef std::map<std::string,Module>::iterator ModulePtr;
 	std::map<std::string,Module> modules;
 	ModulePtr currentModule;
-	ModulePtr compilerModule;
 
 	std::string packageDir;
 
@@ -601,23 +601,13 @@ namespace compiler {
 		currentModule->second.directory = System::path::directory(moduleName);
 
 		Scope* scope;
-		//Special case for 'packages/arpha/compiler/compiler.arp'
-		if((packageDir + "/arpha/compiler/compiler.arp") == moduleName){
-			assert(compilerModule == modules.end());
-			compilerModule = currentModule;
-			scope = ::compiler::scope;
-			//import 'arpha' by default
-			scope->import(::arpha::scope,"arpha");
-		}else if((packageDir + "/arpha/arpha.arp") == moduleName){
+		//Special case for 'packages/arpha/arp.arp'
+		if((packageDir + "/arpha/arpha.arp") == moduleName){
 			scope = new Scope(nullptr);
 			arpha::defineCoreSyntax(scope);
-			//import 'compiler' by default
-			//scope->import(findModule("compiler"),"compiler");
 		}
 		else {
 			scope = new Scope(nullptr);
-			//import 'compiler' by default
-			//scope->import(::compiler::scope,"compiler",true);
 			//import 'arpha' by default
 			scope->import(findModule("arpha"),"arpha");
 		}
@@ -679,23 +669,19 @@ namespace compiler {
 		return findModuleFromDirectory(packageDir,name);
 	}
 
-	Scope* scope;
 
 
 	void init(){
-		compilerModule = currentModule = modules.end();
-
+		currentModule = modules.end();
 		packageDir = "D:/alex/projects/parser/packages";
 		
-		//scope for compiler module
-		scope = new Scope(nullptr);
 
 		intrinsics::types::preinit();
 
 		//Load language definitions.
 		auto arphaModule = newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
 
-		Evaluator::init(scope,arphaModule->second.scope);
+		Evaluator::init(arphaModule->second.scope);
 	
 	}
 

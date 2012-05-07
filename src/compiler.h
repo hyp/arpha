@@ -13,7 +13,6 @@ struct Scope;
 namespace compiler {
 	//settings
 
-	extern Scope* scope;
 
 	//types
 
