@@ -67,7 +67,8 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(ReturnExpression* node){
-		stream<<"return "<<node->value;
+		stream<<"return";
+		if(node->value) stream<<' '<<node->value;
 		return node;
 	}
 	Node* visit(MatchExpression* node){
@@ -246,7 +247,7 @@ Node* AssignmentExpression::duplicate() const {
 // Return expression
 ReturnExpression::ReturnExpression(Node* expression) : value(expression) {}
 Node* ReturnExpression::duplicate() const {
-	return new ReturnExpression(value->duplicate());
+	return new ReturnExpression(value?value->duplicate():nullptr);
 }
 
 // Match expression

@@ -431,7 +431,8 @@ struct OperatorParser: PrefixDefinition {
 struct ReturnParser: PrefixDefinition {
 	ReturnParser(): PrefixDefinition("return",Location()) {}
 	Node* parse(Parser* parser){
-		return new ReturnExpression(parser->parse());
+		if(isEndExpression(parser->peek())) return new ReturnExpression(nullptr);
+		else return new ReturnExpression(parser->parse());
 	}
 };
 

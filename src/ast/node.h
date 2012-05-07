@@ -311,7 +311,7 @@ struct ReturnExpression : Node {
 	ReturnExpression(Node* expression);
 	Node* duplicate() const;
 
-	Node* value;
+	Node* value; //can be null
 	DECLARE_NODE(ReturnExpression);
 };
 
