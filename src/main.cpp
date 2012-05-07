@@ -647,7 +647,7 @@ namespace compiler {
 		auto filename = dir + "/" + name + ".arp";
 		if(!System::fileExists(filename.c_str())){
 			//Try package way
-			filename = dir + "/" + name + "/" + name + ".arp";//TODO last path component for 2nd name
+			filename = dir + "/" + name + "/" + System::path::filename(name) + ".arp";
 			if(!System::fileExists(filename.c_str())) return nullptr;
 		}
 		//load module

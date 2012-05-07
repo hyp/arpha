@@ -28,6 +28,8 @@ namespace System {
 	namespace path {
 		//Returns a/b from a/b/c.arp
 		std::string directory(const char* filename);
+		//Returns c.arp from a/b/c.arp
+		std::string filename(const char* path);
 		//Returns a from a/b/c.arp and advances the pointer to '/' or '\0'
 		std::pair<const char*,const char*> firstComponent(const char** path);
 	}

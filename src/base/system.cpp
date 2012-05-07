@@ -89,7 +89,24 @@ namespace System {
 			return path;
 		}	
 
+		std::string filename(const char* path){
+			assert(path);
+			std::string filename(path);	
+			size_t len = filename.length();
+			size_t i = len;
+			do {
+				i--;
+				if(filename[i] == '/' || filename[i] == '\\'){
+					filename = (len-(i+1))!=0 ? filename.substr(i+1,len) : "";
+					break;
+				}		
+			}while(i != 0);
+			return filename;
+		}
+
 		std::pair<const char*,const char*> firstComponent(const char** path){
+			assert(path);
+			assert(*path);
 			std::pair<const char*,const char*> result;
 			const char* p = *path;
 			result.first = p;
@@ -104,6 +121,11 @@ namespace System {
 		assert(path::directory("packages/arpha/arpha.arp") == "packages/arpha");
 		assert(path::directory("/glasgow") == "");
 		assert(path::directory("foo") == "foo");
+
+		assert(path::filename("packages/arpha/arpha.arp") == "arpha.arp");
+		assert(path::filename("/glasgow") == "glasgow");
+		assert(path::filename("foo") == "foo");
+		assert(path::filename("/washington/") == "");
 
 		const char* name = "arpha/arpha.arp";
 		auto component = path::firstComponent(&name);
