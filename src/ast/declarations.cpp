@@ -7,18 +7,24 @@
 #include "../intrinsics/types.h"
 
 //variable
-Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location),value(nullptr),_reference(this),isMutable(true),expandMe(false),nodeWhichAssignedMe(nullptr) {
+Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location),value(nullptr),_reference(this),isMutable(true),expandMe(false) {
 }
-void Variable::setImmutableValue(AssignmentExpression* node,Node* value){
+bool Variable::resolved(){
+	return type.resolved();
+}
+bool Variable::resolve(Evaluator* evaluator){
+	if(type.isInferred()) return false;
+	else return type.resolve(evaluator);
+}
+void Variable::setImmutableValue(Node* value){
 	assert(isMutable == false);
 	assert(value->_returnType() != intrinsics::types::Unresolved);
 	this->value = value;
 	debug("Setting value %s to variable %s",value,id);
-	if(value->asIntegerLiteral()){
-		this->value->asIntegerLiteral()->_type = type.type();
+	if(value->isConst()){
+		if(value->asIntegerLiteral()) this->value->asIntegerLiteral()->_type = type.type(); //def a bool = 1 -> make the 1 explicitly boolean
 		expandMe = true;
 	}
-	this->nodeWhichAssignedMe = node;
 }
 //intrinsic type
 IntrinsicType::IntrinsicType(SymbolID name,Location& location) : TypeBase(name,location),_reference(this) {
@@ -84,9 +90,6 @@ bool IntegerType::isValid(BigInt& value) const {
 bool IntegerType::isUnsigned() const {
 	return !(min<BigInt((uint64)0));
 }
-Node* IntegerType::assignableFrom(Node* expression,IntegerType* type){
-	return expression;//TODO
-}
 
 //type
 
@@ -134,8 +137,7 @@ bool Record::resolve(Evaluator* evaluator){
 	_resolved = true;
 	for(auto i = fields.begin();i!=fields.end();++i){
 		if(!(*i).type.resolved()){
-			(*i).type.resolve(evaluator);
-			if(!(*i).type.resolved()) _resolved = false;
+			if(!(*i).type.resolve(evaluator)) _resolved = false;
 		}
 		//Don't you dare use itself in itself!
 		if((*i).type.resolved() && (*i).type.type() == reference()){
@@ -159,6 +161,7 @@ bool Record::resolve(Evaluator* evaluator){
 }
 void Record::calculateResolvedProperties(){
 	//sizeof
+	//TODO perhaps make it lazy calculation??
 	_size = 0;
 	for(auto i = fields.begin();i!=fields.end();++i){
 		assert((*i).type.resolved());
@@ -176,15 +179,14 @@ size_t Record::size() const{
 }
 
 std::ostream& operator<< (std::ostream& stream,Record* type){
-	stream<<"record ";
 	if(type->isAnonymous()){
-		stream<<"_"; 
+		stream<<"anon-record"; 
 		for(size_t i = 0;i < type->fields.size();i++){
 			stream<<(i == 0 ? '(' : ',')<<(type->fields[i].name.isNull()?"_":type->fields[i].name)<<":"<<type->fields[i].type.type();
 		}
 		stream<<')';
 	}
-	else stream<<type->id<<"(resolved?"<<(type->resolved()?'t':'f')<<")";
+	else stream<<type->id;
 	return stream;
 }
 
@@ -267,7 +269,7 @@ Record* Record::findAnonymousRecord(std::vector<Field>& record){
 
 Overloadset::Overloadset(Function* firstFunction) : PrefixDefinition(firstFunction->id,firstFunction->location) {
 	declarationType = DeclarationType::OverloadSet;
-	visibilityMode = Visibility::Public;//!important // TODO import module a type foo, module b private def foo() //<-- conflict
+	visibilityMode = Visibility::Public;//!important // TODO fix import module a type foo, module b private def foo() //<-- conflict
 	functions.push_back(firstFunction);
 }
 

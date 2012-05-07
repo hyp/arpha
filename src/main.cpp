@@ -216,23 +216,52 @@ bool isEndExpressionEquals(const Token& token){
 /// ::= 'var' <names> [type|unresolvedExpression (hopefully) resolving to type|Nothing]
 struct VarParser: PrefixDefinition {
 	VarParser(): PrefixDefinition("var",Location()) {}
-	Node* parse(Parser* parser){
+	static Node* parseVar(Parser* parser,SymbolID first,bool isMutable){
 		std::vector<Variable*> vars;
-		do {
-			auto var = new Variable(parser->expectName(),parser->previousLocation());
+		if(!first.isNull()){
+			auto var = new Variable(first,parser->previousLocation());
+			var->isMutable = isMutable;
 			parser->currentScope()->define(var);
 			vars.push_back(var);
+			while(parser->match(",")){
+				var = new Variable(parser->expectName(),parser->previousLocation());
+				var->isMutable = isMutable;
+				parser->currentScope()->define(var);
+				vars.push_back(var);
+			}
+		}else{
+			do {
+				auto var = new Variable(parser->expectName(),parser->previousLocation());
+				var->isMutable = isMutable;
+				parser->currentScope()->define(var);
+				vars.push_back(var);
+			}
+			while(parser->match(","));
 		}
-		while(parser->match(","));
 		//parse optional type
 		InferredUnresolvedTypeExpression type;
 		if(!isEndExpressionEquals(parser->peek())) type.parse(parser,arpha::Precedence::Assignment);
 		for(auto i=vars.begin();i!=vars.end();i++) (*i)->type = type;
+		
+		Node* result;
+		if(vars.size() == 1) result = vars[0]->reference();
+		else{
+			auto tuple = new TupleExpression;
+			for(auto i=vars.begin();i!=vars.end();i++) tuple->children.push_back((*i)->reference());
+			result = tuple;
+		}
 
-		if(vars.size() == 1) return vars[0]->reference();
-		auto tuple = new TupleExpression;
-		for(auto i=vars.begin();i!=vars.end();i++) tuple->children.push_back((*i)->reference());
-		return tuple;
+		if(parser->match("=")){
+			//Initial assignment
+			result = parser->evaluate(result);
+			auto assign = new AssignmentExpression(result,parser->parse(arpha::Precedence::Assignment-1)); 
+			assign->isInitializingAssignment = true;
+			return assign;
+		}
+		else return result;
+	}
+	Node* parse(Parser* parser){
+		return parseVar(parser,SymbolID(),true);
 	}
 };
 
@@ -310,16 +339,7 @@ struct DefParser: PrefixDefinition {
 		auto location  = parser->previousLocation();
 		auto name = parser->expectName();
 		if(parser->match("(")) return function(name,location,parser);
-		else{
-			auto sub = new Variable(name,location);
-			sub->isMutable = false;
-			parser->currentScope()->define(sub);
-			//parse optional type
-			InferredUnresolvedTypeExpression type;
-			if(!isEndExpressionEquals(parser->peek())) type.parse(parser,arpha::Precedence::Assignment);
-			sub->type = type;
-			return sub->reference();
-		}
+		else VarParser::parseVar(parser,name,false);
 	}
 };
 
@@ -437,7 +457,6 @@ struct ReturnParser: PrefixDefinition {
 		else return new ReturnExpression(parser->parse());
 	}
 };
-
 
 /// ::= '&' expression
 struct AddressParser: PrefixDefinition {

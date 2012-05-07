@@ -153,6 +153,9 @@ Node* IntegerLiteral::duplicate() const {
 	dup->_type = _type;
 	return dup;
 };
+bool IntegerLiteral::isConst() const {
+	return true;
+}
 
 // Unit expression
 TypeExpression* UnitExpression::_returnType() const {
@@ -240,12 +243,15 @@ Node* TupleExpression::duplicate() const {
 AssignmentExpression::AssignmentExpression(Node* object,Node* value){
 	this->object = object;
 	this->value = value;
+	isInitializingAssignment = false;
 }
 TypeExpression* AssignmentExpression::_returnType() const {
 	return object->_returnType();
 }
 Node* AssignmentExpression::duplicate() const {
-	return new AssignmentExpression(object->duplicate(),value->duplicate());
+	auto e = new AssignmentExpression(object->duplicate(),value->duplicate());
+	e->isInitializingAssignment = isInitializingAssignment;
+	return e;
 }
 
 // Return expression

@@ -230,7 +230,7 @@ struct AstExpander: NodeVisitor {
 		else return nullptr;
 	}
 
-
+	//TODO def x = 1;x = 1 => 1=1 and def x,y = 1,2 must return on first pass (int32,int32)
 	Node* assign(AssignmentExpression* assignment,Node* object,Node* value,bool* error){
 		if(auto t1 = object->asTupleExpression()){
 			if(auto t2 = value->asTupleExpression()){
@@ -259,16 +259,18 @@ struct AstExpander: NodeVisitor {
 			if(auto var = object->asVariableReference()){
 				if(var->variable->type.isInferred()){
 					var->variable->type.infer(valuesType);
-					debug("Inferred %s for variable %s",valuesType,var->variable->id);
+					debug("Inferred type %s for variable %s",valuesType,var->variable->id);
 					if(var->variable->isMutable) return value;
 				}
 				if(var->variable->type.resolved()){
 					if(auto canBeAssigned = var->variable->type.type()->assignableFrom(value,valuesType)){
 						if(!var->variable->isMutable) {
 							//If variable has a constant type, assign only at place of declaration
-							if(!var->variable->value)
-								var->variable->setImmutableValue(assignment,value);
-							else if(var->variable->nodeWhichAssignedMe != assignment){
+							if(assignment->isInitializingAssignment){
+								if(!var->variable->value)
+									var->variable->setImmutableValue(value);
+							}
+							else{
 								error(value->location,"Can't assign %s to %s - immutable variables can only be assigned at declaration!",value,object);
 								*error = true;
 								return nullptr;
@@ -484,8 +486,8 @@ struct AstExpander: NodeVisitor {
 
 };
 
-void InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
-	if(kind == Unresolved){
+bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
+	assert(kind == Unresolved);
 		auto oldSetting = evaluator->evaluateTypeTuplesAsTypes;
 		evaluator->evaluateTypeTuplesAsTypes = true;
 		auto isTypeExpr = evaluator->eval(unresolvedExpression)->asTypeExpression();
@@ -494,8 +496,10 @@ void InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
 		if(isTypeExpr && isTypeExpr->resolved()){
 			kind = Type;
 			_type = isTypeExpr;
+			return true;
 		}
-	}
+	
+	return false;
 }
 
 Node* Evaluator::eval(Node* node){

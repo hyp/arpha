@@ -10,8 +10,8 @@ namespace intrinsics {
 	namespace compiler {
 
 		void init(Scope* moduleScope){
-			INTRINSIC_VAR(debug)->setImmutableValue(nullptr,new IntegerLiteral(BigInt((uint64)1)));
-			INTRINSIC_VAR(version)->setImmutableValue(nullptr,new IntegerLiteral(BigInt((uint64)1)));
+			INTRINSIC_VAR(debug)->setImmutableValue(new IntegerLiteral(BigInt((uint64)1)));
+			INTRINSIC_VAR(version)->setImmutableValue(new IntegerLiteral(BigInt((uint64)1)));
 		}
 	};
 };

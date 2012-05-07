@@ -17,8 +17,8 @@ private:
 	Scope* _currentScope;
 	
 public:
-	bool evaluateExpressionReferences;
-	bool evaluateTypeTuplesAsTypes;
+	bool evaluateExpressionReferences; // = false
+	bool evaluateTypeTuplesAsTypes; // = false
 	size_t unresolvedExpressions;
 
 	Evaluator() : evaluateExpressionReferences(false),evaluateTypeTuplesAsTypes(false),unresolvedExpressions(0) {}

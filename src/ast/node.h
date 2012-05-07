@@ -70,6 +70,8 @@ struct Node {
 
 	virtual Node* duplicate() const { return 0; } //TODO = 0
 
+	virtual bool isConst() const { return false; }
+
 	//Dynamic casts
 #define CAST(T) virtual T* as##T() { return nullptr; }
 	NODE_LIST(CAST)
@@ -84,6 +86,7 @@ struct IntegerLiteral : Node {
 	IntegerLiteral(const BigInt& integer);
 	TypeExpression* _returnType() const;
 	Node* duplicate() const;
+	bool isConst() const;
 	
 	BigInt integer;
 	TypeExpression* _type;//optional
@@ -170,7 +173,7 @@ struct InferredUnresolvedTypeExpression {
 	TypeExpression* type();
 
 	void infer(TypeExpression* type);
-	void resolve(Evaluator* evaluator);
+	bool resolve(Evaluator* evaluator);
 	void parse(Parser* parser,int stickiness);
 
 	inline bool isInferred(){ return kind == Inferred; }
@@ -304,6 +307,7 @@ struct AssignmentExpression : Node {
 
 	Node* object;
 	Node* value;
+	bool isInitializingAssignment;// = false
 	DECLARE_NODE(AssignmentExpression);
 };
 

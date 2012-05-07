@@ -19,7 +19,10 @@ struct Variable : PrefixDefinition  {
 
 	Node* parse(Parser* parser);
 
-	void setImmutableValue(AssignmentExpression* node,Node* value);
+	void setImmutableValue(Node* value);
+
+	bool resolved();
+	bool resolve(Evaluator* evaluator);
 
 	InferredUnresolvedTypeExpression type;
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
@@ -29,7 +32,6 @@ struct Variable : PrefixDefinition  {
 	
 	bool isMutable; // = true
 	bool expandMe;  // = false // assume value != nullptr
-	AssignmentExpression* nodeWhichAssignedMe; // = nullptr
 };
 
 struct TypeBase : PrefixDefinition {
@@ -59,7 +61,6 @@ struct IntegerType: public TypeBase {
 	size_t size() const;
 	bool isValid(BigInt& value) const;
 	bool isUnsigned() const;
-	Node* assignableFrom(Node* expression,IntegerType* type);
 
 	Node* parse(Parser* parser);
 	BigInt max,min;
@@ -110,7 +111,8 @@ public:
 	bool resolve(Evaluator* evaluator);
 
 	
-	//unique anonymous record construction
+	//Unique anonymous record construction
+	//NB all fields must have resolved types
 	static Record* findAnonymousRecord(std::vector<Field>& record);
 	//An anonymous record
 	inline bool isAnonymous() const { return headRecord != nullptr; }
