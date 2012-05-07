@@ -19,6 +19,7 @@ namespace arpha {
 		enum {
 			Assignment = 10, // =
 			Tuple = 20, // ,
+			Unary = 90,
 			Call = 110, //()
 			Access = 120, //.
 		};
@@ -436,6 +437,23 @@ struct ReturnParser: PrefixDefinition {
 	}
 };
 
+
+/// ::= '&' expression
+struct AddressParser: PrefixDefinition {
+	AddressParser(): PrefixDefinition("&",Location()) {}
+	Node* parse(Parser* parser){
+		return new PointerOperation(parser->parse(arpha::Precedence::Unary),PointerOperation::ADDRESS);
+	}
+};
+
+/// ::= '*' expression
+struct DereferenceParser: PrefixDefinition {
+	DereferenceParser(): PrefixDefinition("*",Location()) {}
+	Node* parse(Parser* parser){
+		return new PointerOperation(parser->parse(arpha::Precedence::Unary),PointerOperation::DEREFERENCE);
+	}
+};
+
 /// ::= 'if' '(' condition ')' consequence [ 'else' alternative ]
 struct IfParser: PrefixDefinition {
 	IfParser(): PrefixDefinition("if",Location()) {}
@@ -551,6 +569,9 @@ void arpha::defineCoreSyntax(Scope* scope){
 	scope->define(new IfParser);
 	scope->define(new WhileParser);
 	scope->define(new MatchParser);
+
+	scope->define(new AddressParser);
+	scope->define(new DereferenceParser);
 }
 
 

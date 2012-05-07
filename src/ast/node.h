@@ -48,6 +48,7 @@ struct Evaluator;
 	X(AccessExpression)      \
 	X(AssignmentExpression)  \
 	X(ReturnExpression)      \
+	X(PointerOperation)      \
 	X(MatchExpression)      \
 	X(BlockExpression)       \
 	X(WhileExpression)          
@@ -313,6 +314,22 @@ struct ReturnExpression : Node {
 
 	Node* value; //can be null
 	DECLARE_NODE(ReturnExpression);
+};
+
+//A unary expression, which is either an adress or a dereference
+//: Pointer(expression.typeof)
+struct PointerOperation : Node {
+	PointerOperation(Node* expression,int type);
+	TypeExpression* _returnType() const;
+	Node* duplicate() const;
+
+	enum {
+		ADDRESS,     //&
+		DEREFERENCE, //*
+	};	
+	Node* expression;
+	int kind; // = ADDRESS
+	DECLARE_NODE(PointerOperation);
 };
 
 struct MatchExpression : Node {

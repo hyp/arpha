@@ -71,6 +71,10 @@ struct NodeToString: NodeVisitor {
 		if(node->value) stream<<' '<<node->value;
 		return node;
 	}
+	Node* visit(PointerOperation* node){
+		stream<<(node->kind==PointerOperation::ADDRESS?'&':'*')<<node->expression;
+		return node;
+	}
 	Node* visit(MatchExpression* node){
 		stream<<"match "<<node->object;
 		for(auto i=node->cases.begin();i!=node->cases.end();i++){
@@ -248,6 +252,18 @@ Node* AssignmentExpression::duplicate() const {
 ReturnExpression::ReturnExpression(Node* expression) : value(expression) {}
 Node* ReturnExpression::duplicate() const {
 	return new ReturnExpression(value?value->duplicate():nullptr);
+}
+
+//Pointer operation
+PointerOperation::PointerOperation(Node* expression,int type){
+	this->expression = expression;
+	kind = type;
+}
+TypeExpression* PointerOperation::_returnType() const {
+	return intrinsics::types::Unresolved;//TODO
+}
+Node* PointerOperation::duplicate() const {
+	return new PointerOperation(expression->duplicate(),kind);
 }
 
 // Match expression
