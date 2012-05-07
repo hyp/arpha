@@ -76,7 +76,7 @@ struct Record: public TypeBase {
 private:	
 	
 	Record* headRecord; ///if this is null, then the type isn't an unonymous record
-	bool _resolved;
+	bool _resolved; // = false
 	size_t _size;
 public:
 
