@@ -154,7 +154,7 @@ struct IndexParser: InfixDefinition {
 
 /// ::= expression ',' expression
 struct TupleParser: InfixDefinition {
-	TupleParser(): InfixDefinition(",",arpha::Precedence::Tuple-1,Location()) {}
+	TupleParser(): InfixDefinition(",",arpha::Precedence::Tuple,Location()) {}
 	Node* parse(Parser* parser,Node* node){
 		auto tuple = new TupleExpression;
 		tuple->children.push_back(node);
@@ -200,7 +200,7 @@ struct AccessParser: InfixDefinition {
 struct AssignmentParser: InfixDefinition {
 	AssignmentParser(): InfixDefinition("=",arpha::Precedence::Assignment,Location()) {}
 	Node* parse(Parser* parser,Node* node){
-		return new AssignmentExpression(node,parser->parse(arpha::Precedence::Assignment-1)); 
+		return new AssignmentExpression(node,parser->parse(arpha::Precedence::Assignment-1)); //left associative
 	}
 };
 
@@ -337,7 +337,6 @@ struct TypeParser: PrefixDefinition {
 		while(parser->match(","));
 		InferredUnresolvedTypeExpression type;
 		type.parse(parser,arpha::Precedence::Assignment);
-		record->_resolved = type.resolved();
 		for(;i<record->fields.size();i++) record->fields[i].type = type;
 	}
 	// body ::= '{' fields ';' fields ... '}'
@@ -355,9 +354,12 @@ struct TypeParser: PrefixDefinition {
 				if(token.symbol == "var"){
 					fields(record,parser,false,extender);
 					return true;
+				}else if(token.symbol == "def"){
+					fields(record,parser,true,extender);
+					return true;
 				}
 			}
-			error(parser->previousLocation(),"Unexpected %s - a var is expected inside type's %s body!",token,record->id);
+			error(parser->previousLocation(),"Unexpected %s - a field declaration is expected inside type's %s body!",token,record->id);
 			return false;
 		}
 	};
@@ -379,7 +381,6 @@ struct TypeParser: PrefixDefinition {
 			return new TypeExpression(type);
 		}
 		auto record = new Record(name,location);
-		record->_resolved = true;
 		parser->currentScope()->define(record);
 		
 		//fields
@@ -388,9 +389,9 @@ struct TypeParser: PrefixDefinition {
 		}
 		else {
 			parser->expect("=");
-			auto typeExpre = parser->parse();//TODO
+			auto typeExpre = parser->parse();//TODO aliased type?
 		}
-		if(record->_resolved) record->updateOnSolving();
+		record->resolve(parser->evaluator());
 		return new TypeExpression(record);
 	}
 };

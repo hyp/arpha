@@ -76,8 +76,8 @@ struct Record: public TypeBase {
 private:	
 	
 	Record* headRecord; ///if this is null, then the type isn't an unonymous record
-	
-	
+	bool _resolved;
+	size_t _size;
 public:
 
 	struct Field {
@@ -87,10 +87,6 @@ public:
 
 		Field(SymbolID id,TypeExpression* typ) : name(id),type(typ),isExtending(false) {}
 	};
-	bool _resolved;
-	size_t _size;
-
-	
 	std::vector<Field> fields;
 	//A single reference expression
 	TypeExpression _reference;
@@ -102,22 +98,20 @@ public:
 
 	// Returns -1 if field isn't found
 	int lookupField(const SymbolID fieldName);
-	// Adds a field to the record
+	// Adds a field to the record. NB record must be unresolved.
 	void add(const Field& var); 
 
 	//Record's properties
 	bool resolved();
 	size_t size() const;
 	
-	//Calculate's properties when the record is fully resolved.
-	void updateOnSolving();
+	//Try to resolve the record.
+	//NB Not used by anonymous records!
+	bool resolve(Evaluator* evaluator);
 
 	
-
-
 	//unique anonymous record construction
 	static Record* findAnonymousRecord(std::vector<Field>& record);
-
 	//An anonymous record
 	inline bool isAnonymous() const { return headRecord != nullptr; }
 	//Determines whether two records have the same field types or not
@@ -126,6 +120,8 @@ private:
 	static Record* createRecordType(std::vector<Field>& record,Record* headRecord = nullptr);
 	static Record* findSubRecord(Record* headRecord,std::vector<Record*>& subRecords,std::vector<Field>& record);
 	
+	//Calculates sizeof etc.
+	void calculateResolvedProperties();
 };
 
 std::ostream& operator<< (std::ostream& stream,Record* type);

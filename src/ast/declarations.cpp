@@ -97,13 +97,13 @@ Record::Record(SymbolID name,Location& location) : TypeBase(name,location),_refe
 }
 
 int Record::lookupField(const SymbolID fieldName){
-	for(int i = 0;i<fields.size();i++){
-		if( fields[i].name == fieldName ) return i;
+	for(size_t i = 0;i<fields.size();i++){
+		if( fields[i].name == fieldName ) return int(i);
 	}
 	return -1;
 }
 void Record::add(const Field& var){
-	//assert(!_resolved);
+	assert(!_resolved);
 	fields.push_back(var);
 }
 
@@ -129,22 +129,44 @@ static bool traverseExtenderHierarchy(Record* record,std::vector<TypeExpression*
 	return true;
 }
 
-void Record::updateOnSolving(){
+bool Record::resolve(Evaluator* evaluator){
+	assert(!_resolved);
 	_resolved = true;
-	
-
+	for(auto i = fields.begin();i!=fields.end();++i){
+		if(!(*i).type.resolved()){
+			(*i).type.resolve(evaluator);
+			if(!(*i).type.resolved()) _resolved = false;
+		}
+		//Don't you dare use itself in itself!
+		if((*i).type.resolved() && (*i).type.type() == reference()){
+			error(location,"Recursive type declaration - The type %s has a field %s of its own type!",id,(*i).name);
+			_resolved = false;
+			break;
+		}
+	}
+	if(_resolved){
+		std::vector<TypeExpression* > collection;
+		if(!traverseExtenderHierarchy(this,collection)){
+				error(location,"Faulty type extension hierarchy - The type %s features multiple path to type %s",id,collection.back());
+				_resolved = false;
+		}
+	}
+	if(_resolved){
+		calculateResolvedProperties();
+		debug("Successfully resolved type %s - sizeof %s",id,_size);
+	}
+	return _resolved;
+}
+void Record::calculateResolvedProperties(){
+	//sizeof
 	_size = 0;
 	for(auto i = fields.begin();i!=fields.end();++i){
 		assert((*i).type.resolved());
 		_size += (*i).type.type()->size();
 	}
-	std::vector<TypeExpression* > collection;
-	if(!traverseExtenderHierarchy(this,collection)){
-			error(location,"Faulty type extension hierarchy - The type %s features multiple path to type %s",id,collection.back());
-			_resolved = false;
-	}
-	debug("Updating type's %s state - sizeof %s",id,_size);
+	
 }
+
 bool Record::resolved(){
 	return _resolved;
 }
@@ -187,7 +209,8 @@ Record* Record::createRecordType(std::vector<Field>& record,Record* headRecord){
 	for(size_t i=0;i<record.size();i++){
 		type->add(Field(headRecord!=nullptr?(record[i].name):(SymbolID()),record[i].type.type() ));
 	}
-	type->updateOnSolving();
+	type->_resolved = true;
+	type->calculateResolvedProperties();
 	return type;
 }
 

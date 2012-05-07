@@ -422,6 +422,7 @@ struct AstExpander: NodeVisitor {
 	}
 	Node* visit(ReturnExpression* node){
 		//TODO function return type inferring
+		if(node->value) node->value = node->value->accept(this);
 		return node;
 	}
 
