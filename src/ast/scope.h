@@ -34,9 +34,14 @@ struct PrefixDefinition : memory::ManagedDefinition {
 	uint8 declarationType;
 
 	PrefixDefinition(SymbolID name,Location& location);
+
 	virtual Node* parse(Parser* parser) = 0;
+	//Can it return a reference when it's parsed and resolved at later passes
+	virtual Node* createReference(){ return nullptr; }
+
 	virtual bool isResolved(){ return true; }
 	virtual bool resolve(Evaluator* evaluator){ return true; }
+
 };
 
 struct InfixDefinition : memory::ManagedDefinition {

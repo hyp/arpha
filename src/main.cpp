@@ -185,7 +185,7 @@ struct AccessParser: InfixDefinition {
 				}
 				auto expression = parser->evaluate(def->parse(parser));
 				//apply the correct overload lookup scope
-				if(auto overloadSet = expression->asOverloadSetExpression()) overloadSet->scope = val->scope->scope;
+				if(auto overloadSet = expression->asUnresolvedSymbol()) overloadSet->explicitLookupScope = val->scope->scope;
 				return expression;
 			}else{
 				error(node->location,"A module '%s' isn't imported from package '%s'!",parser->lookedUpToken.symbol,val->scope->id);
@@ -498,7 +498,7 @@ struct IfParser: PrefixDefinition {
 struct WhileParser: PrefixDefinition {
 	WhileParser(): PrefixDefinition("while",Location()) {}
 	Node* parse(Parser* parser){
-		auto condition = new ExpressionVerifier(parser->parse(),intrinsics::types::boolean);
+		auto condition = parser->parse();
 		auto body = parser->parse();
 		return new WhileExpression(condition,body);
 	}

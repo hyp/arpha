@@ -115,6 +115,10 @@ void Record::add(const Field& var){
 	fields.push_back(var);
 }
 
+Node* Record::createReference(){
+	return reference();
+}
+
 //Collects all the extenders field from the record extender hierarchy
 static bool insertUniqueExtender(std::vector<TypeExpression*>& collection,TypeExpression* extender){
 	for(auto i = collection.begin();i!=collection.end();i++){

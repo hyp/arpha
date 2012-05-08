@@ -6,6 +6,7 @@
 #include "../ast/declarations.h"
 #include "parser.h"
 #include "../compiler.h"
+#include "../intrinsics/types.h"
 
 Parser::Parser(const char* src) : Lexer(src) {  
 }
@@ -40,7 +41,7 @@ bool Parser::match(int tokenType){
 SymbolID Parser::expectName(){
 	Token tok = consume();
 	if(tok.isSymbol()==false){
-		error(previousLocation(),"A valid name is expected!");
+		error(previousLocation(),"A valid symbol is expected instead of %s!",tok);
 		return SymbolID("error-name");
 	}
 	return tok.symbol;
@@ -73,8 +74,8 @@ Node* Parser::parse(int stickiness){
 	if(lookedUpToken.isSymbol()){
 		auto prefixDefinition = _currentScope->lookupPrefix(lookedUpToken.symbol);
 		if(!prefixDefinition){ 
-			error(location,"Can't prefix parse %s!",lookedUpToken); //TODO unresolved name
-			expression = ErrorExpression::getInstance();
+			debug("line %s: Can't prefix parse %s at first round!",location.line(),lookedUpToken); //TODO unresolved name
+			expression = new UnresolvedSymbol(location,lookedUpToken.symbol);
 		}else{
 			expression = prefixDefinition->parse(this);
 		}
@@ -109,10 +110,10 @@ Node* ImportedScope::parse(Parser* parser) {
 }
 
 void InferredUnresolvedTypeExpression::parse(Parser* parser,int stickiness){
-	auto oldSetting = parser->evaluator()->evaluateTypeTuplesAsTypes;
-	parser->evaluator()->evaluateTypeTuplesAsTypes = true;
+	auto oldSetting = parser->evaluator()->expectedTypeForEvaluatedExpression;
+	parser->evaluator()->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
 	auto node = parser->parse(stickiness);
-	parser->evaluator()->evaluateTypeTuplesAsTypes = oldSetting;
+	parser->evaluator()->expectedTypeForEvaluatedExpression = oldSetting;
 
 	auto isTypeExpr = node->asTypeExpression();
 	if(isTypeExpr && isTypeExpr->isResolved()){
@@ -149,16 +150,16 @@ Node* Function::parse(Parser* parser){
 }
 
 Node* Overloadset::parse(Parser* parser){
-	return OverloadSetExpression::create(parser->lookedUpToken.symbol,parser->currentScope());
+	return new UnresolvedSymbol(parser->previousLocation(),parser->lookedUpToken.symbol);
 }
 
 Node* PrefixOperator::parse(Parser* parser){
-	return CallExpression::create(OverloadSetExpression::create(function,parser->currentScope()),parser->parse());
+	return CallExpression::create(new UnresolvedSymbol(parser->previousLocation(),function),parser->parse());
 }
 
 Node* InfixOperator::parse(Parser* parser,Node* node){
 	auto tuple = new TupleExpression;
 	tuple->children.push_back(node);
 	tuple->children.push_back(parser->parse(stickiness));
-	return CallExpression::create(OverloadSetExpression::create(function,parser->currentScope()),tuple);
+	return CallExpression::create(new UnresolvedSymbol(parser->previousLocation(),function),tuple);
 }

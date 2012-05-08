@@ -105,6 +105,7 @@ public:
 	Record(SymbolID name,Location& location);
 
 	Node* parse(Parser* parser);
+	Node* createReference();
 
 	// Returns -1 if field isn't found
 	int lookupField(const SymbolID fieldName);

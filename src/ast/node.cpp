@@ -12,20 +12,6 @@ TypeExpression* Node::_returnType() const {
 	return intrinsics::types::Void;
 }
 
-// Error expression
-TypeExpression* ErrorExpression::_returnType() const {
-	return intrinsics::types::Unresolved;
-}
-bool ErrorExpression::isResolved() const { return false; }
-ErrorExpression* errorInstance = nullptr;
-Node* ErrorExpression::duplicate() const {
-	return errorInstance;
-};
-ErrorExpression* ErrorExpression::getInstance() {
-	if(errorInstance) return errorInstance;
-	else return errorInstance = new ErrorExpression;
-}
-
 // Integer literals
 IntegerLiteral::IntegerLiteral(const BigInt& integer){
 	this->integer = integer;
@@ -191,7 +177,7 @@ TypeExpression* MatchExpression::_returnType() const {
 bool MatchExpression::isResolved() const {
 	return false;
 }
-Node* MatchExpression::duplicate(){
+Node* MatchExpression::duplicate() const{
 	auto dup = new MatchExpression(object);
 	dup->cases.reserve(cases.size());
 	for(auto i = cases.begin();i!=cases.end();i++){
@@ -209,6 +195,9 @@ TypeExpression* FunctionReference::_returnType() const {
 Function* FunctionReference::function() const {
 	assert(_function->resolved());
 	return _function;
+}
+Node* FunctionReference::duplicate() const {
+	return new FunctionReference(_function);
 }
 
 // Field access expression
@@ -230,22 +219,6 @@ Node* FieldAccessExpression::duplicate() const {
 	return new FieldAccessExpression(object->duplicate(),field);
 }
 
-// Access expression
-AccessExpression::AccessExpression(Node* object,SymbolID symbol){
-	this->object = object;
-	this->symbol = symbol;
-	this->passedFirstEval = false;
-}
-TypeExpression* AccessExpression::_returnType() const{
-	return intrinsics::types::Unresolved;
-}
-bool AccessExpression::isResolved() const {
-	return false;
-}
-Node* AccessExpression::duplicate() const {
-	return new AccessExpression(object->duplicate(),symbol);//duplicate passed first eval??? - no
-}
-
 
 
 TypeExpression* CallExpression::_returnType() const {
@@ -256,6 +229,9 @@ TypeExpression* CallExpression::_returnType() const {
 }
 bool CallExpression::isResolved() const {
 	return false;
+}
+Node* CallExpression::duplicate() const {
+	return nullptr;//TODO
 }
 
 //While expression
@@ -295,12 +271,6 @@ NODE_LIST(DECLARE_NODE_IMPLEMENTATION)
 
 //Constructors
 
-OverloadSetExpression* OverloadSetExpression::create(SymbolID symbol,Scope* scope){
-	auto e = new OverloadSetExpression;
-	e->scope = scope;
-	e->symbol = symbol;
-	return e;
-}
 CallExpression* CallExpression::create(Node* object,Node* argument){
 	auto e = new CallExpression;
 	e->object = object;
@@ -418,14 +388,52 @@ std::ostream& operator<< (std::ostream& stream,TypeExpression* node){
 	return stream;
 }
 
-//Other nodes
+//Other,temporary nodes
 
-ExpressionVerifier::ExpressionVerifier(Node* child,TypeExpression* typeExpected) : expression(child),expectedType(typeExpected) {
+ExpressionVerifier::ExpressionVerifier(const Location& loc,Node* child,TypeExpression* typeExpected) : expression(child),expectedType(typeExpected) {
 	assert(child);assert(typeExpected);
+	location = loc;
+}
+Node* ExpressionVerifier::duplicate() const {
+	return new ExpressionVerifier(location,expression->duplicate(),expectedType/* NB no duplicate */);
 }
 std::ostream& operator<< (std::ostream& stream,ExpressionVerifier* node){
 	stream<<node->expression<<" with expected type "<<node->expectedType;
 	return stream;
+}
+
+UnresolvedSymbol::UnresolvedSymbol(const Location& loc,SymbolID sym,Scope* scope) : symbol(sym),explicitLookupScope(scope) {
+	assert(!sym.isNull());
+	location = loc;
+}
+Node* UnresolvedSymbol::duplicate() const {
+	return new UnresolvedSymbol(location,symbol,explicitLookupScope);
+}
+std::ostream& operator<< (std::ostream& stream,UnresolvedSymbol* node){
+	stream<<node->symbol;
+	return stream;
+}
+
+AccessExpression::AccessExpression(Node* object,SymbolID symbol){
+	this->object = object;
+	this->symbol = symbol;
+	this->passedFirstEval = false;
+}
+Node* AccessExpression::duplicate() const {
+	return new AccessExpression(object->duplicate(),symbol);//NB duplicate passed first eval? - no
+}
+std::ostream& operator<< (std::ostream& stream,AccessExpression* node){
+	stream<<node->object<<" u. "<<node->symbol;
+	return stream;
+}
+
+ErrorExpression* errorInstance = nullptr;
+Node* ErrorExpression::duplicate() const {
+	return errorInstance;//NB an instance is already created, so we dont have to use getInstance
+};
+ErrorExpression* ErrorExpression::getInstance() {
+	if(errorInstance) return errorInstance;
+	else return errorInstance = new ErrorExpression;
 }
 
 /**
@@ -435,8 +443,16 @@ std::ostream& operator<< (std::ostream& stream,ExpressionVerifier* node){
 struct NodeToString: NodeVisitor {
 	std::ostream& stream;
 	NodeToString(std::ostream& ostream) : stream(ostream) {}
-	
+
+	Node* visit(UnresolvedSymbol* node){
+		stream<<node;
+		return node;
+	}
 	Node* visit(ExpressionVerifier* node){
+		stream<<node;
+		return node;
+	}
+	Node* visit(AccessExpression* node){
 		stream<<node;
 		return node;
 	}
@@ -473,10 +489,6 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 
-	Node* visit(OverloadSetExpression* node){
-		stream<<"overloadset "<<node->symbol;
-		return node;
-	}
 	Node* visit(CallExpression* node){
 		stream<<"call "<<node->object<<" with "<<node->arg;
 		return node;
@@ -485,10 +497,7 @@ struct NodeToString: NodeVisitor {
 		stream<<node->object<<" f. "<<node->objectsRecord()->fields[node->field].name;
 		return node;
 	}
-	Node* visit(AccessExpression* node){
-		stream<<node->object<<" . "<<node->symbol;
-		return node;
-	}
+
 	Node* visit(AssignmentExpression* node){
 		stream<<node->object<<" = "<<node->value;
 		return node;

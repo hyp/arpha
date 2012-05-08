@@ -27,9 +27,12 @@ struct Evaluator;
 //Injects visitor callback and dynamic cast function into a node structure
 //Note: only does the definitions, the appropriate implementations are done by traversing NODE_LIST
 #define DECLARE_NODE(T) \
+	virtual Node* duplicate() const; \
 	virtual Node* accept(NodeVisitor* visitor);  \
 	private:             \
 	virtual T* as##T();  \
+
+#define DECLARE_TEMPNODE(T) DECLARE_NODE(T)
 
 //This is a list of node types. TODO refactor into NODETYPE_LIST
 #define NODE_LIST(X) \
@@ -43,7 +46,6 @@ struct Evaluator;
 	X(VariableReference) \
 	X(FunctionReference)     \
 	X(TupleExpression)       \
-	X(OverloadSetExpression) \
 	X(CallExpression)        \
 	X(FieldAccessExpression)      \
 	X(AccessExpression)      \
@@ -54,7 +56,8 @@ struct Evaluator;
 	X(BlockExpression)       \
 	X(WhileExpression)         \
 	\
-	X(ExpressionVerifier)
+	X(ExpressionVerifier) \
+	X(UnresolvedSymbol) \
 
 //Forward declaration of node types
 struct Node;
@@ -71,7 +74,7 @@ struct Node {
 	//Accepts an ast visitor
 	virtual Node* accept(NodeVisitor* visitor) = 0;
 
-	virtual Node* duplicate() const { return 0; } //TODO = 0
+	virtual Node* duplicate() const  = 0;
 
 	virtual bool isResolved() const { return true; }
 
@@ -90,7 +93,6 @@ std::ostream& operator<< (std::ostream& stream,Node* node);
 struct IntegerLiteral : Node {
 	IntegerLiteral(const BigInt& integer);
 	TypeExpression* _returnType() const;
-	Node* duplicate() const;
 	bool isConst() const;
 	
 	
@@ -99,25 +101,10 @@ struct IntegerLiteral : Node {
 	DECLARE_NODE(IntegerLiteral);
 };
 
-//(error):unresolved
-struct ErrorExpression : Node {
-	TypeExpression* _returnType() const;
-	bool isResolved() const;
-
-	Node* duplicate() const;
-	static ErrorExpression* getInstance(); //avoid multiple creations
-
-	DECLARE_NODE(ErrorExpression);
-private:
-	ErrorExpression(){}
-	ErrorExpression(const ErrorExpression& other){}
-};
-
 //():void
 struct UnitExpression : Node {
 	TypeExpression* _returnType() const;
 	
-	Node* duplicate() const;
 	static UnitExpression* getInstance(); //avoid multiple creations
 
 	DECLARE_NODE(UnitExpression);
@@ -130,7 +117,6 @@ private:
 struct WildcardExpression : Node {
 	TypeExpression* _returnType() const;
 	
-	Node* duplicate() const;
 	static WildcardExpression* getInstance(); //avoid multiple creations
 
 	DECLARE_NODE(WildcardExpression);
@@ -144,7 +130,6 @@ struct ExpressionReference : Node {
 	ExpressionReference(Node* node);
 	
 	TypeExpression* _returnType() const;
-	Node* duplicate() const;
 
 	Node* expression;
 	DECLARE_NODE(ExpressionReference);
@@ -155,7 +140,6 @@ struct ImportedScopeReference : Node {
 	ImportedScopeReference(ImportedScope* scope);
 
 	TypeExpression* _returnType() const;
-	Node* duplicate() const;
 
 	ImportedScope* scope;
 	DECLARE_NODE(ImportedScopeReference);
@@ -204,7 +188,6 @@ struct TypeExpression : Node {
 
 	bool isResolved() const;
 	TypeExpression* _returnType() const;
-	Node* duplicate() const;
 	size_t size() const;
 
 	bool isSame(TypeExpression* other);
@@ -236,7 +219,6 @@ struct VariableReference : Node {
 
 	TypeExpression* _returnType() const;
 	bool isResolved() const;
-	Node* duplicate() const;
 
 	Variable* variable;
 	DECLARE_NODE(VariableReference);
@@ -248,7 +230,6 @@ struct TupleExpression : Node {
 	TupleExpression(Node* a,Node* b);
 
 	TypeExpression* _returnType() const;
-	Node* duplicate() const;
 	bool isResolved() const;
 
 	std::vector<Node*> children;
@@ -265,17 +246,6 @@ struct FunctionReference : Node {
 
 	Function* _function;
 	DECLARE_NODE(FunctionReference);
-};
-
-//: intrinsics::types::Unresolved
-struct OverloadSetExpression : Node {
-	static OverloadSetExpression* create(SymbolID symbol,Scope* scope);
-
-	//Scope in which to look for resolving. 
-	//NB: This doesn't have to be the scope that the expression was created in, so don't use it as a current scope indicator!
-	Scope* scope;
-	SymbolID symbol;
-	DECLARE_NODE(OverloadSetExpression);
 };
 
 struct CallExpression : Node {
@@ -295,7 +265,6 @@ struct FieldAccessExpression : Node {
 	FieldAccessExpression(Node* object,int field);
 
 	TypeExpression* _returnType() const;
-	Node* duplicate() const;
 
 	// Returns record T when object is of type T or pointer T 
 	Record* objectsRecord() const;
@@ -305,25 +274,11 @@ struct FieldAccessExpression : Node {
 	DECLARE_NODE(FieldAccessExpression);
 };
 
-struct AccessExpression : Node {
-	AccessExpression(Node* object,SymbolID symbol);
-
-	TypeExpression* _returnType() const;
-	bool isResolved() const;
-	Node* duplicate() const;
-	
-	Node* object;
-	SymbolID symbol;
-	bool passedFirstEval; //On first evaluation don't touch this node!!
-	DECLARE_NODE(AccessExpression);
-};
-
 struct AssignmentExpression : Node {
 	AssignmentExpression(Node* object,Node* value);
 
 	TypeExpression* _returnType() const;
 	bool isResolved() const;
-	Node* duplicate() const;
 
 	Node* object;
 	Node* value;
@@ -334,7 +289,6 @@ struct AssignmentExpression : Node {
 // : intrinsics::types::Void
 struct ReturnExpression : Node {
 	ReturnExpression(Node* expression);
-	Node* duplicate() const;
 
 	Node* value; //can be null
 	DECLARE_NODE(ReturnExpression);
@@ -345,7 +299,6 @@ struct ReturnExpression : Node {
 struct PointerOperation : Node {
 	PointerOperation(Node* expression,int type);
 	TypeExpression* _returnType() const;
-	Node* duplicate() const;
 	bool isResolved() const;
 
 	enum {
@@ -362,7 +315,6 @@ struct MatchExpression : Node {
 
 	TypeExpression* _returnType() const;
 	bool isResolved() const;
-	Node* duplicate();
 
 	Node* object;
 	struct Case {	
@@ -379,8 +331,7 @@ struct MatchExpression : Node {
 // : intrinsics::types::Void
 struct BlockExpression : Node {
 	BlockExpression(Scope* scope);
-	bool isResolved() const;
-	Node* duplicate() const;
+	bool isResolved() const;//TODO true or false?
 
 	std::vector<Node*> children;
 	Scope* scope;
@@ -388,12 +339,12 @@ struct BlockExpression : Node {
 };
 
 // : intrinsics::types::Void
+// Status - syntax[90%],evaluation[100%],optimization[0%],generation[0%]
 struct WhileExpression : Node {
 	WhileExpression(Node* condition,Node* body);
 
-	Node* duplicate() const;
 
-	Node* condition;
+	Node* condition;//expectedType = intrinsics::types::boolean
 	Node* body;
 	DECLARE_NODE(WhileExpression);
 };
@@ -408,11 +359,47 @@ struct AlwaysUnresolved : Node {
 
 // Used for typetesting - verifies that a given expression is compatible to a certain type
 struct ExpressionVerifier : AlwaysUnresolved {
-	ExpressionVerifier(Node* child,TypeExpression* typeExpected);
+	ExpressionVerifier(const Location& loc,Node* child,TypeExpression* typeExpected);
 
 	Node* expression;
 	TypeExpression* expectedType;
-	DECLARE_NODE(ExpressionVerifier);
+	DECLARE_TEMPNODE(ExpressionVerifier);
+};
+
+// An unresolved symbol
+struct UnresolvedSymbol :AlwaysUnresolved {
+	UnresolvedSymbol(const Location& loc,SymbolID sym,Scope* scope = nullptr);
+
+	//Scope in which to look for resolving. 
+	//Leave it null to search in the current scope.
+	//NB: This doesn't have to be the scope that the expression was created in, so don't use it as a current scope indicator!
+	Scope* explicitLookupScope; // = nullptr
+	SymbolID symbol;
+	DECLARE_TEMPNODE(UnresolvedSymbol);
+};
+
+// An expression representing a symbolic query to an object in a form of object '.' symbol
+// Resolved into a call when a suitable matching function exists
+// Otherwise resolved into field access expression when querying a field
+// N.B. Don't try to resolve this at first time, because a.x(..) and a.x = .. need to be resolved from their respecitve parents
+struct AccessExpression : AlwaysUnresolved {
+	AccessExpression(Node* object,SymbolID symbol);
+	
+	Node* object;
+	SymbolID symbol;
+	bool passedFirstEval; //On first evaluation don't touch this node!!
+	DECLARE_TEMPNODE(AccessExpression);
+};
+
+// A dummy expression representing an error and never resolving
+// N.B. use getInstance instead of new for creation!
+struct ErrorExpression : AlwaysUnresolved {
+	static ErrorExpression* getInstance(); //avoid multiple creations
+
+	DECLARE_TEMPNODE(ErrorExpression);
+private:
+	ErrorExpression(){}
+	ErrorExpression(const ErrorExpression& other){}
 };
 
 #endif

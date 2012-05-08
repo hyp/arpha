@@ -112,6 +112,7 @@ void Evaluator::init(Scope* arphaScope){
 	#undef _HANDLE
 }
 
+
 Node* evaluateResolvedFunctionCall(Scope* scope,CallExpression* node){
 	auto function = node->object->asFunctionReference()->function();
 
@@ -123,6 +124,17 @@ Node* evaluateResolvedFunctionCall(Scope* scope,CallExpression* node){
 	}else if(function->intrinsicEvaluator) 
 		return function->intrinsicEvaluator(node);
 	return node;
+}
+
+//Typecheks an expression
+static Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
+	if(auto assigns = expectedType->assignableFrom(expression,expression->_returnType())){
+		return assigns;
+	}
+	else {/* TODO expression->location? */
+		error(loc,"Expected an expression of type %s instead of %s of type %s",expectedType,expression,expression->_returnType());
+		return expression;
+	}
 }
 
 struct AstExpander: NodeVisitor {
@@ -183,8 +195,9 @@ struct AstExpander: NodeVisitor {
 
 		if(argumentType == intrinsics::types::Void) error(node->arg->location,"Can't perform function call on a statement!");
 		else if(argumentType != intrinsics::types::Unresolved){
-			if(auto callingOverloadSet = node->object->asOverloadSetExpression()){
-				auto func = callingOverloadSet->scope->resolveFunction(callingOverloadSet->symbol,node->arg);
+			if(auto callingOverloadSet = node->object->asUnresolvedSymbol()){
+				auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : evaluator->currentScope());
+				auto func =  scope->resolveFunction(callingOverloadSet->symbol,node->arg);
 				if(func){
 					node->object = new FunctionReference(func);
 					//TODO function->adjustArgument
@@ -219,13 +232,20 @@ struct AstExpander: NodeVisitor {
 
 	Node* visit(PointerOperation* node){
 		node->expression = node->expression->accept(this);
-		auto ret = node->expression->_returnType();
-		if(ret != intrinsics::types::Unresolved){
-			//*int32 => Pointer(int32)
+		if(node->expression->isResolved()){
+			// *int32 => Pointer(int32)
 			if(auto typeExpr = node->expression->asTypeExpression()){
 				//delete node
 				return new TypeExpression(nullptr,typeExpr);
 			}
+		}
+		else if(evaluator->expectedTypeForEvaluatedExpression == intrinsics::types::Type){
+			/*// *int32 => Pointer(int32)
+			if(auto typeExpr = node->expression->asTypeExpression()){
+				//delete node
+				return new TypeExpression(nullptr,typeExpr);
+			}*/
+			debug("Yiihaw!");
 		}
 		return node;
 	}
@@ -361,22 +381,6 @@ struct AstExpander: NodeVisitor {
 		}
 		return node;*/
 	}
-	Node* visit(AccessExpression* node){
-		node->object = node->object->accept(this);
-		if(node->passedFirstEval){
-			auto objectType = node->object->_returnType();
-			if(auto fa = fieldAccessFromAccess(node)) return fa;
-			//TODO type field access & expression '.' call notation
-			/*if(auto field = objectType->lookupField(node->symbol)){
-				//TODO This may need to be done only on 2nd iteration, because there might be setters/getters defined on a later on in the module
-				//TODO - how to mark it??
-				return node;
-			}*/
-			else return CallExpression::create(OverloadSetExpression::create(node->symbol,evaluator->currentScope()),node->object)->accept(this);
-		}
-		else node->passedFirstEval = true;
-		return node;
-	}
 
 
 	Node* visit(TupleExpression* node){
@@ -409,7 +413,8 @@ struct AstExpander: NodeVisitor {
 			else fields.push_back(Record::Field(SymbolID(),returns));
 		}
 		if(!node->type){
-			if(evaluator->evaluateTypeTuplesAsTypes){
+			//int32,int32 :: Type,Type -> anon-record(int32,int32) :: Type
+			if(evaluator->expectedTypeForEvaluatedExpression == intrinsics::types::Type){
 				bool allTypes = true;
 				for(auto i=fields.begin();i!=fields.end();i++){
 					if((*i).type.type() != intrinsics::types::Type) allTypes = false;
@@ -480,28 +485,66 @@ struct AstExpander: NodeVisitor {
 	}
 
 	Node* visit(WhileExpression* node){
-		node->condition = node->condition->accept(this);//Type checking through ExpressionVerifier
+		node->condition = node->condition->accept(this);
 		node->body = node->body->accept(this);
+
+		if(node->condition->isResolved()) node->condition = typecheck(node->location,node->condition,intrinsics::types::boolean);
 		return node;
 	}
 
+	/**
+	* Temporary nodes
+	*/
 	Node* visit(ExpressionVerifier* node){
 		node->expression = node->expression->accept(this);
 		if(node->expression->isResolved()){
-			if(auto assigns = node->expectedType->assignableFrom(node->expression,node->expression->_returnType())){
-				node->expression = nullptr;
-				delete node;
-				return assigns;
-			}
-			else {
-				error(node->location,"Expected an expression of type %s instead of %s",node->expectedType,node->expression);
-			}
+			auto result = typecheck(node->location,node->expression,node->expectedType);
+			node->expression = nullptr;
+			delete node;
+			return result;
 		}
+		//NB No need for unresolved marking
 		return node;
 	}
 
+	Node* visit(UnresolvedSymbol* node){
+		//TODO fix
+		//{ Foo/*Should be type Foo */; var Foo int32 } type Foo <-- impossibru
+		auto def = (node->explicitLookupScope ? node->explicitLookupScope : evaluator->currentScope())->lookupPrefix(node->symbol);
+		if(def){
+			if(auto ref = def->createReference()){
+				delete node;
+				return ref;
+			};
+		}
+		evaluator->markUnresolved(node);
+		return node;
+	}
+
+	Node* visit(AccessExpression* node){
+		node->object = node->object->accept(this);
+		if(node->passedFirstEval){
+			if(node->object->isResolved()){
+				if(auto fa = fieldAccessFromAccess(node)) return fa;
+			//TODO type field access & expression '.' call notation
+			/*if(auto field = objectType->lookupField(node->symbol)){
+				//TODO This may need to be done only on 2nd iteration, because there might be setters/getters defined on a later on in the module
+				//TODO - how to mark it??
+				return node;
+			}*/
+				else return CallExpression::create(new UnresolvedSymbol(node->location,node->symbol),node->object)->accept(this);
+			}
+		}
+		else node->passedFirstEval = true;
+		evaluator->markUnresolved(node);
+		return node;
+	}
 
 };
+
+void Evaluator::markUnresolved(Node* node){
+	//TODO
+}
 
 bool Scope::resolve(Evaluator* evaluator){
 	bool isResolved = true;
@@ -515,10 +558,10 @@ bool Scope::resolve(Evaluator* evaluator){
 
 bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
 	assert(kind == Unresolved);
-		auto oldSetting = evaluator->evaluateTypeTuplesAsTypes;
-		evaluator->evaluateTypeTuplesAsTypes = true;
+		auto oldSetting = evaluator->expectedTypeForEvaluatedExpression;
+		evaluator->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
 		auto isTypeExpr = evaluator->eval(unresolvedExpression)->asTypeExpression();
-		evaluator->evaluateTypeTuplesAsTypes = oldSetting;
+		evaluator->expectedTypeForEvaluatedExpression = oldSetting;
 
 		if(isTypeExpr && isTypeExpr->isResolved()){
 			kind = Type;
