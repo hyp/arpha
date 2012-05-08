@@ -498,7 +498,7 @@ struct IfParser: PrefixDefinition {
 struct WhileParser: PrefixDefinition {
 	WhileParser(): PrefixDefinition("while",Location()) {}
 	Node* parse(Parser* parser){
-		auto condition = parser->parse();
+		auto condition = new ExpressionVerifier(parser->parse(),intrinsics::types::boolean);
 		auto body = parser->parse();
 		return new WhileExpression(condition,body);
 	}
@@ -650,8 +650,17 @@ namespace compiler {
 			intrinsics::compiler::init(scope);
 		}
 
-		debug("------------------- AST: ------------------------------");
+				debug("------------------- AST: ------------------------------");
 		debug("%s\n",currentModule->second.body);
+
+
+		if(std::string("source") == moduleName){
+
+			parser.evaluator()->eval(currentModule->second.body);
+			debug("2nd Pass:");
+			debug("------------------- AST: ------------------------------");
+			debug("%s\n",currentModule->second.body);
+		}
 
 
 		//restore old module ptr

@@ -115,7 +115,7 @@ void InferredUnresolvedTypeExpression::parse(Parser* parser,int stickiness){
 	parser->evaluator()->evaluateTypeTuplesAsTypes = oldSetting;
 
 	auto isTypeExpr = node->asTypeExpression();
-	if(isTypeExpr && isTypeExpr->resolved()){
+	if(isTypeExpr && isTypeExpr->isResolved()){
 		kind = Type;
 		_type = isTypeExpr;
 		return;

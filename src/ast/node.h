@@ -52,7 +52,9 @@ struct Evaluator;
 	X(PointerOperation)      \
 	X(MatchExpression)      \
 	X(BlockExpression)       \
-	X(WhileExpression)          
+	X(WhileExpression)         \
+	\
+	X(ExpressionVerifier)
 
 //Forward declaration of node types
 struct Node;
@@ -70,6 +72,8 @@ struct Node {
 	virtual Node* accept(NodeVisitor* visitor) = 0;
 
 	virtual Node* duplicate() const { return 0; } //TODO = 0
+
+	virtual bool isResolved() const { return true; }
 
 	virtual bool isConst() const { return false; }
 
@@ -89,6 +93,7 @@ struct IntegerLiteral : Node {
 	Node* duplicate() const;
 	bool isConst() const;
 	
+	
 	BigInt integer;
 	TypeExpression* _type;//optional
 	DECLARE_NODE(IntegerLiteral);
@@ -97,6 +102,7 @@ struct IntegerLiteral : Node {
 //(error):unresolved
 struct ErrorExpression : Node {
 	TypeExpression* _returnType() const;
+	bool isResolved() const;
 
 	Node* duplicate() const;
 	static ErrorExpression* getInstance(); //avoid multiple creations
@@ -170,7 +176,7 @@ struct InferredUnresolvedTypeExpression {
 
 	inline InferredUnresolvedTypeExpression() : kind(Inferred) {}
 	inline InferredUnresolvedTypeExpression(TypeExpression* expr) : kind(Type),_type(expr) {}
-	inline bool resolved(){ return kind == Type; }
+	inline bool isResolved() const { return kind == Type; }
 	TypeExpression* type();
 
 	void infer(TypeExpression* type);
@@ -196,7 +202,7 @@ struct TypeExpression : Node {
 	TypeExpression(Record* record);
 	TypeExpression(PointerType* pointer,TypeExpression* next);
 
-	bool resolved() const;
+	bool isResolved() const;
 	TypeExpression* _returnType() const;
 	Node* duplicate() const;
 	size_t size() const;
@@ -229,6 +235,7 @@ struct VariableReference : Node {
 	VariableReference(Variable* variable);
 
 	TypeExpression* _returnType() const;
+	bool isResolved() const;
 	Node* duplicate() const;
 
 	Variable* variable;
@@ -242,6 +249,7 @@ struct TupleExpression : Node {
 
 	TypeExpression* _returnType() const;
 	Node* duplicate() const;
+	bool isResolved() const;
 
 	std::vector<Node*> children;
 	TypeExpression* type;
@@ -274,6 +282,7 @@ struct CallExpression : Node {
 	static CallExpression* create(Node* object,Node* argument);
 
 	TypeExpression* _returnType() const;
+	bool isResolved() const;
 
 	Node* object;
 	Node* arg;
@@ -300,6 +309,7 @@ struct AccessExpression : Node {
 	AccessExpression(Node* object,SymbolID symbol);
 
 	TypeExpression* _returnType() const;
+	bool isResolved() const;
 	Node* duplicate() const;
 	
 	Node* object;
@@ -312,6 +322,7 @@ struct AssignmentExpression : Node {
 	AssignmentExpression(Node* object,Node* value);
 
 	TypeExpression* _returnType() const;
+	bool isResolved() const;
 	Node* duplicate() const;
 
 	Node* object;
@@ -335,6 +346,7 @@ struct PointerOperation : Node {
 	PointerOperation(Node* expression,int type);
 	TypeExpression* _returnType() const;
 	Node* duplicate() const;
+	bool isResolved() const;
 
 	enum {
 		ADDRESS,     //&
@@ -349,6 +361,7 @@ struct MatchExpression : Node {
 	MatchExpression(Node* object);
 
 	TypeExpression* _returnType() const;
+	bool isResolved() const;
 	Node* duplicate();
 
 	Node* object;
@@ -366,6 +379,7 @@ struct MatchExpression : Node {
 // : intrinsics::types::Void
 struct BlockExpression : Node {
 	BlockExpression(Scope* scope);
+	bool isResolved() const;
 	Node* duplicate() const;
 
 	std::vector<Node*> children;
@@ -382,6 +396,23 @@ struct WhileExpression : Node {
 	Node* condition;
 	Node* body;
 	DECLARE_NODE(WhileExpression);
+};
+
+/**
+* These nodes are temporary utility nodes which are resolved into proper nodes.
+*/
+
+struct AlwaysUnresolved : Node {
+	bool isResolved() const { return false; }
+};
+
+// Used for typetesting - verifies that a given expression is compatible to a certain type
+struct ExpressionVerifier : AlwaysUnresolved {
+	ExpressionVerifier(Node* child,TypeExpression* typeExpected);
+
+	Node* expression;
+	TypeExpression* expectedType;
+	DECLARE_NODE(ExpressionVerifier);
 };
 
 #endif

@@ -8,6 +8,11 @@
 
 struct Parser;
 struct Node;
+struct Type;
+struct Variable;
+struct Function;
+struct ImportedScope;
+struct Evaluator;
 
 namespace Visibility {
 	enum {
@@ -30,6 +35,8 @@ struct PrefixDefinition : memory::ManagedDefinition {
 
 	PrefixDefinition(SymbolID name,Location& location);
 	virtual Node* parse(Parser* parser) = 0;
+	virtual bool isResolved(){ return true; }
+	virtual bool resolve(Evaluator* evaluator){ return true; }
 };
 
 struct InfixDefinition : memory::ManagedDefinition {
@@ -42,11 +49,7 @@ struct InfixDefinition : memory::ManagedDefinition {
 	virtual Node* parse(Parser* parser,Node* node) = 0;
 };
 
-struct Node;
-struct Type;
-struct Variable;
-struct Function;
-struct ImportedScope;
+
 
 //Scope resolves symbols to corresponding definitions, which tells parser how to parse the encountered symbol
 struct Scope: memory::ManagedDefinition {
@@ -77,6 +80,8 @@ struct Scope: memory::ManagedDefinition {
 	void defineFunction(Function* definition);
 
 	Scope* parent;
+
+	bool resolve(Evaluator* evaluator);
 
 private:
 

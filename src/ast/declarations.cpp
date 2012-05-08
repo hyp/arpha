@@ -9,8 +9,8 @@
 //variable
 Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location),value(nullptr),_reference(this),isMutable(true),expandMe(false) {
 }
-bool Variable::resolved(){
-	return type.resolved();
+bool Variable::isResolved(){
+	return type.isResolved();
 }
 bool Variable::resolve(Evaluator* evaluator){
 	if(type.isInferred()) return false;
@@ -141,11 +141,12 @@ bool Record::resolve(Evaluator* evaluator){
 	assert(!_resolved);
 	_resolved = true;
 	for(auto i = fields.begin();i!=fields.end();++i){
-		if(!(*i).type.resolved()){
+		if(!(*i).type.isResolved()){
 			if(!(*i).type.resolve(evaluator)) _resolved = false;
 		}
 		//Don't you dare use itself in itself!
-		if((*i).type.resolved() && (*i).type.type() == reference()){
+		//TODO don't allow extended Pointer to self
+		if((*i).type.isResolved() && (*i).type.type() == reference()){
 			error(location,"Recursive type declaration - The type %s has a field %s of its own type!",id,(*i).name);
 			_resolved = false;
 			break;
@@ -169,13 +170,13 @@ void Record::calculateResolvedProperties(){
 	//TODO perhaps make it lazy calculation??
 	_size = 0;
 	for(auto i = fields.begin();i!=fields.end();++i){
-		assert((*i).type.resolved());
+		assert((*i).type.isResolved());
 		_size += (*i).type.type()->size();
 	}
 	
 }
 
-bool Record::resolved(){
+bool Record::isResolved(){
 	return _resolved;
 }
 size_t Record::size() const{
@@ -244,7 +245,7 @@ Record* Record::findAnonymousRecord(std::vector<Field>& record){
 	auto areFieldsUnnamed = true;
 	for(size_t j=0;j < record.size();j++){
 		if(!record[j].name.isNull()) areFieldsUnnamed = false;
-		assert(record[j].type.resolved());
+		assert(record[j].type.isResolved());
 	}
 
 	//Check to see if the following record already exists.

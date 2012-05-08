@@ -21,7 +21,7 @@ struct Variable : PrefixDefinition  {
 
 	void setImmutableValue(Node* value);
 
-	bool resolved();
+	bool isResolved();
 	bool resolve(Evaluator* evaluator);
 
 	InferredUnresolvedTypeExpression type;
@@ -112,7 +112,7 @@ public:
 	void add(const Field& var); 
 
 	//Record's properties
-	bool resolved();
+	bool isResolved();
 	size_t size() const;
 	
 	//Try to resolve the record.

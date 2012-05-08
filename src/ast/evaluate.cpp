@@ -217,6 +217,19 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}	
 
+	Node* visit(PointerOperation* node){
+		node->expression = node->expression->accept(this);
+		auto ret = node->expression->_returnType();
+		if(ret != intrinsics::types::Unresolved){
+			//*int32 => Pointer(int32)
+			if(auto typeExpr = node->expression->asTypeExpression()){
+				//delete node
+				return new TypeExpression(nullptr,typeExpr);
+			}
+		}
+		return node;
+	}
+
 
 	Node* fieldAccessFromAccess(AccessExpression* node){
 		auto returns = node->object->_returnType();
@@ -263,7 +276,7 @@ struct AstExpander: NodeVisitor {
 					debug("Inferred type %s for variable %s",valuesType,var->variable->id);
 					if(var->variable->isMutable) return value;
 				}
-				if(var->variable->type.resolved()){
+				if(var->variable->type.isResolved()){
 					if(auto canBeAssigned = var->variable->type.type()->assignableFrom(value,valuesType)){
 						if(!var->variable->isMutable) {
 							//If variable has a constant type, assign only at place of declaration
@@ -416,7 +429,8 @@ struct AstExpander: NodeVisitor {
 	}
 	Node* visit(BlockExpression* node){
 		auto scp = evaluator->currentScope();
-		//TODO scope->resolveDefinitions();
+		debug("RSLV");
+		scp->resolve(evaluator);//Resolve unresolved definitions
 		evaluator->currentScope(node->scope);
 		for(size_t i =0;i<node->children.size();i++)
 			node->children[i] = node->children[i]->accept(this);
@@ -466,26 +480,38 @@ struct AstExpander: NodeVisitor {
 	}
 
 	Node* visit(WhileExpression* node){
-		node->condition = node->condition->accept(this);
+		node->condition = node->condition->accept(this);//Type checking through ExpressionVerifier
 		node->body = node->body->accept(this);
+		return node;
+	}
 
-		//Typecheck
-		auto condReturns = node->condition->_returnType();
-		if(condReturns != intrinsics::types::Unresolved){
-			if(auto conditionalExpression = intrinsics::types::boolean->assignableFrom(node->condition,condReturns)){
-				node->condition = conditionalExpression;
-			}else{
-				error(node->location,"Expected a boolean expression instead of %s for loop's condition!",node->condition);
-				//delete node
-				return ErrorExpression::getInstance();
+	Node* visit(ExpressionVerifier* node){
+		node->expression = node->expression->accept(this);
+		if(node->expression->isResolved()){
+			if(auto assigns = node->expectedType->assignableFrom(node->expression,node->expression->_returnType())){
+				node->expression = nullptr;
+				delete node;
+				return assigns;
+			}
+			else {
+				error(node->location,"Expected an expression of type %s instead of %s",node->expectedType,node->expression);
 			}
 		}
-
 		return node;
 	}
 
 
 };
+
+bool Scope::resolve(Evaluator* evaluator){
+	bool isResolved = true;
+	for(auto i = prefixDefinitions.begin();i!=prefixDefinitions.end();i++){
+		if(!(*i).second->isResolved()){
+			if(!(*i).second->resolve(evaluator)) isResolved = false;
+		}
+	}
+	return isResolved;
+}
 
 bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
 	assert(kind == Unresolved);
@@ -494,7 +520,7 @@ bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
 		auto isTypeExpr = evaluator->eval(unresolvedExpression)->asTypeExpression();
 		evaluator->evaluateTypeTuplesAsTypes = oldSetting;
 
-		if(isTypeExpr && isTypeExpr->resolved()){
+		if(isTypeExpr && isTypeExpr->isResolved()){
 			kind = Type;
 			_type = isTypeExpr;
 			return true;
