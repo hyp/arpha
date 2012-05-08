@@ -121,6 +121,8 @@ public:
 	bool resolve(Evaluator* evaluator);
 
 	
+
+	
 	//Unique anonymous record construction
 	//NB all fields must have resolved types
 	static Record* findAnonymousRecord(std::vector<Field>& record);
@@ -134,6 +136,7 @@ private:
 	
 	//Calculates sizeof etc.
 	void calculateResolvedProperties();
+	bool resolveCircularReferences(Evaluator* evaluator);
 };
 
 std::ostream& operator<< (std::ostream& stream,Record* type);

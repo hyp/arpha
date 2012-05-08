@@ -239,14 +239,6 @@ struct AstExpander: NodeVisitor {
 				return new TypeExpression(nullptr,typeExpr);
 			}
 		}
-		else if(evaluator->expectedTypeForEvaluatedExpression == intrinsics::types::Type){
-			/*// *int32 => Pointer(int32)
-			if(auto typeExpr = node->expression->asTypeExpression()){
-				//delete node
-				return new TypeExpression(nullptr,typeExpr);
-			}*/
-			debug("Yiihaw!");
-		}
 		return node;
 	}
 
@@ -493,7 +485,7 @@ struct AstExpander: NodeVisitor {
 	}
 
 	/**
-	* Temporary nodes
+	* Resolving temporary nodes
 	*/
 	Node* visit(ExpressionVerifier* node){
 		node->expression = node->expression->accept(this);
@@ -543,7 +535,7 @@ struct AstExpander: NodeVisitor {
 };
 
 void Evaluator::markUnresolved(Node* node){
-	//TODO
+	unresolvedExpressions++;
 }
 
 bool Scope::resolve(Evaluator* evaluator){
@@ -558,16 +550,18 @@ bool Scope::resolve(Evaluator* evaluator){
 
 bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
 	assert(kind == Unresolved);
-		auto oldSetting = evaluator->expectedTypeForEvaluatedExpression;
-		evaluator->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
-		auto isTypeExpr = evaluator->eval(unresolvedExpression)->asTypeExpression();
-		evaluator->expectedTypeForEvaluatedExpression = oldSetting;
+	auto oldSetting = evaluator->expectedTypeForEvaluatedExpression;
+	evaluator->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
+	unresolvedExpression = evaluator->eval(unresolvedExpression);
+	evaluator->expectedTypeForEvaluatedExpression = oldSetting;
 
+	if(auto isTypeExpr = unresolvedExpression->asTypeExpression()){
 		if(isTypeExpr && isTypeExpr->isResolved()){
 			kind = Type;
 			_type = isTypeExpr;
 			return true;
 		}
+	}
 	
 	return false;
 }

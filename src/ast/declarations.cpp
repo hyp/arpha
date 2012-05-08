@@ -141,6 +141,78 @@ static bool traverseExtenderHierarchy(Record* record,std::vector<TypeExpression*
 	return true;
 }
 
+// This function recursively checks if a Record r or the record from one of r's fields contains a field with an exact type of illegalRecord
+static Record* containsItself(Record* record,Record* illegalRecord){
+	assert(record->isResolved());
+	for(auto i = record->fields.begin();i!=record->fields.end();++i){
+		auto typeExpr = (*i).type.type();
+		if(typeExpr->type == TypeExpression::RECORD){
+			if(typeExpr->record == illegalRecord) return record;
+			else if(auto recursiveCheck = containsItself(typeExpr->record,illegalRecord)) return recursiveCheck;
+		}
+	}
+	return nullptr;
+}
+
+//TODO what about multiple unresolved records in one expression?? e.g. MyType(Foo::unresolved,Bar::unresolved)
+static void collectUnresolvedRecord(Node* unresolvedExpression,Record* initialRecord,std::vector<Record*>& records){
+	if(auto typeExpr = unresolvedExpression->asTypeExpression()){
+		if(typeExpr->type == TypeExpression::RECORD && typeExpr->record!=initialRecord) //NB dont mark itself //unresolved record is implied here
+			records.push_back(typeExpr->record);
+	}
+	//TODO hackz
+	else if(auto ptr = unresolvedExpression->asPointerOperation()){
+		if(ptr->kind == PointerOperation::DEREFERENCE) collectUnresolvedRecord(ptr->expression,initialRecord,records);
+	}
+}
+
+// This functions tries to resolve type definitions containing unresolved records which contain the records of the original type
+bool Record::resolveCircularReferences(Evaluator* evaluator){
+	debug("Trying to resolve possible circular references for type %s",this);
+	std::vector<Record*> records;
+	size_t unresolvedCount = 0;
+	//Check if otherRecord contains a field which is a this record or pointer to this record
+	for(auto i = fields.begin();i!=fields.end();++i){
+		if(!(*i).type.isResolved()){
+			unresolvedCount++;
+			auto expr = (*i).type.unresolvedExpression;
+			collectUnresolvedRecord((*i).type.unresolvedExpression,this,records);
+		}
+	}
+
+	if((!records.size()) || records.size() != unresolvedCount) return false;
+	debug(" 1) Collected %s,%s records.",records.size(),unresolvedCount);
+
+	//Step 2 - pretend that I am resolved and try to resolve all collected records
+	_resolved = true;
+	for(auto i = records.begin();i!=records.end();i++){
+		if(!(*i)->resolve(evaluator)){
+			_resolved = false;
+			debug(" .) Couldn't resolve circular references for single element %s",(*i));
+			break;
+		}
+	}
+
+	if(!_resolved){
+		//Reset the records
+		for(auto i = records.begin();i!=records.end();i++){
+			(*i)->resolve(evaluator);
+		}
+		return false;
+	}else{	
+		//resolve myself
+		for(auto i = fields.begin();i!=fields.end();++i){
+			if(!(*i).type.isResolved()){
+				if(!(*i).type.resolve(evaluator)) _resolved = false;
+			}
+		}
+	}
+
+	//Here all records were sucessfully resolved, so we can safely assume that we've been resolved.
+	if(_resolved) debug(" .) suceeded!");
+	return _resolved;
+}
+
 bool Record::resolve(Evaluator* evaluator){
 	assert(!_resolved);
 	_resolved = true;
@@ -149,6 +221,7 @@ bool Record::resolve(Evaluator* evaluator){
 			if(!(*i).type.resolve(evaluator)) _resolved = false;
 		}
 		//Don't you dare use itself in itself!
+		//TODO rm? This isn't necessary as we are checking hasItself below
 		//TODO don't allow extended Pointer to self
 		if((*i).type.isResolved() && (*i).type.type() == reference()){
 			error(location,"Recursive type declaration - The type %s has a field %s of its own type!",id,(*i).name);
@@ -156,11 +229,18 @@ bool Record::resolve(Evaluator* evaluator){
 			break;
 		}
 	}
+	if(!_resolved) resolveCircularReferences(evaluator);
 	if(_resolved){
-		std::vector<TypeExpression* > collection;
-		if(!traverseExtenderHierarchy(this,collection)){
-				error(location,"Faulty type extension hierarchy - The type %s features multiple path to type %s",id,collection.back());
-				_resolved = false;
+		if(auto hasItself = containsItself(this,this)){
+			error(location,"Recursive type declaration - The type %s contains a field of type %s which has a field of type %s!",this,hasItself,this);
+			_resolved = false;
+		}
+		if(_resolved){
+			std::vector<TypeExpression* > collection;
+			if(!traverseExtenderHierarchy(this,collection)){
+					error(location,"Faulty type extension hierarchy - The type %s features multiple path to type %s",id,collection.back());
+					_resolved = false;
+			}
 		}
 	}
 	if(_resolved){

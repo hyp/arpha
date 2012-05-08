@@ -1,0 +1,36 @@
+# temporary module used to test how types resolve with pointers and multiple passes
+
+type Foo0 { var x *Foo0 } #ok
+
+type FooError { var x FooError } #error
+
+type CommonExtender { extends var x int32 }
+type FooError2 { extends var x CommonExtender ; extends var x int32 } # error
+
+type Foo1 { var x Bar1 } #ok(typically after 2nd pass)
+type Bar1 { var y int32 }
+
+type Foo2 { var x Bar2 } #ok
+type Bar2 { var x *Foo2 }
+
+type Foo3 { var x *Bar3 } #ok
+type Bar3 { var x *Foo3 }
+
+type Foo3Tricky { var x *Bar3Tricky; var y *Foo3Tricky } #ok
+type Bar3Tricky { var x *Foo3Tricky }
+
+type Foo4 { var x *Bar4; var y *Bar44 }
+type Bar4 { var x *Foo4 }
+type Bar44 { var x *Foo4 } #ok
+
+type Foo5 { var x *Bar55; var y *Bar5 }
+type Bar5 { var x *Foo5 }
+type Bar55 { var x *Foo5; var y *Bar5 } #ok
+
+type Foo6 { var x *Bar6; var y *Bar66 }
+type Bar6 { var x Foo6 }
+type Bar66 { var x *Foo6 } #ok
+
+type ContainsItself { var x ContainsYourself }
+type ContainsYourself { var x ContainsItself } #error, this will never be resolved
+

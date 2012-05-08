@@ -654,10 +654,10 @@ namespace compiler {
 		debug("%s\n",currentModule->second.body);
 
 
-		if(std::string("source") == moduleName){
+		if(std::string("source") == moduleName || (packageDir + "/test/types.arp") == moduleName){
 
 			parser.evaluator()->eval(currentModule->second.body);
-			debug("2nd Pass:");
+			debug("After 2nd Pass:");
 			debug("------------------- AST: ------------------------------");
 			debug("%s\n",currentModule->second.body);
 		}
