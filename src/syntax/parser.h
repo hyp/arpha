@@ -33,6 +33,7 @@ struct Parser : Lexer {
 private:
 	Scope* _currentScope;
 	Evaluator firstRoundEvaluator;
+	SymbolID labelForNextNode;
 public:
 
 	inline Scope* currentScope() const { return _currentScope; }

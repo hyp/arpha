@@ -72,16 +72,26 @@ Node* Parser::parse(int stickiness){
 	auto location = currentLocation();
 	lookedUpToken = consume();
 	if(lookedUpToken.isSymbol()){
-		auto prefixDefinition = _currentScope->lookupPrefix(lookedUpToken.symbol);
-		if(!prefixDefinition){ 
-			debug("line %s: Can't prefix parse %s at first round!",location.line(),lookedUpToken); //TODO unresolved name
-			expression = new UnresolvedSymbol(location,lookedUpToken.symbol);
-		}else{
-			expression = prefixDefinition->parse(this);
+		auto next = peek();
+		if(next.isSymbol() && next.symbol == ":"){//TODo macroes featuring ':'
+			labelForNextNode = lookedUpToken.symbol;
+			consume();
+			return parse(stickiness);
+		}
+		else{
+			auto prefixDefinition = _currentScope->lookupPrefix(lookedUpToken.symbol);
+			if(!prefixDefinition){ 
+				debug("line %s: Can't prefix parse %s at first round!",location.line(),lookedUpToken); //TODO unresolved name
+				expression = new UnresolvedSymbol(location,lookedUpToken.symbol);
+			}else{
+				expression = prefixDefinition->parse(this);
+			}
 		}
 	}
 	else expression = parseNotSymbol(this);
 	expression->location = location;
+	expression->_label = labelForNextNode;
+	labelForNextNode = SymbolID();
 	expression = evaluate(expression);
 
 	//infix parsing

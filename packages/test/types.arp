@@ -34,3 +34,13 @@ type Bar66 { var x *Foo6 } #ok
 type ContainsItself { var x ContainsYourself }
 type ContainsYourself { var x ContainsItself } #error, this will never be resolved
 
+type Foo10 { var x *Bar10,*Bar100 }
+type Bar10 { var x *Foo10 }
+type Bar100 { var x *Bar10 } #ok
+
+type Foo11 { var x *Bar11,*Bar11 }
+type Bar11 { var x *Foo11 } #ok
+
+type Foo12 { var x *Bar12,*Bar12 }
+type Bar12 { var x *Foo12,*Foo12 } #ok
+

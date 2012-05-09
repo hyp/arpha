@@ -235,7 +235,8 @@ struct AstExpander: NodeVisitor {
 		if(node->expression->isResolved()){
 			// *int32 => Pointer(int32)
 			if(auto typeExpr = node->expression->asTypeExpression()){
-				//delete node
+				node->expression = nullptr;
+				delete node;
 				return new TypeExpression(nullptr,typeExpr);
 			}
 		}
@@ -376,7 +377,7 @@ struct AstExpander: NodeVisitor {
 
 
 	Node* visit(TupleExpression* node){
-		if(node->type && node->type!=intrinsics::types::Unresolved) return node;//Don't evaluate it again
+		if(node->isResolved()) return node;//Don't evaluate it again
 		if(node->children.size() == 1){
 			auto child = node->children[0];
 			delete node;
@@ -388,23 +389,23 @@ struct AstExpander: NodeVisitor {
 
 		std::vector<Record::Field> fields;
 	
-		node->type = nullptr;
-		TypeExpression* returns;
+		bool resolved = true;
 		for(size_t i =0;i<node->children.size();i++){
 			node->children[i] = node->children[i]->accept(this);
-			returns = node->children[i]->_returnType();
 
-			if(returns == intrinsics::types::Void){
-				error(node->children[i]->location,"A tuple can't contain an expression returning void!");
-				node->type = intrinsics::types::Unresolved;
+			if(node->children[i]->isResolved()){
+				//Check that the child doesn't return void
+				auto returns = node->children[i]->_returnType();
+				if(returns == intrinsics::types::Void){
+					error(node->children[i]->location,"A tuple can't contain an expression returning void!");
+					resolved = false;
+				}
+				else fields.push_back(Record::Field(SymbolID(),returns->duplicate()->asTypeExpression()));
 			}
-			else if(returns == intrinsics::types::Unresolved){
-				node->type = intrinsics::types::Unresolved;
-				evaluator->unresolvedExpressions++;
-			}
-			else fields.push_back(Record::Field(SymbolID(),returns));
+			else resolved = false;
 		}
-		if(!node->type){
+
+		if(resolved){
 			//int32,int32 :: Type,Type -> anon-record(int32,int32) :: Type
 			if(evaluator->expectedTypeForEvaluatedExpression == intrinsics::types::Type){
 				bool allTypes = true;
@@ -453,16 +454,15 @@ struct AstExpander: NodeVisitor {
 
 	Node* visit(MatchExpression* node){
 		node->object = node->object->accept(this);
-		auto objectReturns = node->object->_returnType();
-		if(objectReturns == intrinsics::types::Unresolved) return node;
+		if(!node->object->isResolved()) return node;
 		//Resolve cases
 		bool allCasesResolved = true;
 		for(auto i =node->cases.begin();i!=node->cases.end();i++){
 			(*i).pattern = (*i).pattern->accept(this);
-			if((*i).pattern->_returnType() == intrinsics::types::Unresolved) allCasesResolved = false;
+			if(!(*i).pattern->isResolved()) allCasesResolved = false;
 			if((*i).consequence){
 				(*i).consequence = (*i).consequence->accept(this);
-				if((*i).consequence->_returnType() == intrinsics::types::Unresolved) allCasesResolved = false;
+				if(!(*i).consequence->isResolved()) allCasesResolved = false;
 			}
 		}
 

@@ -95,6 +95,7 @@ Node* VariableReference::duplicate() const {
 	return variable->reference();
 };
 
+
 // Tuple expression
 TupleExpression::TupleExpression() : type(nullptr) {}
 TupleExpression::TupleExpression(Node* a,Node* b) : type(nullptr) {
@@ -111,14 +112,14 @@ TypeExpression* TupleExpression::_returnType() const {
 	return type;
 }
 bool TupleExpression::isResolved() const {
-	return type && type!=intrinsics::types::Unresolved;
+	return type != nullptr;
 }
 Node* TupleExpression::duplicate() const {
 	auto dup = new TupleExpression;
 	for(auto i = children.begin();i!=children.end();i++){
 		dup->children.push_back((*i)->duplicate());
 	}
-	dup->type = type;
+	dup->type = type->duplicate()->asTypeExpression();
 	return dup;
 };
 
@@ -154,7 +155,11 @@ PointerOperation::PointerOperation(Node* expression,int type){
 TypeExpression* PointerOperation::_returnType() const {
 	auto next = expression->_returnType();//TODO
 	if(next->type == TypeExpression::INTRINSIC) return intrinsics::types::Unresolved;
-	if(kind == ADDRESS) return new TypeExpression(nullptr,next);//TODO localPointer of local vars
+	if(kind == ADDRESS){
+		auto x = new TypeExpression(nullptr,next);//TODO localPointer of local vars
+		//x->_localSemantics = true;
+		return x;
+	}
 	else if(kind == DEREFERENCE && next->type == TypeExpression::POINTER){
 		return next->next;
 	}
@@ -288,20 +293,20 @@ void InferredUnresolvedTypeExpression::infer(TypeExpression* type){
 	assert(type != intrinsics::types::Unresolved);
 	assert(type->isResolved());
 	kind = Type;
-	_type = type;
+	_type = type->duplicate()->asTypeExpression();
 }
 
 // TypeExpression
-TypeExpression::TypeExpression(IntrinsicType* intrinsic) : type(INTRINSIC) {
+TypeExpression::TypeExpression(IntrinsicType* intrinsic) : type(INTRINSIC),_localSemantics(false) {
 	this->intrinsic = intrinsic;
 }
-TypeExpression::TypeExpression(IntegerType* integer) : type(INTEGER) {
+TypeExpression::TypeExpression(IntegerType* integer) : type(INTEGER),_localSemantics(false) {
 	this->integer = integer;
 }
-TypeExpression::TypeExpression(Record* record): type(RECORD) { 
+TypeExpression::TypeExpression(Record* record): type(RECORD),_localSemantics(false) { 
 	this->record = record; 
 }
-TypeExpression::TypeExpression(PointerType* pointer,TypeExpression* next) : type(POINTER) {
+TypeExpression::TypeExpression(PointerType* pointer,TypeExpression* next) : type(POINTER),_localSemantics(false) {
 	this->next = next;
 }
 bool TypeExpression::isResolved() const {
@@ -315,12 +320,15 @@ TypeExpression* TypeExpression::_returnType() const {
 	return isResolved() ? intrinsics::types::Type : intrinsics::types::Unresolved ;
 }
 Node* TypeExpression::duplicate() const {
+	TypeExpression* x;
 	switch(type){
 		case RECORD: return record->reference();
 		case INTEGER: return integer->reference();
 		case INTRINSIC: return intrinsic->reference();
 		case POINTER:
-			return new TypeExpression(nullptr,next->duplicate()->asTypeExpression());
+			x = new TypeExpression(nullptr,next->duplicate()->asTypeExpression());
+			 x->_localSemantics = _localSemantics;
+			 return x;
 		default:
 			throw std::runtime_error("Can't evaluate size of an unresolved type expression!");
 			return nullptr;
@@ -362,8 +370,11 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 		}
 	}else if(this->type == POINTER){
 		if(type->type == POINTER){
-
-			if(this->isSame(type)) return expression;
+			
+			if(this->isSame(type)){
+				if(!this->hasLocalSemantics() && type->hasLocalSemantics()) return nullptr;
+				else return expression;
+			}
 			//Extender records on pointers to records
 			else if(type->next->type == RECORD){
 				auto dummyDeref = new PointerOperation(expression,PointerOperation::DEREFERENCE);
@@ -379,11 +390,13 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 	return nullptr;
 }
 std::ostream& operator<< (std::ostream& stream,TypeExpression* node){
+	if(node->hasLocalSemantics()) stream<<"local ";
 	switch(node->type){
 		case TypeExpression::RECORD: stream<<node->record; break;
 		case TypeExpression::INTEGER: stream<<node->integer->id; break;
 		case TypeExpression::INTRINSIC: stream<<node->intrinsic->id; break;
-		case TypeExpression::POINTER: stream<<"Pointer("<<node->next<<')'; break;
+		case TypeExpression::POINTER: 
+			stream<<"Pointer("<<node->next<<')'; break;
 	}
 	return stream;
 }
@@ -547,6 +560,7 @@ struct NodeToString: NodeVisitor {
 };
 std::ostream& operator<< (std::ostream& stream,Node* node){
 	stream<<'(';
+	if(!node->label().isNull()) stream<<node->label()<<':';
 	NodeToString visitor(stream);
 	node->accept(&visitor);
 	stream<<')';

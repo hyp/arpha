@@ -68,6 +68,7 @@ struct Node;
 //An AST node
 struct Node {
 	Location location;
+	SymbolID _label; //optional lable e.g. x:1 => 1 will have label x
 
 	virtual TypeExpression* _returnType() const;
 
@@ -79,6 +80,8 @@ struct Node {
 	virtual bool isResolved() const { return true; }
 
 	virtual bool isConst() const { return false; }
+
+	inline SymbolID label() const { return _label; }
 
 	//Dynamic casts
 #define CAST(T) virtual T* as##T() { return nullptr; }
@@ -192,6 +195,8 @@ struct TypeExpression : Node {
 
 	bool isSame(TypeExpression* other);
 
+	bool hasLocalSemantics() const { return _localSemantics; }
+
 	/**
 	* This is the one of the key functions of the type system.
 	* Given an expression and its type, this function will check if the 'this' type can be assigned from expression's type.
@@ -203,6 +208,7 @@ struct TypeExpression : Node {
 	DECLARE_NODE(TypeExpression);
 public:
 	int type;
+	bool _localSemantics;
 	union {
 		IntrinsicType* intrinsic;
 		Record* record;
@@ -233,7 +239,7 @@ struct TupleExpression : Node {
 	bool isResolved() const;
 
 	std::vector<Node*> children;
-	TypeExpression* type;
+	TypeExpression* type; // = nullptr
 
 	DECLARE_NODE(TupleExpression);
 };
@@ -349,9 +355,9 @@ struct WhileExpression : Node {
 	DECLARE_NODE(WhileExpression);
 };
 
-/**
+/*****
 * These nodes are temporary utility nodes which are resolved into proper nodes.
-*/
+*****/
 
 struct AlwaysUnresolved : Node {
 	bool isResolved() const { return false; }

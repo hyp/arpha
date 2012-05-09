@@ -18,7 +18,7 @@ bool Variable::resolve(Evaluator* evaluator){
 }
 void Variable::setImmutableValue(Node* value){
 	assert(isMutable == false);
-	assert(value->_returnType() != intrinsics::types::Unresolved);
+	assert(value->isResolved());
 	this->value = value;
 	debug("Setting value %s to variable %s",value,id);
 	if(value->isConst()){
@@ -155,15 +155,25 @@ static Record* containsItself(Record* record,Record* illegalRecord){
 }
 
 //TODO what about multiple unresolved records in one expression?? e.g. MyType(Foo::unresolved,Bar::unresolved)
-static void collectUnresolvedRecord(Node* unresolvedExpression,Record* initialRecord,std::vector<Record*>& records){
+// TODO insertUnique, increment unresolvedCount for ^
+static void collectUnresolvedRecord(Node* unresolvedExpression,Record* initialRecord,std::vector<Record*>& records,size_t& foundNotRecords ){
 	if(auto typeExpr = unresolvedExpression->asTypeExpression()){
-		if(typeExpr->type == TypeExpression::RECORD && typeExpr->record!=initialRecord) //NB dont mark itself //unresolved record is implied here
-			records.push_back(typeExpr->record);
+		if(typeExpr->type == TypeExpression::RECORD){
+			if(typeExpr->record!=initialRecord) //NB dont mark itself //unresolved record is implied here
+				records.push_back(typeExpr->record);
+		}
+		else foundNotRecords++;
 	}
 	//TODO hackz
 	else if(auto ptr = unresolvedExpression->asPointerOperation()){
-		if(ptr->kind == PointerOperation::DEREFERENCE) collectUnresolvedRecord(ptr->expression,initialRecord,records);
+		if(ptr->kind == PointerOperation::DEREFERENCE) collectUnresolvedRecord(ptr->expression,initialRecord,records,foundNotRecords);
 	}
+	else if(auto tuple = unresolvedExpression->asTupleExpression()){
+		for(auto i = tuple->children.begin();i!=tuple->children.end();i++){
+			if(!(*i)->isResolved()) collectUnresolvedRecord((*i),initialRecord,records,foundNotRecords);
+		}
+	}
+	else if(!unresolvedExpression->isResolved()) foundNotRecords++;
 }
 
 // This functions tries to resolve type definitions containing unresolved records which contain the records of the original type
@@ -171,17 +181,25 @@ bool Record::resolveCircularReferences(Evaluator* evaluator){
 	debug("Trying to resolve possible circular references for type %s",this);
 	std::vector<Record*> records;
 	size_t unresolvedCount = 0;
+	size_t notRecords = 0;
 	//Check if otherRecord contains a field which is a this record or pointer to this record
 	for(auto i = fields.begin();i!=fields.end();++i){
 		if(!(*i).type.isResolved()){
 			unresolvedCount++;
 			auto expr = (*i).type.unresolvedExpression;
-			collectUnresolvedRecord((*i).type.unresolvedExpression,this,records);
+			collectUnresolvedRecord((*i).type.unresolvedExpression,this,records,notRecords);
 		}
 	}
 
-	if((!records.size()) || records.size() != unresolvedCount) return false;
-	debug(" 1) Collected %s,%s records.",records.size(),unresolvedCount);
+	debug(" 1) Collected %s,%s records. %s",records.size(),unresolvedCount, notRecords );
+	if((!records.size()) || records.size() != unresolvedCount){
+		//special case for 
+		// type Foo12 { var x *Bar12,*Bar12 }
+		// type Bar12 { var x *Foo12,*Foo12 }
+		if(!(records.size() > unresolvedCount && notRecords == 0))
+			return false;
+	}
+	
 
 	//Step 2 - pretend that I am resolved and try to resolve all collected records
 	_resolved = true;
