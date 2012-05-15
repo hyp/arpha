@@ -136,7 +136,7 @@ void InferredUnresolvedTypeExpression::parse(Parser* parser,int stickiness){
 }
 
 Node* Variable::parse(Parser* parser){
-	return reference();
+	return new VariableReference(this);
 }
 
 Node* Record::parse(Parser* parser){
@@ -156,7 +156,8 @@ Node* PointerType::parse(Parser* parser){
 }
 
 Node* Function::parse(Parser* parser){
-	return nullptr;//FunctionReference::create(this);//TODO remove?
+	assert(false);
+	return nullptr;//TODO remove?
 }
 
 Node* Overloadset::parse(Parser* parser){
@@ -164,12 +165,12 @@ Node* Overloadset::parse(Parser* parser){
 }
 
 Node* PrefixOperator::parse(Parser* parser){
-	return CallExpression::create(new UnresolvedSymbol(parser->previousLocation(),function),parser->parse());
+	return new CallExpression(new UnresolvedSymbol(parser->previousLocation(),function),parser->parse());
 }
 
 Node* InfixOperator::parse(Parser* parser,Node* node){
 	auto tuple = new TupleExpression;
 	tuple->children.push_back(node);
 	tuple->children.push_back(parser->parse(stickiness));
-	return CallExpression::create(new UnresolvedSymbol(parser->previousLocation(),function),tuple);
+	return new CallExpression(new UnresolvedSymbol(parser->previousLocation(),function),tuple);
 }

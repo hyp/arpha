@@ -38,27 +38,17 @@ bool IntegerLiteral::isConst() const {
 TypeExpression* UnitExpression::_returnType() const {
 	return intrinsics::types::Void;
 }
-UnitExpression* unitInstance = nullptr;
 Node* UnitExpression::duplicate() const {
-	return unitInstance;
+	return new UnitExpression;
 };
-UnitExpression* UnitExpression::getInstance() {
-	if(unitInstance) return unitInstance;
-	else return unitInstance = new UnitExpression;
-}
 
 // Wildcard expression
 TypeExpression* WildcardExpression::_returnType() const {
-	return intrinsics::types::Void;//???
+	return intrinsics::types::Void;//TODO???
 }
-WildcardExpression* wildInstance = nullptr;
 Node* WildcardExpression::duplicate() const {
-	return wildInstance;
+	return new WildcardExpression;
 };
-WildcardExpression* WildcardExpression::getInstance() {
-	if(wildInstance) return wildInstance;
-	else return wildInstance = new WildcardExpression;
-}
 
 // Expression reference
 ExpressionReference::ExpressionReference(Node* node) : expression(node){}
@@ -80,7 +70,6 @@ Node* ImportedScopeReference::duplicate() const {
 	return scope->reference();
 }
 
-
 // Variable reference
 VariableReference::VariableReference(Variable* variable){
 	this->variable = variable;
@@ -88,13 +77,15 @@ VariableReference::VariableReference(Variable* variable){
 bool VariableReference::isResolved() const {
 	return variable->isResolved();
 }
+bool VariableReference::isLocal() const {
+	return variable->isLocal();
+}
 TypeExpression* VariableReference::_returnType() const {
 	return variable->type.type();
 }
 Node* VariableReference::duplicate() const {
-	return variable->reference();
-};
-
+	return new VariableReference(variable);
+}
 
 // Tuple expression
 TupleExpression::TupleExpression() : type(nullptr) {}
@@ -153,20 +144,21 @@ PointerOperation::PointerOperation(Node* expression,int type){
 	kind = type;
 }
 TypeExpression* PointerOperation::_returnType() const {
+	assert(expression->isResolved());
 	auto next = expression->_returnType();//TODO
 	if(next->type == TypeExpression::INTRINSIC) return intrinsics::types::Unresolved;
 	if(kind == ADDRESS){
-		auto x = new TypeExpression(nullptr,next);//TODO localPointer of local vars
-		//x->_localSemantics = true;
+		auto x = new TypeExpression((PointerType*)nullptr,next);//TODO localPointer of local vars
+		x->_localSemantics = expression->isLocal();
 		return x;
 	}
 	else if(kind == DEREFERENCE && next->type == TypeExpression::POINTER){
-		return next->next;
+		return next->argument;
 	}
 	return intrinsics::types::Unresolved;
 }
 bool PointerOperation::isResolved() const {
-	return false;
+	return false;//TODO
 }
 Node* PointerOperation::duplicate() const {
 	return new PointerOperation(expression->duplicate(),kind);
@@ -191,18 +183,18 @@ Node* MatchExpression::duplicate() const{
 	return dup;
 }
 
-
-FunctionReference::FunctionReference(Function* function) : _function(function) {
+// Function reference
+FunctionReference::FunctionReference(Function* func) : function(func) {
 }
 TypeExpression* FunctionReference::_returnType() const {
-	return intrinsics::types::Unresolved;//TODO;
+	assert(isResolved());
+	return new TypeExpression(function->argumentType(),function->returnType());
 }
-Function* FunctionReference::function() const {
-	assert(_function->resolved());
-	return _function;
+bool FunctionReference::isResolved() const {
+	return function->isResolved();//TODO kinds pointless, since function refrences are only obtained from resolved functions?
 }
 Node* FunctionReference::duplicate() const {
-	return new FunctionReference(_function);
+	return new FunctionReference(function);
 }
 
 // Field access expression
@@ -214,7 +206,7 @@ FieldAccessExpression::FieldAccessExpression(Node* object,int field){
 Record* FieldAccessExpression::objectsRecord() const {
 	auto type = object->_returnType();
 	if(type->type == TypeExpression::RECORD) return type->record;
-	else if(type->type == TypeExpression::POINTER && type->next->type == TypeExpression::RECORD) return type->next->record;
+	else if(type->type == TypeExpression::POINTER && type->argument->type == TypeExpression::RECORD) return type->argument->record;
 	return nullptr;
 }
 TypeExpression* FieldAccessExpression::_returnType() const {
@@ -224,19 +216,25 @@ Node* FieldAccessExpression::duplicate() const {
 	return new FieldAccessExpression(object->duplicate(),field);
 }
 
+// Call expression
 
+CallExpression::CallExpression(Node* object,Node* argument){
+	this->object = object;
+	this->arg = argument;
+}
 
 TypeExpression* CallExpression::_returnType() const {
+	assert(isResolved());
 	if( auto refFunc = object->asFunctionReference()){
-		return refFunc->function()->returnType;
+		return refFunc->function->_returnType.type();
 	}
-	return intrinsics::types::Unresolved;
+	return intrinsics::types::Void;
 }
 bool CallExpression::isResolved() const {
 	return false;
 }
 Node* CallExpression::duplicate() const {
-	return nullptr;//TODO
+	return new CallExpression(object->duplicate(),arg->duplicate());
 }
 
 //While expression
@@ -274,14 +272,6 @@ NODE_LIST(DECLARE_NODE_IMPLEMENTATION)
 
 #undef DECLARE_NODE_IMPLEMENTATION
 
-//Constructors
-
-CallExpression* CallExpression::create(Node* object,Node* argument){
-	auto e = new CallExpression;
-	e->object = object;
-	e->arg = argument;
-	return e;
-}
 
 //
 
@@ -290,7 +280,6 @@ TypeExpression* InferredUnresolvedTypeExpression::type(){
 }
 void InferredUnresolvedTypeExpression::infer(TypeExpression* type){
 	assert(kind == Inferred);
-	assert(type != intrinsics::types::Unresolved);
 	assert(type->isResolved());
 	kind = Type;
 	_type = type->duplicate()->asTypeExpression();
@@ -307,12 +296,17 @@ TypeExpression::TypeExpression(Record* record): type(RECORD),_localSemantics(fal
 	this->record = record; 
 }
 TypeExpression::TypeExpression(PointerType* pointer,TypeExpression* next) : type(POINTER),_localSemantics(false) {
-	this->next = next;
+	this->argument = next;
+}
+TypeExpression::TypeExpression(TypeExpression* argument,TypeExpression* returns) : type(FUNCTION),_localSemantics(false) {
+	this->argument = argument;
+	this->returns = returns;
 }
 bool TypeExpression::isResolved() const {
 	switch(type){
 		case RECORD: return record->isResolved();
-		case POINTER: return next->isResolved();
+		case POINTER: return argument->isResolved();
+		case FUNCTION: return argument->isResolved() && returns->isResolved();
 	}
 	return true;
 }
@@ -326,11 +320,15 @@ Node* TypeExpression::duplicate() const {
 		case INTEGER: return integer->reference();
 		case INTRINSIC: return intrinsic->reference();
 		case POINTER:
-			x = new TypeExpression(nullptr,next->duplicate()->asTypeExpression());
-			 x->_localSemantics = _localSemantics;
-			 return x;
+			x = new TypeExpression((PointerType*)nullptr,argument->duplicate()->asTypeExpression());
+			x->_localSemantics = _localSemantics;
+			return x;
+		case FUNCTION:
+			x = new TypeExpression(argument->duplicate()->asTypeExpression(),returns->duplicate()->asTypeExpression());
+			x->_localSemantics = _localSemantics;
+			return x;
 		default:
-			throw std::runtime_error("Can't evaluate size of an unresolved type expression!");
+			throw std::runtime_error("TypeExpression type invariant failed");
 			return nullptr;
 	}
 }
@@ -342,16 +340,27 @@ size_t TypeExpression::size() const {
 		case INTEGER: return integer->size();
 		case INTRINSIC: return intrinsic->size();
 		case POINTER: return compiler::pointerSize;
+		case FUNCTION: return compiler::pointerSize;
 		default:
-			throw std::runtime_error("Can't evaluate size of an unresolved type expression!");
+			throw std::runtime_error("TypeExpression type invariant failed");
 	}
 }
 bool TypeExpression::isSame(TypeExpression* other){
-	if(type==POINTER && other->type==POINTER) return next->isSame(other->next);
-	else return this == other;//like a boss
+	if(this->type != other->type) return false;
+	if(this->_localSemantics != other->_localSemantics) return false;
+	switch(type){
+		case RECORD: return record == other->record;
+		case INTEGER: return integer == other->integer;
+		case POINTER: return argument->isSame(other->argument);
+		case INTRINSIC: return intrinsic == other->intrinsic;
+		case FUNCTION: return argument->isSame(other->argument) && returns->isSame(other->returns);
+		default:
+			throw std::runtime_error("TypeExpression type invariant failed");	
+			return false;
+	}
 }
 Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
-	if(this == type) return expression;//like a baws
+	if(this->isSame(type)) return expression;//like a baws
 
 	else if(this->type == INTEGER && type->type == INTEGER){
 		//literal integer constants.. check to see if the type can accept it's value
@@ -370,15 +379,12 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 		}
 	}else if(this->type == POINTER){
 		if(type->type == POINTER){
+			//TODO local semantics interaction
 			
-			if(this->isSame(type)){
-				if(!this->hasLocalSemantics() && type->hasLocalSemantics()) return nullptr;
-				else return expression;
-			}
 			//Extender records on pointers to records
-			else if(type->next->type == RECORD){
+			if(type->argument->type == RECORD){
 				auto dummyDeref = new PointerOperation(expression,PointerOperation::DEREFERENCE);
-				if(auto assigns = this->next->assignableFrom(dummyDeref,type->next)){
+				if(auto assigns = this->argument->assignableFrom(dummyDeref,type->argument)){
 					debug("YES for pointer exetnder records!");
 					return new PointerOperation(assigns,PointerOperation::ADDRESS);
 				}
@@ -396,7 +402,9 @@ std::ostream& operator<< (std::ostream& stream,TypeExpression* node){
 		case TypeExpression::INTEGER: stream<<node->integer->id; break;
 		case TypeExpression::INTRINSIC: stream<<node->intrinsic->id; break;
 		case TypeExpression::POINTER: 
-			stream<<"Pointer("<<node->next<<')'; break;
+			stream<<"Pointer("<<node->argument<<')'; break;
+		case TypeExpression::FUNCTION: 
+			stream<<"FuncType("<<node->argument<<','<<node->returns<<')'; break;
 	}
 	return stream;
 }
@@ -494,11 +502,11 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(VariableReference* node){
-		stream<<"variable "<<node->variable->id;
+		stream<<(node->variable->isLocal()?"local ":"")<<"variable "<<node->variable->id;
 		return node;
 	}
 	Node* visit(FunctionReference* node){
-		stream<<"ref func "<<node->function()->id;
+		stream<<"ref func "<<node->function->id;
 		return node;
 	}
 

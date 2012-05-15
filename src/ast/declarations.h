@@ -15,7 +15,7 @@ struct TypeExpression;
 #include "node.h"
 
 struct Variable : PrefixDefinition  {
-	Variable(SymbolID name,Location& location);
+	Variable(SymbolID name,Location& location,bool isLocal = false);
 
 	Node* parse(Parser* parser);
 
@@ -24,15 +24,25 @@ struct Variable : PrefixDefinition  {
 	bool isResolved();
 	bool resolve(Evaluator* evaluator);
 
+	bool isLocal();
+
 	InferredUnresolvedTypeExpression type;
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
-	//A single reference expression
-	VariableReference _reference;
-	inline VariableReference* reference(){ return &_reference; }
 	
 	bool isMutable; // = true
 	bool expandMe;  // = false // assume value != nullptr
+	bool _local;
 };
+
+struct Argument : Variable {
+	Argument(SymbolID name,Location& location);
+
+	void defaultValue(Node* expression,bool inferType);
+	Node* defaultValue() const;
+private:
+	Node* _defaultValue;
+};
+
 
 struct TypeBase : PrefixDefinition {
 public:
@@ -146,39 +156,36 @@ struct Overloadset: public PrefixDefinition {
 	Overloadset(Function* firstFunction);
 
 	Node* parse(Parser* parser);
+
+	void push_back(Function* function);
+
+	Overloadset* asOverloadset();
 	
 	std::vector<Function*> functions;
 };
 
+// A function
+// By defualt function is created with an empty body with null scope
+// Return type is infered by default
 struct Function: public PrefixDefinition {
-
-	struct Argument {
-		Variable* variable;			 // so that code inside the functions has access to arguments
-		//FunctionDef* typeConstraint; // Arithmetic
-		//Definition* valueConstraint; // x <- int32 //can be type or function!
-		
-		Argument(Variable* var);
-	};
-
-
-
-	Function(SymbolID name,Location& location);
+	Function(SymbolID name,Location& location,Scope* bodyScope);
 
 	Node* parse(Parser* parser);
 
-	//Function's properties
-	bool resolved(){ return true; }
-	TypeExpression* type();
+	bool isResolved();
+	bool resolve(Evaluator* evaluator);
 
-	//Calculate's properties when the type is fully resolved.
-	void updateOnSolving();
+	TypeExpression* argumentType();
+	TypeExpression* returnType();
 
-	TypeExpression* argument;
-	TypeExpression* returnType;
-	Scope* bodyScope;
-	BlockExpression* body;
+	Function* duplicate();
+
+	InferredUnresolvedTypeExpression _returnType;
+	BlockExpression body;
 	Node* (*intrinsicEvaluator)(CallExpression*);
-	std::vector<Argument> arguments;
+	std::vector<Argument*> arguments;
+private:
+	bool _resolved;
 };
 
 // A single node in an import symbol tree

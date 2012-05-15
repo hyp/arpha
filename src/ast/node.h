@@ -81,6 +81,8 @@ struct Node {
 
 	virtual bool isConst() const { return false; }
 
+	virtual bool isLocal() const { return false; }
+
 	inline SymbolID label() const { return _label; }
 
 	//Dynamic casts
@@ -106,25 +108,21 @@ struct IntegerLiteral : Node {
 
 //():void
 struct UnitExpression : Node {
+	UnitExpression(){}
 	TypeExpression* _returnType() const;
-	
-	static UnitExpression* getInstance(); //avoid multiple creations
 
 	DECLARE_NODE(UnitExpression);
 private:
-	UnitExpression(){}
 	UnitExpression(const UnitExpression& other){}
 };
 
 //_:void
 struct WildcardExpression : Node {
+	WildcardExpression(){}
 	TypeExpression* _returnType() const;
-	
-	static WildcardExpression* getInstance(); //avoid multiple creations
 
 	DECLARE_NODE(WildcardExpression);
 private:
-	WildcardExpression(){}
 	WildcardExpression(const WildcardExpression& other){}
 };
 
@@ -188,6 +186,7 @@ struct TypeExpression : Node {
 	TypeExpression(IntegerType* integer);
 	TypeExpression(Record* record);
 	TypeExpression(PointerType* pointer,TypeExpression* next);
+	TypeExpression(TypeExpression* argument,TypeExpression* returns);//function
 
 	bool isResolved() const;
 	TypeExpression* _returnType() const;
@@ -213,11 +212,15 @@ public:
 		IntrinsicType* intrinsic;
 		Record* record;
 		IntegerType* integer;
-		TypeExpression* next;
+		TypeExpression* argument;
 	};
+	TypeExpression* returns;
 	friend std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
 };
 std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
+
+// Type checks the expression, returning an expression which fits the expectedType or null if the types don't match
+Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType);
 
 //: variable->type
 struct VariableReference : Node {
@@ -225,6 +228,7 @@ struct VariableReference : Node {
 
 	TypeExpression* _returnType() const;
 	bool isResolved() const;
+	bool isLocal() const;
 
 	Variable* variable;
 	DECLARE_NODE(VariableReference);
@@ -245,17 +249,17 @@ struct TupleExpression : Node {
 };
 
 struct FunctionReference : Node {
-	FunctionReference(Function* function);
+	FunctionReference(Function* func);
 
 	TypeExpression* _returnType() const;
-	Function* function() const;
+	bool isResolved() const;
 
-	Function* _function;
+	Function* function;
 	DECLARE_NODE(FunctionReference);
 };
 
 struct CallExpression : Node {
-	static CallExpression* create(Node* object,Node* argument);
+	CallExpression(Node* object,Node* argument);
 
 	TypeExpression* _returnType() const;
 	bool isResolved() const;

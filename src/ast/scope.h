@@ -10,6 +10,7 @@ struct Parser;
 struct Node;
 struct Type;
 struct Variable;
+struct Overloadset;
 struct Function;
 struct ImportedScope;
 struct Evaluator;
@@ -21,11 +22,6 @@ namespace Visibility {
 	};
 }
 
-namespace DeclarationType {
-	enum {
-		OverloadSet = 1
-	};
-}
 
 struct PrefixDefinition : memory::ManagedDefinition {
 	SymbolID id;
@@ -41,6 +37,8 @@ struct PrefixDefinition : memory::ManagedDefinition {
 
 	virtual bool isResolved(){ return true; }
 	virtual bool resolve(Evaluator* evaluator){ return true; }
+
+	virtual Overloadset* asOverloadset(){ return nullptr; }
 
 };
 
@@ -87,6 +85,10 @@ struct Scope: memory::ManagedDefinition {
 	Scope* parent;
 
 	bool resolve(Evaluator* evaluator);
+
+	Function* functionOwner() const;
+
+	Function* _functionOwner;
 
 private:
 

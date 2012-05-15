@@ -114,7 +114,7 @@ void Evaluator::init(Scope* arphaScope){
 
 
 Node* evaluateResolvedFunctionCall(Scope* scope,CallExpression* node){
-	auto function = node->object->asFunctionReference()->function();
+	auto function = node->object->asFunctionReference()->function;
 
 	//Try to expand the function
 	auto handler = functionBindings.find(function);
@@ -127,7 +127,7 @@ Node* evaluateResolvedFunctionCall(Scope* scope,CallExpression* node){
 }
 
 //Typecheks an expression
-static Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
+Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
 	if(auto assigns = expectedType->assignableFrom(expression,expression->_returnType())){
 		return assigns;
 	}
@@ -151,7 +151,7 @@ struct AstExpander: NodeVisitor {
 	}
 
 	//on a.foo(...)
-	static Node* transformCallOnAccess(CallExpression* node,TypeExpression* argumentType,AccessExpression* acessingObject){
+	static Node* transformCallOnAccess(CallExpression* node,AccessExpression* acessingObject){
 		/*debug("calling on access! %s with %s",acessingObject,node->arg);
 		//a.foo()
 		if(argumentType == arpha::Nothing){
@@ -180,47 +180,41 @@ struct AstExpander: NodeVisitor {
 			//delte node
 			return r;
 		}*/
-		if(node->arg->_returnType() == intrinsics::types::Void) error(node->arg->location,"Can't perform type call onto a statement!");
 		return node;
 	}
 
 	Node* visit(CallExpression* node){
 		//evaluate argument
 		node->arg = node->arg->accept(this);
-		auto argumentType = node->arg->_returnType();
-
+		
 		if(auto callingType = node->object->asTypeExpression()){
 			return evalTypeCall(node,callingType);
 		}
 
-		if(argumentType == intrinsics::types::Void) error(node->arg->location,"Can't perform function call on a statement!");
-		else if(argumentType != intrinsics::types::Unresolved){
-			if(auto callingOverloadSet = node->object->asUnresolvedSymbol()){
-				auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : evaluator->currentScope());
-				auto func =  scope->resolveFunction(callingOverloadSet->symbol,node->arg);
-				if(func){
-					node->object = new FunctionReference(func);
-					//TODO function->adjustArgument
-					debug("Overload successfully resolved as %s: %s",func->id,func->argument);
-					if(func == intrinsics::ast::mixin){
-						auto oldSetting = evaluator->evaluateExpressionReferences;
-						evaluator->evaluateExpressionReferences = true;
-						auto e = node->arg->accept(this);
-						evaluator->evaluateExpressionReferences = oldSetting;
-						return e;
-					}
-					return evaluateResolvedFunctionCall(evaluator->currentScope(),node);
+		if(!node->arg->isResolved()) return node;
+		if(auto callingOverloadSet = node->object->asUnresolvedSymbol()){
+			auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : evaluator->currentScope());
+			auto func =  scope->resolveFunction(callingOverloadSet->symbol,node->arg);
+			if(func){
+				node->object = new FunctionReference(func);
+				//TODO function->adjustArgument
+				if(func == intrinsics::ast::mixin){
+					auto oldSetting = evaluator->evaluateExpressionReferences;
+					evaluator->evaluateExpressionReferences = true;
+					auto e = node->arg->accept(this);
+					evaluator->evaluateExpressionReferences = oldSetting;
+					return e;
 				}
+				return evaluateResolvedFunctionCall(evaluator->currentScope(),node);
 			}
-			else if(auto callingFunc = node->object->asFunctionReference())
-				return node;	//TODO eval?
-			else if(auto callingAccess = node->object->asAccessExpression()){
-				return transformCallOnAccess(node,argumentType,callingAccess)->accept(this);
-			}
-			else
-				error(node->object->location,"Can't perform a function call %s!",node->object);
 		}
-
+		else if(auto callingFunc = node->object->asFunctionReference())
+			return node;	//TODO eval?
+		else if(auto callingAccess = node->object->asAccessExpression()){
+			return transformCallOnAccess(node,callingAccess)->accept(this);
+		}
+		else
+			error(node->object->location,"Can't perform a function call %s!",node->object);
 		return node;
 	}
 
@@ -237,7 +231,7 @@ struct AstExpander: NodeVisitor {
 			if(auto typeExpr = node->expression->asTypeExpression()){
 				node->expression = nullptr;
 				delete node;
-				return new TypeExpression(nullptr,typeExpr);
+				return new TypeExpression((PointerType*)nullptr,typeExpr);
 			}
 		}
 		return node;
@@ -246,7 +240,7 @@ struct AstExpander: NodeVisitor {
 
 	Node* fieldAccessFromAccess(AccessExpression* node){
 		auto returns = node->object->_returnType();
-		if(returns->type == TypeExpression::POINTER) returns = returns->next;
+		if(returns->type == TypeExpression::POINTER) returns = returns->argument;
 		assert(returns->type == TypeExpression::RECORD);
 		auto field = returns->record->lookupField(node->symbol);
 		if(field != -1){
@@ -384,7 +378,7 @@ struct AstExpander: NodeVisitor {
 			return child;
 		}else if(node->children.size() == 0){
 			delete node;
-			return UnitExpression::getInstance();
+			return new UnitExpression;
 		}
 
 		std::vector<Record::Field> fields;
@@ -436,8 +430,26 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 	Node* visit(ReturnExpression* node){
-		//TODO function return type inferring
-		if(node->value) node->value = node->value->accept(this);
+		auto func = evaluator->currentScope()->functionOwner();
+		if(func){
+			if(node->value){
+				node->value = node->value->accept(this);
+				if(node->value->isResolved()){
+					if(func->_returnType.isInferred()) func->_returnType.infer(node->value->_returnType());
+					else if(func->_returnType.isResolved()){
+						node->value = typecheck(node->value->location,node->value,func->_returnType.type());
+					}
+				}
+			}else {
+				if(func->_returnType.isInferred()) func->_returnType.infer(intrinsics::types::Void);
+				else if(func->_returnType.isResolved()){
+					//TODO proper typecheck?
+					if(!func->_returnType.type()->isSame(intrinsics::types::Void)){
+						error(node->location,"This function is expected to return void, not %s!",func->_returnType.type());
+					}
+				}
+			}
+		}else error(node->location,"Return statement is allowed only inside function's body!");
 		return node;
 	}
 
@@ -524,7 +536,7 @@ struct AstExpander: NodeVisitor {
 				//TODO - how to mark it??
 				return node;
 			}*/
-				else return CallExpression::create(new UnresolvedSymbol(node->location,node->symbol),node->object)->accept(this);
+				else return (new CallExpression(new UnresolvedSymbol(node->location,node->symbol),node->object))->accept(this);
 			}
 		}
 		else node->passedFirstEval = true;

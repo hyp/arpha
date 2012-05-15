@@ -4,6 +4,7 @@
 #include "scope.h"
 #include "node.h"
 #include "declarations.h"
+#include "../intrinsics/types.h"
 
 PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){
 	this->id = name;this->location = location;
@@ -15,8 +16,11 @@ InfixDefinition::InfixDefinition(SymbolID name,int stickiness,Location& location
 	visibilityMode = Visibility::Public;
 }
 
-Scope::Scope(Scope* parent){
+Scope::Scope(Scope* parent) : _functionOwner(parent ? parent->_functionOwner : nullptr) {
 	this->parent = parent;
+}
+Function* Scope::functionOwner() const {
+	return _functionOwner;
 }
 
 void Scope::import(Scope* scope,const char* alias,bool qualified,bool exported){
@@ -132,6 +136,19 @@ void Scope::define(InfixDefinition* definition){
 }
 
 void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& results,const Node* argument,bool enforcePublic = false){
+	auto argumentType = argument->_returnType();
+
+	for(auto i=overloads.begin();i!=overloads.end();++i){
+		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
+		auto func = (*i);
+		if(0 == func->arguments.size()){
+			if(argumentType == intrinsics::types::Void) results.push_back(func);
+			//TODO default arguments
+		}else {
+			
+		}
+	}
+
 	/*Type* argumentType = argument->returnType();
 	Function *implicitMatch = nullptr,*inferMatch = nullptr,*exprMatch = nullptr;//lastResort
 	int extender;
@@ -172,9 +189,9 @@ Function* Scope::resolve(const char* name,Type* argumentType){
 Function* Scope::resolveFunction(SymbolID name,const Node* argument){
 	std::vector<Function*> results;
 	//step 1 - check current scope for matching function
-	if(auto os = containsPrefix(name)){
-		if(os->declarationType == DeclarationType::OverloadSet){
-			findMatches(((Overloadset*)os)->functions,results,argument);
+	if(auto hasDef = containsPrefix(name)){
+		if(auto os = hasDef->asOverloadset()){
+			findMatches(os->functions,results,argument);
 			if(results.size() == 1) return results[0];
 			else if(results.size()>1) return errorOnMultipleMatches(results);
 		}
@@ -183,8 +200,8 @@ Function* Scope::resolveFunction(SymbolID name,const Node* argument){
 	if(imports.size()){
 		std::vector<Function*> overloads;
 		for(auto i = imports.begin();i!=imports.end();++i){ 
-			if(auto os = (*i)->containsPrefix(name)){
-				if(os->declarationType == DeclarationType::OverloadSet) overloads.insert(overloads.end(),((Overloadset*)os)->functions.begin(),((Overloadset*)os)->functions.end()); 
+			if(auto hasDef = (*i)->containsPrefix(name)){
+				if(auto os = hasDef->asOverloadset()) overloads.insert(overloads.end(),os->functions.begin(),os->functions.end()); 
 			}
 		}
 		findMatches(overloads,results,argument,true);
@@ -197,23 +214,16 @@ Function* Scope::resolveFunction(SymbolID name,const Node* argument){
 }
 
 void Scope::defineFunction(Function* definition){
-
-	Overloadset* set;
-
-	auto alreadyDefined = containsPrefix(definition->id);
-	if(alreadyDefined){
-		if(alreadyDefined->declarationType != DeclarationType::OverloadSet){ 
-			error(definition->location,"'%s' is already (prefix)defined in the current scope",definition->id);
+	if(auto alreadyDefined = containsPrefix(definition->id)){
+		if(auto os = alreadyDefined->asOverloadset()) os->push_back(definition);
+		else {
+			error(definition->location,"'%s' is already (prefix)defined in the current scope",definition->id);//TODO better message
 			return;
-		}
-		set = (Overloadset*)alreadyDefined;
-		//todo safe add function
-		set->functions.push_back(definition);
-		
+		}	
 	}
 	else {
-		set = new Overloadset(definition);
-		prefixDefinitions[definition->id] = set;
+		auto os = new Overloadset(definition);
+		prefixDefinitions[definition->id] = os;
 	}
 }
 

@@ -120,7 +120,7 @@ struct ParenthesisParser: PrefixDefinition {
 	}
 	Node* parse(Parser* parser){
 		if( parser->match(closingParenthesis) )
-			return UnitExpression::getInstance();
+			return new UnitExpression;
 		auto e = parser->parse();
 		parser->expect(closingParenthesis);
 		return e;
@@ -135,12 +135,12 @@ struct CallParser: InfixDefinition {
 	}
 	Node* parse(Parser* parser,Node* node){
 		Node* arg;
-		if( parser->match(closingParenthesis) ) arg = UnitExpression::getInstance();
+		if( parser->match(closingParenthesis) ) arg = new UnitExpression;
 		else{
 			arg = parser->parse();
 			parser->expect(closingParenthesis);
 		}
-		return CallExpression::create(node,arg);
+		return new CallExpression(node,arg);
 	}
 };
 
@@ -218,20 +218,21 @@ struct VarParser: PrefixDefinition {
 	VarParser(): PrefixDefinition("var",Location()) {}
 	static Node* parseVar(Parser* parser,SymbolID first,bool isMutable){
 		std::vector<Variable*> vars;
+		bool isLocal = parser->currentScope()->functionOwner() != nullptr;
 		if(!first.isNull()){
-			auto var = new Variable(first,parser->previousLocation());
+			auto var = new Variable(first,parser->previousLocation(),isLocal);
 			var->isMutable = isMutable;
 			parser->currentScope()->define(var);
 			vars.push_back(var);
 			while(parser->match(",")){
-				var = new Variable(parser->expectName(),parser->previousLocation());
+				var = new Variable(parser->expectName(),parser->previousLocation(),isLocal);
 				var->isMutable = isMutable;
 				parser->currentScope()->define(var);
 				vars.push_back(var);
 			}
 		}else{
 			do {
-				auto var = new Variable(parser->expectName(),parser->previousLocation());
+				auto var = new Variable(parser->expectName(),parser->previousLocation(),isLocal);
 				var->isMutable = isMutable;
 				parser->currentScope()->define(var);
 				vars.push_back(var);
@@ -244,10 +245,10 @@ struct VarParser: PrefixDefinition {
 		for(auto i=vars.begin();i!=vars.end();i++) (*i)->type = type;
 		
 		Node* result;
-		if(vars.size() == 1) result = vars[0]->reference();
+		if(vars.size() == 1) result = new VariableReference(vars[0]);
 		else{
 			auto tuple = new TupleExpression;
-			for(auto i=vars.begin();i!=vars.end();i++) tuple->children.push_back((*i)->reference());
+			for(auto i=vars.begin();i!=vars.end();i++) tuple->children.push_back(new VariableReference((*i)));
 			result = tuple;
 		}
 
@@ -274,16 +275,15 @@ struct DefParser: PrefixDefinition {
 	static void functionBody(Function* func,Parser* parser){
 		auto token = parser->peek();
 		if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
-			func->body = nullptr;
+			;
 		}else{
-			func->body = new BlockExpression(func->bodyScope);
 			auto oldScope = parser->currentScope();
-			parser->currentScope(func->bodyScope);
+			parser->currentScope(func->body.scope);
 			if(parser->match("="))
-				func->body->children.push_back(parser->evaluate(new ReturnExpression(parser->parse())));
+				func->body.children.push_back(parser->evaluate(new ReturnExpression(parser->parse())));
 			else {
 				parser->expect("{");
-				blockParser->body(parser,BlockParser::BlockChildParser(func->body));
+				blockParser->body(parser,BlockParser::BlockChildParser(&func->body));
 			}
 			parser->currentScope(oldScope);
 		}
@@ -291,29 +291,38 @@ struct DefParser: PrefixDefinition {
 
 
 	static Node* function(SymbolID name,Location location,Parser* parser){
-		/*Function
-		auto func = new Function(name,location);
+		//Function
+		auto bodyScope = new Scope(parser->currentScope());
+		auto func = new Function(name,location,bodyScope);
+		bodyScope->_functionOwner = func;
 		parser->currentScope()->defineFunction(func);
-		auto declaration = FunctionDeclaration::create(func);
-		declaration->returnTypeExpression = nullptr;
-		func->bodyScope = new Scope(parser->currentScope());
 
 		//parse arguments
 		if(!parser->match(")")){
 			while(1){
 				auto loc = parser->currentLocation();
 				auto argName = parser->expectName();
-				Function::Argument arg(new Variable(argName,location));
-				func->bodyScope->define(arg.variable);
-				func->arguments.push_back(arg);
+				auto param = new Argument(argName,location);
+		
 				auto next = parser->peek();
-				FunctionDeclaration::Parameter param;
-				if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")")){
-					param.typeExpression = TypeReference::create(compiler::anyType);
+				bool inferOnDefault = false;
+				if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")" || next.symbol == "=")){
+					param->type.infer(intrinsics::types::AnyType);
+					inferOnDefault = true;
 				}else{
-					param.typeExpression = parser->parse(arpha::Precedence::Tuple);
+					param->type.parse(parser,arpha::Precedence::Tuple);
+					next = parser->peek();
 				}
-				declaration->parameters.push_back(param);
+
+				//parameter's default value
+				if(next.isSymbol() && next.symbol == "="){
+					parser->consume();
+					param->defaultValue(parser->parse(arpha::Precedence::Tuple),inferOnDefault);
+				}
+
+				func->arguments.push_back(param);
+				bodyScope->define(param);
+
 				if(parser->match(")")) break;
 				parser->expect(",");
 			}
@@ -321,18 +330,18 @@ struct DefParser: PrefixDefinition {
 		//return type & body
 		auto token = parser->peek();
 		if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
-			func->returnType = compiler::Nothing;
-			func->body = nullptr;
+			func->_returnType.infer(intrinsics::types::Void);
 		}
 		else {
-			func->returnType = compiler::Unresolved;	
 			if(!(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
-				declaration->returnTypeExpression = parser->parse(arpha::Precedence::Assignment);
+				func->_returnType.parse(parser,arpha::Precedence::Assignment);
 			}
 			functionBody(func,parser);
 		}
-		return declaration;*/
-		return nullptr;
+		//def infer return type void on no return statements in body TODO
+		func->resolve(parser->evaluator());
+		debug("defined func - %s",&func->body);
+		return new FunctionReference(func);
 	}
 
 	Node* parse(Parser* parser){
@@ -403,7 +412,7 @@ struct TypeParser: PrefixDefinition {
 			debug("Defined pointer type %s",name);
 			auto type = new PointerType(name,location);
 			parser->currentScope()->define(type);
-			return UnitExpression::getInstance();//TODO
+			return new UnitExpression;//TODO
 		}
 		auto record = new Record(name,location);
 		parser->currentScope()->define(record);
@@ -450,7 +459,7 @@ struct OperatorParser: PrefixDefinition {
 			op->function = parser->expectName();
 			parser->currentScope()->define(op);
 		}
-		return UnitExpression::getInstance();
+		return new UnitExpression;
 	}
 };
 
@@ -510,7 +519,7 @@ struct MatchParser: PrefixDefinition {
 	
 	// pattern ::= '_'|expression
 	static Node* pattern(Parser* parser){
-		if(parser->match("_")) return WildcardExpression::getInstance();
+		if(parser->match("_")) return new WildcardExpression;
 		else return parser->parse();
 	}
 	// body ::= '{' 'to' pattern ':' consequence... '}'
@@ -569,7 +578,7 @@ struct ImportParser: PrefixDefinition {
 				error(location,"module '%s' wasn't found!",modulePath);
 			}
 		}while(parser->match(","));
-		return UnitExpression::getInstance();
+		return new UnitExpression;
 	}
 };
 

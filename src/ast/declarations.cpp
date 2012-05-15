@@ -7,7 +7,11 @@
 #include "../intrinsics/types.h"
 
 //variable
-Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location),value(nullptr),_reference(this),isMutable(true),expandMe(false) {
+Variable::Variable(SymbolID name,Location& location,bool isLocal) : PrefixDefinition(name,location),value(nullptr),isMutable(true),expandMe(false) {
+	_local = isLocal;
+}
+bool Variable::isLocal(){
+	return _local;
 }
 bool Variable::isResolved(){
 	return type.isResolved();
@@ -376,38 +380,78 @@ Record* Record::findAnonymousRecord(std::vector<Field>& record){
 //Overload set
 
 Overloadset::Overloadset(Function* firstFunction) : PrefixDefinition(firstFunction->id,firstFunction->location) {
-	declarationType = DeclarationType::OverloadSet;
 	visibilityMode = Visibility::Public;//!important // TODO fix import module a type foo, module b private def foo() //<-- conflict
 	functions.push_back(firstFunction);
+}
+Overloadset* Overloadset::asOverloadset(){
+	 return this;
+}
+void Overloadset::push_back(Function* function){
+	functions.push_back(function);//TODO check against same functions
 }
 
 //Function
 
-Function::Argument::Argument(Variable* var) : variable(var) {
+Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr) {
 }
-
-Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,location){
-	argument = intrinsics::types::Void;
-	returnType   = intrinsics::types::Void;
-	bodyScope = nullptr;
-	body = nullptr;
-	intrinsicEvaluator = nullptr;
-}
-TypeExpression* Function::type(){
-	return nullptr;//compiler::function;//TODO
-}
-
-void Function::updateOnSolving(){
-	//TODO
-	//calculate argument type
-	/*if(arguments.size() == 0) argument = compiler::Nothing;
-	else if(arguments.size()>1){
-		std::vector<std::pair<SymbolID,Type*>> fields;
-		for(auto i=arguments.begin();i!=arguments.end();++i) fields.push_back(std::make_pair((*i).variable->id,(*i).variable->type));
-		argument = Type::tuple(fields);
+void Argument::defaultValue(Node* expression,bool inferType){
+	assert(expression->isResolved());
+	if(inferType){
+		type._type = expression->_returnType();
 	}
-	else argument = arguments.front().variable->type;
-	debug("Updating function's %s state (arg: %s) ret %s",id,argument,returnType);*/
+	else {
+		//TODO typecheck
+		expression = typecheck(expression->location,expression,type.type());
+	}
+	_defaultValue = expression;
+}
+Node* Argument::defaultValue() const {
+	return _defaultValue;
+}
+
+Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDefinition(name,location), body(bodyScope) {
+	intrinsicEvaluator = nullptr;
+	_resolved = false;
+}
+
+bool Function::isResolved(){
+	return _resolved;
+}
+bool Function::resolve(Evaluator* evaluator){
+	assert(!_resolved);
+	_resolved = true;
+	for(auto i = arguments.begin();i!=arguments.end();++i){
+		if(!(*i)->isResolved()){
+			if(!(*i)->resolve(evaluator)) _resolved = false;
+		}
+	}
+	//resolve return type
+	if(!_returnType.isResolved()){
+		if(_returnType.isInferred() || !_returnType.resolve(evaluator)) _resolved = false;
+	}
+	//resolve body??
+	return _resolved;
+}
+
+TypeExpression* Function::argumentType()  {
+	assert(_resolved);
+	auto args = arguments.size();
+	if(args == 0) return intrinsics::types::Void;
+	else if(args == 1) return arguments[0]->type.type();
+	std::vector<Record::Field> fields;
+	for(auto i = arguments.begin();i!=arguments.end();++i){
+		fields.push_back(Record::Field(SymbolID(),(*i)->type.type()));
+	}
+	return new TypeExpression(Record::findAnonymousRecord(fields));
+}
+TypeExpression* Function::returnType() {
+	assert(_resolved);
+	return _returnType.type();
+}
+Function* Function::duplicate(){
+	//TODO
+	assert(_resolved);
+	return nullptr;
 }
 
 //Imported scope
