@@ -8,7 +8,7 @@
 
 namespace intrinsics {
 	namespace types {
-		TypeExpression *Void,*Unresolved,*AnyType;
+		TypeExpression *Void,*AnyType;
 
 		TypeExpression *Type,*Expression;
 
@@ -24,10 +24,8 @@ namespace intrinsics {
 
 		void preinit(){
 			auto VoidType = new IntrinsicType("void",Location());
-			auto UnresolvedType = new IntrinsicType("unresolved",Location());
 			auto AnyTypeType = new IntrinsicType("any(_)type",Location());
 			Void = VoidType->reference();
-			Unresolved = UnresolvedType->reference();
 			AnyType = AnyTypeType->reference();
 
 			Type = (new IntrinsicType("Type",Location()))->reference();

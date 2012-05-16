@@ -64,7 +64,7 @@ ImportedScopeReference::ImportedScopeReference(ImportedScope* scope){
 	this->scope = scope;
 }
 TypeExpression* ImportedScopeReference::_returnType() const {
-	return intrinsics::types::Unresolved;
+	return intrinsics::types::Void;//TODO
 }
 Node* ImportedScopeReference::duplicate() const {
 	return scope->reference();
@@ -146,19 +146,19 @@ PointerOperation::PointerOperation(Node* expression,int type){
 TypeExpression* PointerOperation::_returnType() const {
 	assert(expression->isResolved());
 	auto next = expression->_returnType();//TODO
-	if(next->type == TypeExpression::INTRINSIC) return intrinsics::types::Unresolved;
+	assert(next->type != TypeExpression::INTRINSIC);
 	if(kind == ADDRESS){
-		auto x = new TypeExpression((PointerType*)nullptr,next);//TODO localPointer of local vars
+		auto x = new TypeExpression((PointerType*)nullptr,next);
 		x->_localSemantics = expression->isLocal();
 		return x;
 	}
 	else if(kind == DEREFERENCE && next->type == TypeExpression::POINTER){
 		return next->argument;
 	}
-	return intrinsics::types::Unresolved;
+	return intrinsics::types::Void;
 }
 bool PointerOperation::isResolved() const {
-	return false;//TODO
+	return expression->isResolved();
 }
 Node* PointerOperation::duplicate() const {
 	return new PointerOperation(expression->duplicate(),kind);
@@ -276,7 +276,8 @@ NODE_LIST(DECLARE_NODE_IMPLEMENTATION)
 //
 
 TypeExpression* InferredUnresolvedTypeExpression::type(){
-	return kind == Type ? _type : intrinsics::types::Unresolved;
+	assert(kind == Type);
+	return  _type;
 }
 void InferredUnresolvedTypeExpression::infer(TypeExpression* type){
 	assert(kind == Inferred);
@@ -311,7 +312,8 @@ bool TypeExpression::isResolved() const {
 	return true;
 }
 TypeExpression* TypeExpression::_returnType() const {
-	return isResolved() ? intrinsics::types::Type : intrinsics::types::Unresolved ;
+	assert(isResolved());
+	return intrinsics::types::Type;
 }
 Node* TypeExpression::duplicate() const {
 	TypeExpression* x;

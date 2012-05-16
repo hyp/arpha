@@ -359,7 +359,7 @@ struct TypeParser: PrefixDefinition {
 	static void fields(Record* record,Parser* parser,bool val = false,bool extender = false){
 		size_t i = record->fields.size();
 		do {
-			auto field = Record::Field(parser->expectName(),intrinsics::types::Unresolved);
+			auto field = Record::Field(parser->expectName(),intrinsics::types::Void);
 			field.isExtending = extender;
 			record->add(field);
 		}

@@ -1,0 +1,54 @@
+# temporary module used to test how functions resolve their return types and handle local pointers
+
+def f(x int32) # Should be int32 -> void
+
+def f0() # Should be void -> void
+
+def f1(x int32) int32 #Should be int32 -> int32
+
+def f2(x int32) int32,int32 #Should be int32 -> int32,int32
+
+def f3(x (int32,int32)) int32,int32 #Should be (int32,int32) -> int32,int32
+
+def f4(x (int32,int32),y (int32,int32)) int32,int32 #Should be (int32,int32),(int32,int32) -> int32,int32
+
+def f10() = 2 # Should be void -> int32
+
+def f11(){
+	return 2,3
+} # Should be void -> int32,int32
+
+def f12(){
+	return
+} # Should be void -> void
+
+def f13(){
+	var x = 3
+} # Should be void -> void !
+
+
+var pointer *int32
+
+def f20(){
+	var x = 2
+	var y = &x
+	pointer = y # Should be an error!
+} # void -> void
+
+def f21(){
+	var x = 3
+	var y = &x
+	y = pointer # Should be ok!
+} # void -> void
+
+def f22() *int32 {
+	var x = 4
+	return &x # Should be an error!
+}
+
+def f23(){
+	var x = 5
+	return &x # NB this should be an error! Don't allow to infer a return type with local semantic!
+}
+
+

@@ -184,6 +184,7 @@ struct Function: public PrefixDefinition {
 	BlockExpression body;
 	Node* (*intrinsicEvaluator)(CallExpression*);
 	std::vector<Argument*> arguments;
+	bool _hasReturnInside;
 private:
 	bool _resolved;
 };

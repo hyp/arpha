@@ -171,7 +171,7 @@ struct InferredUnresolvedTypeExpression {
 	inline bool isInferred(){ return kind == Inferred; }
 };
 
-//(type ...): intrinsics::types::Type | intrinsics::types::Unresolved
+//(type ...): intrinsics::types::Type
 struct TypeExpression : Node {
 
 	enum {

@@ -173,7 +173,6 @@ struct AstExpander: NodeVisitor {
 	}
 	//TODO Type call -> constructor.
 	Node* evalTypeCall(CallExpression* node,TypeExpression* type){
-		assert(type != intrinsics::types::Unresolved);
 		/*if(type == intrinsics::ast::Expression){
 			debug("Expression of");
 			auto r = ExpressionReference::create(node->arg);
@@ -275,7 +274,6 @@ struct AstExpander: NodeVisitor {
 			}
 		}else{
 			auto valuesType = value->_returnType();
-			if(valuesType  == intrinsics::types::Unresolved) return nullptr;
 			//Assigning values to variables
 			if(auto var = object->asVariableReference()){
 				if(var->variable->type.isInferred()){
@@ -319,7 +317,7 @@ struct AstExpander: NodeVisitor {
 	}
 	Node* visit(AssignmentExpression* node){
 		node->value = node->value->accept(this);
-		if(node->value->_returnType()  == intrinsics::types::Unresolved) return node;//Don't bother until the value is fully resolved
+		if(!node->value->isResolved()) return node;//Don't bother until the value is fully resolved
 		bool error = false;
 
 		auto newValue = assign(node,node->object,node->value,&error);
@@ -432,10 +430,18 @@ struct AstExpander: NodeVisitor {
 	Node* visit(ReturnExpression* node){
 		auto func = evaluator->currentScope()->functionOwner();
 		if(func){
+			func->_hasReturnInside = true;
 			if(node->value){
 				node->value = node->value->accept(this);
 				if(node->value->isResolved()){
-					if(func->_returnType.isInferred()) func->_returnType.infer(node->value->_returnType());
+					if(func->_returnType.isInferred()){
+						//Don't allow to return local types
+						auto valRet = node->value->_returnType();
+						if(!valRet->hasLocalSemantics())
+							func->_returnType.infer(valRet);
+						else
+							error(node->location,"Can't return %s because of local semantics!",node->value);
+					}
 					else if(func->_returnType.isResolved()){
 						node->value = typecheck(node->value->location,node->value,func->_returnType.type());
 					}

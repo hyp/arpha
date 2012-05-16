@@ -412,6 +412,7 @@ Node* Argument::defaultValue() const {
 Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDefinition(name,location), body(bodyScope) {
 	intrinsicEvaluator = nullptr;
 	_resolved = false;
+	_hasReturnInside = false;
 }
 
 bool Function::isResolved(){
@@ -425,11 +426,14 @@ bool Function::resolve(Evaluator* evaluator){
 			if(!(*i)->resolve(evaluator)) _resolved = false;
 		}
 	}
+	//Body has no return expression => return void
+	if(!_hasReturnInside && _returnType.isInferred()) _returnType.infer(intrinsics::types::Void);
 	//resolve return type
 	if(!_returnType.isResolved()){
 		if(_returnType.isInferred() || !_returnType.resolve(evaluator)) _resolved = false;
 	}
 	//resolve body??
+	
 	return _resolved;
 }
 
