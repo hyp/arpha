@@ -14,6 +14,7 @@ struct Overloadset;
 struct Function;
 struct ImportedScope;
 struct Evaluator;
+struct DuplicationModifiers;
 
 namespace Visibility {
 	enum {
@@ -34,6 +35,8 @@ struct PrefixDefinition : memory::ManagedDefinition {
 	virtual Node* parse(Parser* parser) = 0;
 	//Can it return a reference when it's parsed and resolved at later passes
 	virtual Node* createReference(){ return nullptr; }
+
+	virtual PrefixDefinition* duplicate(DuplicationModifiers* mods){ return nullptr; }
 
 	virtual bool isResolved(){ return true; }
 	virtual bool resolve(Evaluator* evaluator){ return true; }
@@ -79,8 +82,10 @@ struct Scope: memory::ManagedDefinition {
 	void define(InfixDefinition* definition);
 
 	Function* resolve(const char* name,Type* argumentType);
-	Function* resolveFunction(SymbolID name,const Node* argument);
+	Function* resolveFunction(SymbolID name,Node* argument);
 	void defineFunction(Function* definition);
+
+	void duplicate(DuplicationModifiers* mods);
 
 	Scope* parent;
 

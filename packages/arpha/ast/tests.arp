@@ -5,3 +5,4 @@ import ast
 def expr = Expression(3)
 assert(expr.returnType == int32)
 assert(typeof(mixin(expr)) == int32)
+

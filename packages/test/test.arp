@@ -2,3 +2,15 @@ import samedir
 import export public
 
 def another_value = some_value
+
+while (true) { } # ok
+while (false) { } # ok
+
+while (2) { } #Error!
+
+type BoolExtender {
+	extends var x bool
+}
+var b BoolExtender
+
+while(b) { } # ok!

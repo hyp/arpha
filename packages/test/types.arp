@@ -1,9 +1,14 @@
 # temporary module used to test how types resolve with pointers and multiple passes
 
 type FooExtender { extends var x int32 }
+type FooExtender2 { extends var x FooExtender }
 var foo FooExtender
 var integer int32 = foo #ok
 var ptr *int32 = &foo #ok
+var foo2 FooExtender2
+foo = foo2 #ok
+integer = foo2 #ok
+ptr = &foo2 #ok
 
 type Foo0 { var x *Foo0 } #ok
 

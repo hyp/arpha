@@ -9,10 +9,20 @@ def not(x bool) bool
 def and(x bool,y bool) bool
 def or(x bool,y bool) bool
 def equals(x bool,y bool) bool
-def not_equals(x,y) = not(x==y)
+def notEquals(x,y) = not(x==y)
 
 # Arithmetics
 def minus(x int32) int32
 
 def add(x int32,y int32) int32
 def subtract(x int32,y int32) int32
+def multiply(x int32,y int32) int32
+def divide(x int32,y int32) int32
+def mod(x int32,y int32) int32
+
+def equals(x int32,y int32) bool
+def less(x int32,y int32) bool
+def greater(x int32,y int32) bool
+def lessEquals(x int32,y int32) bool
+def greaterEquals(x int32,y int32) bool
+

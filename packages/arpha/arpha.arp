@@ -22,8 +22,11 @@ import export operators
 
 import export qualified compiler
 
-#
 import export operations
+
+import export qualified ast
+
+#
 
 # Returns true if two given types are the same type. TOCONSIDER move to compiler
 def equals(x compiler.Type,y compiler.Type) bool

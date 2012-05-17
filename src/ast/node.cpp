@@ -11,6 +11,11 @@
 TypeExpression* Node::_returnType() const {
 	return intrinsics::types::Void;
 }
+Node* Node::copyProperties(Node* dest) const {
+	dest->location = location;
+	dest->_label = _label;
+	return dest;
+}
 
 // Integer literals
 IntegerLiteral::IntegerLiteral(const BigInt& integer){
@@ -19,16 +24,22 @@ IntegerLiteral::IntegerLiteral(const BigInt& integer){
 }
 TypeExpression* IntegerLiteral::_returnType() const{
 	if(_type) return _type;
-	//TODO <0 integers
-	if(integer <= intrinsics::types::int32->integer->max) return intrinsics::types::int32;
-	else if(integer <= intrinsics::types::uint32->integer->max) return intrinsics::types::uint32;
-	else if(integer <= intrinsics::types::int64->integer->max) return intrinsics::types::int64;
-	else return intrinsics::types::uint64;
+	//TODO integers overflowing int64 max/min
+	if(integer.isNegative()){
+		if(/* >= */!(integer < intrinsics::types::int32->integer->min)) return intrinsics::types::int32;
+		else return intrinsics::types::int64;
+	}
+	else{
+		if(integer <= intrinsics::types::int32->integer->max) return intrinsics::types::int32;
+		else if(integer <= intrinsics::types::uint32->integer->max) return intrinsics::types::uint32;
+		else if(integer <= intrinsics::types::int64->integer->max) return intrinsics::types::int64;
+		else return intrinsics::types::uint64;
+	}
 }
 Node* IntegerLiteral::duplicate() const {
 	auto dup = new IntegerLiteral(integer);
 	dup->_type = _type;
-	return dup;
+	return copyProperties(dup);
 };
 bool IntegerLiteral::isConst() const {
 	return true;
@@ -39,7 +50,7 @@ TypeExpression* UnitExpression::_returnType() const {
 	return intrinsics::types::Void;
 }
 Node* UnitExpression::duplicate() const {
-	return new UnitExpression;
+	return copyProperties(new UnitExpression);
 };
 
 // Wildcard expression
@@ -47,7 +58,7 @@ TypeExpression* WildcardExpression::_returnType() const {
 	return intrinsics::types::Void;//TODO???
 }
 Node* WildcardExpression::duplicate() const {
-	return new WildcardExpression;
+	return copyProperties(new WildcardExpression);
 };
 
 // Expression reference
@@ -84,7 +95,7 @@ TypeExpression* VariableReference::_returnType() const {
 	return variable->type.type();
 }
 Node* VariableReference::duplicate() const {
-	return new VariableReference(variable);
+	return copyProperties(new VariableReference(variable));
 }
 
 // Tuple expression
@@ -111,7 +122,7 @@ Node* TupleExpression::duplicate() const {
 		dup->children.push_back((*i)->duplicate());
 	}
 	dup->type = type->duplicate()->asTypeExpression();
-	return dup;
+	return copyProperties(dup);
 };
 
 // Assignment expression
@@ -119,23 +130,26 @@ AssignmentExpression::AssignmentExpression(Node* object,Node* value){
 	this->object = object;
 	this->value = value;
 	isInitializingAssignment = false;
+	_resolved = false;
 }
 TypeExpression* AssignmentExpression::_returnType() const {
+	assert(_resolved);
 	return object->_returnType();
 }
 bool AssignmentExpression::isResolved() const {
-	return false;//TODO
+	return _resolved;
 }
 Node* AssignmentExpression::duplicate() const {
 	auto e = new AssignmentExpression(object->duplicate(),value->duplicate());
 	e->isInitializingAssignment = isInitializingAssignment;
-	return e;
+	e->_resolved = _resolved;
+	return copyProperties(e);
 }
 
 // Return expression
 ReturnExpression::ReturnExpression(Node* expression) : value(expression) {}
 Node* ReturnExpression::duplicate() const {
-	return new ReturnExpression(value?value->duplicate():nullptr);
+	return copyProperties(new ReturnExpression(value?value->duplicate():nullptr));
 }
 
 //Pointer operation
@@ -161,7 +175,7 @@ bool PointerOperation::isResolved() const {
 	return expression->isResolved();
 }
 Node* PointerOperation::duplicate() const {
-	return new PointerOperation(expression->duplicate(),kind);
+	return copyProperties(new PointerOperation(expression->duplicate(),kind));
 }
 
 // Match expression
@@ -180,7 +194,7 @@ Node* MatchExpression::duplicate() const{
 	for(auto i = cases.begin();i!=cases.end();i++){
 		dup->cases.push_back(Case((*i).pattern->duplicate(),(*i).consequence ? (*i).consequence->duplicate() : nullptr,(*i).fallThrough));
 	}
-	return dup;
+	return copyProperties(dup);
 }
 
 // Function reference
@@ -194,7 +208,7 @@ bool FunctionReference::isResolved() const {
 	return function->isResolved();//TODO kinds pointless, since function refrences are only obtained from resolved functions?
 }
 Node* FunctionReference::duplicate() const {
-	return new FunctionReference(function);
+	return copyProperties(new FunctionReference(function));
 }
 
 // Field access expression
@@ -209,11 +223,14 @@ Record* FieldAccessExpression::objectsRecord() const {
 	else if(type->type == TypeExpression::POINTER && type->argument->type == TypeExpression::RECORD) return type->argument->record;
 	return nullptr;
 }
+bool FieldAccessExpression::isLocal() const {
+	return object->isLocal(); //for when using (local var x Foo).field
+}
 TypeExpression* FieldAccessExpression::_returnType() const {
 	return objectsRecord()->fields[field].type.type();
 }
 Node* FieldAccessExpression::duplicate() const {
-	return new FieldAccessExpression(object->duplicate(),field);
+	return copyProperties(new FieldAccessExpression(object->duplicate(),field));
 }
 
 // Call expression
@@ -221,20 +238,23 @@ Node* FieldAccessExpression::duplicate() const {
 CallExpression::CallExpression(Node* object,Node* argument){
 	this->object = object;
 	this->arg = argument;
+	_resolved = false;
 }
 
 TypeExpression* CallExpression::_returnType() const {
 	assert(isResolved());
 	if( auto refFunc = object->asFunctionReference()){
-		return refFunc->function->_returnType.type();
+		return refFunc->function->_returnType.isResolved() ? refFunc->function->_returnType.type() : intrinsics::types::Void;//TODO fix when function has unresolved return type!
 	}
-	return intrinsics::types::Void;
+	return intrinsics::types::Void;//TODO only allow functions?
 }
 bool CallExpression::isResolved() const {
-	return false;
+	return _resolved;
 }
 Node* CallExpression::duplicate() const {
-	return new CallExpression(object->duplicate(),arg->duplicate());
+	auto e = new CallExpression(object->duplicate(),arg->duplicate());
+	e->_resolved = _resolved;
+	return copyProperties(e);
 }
 
 //While expression
@@ -243,7 +263,7 @@ WhileExpression::WhileExpression(Node* condition,Node* body){
 	this->body = body;
 }
 Node* WhileExpression::duplicate() const{
-	return new WhileExpression(condition->duplicate(),body->duplicate());
+	return copyProperties(new WhileExpression(condition->duplicate(),body->duplicate()));
 }
 
 // Block expression
@@ -254,7 +274,7 @@ Node* BlockExpression::duplicate() const {
 	auto dup = new BlockExpression(scope);//scope->dup???
 	dup->children.reserve(children.size());//Single alocation
 	for(auto i=children.begin();i!=children.end();i++) dup->children.push_back((*i)->duplicate());
-	return dup;
+	return copyProperties(dup);
 }
 bool BlockExpression::isResolved() const {
 	return false;
@@ -278,6 +298,13 @@ NODE_LIST(DECLARE_NODE_IMPLEMENTATION)
 TypeExpression* InferredUnresolvedTypeExpression::type(){
 	assert(kind == Type);
 	return  _type;
+}
+InferredUnresolvedTypeExpression InferredUnresolvedTypeExpression::duplicate(DuplicationModifiers* mods){
+	InferredUnresolvedTypeExpression result;
+	if(kind == Type) result._type = _type->duplicate()->asTypeExpression();
+	else if(kind == Unresolved) result.unresolvedExpression = unresolvedExpression->duplicate();
+	result.kind = kind;
+	return result;
 }
 void InferredUnresolvedTypeExpression::infer(TypeExpression* type){
 	assert(kind == Inferred);
@@ -418,7 +445,7 @@ ExpressionVerifier::ExpressionVerifier(const Location& loc,Node* child,TypeExpre
 	location = loc;
 }
 Node* ExpressionVerifier::duplicate() const {
-	return new ExpressionVerifier(location,expression->duplicate(),expectedType/* NB no duplicate */);
+	return copyProperties(new ExpressionVerifier(location,expression->duplicate(),expectedType/* NB no duplicate */));
 }
 std::ostream& operator<< (std::ostream& stream,ExpressionVerifier* node){
 	stream<<node->expression<<" with expected type "<<node->expectedType;
@@ -430,7 +457,7 @@ UnresolvedSymbol::UnresolvedSymbol(const Location& loc,SymbolID sym,Scope* scope
 	location = loc;
 }
 Node* UnresolvedSymbol::duplicate() const {
-	return new UnresolvedSymbol(location,symbol,explicitLookupScope);
+	return copyProperties(new UnresolvedSymbol(location,symbol,explicitLookupScope));
 }
 std::ostream& operator<< (std::ostream& stream,UnresolvedSymbol* node){
 	stream<<node->symbol;
@@ -443,7 +470,7 @@ AccessExpression::AccessExpression(Node* object,SymbolID symbol){
 	this->passedFirstEval = false;
 }
 Node* AccessExpression::duplicate() const {
-	return new AccessExpression(object->duplicate(),symbol);//NB duplicate passed first eval? - no
+	return copyProperties(new AccessExpression(object->duplicate(),symbol));//NB duplicate passed first eval? - no
 }
 std::ostream& operator<< (std::ostream& stream,AccessExpression* node){
 	stream<<node->object<<" u. "<<node->symbol;

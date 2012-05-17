@@ -135,17 +135,40 @@ void Scope::define(InfixDefinition* definition){
 	else infixDefinitions[definition->id] = definition;
 }
 
-void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& results,const Node* argument,bool enforcePublic = false){
+void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic = false){
 	auto argumentType = argument->_returnType();
+
+	std::vector<Node*> nonLabeled;
+	std::vector<Node*> labeled;
+	//Step 1 - gather parameters
+	if(auto tuple = argument->asTupleExpression()){
+		for(auto i = tuple->children.begin();i!=tuple->children.end();i++){
+			(*i)->label().isNull() ? nonLabeled.push_back(*i) : labeled.push_back(*i);
+		}	
+	}else{
+		argument->label().isNull() ? nonLabeled.push_back(argument) : labeled.push_back(argument);
+	}
+	auto nonLabeledCount = nonLabeled.size();
+	auto labeledCount = labeled.size();
 
 	for(auto i=overloads.begin();i!=overloads.end();++i){
 		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
 		auto func = (*i);
 		if(0 == func->arguments.size()){
 			if(argumentType == intrinsics::types::Void) results.push_back(func);
-			//TODO default arguments
 		}else {
-			
+			//Fit all nonLabeledFirst
+			size_t currentNonLabeled = 0;
+			bool allMatched = true;
+			for(auto j = func->arguments.begin();j!=func->arguments.end();j++){
+				if((*j)->type.type()->isSame(nonLabeled[currentNonLabeled]->_returnType())){
+					currentNonLabeled++;
+				}else if((*j)->type.type()->isSame(intrinsics::types::AnyType)){
+					currentNonLabeled = nonLabeledCount;//TODO
+				}
+				else allMatched = false;
+			}
+			if(allMatched && currentNonLabeled == nonLabeledCount) results.push_back(func);
 		}
 	}
 
@@ -186,7 +209,7 @@ Function* Scope::resolve(const char* name,Type* argumentType){
 	//return resolveFunction(name,&argument);
 	return nullptr;
 }
-Function* Scope::resolveFunction(SymbolID name,const Node* argument){
+Function* Scope::resolveFunction(SymbolID name,Node* argument){
 	std::vector<Function*> results;
 	//step 1 - check current scope for matching function
 	if(auto hasDef = containsPrefix(name)){
@@ -224,6 +247,16 @@ void Scope::defineFunction(Function* definition){
 	else {
 		auto os = new Overloadset(definition);
 		prefixDefinitions[definition->id] = os;
+	}
+}
+
+void Scope::duplicate(DuplicationModifiers* mods){
+	for(auto i = prefixDefinitions.begin();i!=prefixDefinitions.end();i++){
+		if(auto dup = (*i).second->duplicate(mods)){
+			mods->target->define(dup);
+		}else{
+			error(mods->location,"Can't duplicate some definition %s!",(*i).first);
+		}
 	}
 }
 

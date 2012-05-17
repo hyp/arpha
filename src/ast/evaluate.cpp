@@ -113,16 +113,16 @@ void Evaluator::init(Scope* arphaScope){
 }
 
 
-Node* evaluateResolvedFunctionCall(Scope* scope,CallExpression* node){
+Node* evaluateResolvedFunctionCall(Evaluator* evaluator,CallExpression* node){
 	auto function = node->object->asFunctionReference()->function;
 
 	//Try to expand the function
 	auto handler = functionBindings.find(function);
 	if(handler != functionBindings.end()){
 		debug("Expanding a function call %s with %s",function->id,node->arg);
-		return handler->second(scope,node,node->arg);
+		return handler->second(evaluator->currentScope(),node,node->arg);
 	}else if(function->intrinsicEvaluator) 
-		return function->intrinsicEvaluator(node);
+		return function->intrinsicEvaluator(node,evaluator);
 	return node;
 }
 
@@ -136,6 +136,8 @@ Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
 		return expression;
 	}
 }
+
+
 
 struct AstExpander: NodeVisitor {
 	Evaluator* evaluator;
@@ -152,10 +154,9 @@ struct AstExpander: NodeVisitor {
 
 	//on a.foo(...)
 	static Node* transformCallOnAccess(CallExpression* node,AccessExpression* acessingObject){
-		/*debug("calling on access! %s with %s",acessingObject,node->arg);
 		//a.foo()
-		if(argumentType == arpha::Nothing){
-			//TODO delete node->arg;
+		if(node->arg->asUnitExpression()){
+			delete node->arg;
 			node->arg  = acessingObject->object;
 		}
 		//a.foo(bar)
@@ -163,12 +164,12 @@ struct AstExpander: NodeVisitor {
 			if(auto isArgRecord = node->arg->asTupleExpression())
 				isArgRecord->children.insert(isArgRecord->children.begin(),acessingObject->object);
 			else
-				node->arg = TupleExpression::create(acessingObject->object,node->arg);
+				node->arg = new TupleExpression(acessingObject->object,node->arg);
 		}
-		auto newCalleeObject = OverloadSetExpression::create(acessingObject->symbol,acessingObject->scope);
-		//TODO delete_no_children node->object
+		auto newCalleeObject = new UnresolvedSymbol(node->location,acessingObject->symbol);
 		node->object = newCalleeObject;
-		return node;*/
+		acessingObject->object = nullptr;
+		delete acessingObject;
 		return node;
 	}
 	//TODO Type call -> constructor.
@@ -180,6 +181,25 @@ struct AstExpander: NodeVisitor {
 			return r;
 		}*/
 		return node;
+	}
+
+	Node* inlineFunction(CallExpression* node){
+		assert(node->isResolved());
+		auto func = node->object->asFunctionReference()->function;
+		if(func->body.children.size() == 1){
+			if(auto ret = func->body.children[0]->asReturnExpression() ){
+				if(node->arg->asUnitExpression()){
+					delete node;
+					return ret->value->duplicate();
+				}else{
+					//TODO proper body Dup and replace arguments!
+					//auto bodyDup = ret->value->duplicate();
+					//replace arguments
+					return nullptr;
+				}
+			}
+		}
+		return nullptr;
 	}
 
 	Node* visit(CallExpression* node){
@@ -204,7 +224,11 @@ struct AstExpander: NodeVisitor {
 					evaluator->evaluateExpressionReferences = oldSetting;
 					return e;
 				}
-				return evaluateResolvedFunctionCall(evaluator->currentScope(),node);
+				node->_resolved = true;
+				if(auto inlined = inlineFunction(node)) return inlined;
+				else return evaluateResolvedFunctionCall(evaluator,node);
+			}else{
+				evaluator->markUnresolved(node);
 			}
 		}
 		else if(auto callingFunc = node->object->asFunctionReference())
@@ -213,7 +237,7 @@ struct AstExpander: NodeVisitor {
 			return transformCallOnAccess(node,callingAccess)->accept(this);
 		}
 		else
-			error(node->object->location,"Can't perform a function call %s!",node->object);
+			error(node->object->location,"Can't perform a call on %s!",node->object);
 		return node;
 	}
 
@@ -250,7 +274,7 @@ struct AstExpander: NodeVisitor {
 		else return nullptr;
 	}
 
-	//TODO def x = 1;x = 1 => 1=1 and def x,y = 1,2 must return on first pass (int32,int32)
+	//TODO def x = 1;x = 1 => 1=1
 	Node* assign(AssignmentExpression* assignment,Node* object,Node* value,bool* error){
 		if(auto t1 = object->asTupleExpression()){
 			if(auto t2 = value->asTupleExpression()){
@@ -258,7 +282,9 @@ struct AstExpander: NodeVisitor {
 					for(size_t i=0;i<t1->children.size();i++){
 						auto newValue = assign(assignment,t1->children[i],t2->children[i],error);
 						if(newValue) t2->children[i] = newValue;
+						else assignment->_resolved = false;
 					}
+					
 					return t2;
 				}
 				else{
@@ -316,12 +342,19 @@ struct AstExpander: NodeVisitor {
 		}		
 	}
 	Node* visit(AssignmentExpression* node){
+		if(node->_resolved) return node;//Don't evaluate it again
+
 		node->value = node->value->accept(this);
 		if(!node->value->isResolved()) return node;//Don't bother until the value is fully resolved
 		bool error = false;
 
+		node->_resolved = true;
 		auto newValue = assign(node,node->object,node->value,&error);
-		if(newValue) node->value = newValue;
+		if(newValue){
+			node->value = newValue;
+		}
+		else node->_resolved = false;
+		if(node->_resolved) node->object = node->object->accept(this); // Need to resolve object's tuple's type when some variable is inferred
 
 		if(error){
 			//TODO delete tuple's children
@@ -435,7 +468,7 @@ struct AstExpander: NodeVisitor {
 				node->value = node->value->accept(this);
 				if(node->value->isResolved()){
 					if(func->_returnType.isInferred()){
-						//Don't allow to return local types
+						//TODO Don't allow to return local types
 						auto valRet = node->value->_returnType();
 						if(!valRet->hasLocalSemantics())
 							func->_returnType.infer(valRet);
@@ -536,12 +569,7 @@ struct AstExpander: NodeVisitor {
 		if(node->passedFirstEval){
 			if(node->object->isResolved()){
 				if(auto fa = fieldAccessFromAccess(node)) return fa;
-			//TODO type field access & expression '.' call notation
-			/*if(auto field = objectType->lookupField(node->symbol)){
-				//TODO This may need to be done only on 2nd iteration, because there might be setters/getters defined on a later on in the module
-				//TODO - how to mark it??
-				return node;
-			}*/
+				//TODO type field access & expression '.' call notation
 				else return (new CallExpression(new UnresolvedSymbol(node->location,node->symbol),node->object))->accept(this);
 			}
 		}

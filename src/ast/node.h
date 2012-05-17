@@ -65,6 +65,13 @@ struct Node;
 	NODE_LIST(NODE_FORWARD_DECLARATION)
 #undef NODE_FORWARD_DECLARATION
 
+//TODO
+struct DuplicationModifiers {
+	Location location;
+	Scope* target;
+	std::vector<std::pair<Variable*,Variable*> > duplicatedVariables;
+};
+
 //An AST node
 struct Node {
 	Location location;
@@ -76,6 +83,7 @@ struct Node {
 	virtual Node* accept(NodeVisitor* visitor) = 0;
 
 	virtual Node* duplicate() const  = 0;
+	Node* copyProperties(Node* dest) const;
 
 	virtual bool isResolved() const { return true; }
 
@@ -163,6 +171,8 @@ struct InferredUnresolvedTypeExpression {
 	inline InferredUnresolvedTypeExpression(TypeExpression* expr) : kind(Type),_type(expr) {}
 	inline bool isResolved() const { return kind == Type; }
 	TypeExpression* type();
+
+	InferredUnresolvedTypeExpression duplicate(DuplicationModifiers* mods);
 
 	void infer(TypeExpression* type);
 	bool resolve(Evaluator* evaluator);
@@ -266,6 +276,7 @@ struct CallExpression : Node {
 
 	Node* object;
 	Node* arg;
+	bool _resolved;
 	DECLARE_NODE(CallExpression);
 };
 
@@ -278,6 +289,7 @@ struct FieldAccessExpression : Node {
 
 	// Returns record T when object is of type T or pointer T 
 	Record* objectsRecord() const;
+	bool isLocal() const;
 
 	Node* object;
 	int field;
@@ -293,6 +305,7 @@ struct AssignmentExpression : Node {
 	Node* object;
 	Node* value;
 	bool isInitializingAssignment;// = false
+	bool _resolved;
 	DECLARE_NODE(AssignmentExpression);
 };
 

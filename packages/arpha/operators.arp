@@ -22,7 +22,7 @@ operator || with priority precedence.logical = or
 
 ## Equality group
 operator == with priority precedence.equality = equals
-operator != with priority precedence.equality = not_equals
+operator != with priority precedence.equality = notEquals
 
 ## Comparison group
 operator < with priority precedence.comparison = less

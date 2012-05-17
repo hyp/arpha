@@ -10,6 +10,13 @@
 Variable::Variable(SymbolID name,Location& location,bool isLocal) : PrefixDefinition(name,location),value(nullptr),isMutable(true),expandMe(false) {
 	_local = isLocal;
 }
+PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
+	auto var = new Variable(id,location,mods->target->functionOwner() ? true : false);
+	var->type = type.duplicate(mods);
+	var->isMutable = isMutable;
+	mods->duplicatedVariables.push_back(std::make_pair(this,var));
+	return var;
+}
 bool Variable::isLocal(){
 	return _local;
 }
@@ -30,6 +37,11 @@ void Variable::setImmutableValue(Node* value){
 		expandMe = true;
 	}
 }
+
+PrefixDefinition* Argument::duplicate(DuplicationModifiers* mods){
+	return nullptr;//TODO
+}
+
 //intrinsic type
 IntrinsicType::IntrinsicType(SymbolID name,Location& location) : TypeBase(name,location),_reference(this) {
 }
@@ -136,10 +148,10 @@ static bool insertUniqueExtender(std::vector<TypeExpression*>& collection,TypeEx
 }
 static bool traverseExtenderHierarchy(Record* record,std::vector<TypeExpression*>& collection){
 	for(auto i = record->fields.begin();i!=record->fields.end();i++){
-		if((*i).isExtending){
+		if((*i).type.isResolved() && (*i).isExtending){
 			if(!insertUniqueExtender(collection,(*i).type.type())) return false;
 		}
-		if((*i).type.type()->type == TypeExpression::RECORD)
+		if((*i).type.isResolved() && (*i).type.type()->type == TypeExpression::RECORD)
 			if(!traverseExtenderHierarchy((*i).type.type()->record,collection)) return false;
 	}
 	return true;
@@ -149,10 +161,12 @@ static bool traverseExtenderHierarchy(Record* record,std::vector<TypeExpression*
 static Record* containsItself(Record* record,Record* illegalRecord){
 	assert(record->isResolved());
 	for(auto i = record->fields.begin();i!=record->fields.end();++i){
-		auto typeExpr = (*i).type.type();
-		if(typeExpr->type == TypeExpression::RECORD){
-			if(typeExpr->record == illegalRecord) return record;
-			else if(auto recursiveCheck = containsItself(typeExpr->record,illegalRecord)) return recursiveCheck;
+		if((*i).type.isResolved()){
+			auto typeExpr = (*i).type.type();
+			if(typeExpr->type == TypeExpression::RECORD){
+				if(typeExpr->record == illegalRecord) return record;
+				else if(auto recursiveCheck = containsItself(typeExpr->record,illegalRecord)) return recursiveCheck;
+			}
 		}
 	}
 	return nullptr;
@@ -236,7 +250,7 @@ bool Record::resolveCircularReferences(Evaluator* evaluator){
 }
 
 bool Record::resolve(Evaluator* evaluator){
-	assert(!_resolved);
+	/*assert(!_resolved);*/
 	_resolved = true;
 	for(auto i = fields.begin();i!=fields.end();++i){
 		if(!(*i).type.isResolved()){
@@ -452,10 +466,11 @@ TypeExpression* Function::returnType() {
 	assert(_resolved);
 	return _returnType.type();
 }
-Function* Function::duplicate(){
-	//TODO
-	assert(_resolved);
-	return nullptr;
+PrefixDefinition* Function::duplicate(DuplicationModifiers* mods){
+	auto func = new Function(id,location,new Scope(mods->target));
+	func->body.scope->_functionOwner = func;
+	func->_returnType = _returnType.duplicate(mods);//TODO
+	return func;
 }
 
 //Imported scope

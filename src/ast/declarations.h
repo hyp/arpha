@@ -10,6 +10,7 @@ struct BlockExpression;
 struct CallExpression;
 struct Type;
 struct TypeExpression;
+struct Evaluator;
 
 #include "../base/bigint.h"
 #include "node.h"
@@ -26,6 +27,8 @@ struct Variable : PrefixDefinition  {
 
 	bool isLocal();
 
+	PrefixDefinition* duplicate(DuplicationModifiers* mods);
+
 	InferredUnresolvedTypeExpression type;
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
 	
@@ -36,6 +39,8 @@ struct Variable : PrefixDefinition  {
 
 struct Argument : Variable {
 	Argument(SymbolID name,Location& location);
+
+	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 
 	void defaultValue(Node* expression,bool inferType);
 	Node* defaultValue() const;
@@ -178,11 +183,11 @@ struct Function: public PrefixDefinition {
 	TypeExpression* argumentType();
 	TypeExpression* returnType();
 
-	Function* duplicate();
+	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 
 	InferredUnresolvedTypeExpression _returnType;
 	BlockExpression body;
-	Node* (*intrinsicEvaluator)(CallExpression*);
+	Node* (*intrinsicEvaluator)(CallExpression*,Evaluator* evaluator);
 	std::vector<Argument*> arguments;
 	bool _hasReturnInside;
 private:

@@ -582,6 +582,38 @@ struct ImportParser: PrefixDefinition {
 	}
 };
 
+struct CommandParser: PrefixDefinition {
+	CommandParser(): PrefixDefinition("@",Location()) {}
+
+	enum {
+		None,
+		Functions,
+		Param,
+		
+	};
+
+	void functions();
+	Node* parse(Parser* parser){
+		int state = None;
+		SymbolID param;
+		InferredUnresolvedTypeExpression type;
+		while( !isEndExpression(parser->peek()) ){
+			auto tok = parser->expectName();
+			if(tok == "functions" && state == None) state = Functions;
+			if((tok == "parameter" || tok == "argument") && state == Functions){
+				param = parser->expectName();
+				state = Param;
+			}
+			if((tok == "type") && state == Param){
+				type.parse(parser,arpha::Precedence::Assignment);
+				debug("Command: param %s has type %s",param,type.type());
+				state = Functions;
+			}
+		}
+		return new UnitExpression;
+	}
+};
+
 void arpha::defineCoreSyntax(Scope* scope){
 	Location location(0,0);
 	::arpha::scope = scope;
@@ -607,6 +639,8 @@ void arpha::defineCoreSyntax(Scope* scope){
 
 	scope->define(new AddressParser);
 	scope->define(new DereferenceParser);
+
+	scope->define(new CommandParser);
 }
 
 

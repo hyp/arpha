@@ -8,6 +8,7 @@
 def debug bool
 def version int32
 
+
 # Reports a compilation error!
 #def error(string String)
 

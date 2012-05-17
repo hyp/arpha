@@ -51,4 +51,25 @@ def f23(){
 	return &x # NB this should be an error! Don't allow to infer a return type with local semantic!
 }
 
+#
+TODO
+
+def f30(x *int32) = 2
+def f31(x *int32) {
+	*x = 2
+}
+def f32(x *int32){
+	pointer = x
+}
+def f33(x *int32) = x
+
+def f39(){
+	var x int32
+	f30(&x) # Should be ok
+	f31(&x) # Should be ok
+	f32(&x) # Should fail!
+	f33(&x) # Should be ok!
+}
+
+#
 
