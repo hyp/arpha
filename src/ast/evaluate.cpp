@@ -454,7 +454,6 @@ struct AstExpander: NodeVisitor {
 	Node* visit(BlockExpression* node){
 		assert(!node->isResolved());
 		auto scp = evaluator->currentScope();
-		debug("RSLV");
 		node->_resolved = true;
 		if(!node->scope->isResolved()){
 			if(!node->scope->resolve(evaluator)) node->_resolved = false;//Resolve unresolved definitions
@@ -464,8 +463,7 @@ struct AstExpander: NodeVisitor {
 			if(!node->children[i]->isResolved()){
 				node->children[i] = node->children[i]->accept(this);
 				if(!node->children[i]->isResolved()) node->_resolved = false;
-			}
-			
+			}	
 		}
 		evaluator->currentScope(scp);
 		return node;
@@ -594,6 +592,10 @@ void Evaluator::markUnresolved(Node* node){
 	unresolvedExpressions++;
 }
 
+void Evaluator::markUnresolved(PrefixDefinition* node){
+	unresolvedExpressions++;
+}
+
 bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
 	assert(kind == Unresolved);
 	auto oldSetting = evaluator->expectedTypeForEvaluatedExpression;
@@ -615,4 +617,22 @@ bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
 Node* Evaluator::eval(Node* node){
 	AstExpander expander(this);
 	return node->accept(&expander);
+}
+
+void Evaluator::evaluateModule(BlockExpression* module){
+	if(unresolvedExpressions == 0) return;
+	unresolvedExpressions = 0;
+	size_t prevUnresolvedExpressions;
+	int pass = 1;
+	do{
+		prevUnresolvedExpressions = unresolvedExpressions;
+		unresolvedExpressions = 0;
+		eval(module);
+		debug("After extra pass %d the module is %s",pass,module);
+		pass++;
+	}
+	while(prevUnresolvedExpressions > unresolvedExpressions);
+	if(unresolvedExpressions > 0){
+		error(module->location,"Can't resolve %s expressions!",unresolvedExpressions);
+	}
 }

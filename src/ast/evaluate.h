@@ -32,6 +32,10 @@ public:
 	void currentScope(Scope* scope){ _currentScope = scope; }
 
 	void markUnresolved(Node* node);
+	void markUnresolved(PrefixDefinition* node);
+
+	// Resolves expressions and definitions in a module using multiple passes
+	void evaluateModule(BlockExpression* module);
 };
 
 #endif

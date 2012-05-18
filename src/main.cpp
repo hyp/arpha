@@ -698,10 +698,7 @@ namespace compiler {
 
 		if(std::string("source") == moduleName || (packageDir + "/test/types.arp") == moduleName){
 
-			parser.evaluator()->eval(currentModule->second.body);
-			debug("After 2nd Pass:");
-			debug("------------------- AST: ------------------------------");
-			debug("%s\n",currentModule->second.body);
+			parser.evaluator()->evaluateModule(currentModule->second.body->asBlockExpression());
 		}
 
 

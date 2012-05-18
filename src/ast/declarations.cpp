@@ -25,8 +25,11 @@ bool Variable::isResolved(){
 	return type.isResolved();
 }
 bool Variable::resolve(Evaluator* evaluator){
-	if(type.isInferred()) return false;
-	else return type.resolve(evaluator);
+	auto _resolved = true;
+	if(type.isInferred()) _resolved = false;
+	else _resolved = type.resolve(evaluator);
+	if(!_resolved) evaluator->markUnresolved(this);
+	return _resolved;
 }
 void Variable::setImmutableValue(Node* value){
 	assert(isMutable == false);
@@ -283,7 +286,7 @@ bool Record::resolve(Evaluator* evaluator){
 	if(_resolved){
 		calculateResolvedProperties();
 		debug("Successfully resolved type %s - sizeof %s",id,_size);
-	}
+	}else evaluator->markUnresolved(this);
 	return _resolved;
 }
 void Record::calculateResolvedProperties(){
@@ -474,6 +477,7 @@ bool Function::resolve(Evaluator* evaluator){
 	if(_resolved){
 		debug("Function %s is fully resolved!\n Body: %s",id,&body);
 	}
+	else evaluator->markUnresolved(this);
 	return _resolved;
 }
 
