@@ -340,7 +340,6 @@ struct DefParser: PrefixDefinition {
 		}
 		//def infer return type void on no return statements in body TODO
 		func->resolve(parser->evaluator());
-		debug("defined func - %s",&func->body);
 		return new FunctionReference(func);
 	}
 

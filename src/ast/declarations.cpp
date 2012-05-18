@@ -4,6 +4,7 @@
 #include "scope.h"
 #include "node.h"
 #include "declarations.h"
+#include "evaluate.h"
 #include "../intrinsics/types.h"
 
 //variable
@@ -396,12 +397,29 @@ Record* Record::findAnonymousRecord(std::vector<Field>& record){
 Overloadset::Overloadset(Function* firstFunction) : PrefixDefinition(firstFunction->id,firstFunction->location) {
 	visibilityMode = Visibility::Public;//!important // TODO fix import module a type foo, module b private def foo() //<-- conflict
 	functions.push_back(firstFunction);
+	_resolved = false;
 }
 Overloadset* Overloadset::asOverloadset(){
 	 return this;
 }
 void Overloadset::push_back(Function* function){
 	functions.push_back(function);//TODO check against same functions
+}
+bool Overloadset::isResolved(){ 
+	return _resolved;
+}
+bool Overloadset::resolve(Evaluator* evaluator){
+	_resolved = true;
+	for(auto i = functions.begin();i!= functions.end();i++){
+		if(!(*i)->isResolved()){
+			if(!(*i)->resolve(evaluator)) _resolved = false;
+		}
+	}
+	return _resolved;
+}
+PrefixDefinition* Overloadset::duplicate(DuplicationModifiers* mods){
+	//auto os = new Overloadset(functions[0]->duplicate(mods));
+	return nullptr;//TODO
 }
 
 //Function
@@ -432,6 +450,9 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 bool Function::isResolved(){
 	return _resolved;
 }
+bool Function::isPartiallyResolved(){
+	return true;//TODO
+}
 bool Function::resolve(Evaluator* evaluator){
 	assert(!_resolved);
 	_resolved = true;
@@ -446,8 +467,13 @@ bool Function::resolve(Evaluator* evaluator){
 	if(!_returnType.isResolved()){
 		if(_returnType.isInferred() || !_returnType.resolve(evaluator)) _resolved = false;
 	}
-	//resolve body??
-	
+	if(!body.isResolved()){
+		evaluator->eval(&body);
+		if(!body.isResolved()) _resolved = false;
+	}
+	if(_resolved){
+		debug("Function %s is fully resolved!\n Body: %s",id,&body);
+	}
 	return _resolved;
 }
 

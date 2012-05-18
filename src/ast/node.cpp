@@ -148,6 +148,9 @@ Node* AssignmentExpression::duplicate() const {
 
 // Return expression
 ReturnExpression::ReturnExpression(Node* expression) : value(expression) {}
+bool ReturnExpression::isResolved() const {
+	return value ? value->isResolved() : true;
+}
 Node* ReturnExpression::duplicate() const {
 	return copyProperties(new ReturnExpression(value?value->duplicate():nullptr));
 }
@@ -262,6 +265,9 @@ WhileExpression::WhileExpression(Node* condition,Node* body){
 	this->condition = condition;
 	this->body = body;
 }
+bool WhileExpression::isResolved() const {
+	return condition->isResolved() && body->isResolved();
+}
 Node* WhileExpression::duplicate() const{
 	return copyProperties(new WhileExpression(condition->duplicate(),body->duplicate()));
 }
@@ -269,15 +275,16 @@ Node* WhileExpression::duplicate() const{
 // Block expression
 BlockExpression::BlockExpression(Scope* scope){
 	this->scope = scope;
+	_resolved = false;
 }
 Node* BlockExpression::duplicate() const {
-	auto dup = new BlockExpression(scope);//scope->dup???
+	auto dup = new BlockExpression(scope);//TODO scope->dup???
 	dup->children.reserve(children.size());//Single alocation
 	for(auto i=children.begin();i!=children.end();i++) dup->children.push_back((*i)->duplicate());
 	return copyProperties(dup);
 }
 bool BlockExpression::isResolved() const {
-	return false;
+	return _resolved;
 }
 
 //Injects visitor callback and dynamic cast function into a node structure

@@ -225,8 +225,9 @@ struct AstExpander: NodeVisitor {
 					return e;
 				}
 				node->_resolved = true;
-				if(auto inlined = inlineFunction(node)) return inlined;
-				else return evaluateResolvedFunctionCall(evaluator,node);
+				//if(auto inlined = inlineFunction(node)) return inlined;
+				//else
+				return evaluateResolvedFunctionCall(evaluator,node);
 			}else{
 				evaluator->markUnresolved(node);
 			}
@@ -451,12 +452,21 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 	Node* visit(BlockExpression* node){
+		assert(!node->isResolved());
 		auto scp = evaluator->currentScope();
 		debug("RSLV");
-		scp->resolve(evaluator);//Resolve unresolved definitions
+		node->_resolved = true;
+		if(!node->scope->isResolved()){
+			if(!node->scope->resolve(evaluator)) node->_resolved = false;//Resolve unresolved definitions
+		}
 		evaluator->currentScope(node->scope);
-		for(size_t i =0;i<node->children.size();i++)
-			node->children[i] = node->children[i]->accept(this);
+		for(size_t i =0;i<node->children.size();i++){
+			if(!node->children[i]->isResolved()){
+				node->children[i] = node->children[i]->accept(this);
+				if(!node->children[i]->isResolved()) node->_resolved = false;
+			}
+			
+		}
 		evaluator->currentScope(scp);
 		return node;
 	}
@@ -582,16 +592,6 @@ struct AstExpander: NodeVisitor {
 
 void Evaluator::markUnresolved(Node* node){
 	unresolvedExpressions++;
-}
-
-bool Scope::resolve(Evaluator* evaluator){
-	bool isResolved = true;
-	for(auto i = prefixDefinitions.begin();i!=prefixDefinitions.end();i++){
-		if(!(*i).second->isResolved()){
-			if(!(*i).second->resolve(evaluator)) isResolved = false;
-		}
-	}
-	return isResolved;
 }
 
 bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){

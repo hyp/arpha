@@ -89,6 +89,7 @@ struct Scope: memory::ManagedDefinition {
 
 	Scope* parent;
 
+	bool isResolved();
 	bool resolve(Evaluator* evaluator);
 
 	Function* functionOwner() const;
@@ -97,7 +98,7 @@ struct Scope: memory::ManagedDefinition {
 
 private:
 
-
+	bool _resolved;
 	std::vector<Scope*> imports;
 	std::vector<std::pair<Scope*,std::pair<SymbolID,bool> > > exportedImports;
 	std::vector<ImportedScope*> broadcastedImports;

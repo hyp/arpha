@@ -313,6 +313,8 @@ struct AssignmentExpression : Node {
 struct ReturnExpression : Node {
 	ReturnExpression(Node* expression);
 
+	bool isResolved() const;
+
 	Node* value; //can be null
 	DECLARE_NODE(ReturnExpression);
 };
@@ -354,10 +356,12 @@ struct MatchExpression : Node {
 // : intrinsics::types::Void
 struct BlockExpression : Node {
 	BlockExpression(Scope* scope);
+
 	bool isResolved() const;//TODO true or false?
 
 	std::vector<Node*> children;
 	Scope* scope;
+	bool _resolved;
 	DECLARE_NODE(BlockExpression);
 };
 
@@ -366,6 +370,7 @@ struct BlockExpression : Node {
 struct WhileExpression : Node {
 	WhileExpression(Node* condition,Node* body);
 
+	bool isResolved() const;
 
 	Node* condition;//expectedType = intrinsics::types::boolean
 	Node* body;

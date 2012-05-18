@@ -18,6 +18,7 @@ InfixDefinition::InfixDefinition(SymbolID name,int stickiness,Location& location
 
 Scope::Scope(Scope* parent) : _functionOwner(parent ? parent->_functionOwner : nullptr) {
 	this->parent = parent;
+	_resolved = false;//TODO The 2nd round of resolving is not always necessary !
 }
 Function* Scope::functionOwner() const {
 	return _functionOwner;
@@ -238,7 +239,9 @@ Function* Scope::resolveFunction(SymbolID name,Node* argument){
 
 void Scope::defineFunction(Function* definition){
 	if(auto alreadyDefined = containsPrefix(definition->id)){
-		if(auto os = alreadyDefined->asOverloadset()) os->push_back(definition);
+		if(auto os = alreadyDefined->asOverloadset()){
+			os->push_back(definition);
+		}
 		else {
 			error(definition->location,"'%s' is already (prefix)defined in the current scope",definition->id);//TODO better message
 			return;
@@ -248,6 +251,21 @@ void Scope::defineFunction(Function* definition){
 		auto os = new Overloadset(definition);
 		prefixDefinitions[definition->id] = os;
 	}
+}
+
+bool Scope::isResolved(){
+	return _resolved;
+}
+
+bool Scope::resolve(Evaluator* evaluator){
+	debug("RSLV scope");
+	_resolved = true;
+	for(auto i = prefixDefinitions.begin();i!=prefixDefinitions.end();i++){
+		if(!(*i).second->isResolved()){
+			if(!(*i).second->resolve(evaluator)) _resolved = false;
+		}
+	}
+	return _resolved;
 }
 
 void Scope::duplicate(DuplicationModifiers* mods){

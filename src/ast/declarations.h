@@ -162,11 +162,15 @@ struct Overloadset: public PrefixDefinition {
 
 	Node* parse(Parser* parser);
 
+	bool isResolved();
+	bool resolve(Evaluator* evaluator);
+	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 	void push_back(Function* function);
 
 	Overloadset* asOverloadset();
 	
 	std::vector<Function*> functions;
+	bool _resolved;
 };
 
 // A function
@@ -178,6 +182,7 @@ struct Function: public PrefixDefinition {
 	Node* parse(Parser* parser);
 
 	bool isResolved();
+	bool isPartiallyResolved();//It's when arguments and return type are resolved! The function's body doesn't have to be resolved yet.
 	bool resolve(Evaluator* evaluator);
 
 	TypeExpression* argumentType();
