@@ -12,7 +12,7 @@
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
 
 
-
+Node* constructFittingArgument(Function* func,Node *arg);
 
 Node* evaluateResolvedFunctionCall(Evaluator* evaluator,CallExpression* node){
 	auto function = node->object->asFunctionReference()->function;
@@ -80,25 +80,6 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
-	Node* inlineFunction(CallExpression* node){
-		assert(node->isResolved());
-		auto func = node->object->asFunctionReference()->function;
-		if(func->body.children.size() == 1){
-			if(auto ret = func->body.children[0]->asReturnExpression() ){
-				if(node->arg->asUnitExpression()){
-					delete node;
-					return ret->value->duplicate();
-				}else{
-					//TODO proper body Dup and replace arguments!
-					//auto bodyDup = ret->value->duplicate();
-					//replace arguments
-					return nullptr;
-				}
-			}
-		}
-		return nullptr;
-	}
-
 	Node* visit(CallExpression* node){
 		//evaluate argument
 		node->arg = node->arg->accept(this);
@@ -113,17 +94,8 @@ struct AstExpander: NodeVisitor {
 			auto func =  scope->resolveFunction(callingOverloadSet->symbol,node->arg);
 			if(func){
 				node->object = new FunctionReference(func);
-				//TODO function->adjustArgument
-				if(func == intrinsics::ast::mixin){
-					auto oldSetting = evaluator->evaluateExpressionReferences;
-					evaluator->evaluateExpressionReferences = true;
-					auto e = node->arg->accept(this);
-					evaluator->evaluateExpressionReferences = oldSetting;
-					return e;
-				}
+				node->arg = constructFittingArgument(func,node->arg)->accept(this);
 				node->_resolved = true;
-				//if(auto inlined = inlineFunction(node)) return inlined;
-				//else
 				return evaluateResolvedFunctionCall(evaluator,node);
 			}else{
 				evaluator->markUnresolved(node);
@@ -575,7 +547,93 @@ Node* Evaluator::mixinFunction(CallExpression* node){
 	return node->arg;//TODO
 }
 
-//TODO argument adjusting
+//TODO function duplication with certain wildcard params
+Node* constructFittingArgument(Function* func,Node *arg){
+	std::vector<Node*> result;
+	result.resize(func->arguments.size());
+
+	//..
+	size_t currentArg = 0;
+	size_t currentExpr = 0;
+	size_t lastNonLabeledExpr = 0;
+	size_t resolvedArgs = 0;
+	auto argsCount = func->arguments.size();
+	Node* expr = arg;//nonTuple
+	Node** exprBegin;
+	size_t expressionCount;
+	if(auto tuple = arg->asTupleExpression()){
+		exprBegin = tuple->children.begin()._Ptr;
+		expressionCount = tuple->children.size();
+	}else if(arg->asUnitExpression()){
+		expressionCount = 0;
+	}
+	else{
+		exprBegin = &arg;
+		expressionCount = 1;
+	}
+
+	if(argsCount < expressionCount){
+		if(argsCount > 0 && func->arguments[argsCount-1]->type.type()->isSame(intrinsics::types::AnyType)){
+			argsCount--;
+			auto tuple = new TupleExpression();
+			for(auto i = argsCount;i<expressionCount;i++)
+				tuple->children.push_back(exprBegin[i]);
+			result[argsCount] = tuple;
+			expressionCount = argsCount;
+		}
+		else assert(false);
+	}
+
+	while(currentExpr<expressionCount){
+		auto label = exprBegin[currentExpr]->label();
+		if(!label.isNull()){
+			//Labeled
+			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
+				if(func->arguments[currentArg]->id == label){
+					if(func->arguments[currentArg]->type.type()->isSame(intrinsics::types::AnyType)){
+						result[currentArg] = exprBegin[currentExpr];
+						//TODO func dup
+					}
+					else result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType());
+					break;
+				}
+			}		
+		}
+		else{
+			//NonLabeled
+			if(func->arguments[currentArg]->type.type()->isSame(intrinsics::types::AnyType)){
+				result[currentArg] = exprBegin[currentExpr];
+				//TODO func dup
+			}
+			else result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType());
+			lastNonLabeledExpr = currentExpr;
+		}
+		currentArg++;resolvedArgs++;currentExpr++;	
+	}
+
+	//Default args at end
+	for(currentArg = resolvedArgs; currentArg < argsCount;currentArg ++){
+		result[currentArg] = func->arguments[currentArg]->defaultValue()->duplicate();
+	}
+
+	//Construct a proper argument
+	if(result.size() == 0) return arg; //arg is ()
+	else if(result.size() == 1){
+		if(auto u = arg->asUnitExpression()) delete arg;
+		return result[0];
+	}else{
+		TupleExpression* tuple;
+		if(!(tuple = arg->asTupleExpression())){
+			if(auto u = arg->asUnitExpression()) delete arg;
+			tuple = new TupleExpression();
+		}else{
+			tuple->type = nullptr;
+		}
+		tuple->children = result;
+		return tuple;
+	}
+}
+
 /**
 *Overload resolving:
 *Scenario 1 - no arg:
@@ -637,19 +695,18 @@ bool match(Function* func,Node* arg){
 					}
 				}
 			}
-			if(!foundMatch) return false;
-			currentArg++;resolvedArgs++;currentExpr++;	
+			if(!foundMatch) return false;	
 		}
 		else{
 			//NonLabeled
 			if(!(currentArg < argsCount)) return false;//f(x:5,6) where x is the last arg
 			if( func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ||
 				func->arguments[currentArg]->type.type()->isSame(intrinsics::types::AnyType) ){
-				currentArg++;resolvedArgs++;currentExpr++;
 				lastNonLabeledExpr = currentExpr;
 			}
 			else return false;
 		}
+		currentArg++;resolvedArgs++;currentExpr++;	
 	}
 
 	//Ending
