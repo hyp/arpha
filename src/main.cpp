@@ -46,7 +46,13 @@ struct BlockParser: PrefixDefinition {
 		BlockExpression* _block;
 		BlockChildParser(BlockExpression* block) : _block(block) {}
 		bool operator ()(Parser* parser){
-			_block->children.push_back(parser->parse());
+			auto e = parser->evaluator()->mixinedExpression;
+			auto p = parser->parse();
+			if(parser->evaluator()->mixinedExpression != e){
+				_block->children.push_back(parser->evaluator()->mixinedExpression);
+				parser->evaluator()->mixinedExpression = e;
+			}
+			_block->children.push_back(p);
 			return true;
 		}
 	};

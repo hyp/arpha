@@ -36,7 +36,7 @@ TypeExpression* IntegerLiteral::_returnType() const{
 		else return intrinsics::types::uint64;
 	}
 }
-Node* IntegerLiteral::duplicate() const {
+Node* IntegerLiteral::duplicate(DuplicationModifiers* mods) const {
 	auto dup = new IntegerLiteral(integer);
 	dup->_type = _type;
 	return copyProperties(dup);
@@ -49,7 +49,7 @@ bool IntegerLiteral::isConst() const {
 TypeExpression* UnitExpression::_returnType() const {
 	return intrinsics::types::Void;
 }
-Node* UnitExpression::duplicate() const {
+Node* UnitExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new UnitExpression);
 };
 
@@ -57,7 +57,7 @@ Node* UnitExpression::duplicate() const {
 TypeExpression* WildcardExpression::_returnType() const {
 	return intrinsics::types::Void;//TODO???
 }
-Node* WildcardExpression::duplicate() const {
+Node* WildcardExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new WildcardExpression);
 };
 
@@ -66,8 +66,8 @@ ExpressionReference::ExpressionReference(Node* node) : expression(node){}
 TypeExpression* ExpressionReference::_returnType() const {
 	return intrinsics::types::Expression;
 }
-Node* ExpressionReference::duplicate() const {
-	return new ExpressionReference(expression->duplicate());
+Node* ExpressionReference::duplicate(DuplicationModifiers* mods) const {
+	return new ExpressionReference(expression->duplicate(mods));
 };
 
 //Scope reference
@@ -77,7 +77,7 @@ ImportedScopeReference::ImportedScopeReference(ImportedScope* scope){
 TypeExpression* ImportedScopeReference::_returnType() const {
 	return intrinsics::types::Void;//TODO
 }
-Node* ImportedScopeReference::duplicate() const {
+Node* ImportedScopeReference::duplicate(DuplicationModifiers* mods) const {
 	return scope->reference();
 }
 
@@ -94,7 +94,14 @@ bool VariableReference::isLocal() const {
 TypeExpression* VariableReference::_returnType() const {
 	return variable->type.type();
 }
-Node* VariableReference::duplicate() const {
+Node* VariableReference::duplicate(DuplicationModifiers* mods) const {
+	auto red = mods->redirectors.find(variable);
+	if(red != mods->redirectors.end()){
+		Node* result;
+		if((*red).second.second) result = reinterpret_cast<Node*>((*red).second.first)->duplicate(mods);
+		else result = new VariableReference(reinterpret_cast<Variable*>((*red).second.first));
+		return copyProperties(result);
+	}
 	return copyProperties(new VariableReference(variable));
 }
 
@@ -116,12 +123,12 @@ TypeExpression* TupleExpression::_returnType() const {
 bool TupleExpression::isResolved() const {
 	return type != nullptr;
 }
-Node* TupleExpression::duplicate() const {
+Node* TupleExpression::duplicate(DuplicationModifiers* mods) const {
 	auto dup = new TupleExpression;
 	for(auto i = children.begin();i!=children.end();i++){
-		dup->children.push_back((*i)->duplicate());
+		dup->children.push_back((*i)->duplicate(mods));
 	}
-	dup->type = type->duplicate()->asTypeExpression();
+	dup->type = type->duplicate(mods)->asTypeExpression();
 	return copyProperties(dup);
 };
 
@@ -139,8 +146,8 @@ TypeExpression* AssignmentExpression::_returnType() const {
 bool AssignmentExpression::isResolved() const {
 	return _resolved;
 }
-Node* AssignmentExpression::duplicate() const {
-	auto e = new AssignmentExpression(object->duplicate(),value->duplicate());
+Node* AssignmentExpression::duplicate(DuplicationModifiers* mods) const {
+	auto e = new AssignmentExpression(object->duplicate(mods),value->duplicate(mods));
 	e->isInitializingAssignment = isInitializingAssignment;
 	e->_resolved = _resolved;
 	return copyProperties(e);
@@ -151,8 +158,11 @@ ReturnExpression::ReturnExpression(Node* expression) : value(expression) {}
 bool ReturnExpression::isResolved() const {
 	return value ? value->isResolved() : true;
 }
-Node* ReturnExpression::duplicate() const {
-	return copyProperties(new ReturnExpression(value?value->duplicate():nullptr));
+Node* ReturnExpression::duplicate(DuplicationModifiers* mods) const {
+	if(mods->returnValueRedirector){
+		return copyProperties(new AssignmentExpression(new VariableReference(mods->returnValueRedirector),value->duplicate(mods)));
+	}
+	return copyProperties(new ReturnExpression(value?value->duplicate(mods):nullptr));
 }
 
 //Pointer operation
@@ -177,8 +187,8 @@ TypeExpression* PointerOperation::_returnType() const {
 bool PointerOperation::isResolved() const {
 	return expression->isResolved();
 }
-Node* PointerOperation::duplicate() const {
-	return copyProperties(new PointerOperation(expression->duplicate(),kind));
+Node* PointerOperation::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new PointerOperation(expression->duplicate(mods),kind));
 }
 
 // Match expression
@@ -191,11 +201,11 @@ TypeExpression* MatchExpression::_returnType() const {
 bool MatchExpression::isResolved() const {
 	return false;
 }
-Node* MatchExpression::duplicate() const{
+Node* MatchExpression::duplicate(DuplicationModifiers* mods) const{
 	auto dup = new MatchExpression(object);
 	dup->cases.reserve(cases.size());
 	for(auto i = cases.begin();i!=cases.end();i++){
-		dup->cases.push_back(Case((*i).pattern->duplicate(),(*i).consequence ? (*i).consequence->duplicate() : nullptr,(*i).fallThrough));
+		dup->cases.push_back(Case((*i).pattern->duplicate(mods),(*i).consequence ? (*i).consequence->duplicate(mods) : nullptr,(*i).fallThrough));
 	}
 	return copyProperties(dup);
 }
@@ -210,7 +220,7 @@ TypeExpression* FunctionReference::_returnType() const {
 bool FunctionReference::isResolved() const {
 	return function->isResolved();//TODO kinds pointless, since function refrences are only obtained from resolved functions?
 }
-Node* FunctionReference::duplicate() const {
+Node* FunctionReference::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new FunctionReference(function));
 }
 
@@ -232,8 +242,8 @@ bool FieldAccessExpression::isLocal() const {
 TypeExpression* FieldAccessExpression::_returnType() const {
 	return objectsRecord()->fields[field].type.type();
 }
-Node* FieldAccessExpression::duplicate() const {
-	return copyProperties(new FieldAccessExpression(object->duplicate(),field));
+Node* FieldAccessExpression::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new FieldAccessExpression(object->duplicate(mods),field));
 }
 
 // Call expression
@@ -254,8 +264,8 @@ TypeExpression* CallExpression::_returnType() const {
 bool CallExpression::isResolved() const {
 	return _resolved;
 }
-Node* CallExpression::duplicate() const {
-	auto e = new CallExpression(object->duplicate(),arg->duplicate());
+Node* CallExpression::duplicate(DuplicationModifiers* mods) const {
+	auto e = new CallExpression(object->duplicate(mods),arg->duplicate(mods));
 	e->_resolved = _resolved;
 	return copyProperties(e);
 }
@@ -268,8 +278,8 @@ WhileExpression::WhileExpression(Node* condition,Node* body){
 bool WhileExpression::isResolved() const {
 	return condition->isResolved() && body->isResolved();
 }
-Node* WhileExpression::duplicate() const{
-	return copyProperties(new WhileExpression(condition->duplicate(),body->duplicate()));
+Node* WhileExpression::duplicate(DuplicationModifiers* mods) const{
+	return copyProperties(new WhileExpression(condition->duplicate(mods),body->duplicate(mods)));
 }
 
 // Block expression
@@ -277,15 +287,19 @@ BlockExpression::BlockExpression(Scope* scope){
 	this->scope = scope;
 	_resolved = false;
 }
-void BlockExpression::_duplicate(BlockExpression* dest) const {
+void BlockExpression::_duplicate(BlockExpression* dest,DuplicationModifiers* mods) const {
 	dest->children.reserve(children.size());//Single alocation
-	for(auto i=children.begin();i!=children.end();i++) dest->children.push_back((*i)->duplicate());
+	for(auto i=children.begin();i!=children.end();i++) dest->children.push_back((*i)->duplicate(mods));
 	copyProperties(dest);
 }
-Node* BlockExpression::duplicate() const {
-	auto dup = new BlockExpression(scope);//TODO scope->dup???
-	_duplicate(dup);
-	return copyProperties(dup);
+Node* BlockExpression::duplicate(DuplicationModifiers* mods) const {
+	auto scp = mods->target;
+	mods->target = new Scope(scp);
+	scope->duplicate(mods);
+	auto dup = new BlockExpression(mods->target);
+	_duplicate(dup,mods);
+	mods->target = scp;
+	return dup;
 }
 bool BlockExpression::isResolved() const {
 	return _resolved;
@@ -312,8 +326,8 @@ TypeExpression* InferredUnresolvedTypeExpression::type(){
 }
 InferredUnresolvedTypeExpression InferredUnresolvedTypeExpression::duplicate(DuplicationModifiers* mods){
 	InferredUnresolvedTypeExpression result;
-	if(kind == Type) result._type = _type->duplicate()->asTypeExpression();
-	else if(kind == Unresolved) result.unresolvedExpression = unresolvedExpression->duplicate();
+	if(kind == Type) result._type = _type->duplicate(mods)->asTypeExpression();
+	else if(kind == Unresolved) result.unresolvedExpression = unresolvedExpression->duplicate(mods);
 	result.kind = kind;
 	return result;
 }
@@ -321,7 +335,8 @@ void InferredUnresolvedTypeExpression::infer(TypeExpression* type){
 	assert(kind == Inferred);
 	assert(type->isResolved());
 	kind = Type;
-	_type = type->duplicate()->asTypeExpression();
+	DuplicationModifiers mods;
+	_type = type->duplicate(&mods)->asTypeExpression();
 }
 
 // TypeExpression
@@ -353,18 +368,18 @@ TypeExpression* TypeExpression::_returnType() const {
 	assert(isResolved());
 	return intrinsics::types::Type;
 }
-Node* TypeExpression::duplicate() const {
+Node* TypeExpression::duplicate(DuplicationModifiers* mods) const {
 	TypeExpression* x;
 	switch(type){
 		case RECORD: return record->reference();
 		case INTEGER: return integer->reference();
 		case INTRINSIC: return intrinsic->reference();
 		case POINTER:
-			x = new TypeExpression((PointerType*)nullptr,argument->duplicate()->asTypeExpression());
+			x = new TypeExpression((PointerType*)nullptr,argument->duplicate(mods)->asTypeExpression());
 			x->_localSemantics = _localSemantics;
 			return x;
 		case FUNCTION:
-			x = new TypeExpression(argument->duplicate()->asTypeExpression(),returns->duplicate()->asTypeExpression());
+			x = new TypeExpression(argument->duplicate(mods)->asTypeExpression(),returns->duplicate(mods)->asTypeExpression());
 			x->_localSemantics = _localSemantics;
 			return x;
 		default:
@@ -467,8 +482,8 @@ ExpressionVerifier::ExpressionVerifier(const Location& loc,Node* child,TypeExpre
 	assert(child);assert(typeExpected);
 	location = loc;
 }
-Node* ExpressionVerifier::duplicate() const {
-	return copyProperties(new ExpressionVerifier(location,expression->duplicate(),expectedType/* NB no duplicate */));
+Node* ExpressionVerifier::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new ExpressionVerifier(location,expression->duplicate(mods),expectedType/* NB no duplicate */));
 }
 std::ostream& operator<< (std::ostream& stream,ExpressionVerifier* node){
 	stream<<node->expression<<" with expected type "<<node->expectedType;
@@ -479,7 +494,7 @@ UnresolvedSymbol::UnresolvedSymbol(const Location& loc,SymbolID sym,Scope* scope
 	assert(!sym.isNull());
 	location = loc;
 }
-Node* UnresolvedSymbol::duplicate() const {
+Node* UnresolvedSymbol::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new UnresolvedSymbol(location,symbol,explicitLookupScope));
 }
 std::ostream& operator<< (std::ostream& stream,UnresolvedSymbol* node){
@@ -492,8 +507,8 @@ AccessExpression::AccessExpression(Node* object,SymbolID symbol){
 	this->symbol = symbol;
 	this->passedFirstEval = false;
 }
-Node* AccessExpression::duplicate() const {
-	return copyProperties(new AccessExpression(object->duplicate(),symbol));//NB duplicate passed first eval? - no
+Node* AccessExpression::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new AccessExpression(object->duplicate(mods),symbol));//NB duplicate passed first eval? - no
 }
 std::ostream& operator<< (std::ostream& stream,AccessExpression* node){
 	stream<<node->object<<" u. "<<node->symbol;
@@ -501,7 +516,7 @@ std::ostream& operator<< (std::ostream& stream,AccessExpression* node){
 }
 
 ErrorExpression* errorInstance = nullptr;
-Node* ErrorExpression::duplicate() const {
+Node* ErrorExpression::duplicate(DuplicationModifiers* mods) const {
 	return errorInstance;//NB an instance is already created, so we dont have to use getInstance
 };
 ErrorExpression* ErrorExpression::getInstance() {

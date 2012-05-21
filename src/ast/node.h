@@ -27,7 +27,7 @@ struct Evaluator;
 //Injects visitor callback and dynamic cast function into a node structure
 //Note: only does the definitions, the appropriate implementations are done by traversing NODE_LIST
 #define DECLARE_NODE(T) \
-	virtual Node* duplicate() const; \
+	virtual Node* duplicate(DuplicationModifiers* mods = nullptr) const; \
 	virtual Node* accept(NodeVisitor* visitor);  \
 	private:             \
 	virtual T* as##T();  \
@@ -70,7 +70,12 @@ struct DuplicationModifiers {
 	Location location;
 	Scope* target;
 
-	std::map<void*,void*> redirectors;//Used to redirect references for duplicated definitions
+	//The bool indicates whether the redirector is expression(true) or a definition(false)
+	std::map<void*,std::pair<void*,bool> > redirectors;//Used to redirect references for duplicated definitions
+	
+	Variable* returnValueRedirector;//The variable to which the return value is assigned in inlined and mixined functions
+
+	DuplicationModifiers() : returnValueRedirector(nullptr) {}
 };
 
 //An AST node
@@ -83,7 +88,7 @@ struct Node {
 	//Accepts an ast visitor
 	virtual Node* accept(NodeVisitor* visitor) = 0;
 
-	virtual Node* duplicate() const  = 0;
+	virtual Node* duplicate(DuplicationModifiers* mods = nullptr) const  = 0;
 	Node* copyProperties(Node* dest) const;
 
 	virtual bool isResolved() const { return true; }
@@ -361,7 +366,7 @@ struct BlockExpression : Node {
 
 	bool isResolved() const;//TODO true or false?
 
-	void _duplicate(BlockExpression* dest) const;
+	void _duplicate(BlockExpression* dest,DuplicationModifiers* mods) const;
 
 	std::vector<Node*> children;
 	Scope* scope;

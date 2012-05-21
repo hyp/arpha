@@ -12,6 +12,7 @@ struct Evaluator {
 private:
 	Scope* _currentScope;
 	bool reportUnevaluated;
+	
 public:
 	bool evaluateExpressionReferences; // = false
 
@@ -22,12 +23,13 @@ public:
 
 	size_t unresolvedExpressions;
 
-	Evaluator() : evaluateExpressionReferences(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),unresolvedExpressions(0) {}
+	Evaluator() : evaluateExpressionReferences(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {}
 
 	Node* eval(Node* node);
 	// Resolves expressions and definitions in a module using multiple passes
 	void evaluateModule(BlockExpression* module);
 
+	Node* mixinedExpression;
 	Node* inlineFunction(CallExpression* node);
 	Node* mixinFunction(CallExpression* node);
 

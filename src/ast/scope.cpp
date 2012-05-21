@@ -209,9 +209,13 @@ bool Scope::resolve(Evaluator* evaluator){
 	return _resolved;
 }
 
-void Scope::duplicate(DuplicationModifiers* mods){
+void Scope::duplicate(DuplicationModifiers* mods,bool ignoreArguments){
 	for(auto i = prefixDefinitions.begin();i!=prefixDefinitions.end();i++){
-		if(auto dup = (*i).second->duplicate(mods)){
+		if(ignoreArguments && dynamic_cast<Argument*>((*i).second)){
+			continue;
+		}
+		else if(auto dup = (*i).second->duplicate(mods)){
+
 			mods->target->define(dup);
 		}else{
 			error(mods->location,"Can't duplicate some definition %s!",(*i).first);

@@ -40,7 +40,7 @@ PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
 	auto duplicatedReplacement = new Variable(id,location,mods->target->functionOwner() ? true : false);
 	duplicatedReplacement->type = type.duplicate(mods);
 	duplicatedReplacement->isMutable = isMutable;
-	mods->redirectors[reinterpret_cast<void*>(this)] = reinterpret_cast<void*>(duplicatedReplacement);
+	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(duplicatedReplacement),false);
 	return duplicatedReplacement;
 }
 
@@ -49,7 +49,7 @@ PrefixDefinition* Argument::duplicate(DuplicationModifiers* mods){
 	dup->type = type.duplicate(mods);
 	dup->isMutable = isMutable;
 	dup->_defaultValue = _defaultValue ? _defaultValue->duplicate() : nullptr;
-	mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(this))] = reinterpret_cast<void*>(static_cast<Variable*>(dup));
+	mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(this))] = std::make_pair(reinterpret_cast<void*>(static_cast<Variable*>(dup)),false);
 	return dup;
 }
 
@@ -509,14 +509,17 @@ TypeExpression* Function::returnType() {
 Function* Function::duplicate(DuplicationModifiers* mods){
 	auto func = new Function(id,location,new Scope(mods->target));
 	//NB arguments are duplicated inside the scope!
-	func->_returnType = _returnType.duplicate(mods);//TODO
+	func->_returnType = _returnType.duplicate(mods);
 	func->body.scope->_functionOwner = func;
 	auto oldTarget = mods->target;
 	mods->target = func->body.scope;
+	auto oldRed = mods->returnValueRedirector;
+	mods->returnValueRedirector = nullptr;
 	body.scope->duplicate(mods);
-	body._duplicate(&func->body);
+	body._duplicate(&func->body,mods);
 	mods->target = oldTarget;
-	mods->redirectors[reinterpret_cast<void*>(this)] = reinterpret_cast<void*>(func);
+	mods->returnValueRedirector = oldRed;
+	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);
 	return func;
 }
 

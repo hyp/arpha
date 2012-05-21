@@ -328,12 +328,21 @@ struct AstExpander: NodeVisitor {
 			if(!node->scope->resolve(evaluator)) node->_resolved = false;//Resolve unresolved definitions
 		}
 		evaluator->currentScope(node->scope);
+		auto e = evaluator->mixinedExpression;
+		evaluator->mixinedExpression = nullptr;
 		for(size_t i =0;i<node->children.size();i++){
-			if(!node->children[i]->isResolved()){
+			if(!node->children[i]->isResolved()){	
 				node->children[i] = node->children[i]->accept(this);
 				if(!node->children[i]->isResolved()) node->_resolved = false;
+				if(evaluator->mixinedExpression){
+					debug("Mixin!");
+					node->children.insert(node->children.begin()+i,evaluator->mixinedExpression);
+					i++;
+					evaluator->mixinedExpression = nullptr;
+				}
 			}	
 		}
+		evaluator->mixinedExpression = e;
 		evaluator->currentScope(scp);
 		return node;
 	}
@@ -537,14 +546,34 @@ Node* Evaluator::inlineFunction(CallExpression* node){
 	return nullptr;
 }
 Node* Evaluator::mixinFunction(CallExpression* node){
+	Node* result;
 	assert(node->isResolved());
-	auto f = node->object->asFunctionReference()->function;
+	auto func = node->object->asFunctionReference()->function;
+	debug("<<M");
 	DuplicationModifiers mods;
-	//set up redirectiong map
+	//Replace arguments
+	std::vector<Node*> inlinedArguments;
+	inlinedArguments.resize(func->arguments.size());
+	auto argsBegin = node->arg->asTupleExpression() ? node->arg->asTupleExpression()->children.begin()._Ptr : &(node->arg);
+	for(size_t i =0;i<func->arguments.size();i++){
+		mods.redirectors[reinterpret_cast<void*>(static_cast<Variable*>(func->arguments[i]))] = std::make_pair(reinterpret_cast<void*>(argsBegin[i]),true);
+	}
+	//Mixin definitions
 	mods.location = node->location;
 	mods.target = currentScope();
-	f->body.scope->duplicate(&mods);
-	return node->arg;//TODO
+	func->body.scope->duplicate(&mods,true);
+	//inline body
+	if(!func->returnType()->isSame(intrinsics::types::Void)){
+		auto v = new Variable("$",node->location,currentScope()->functionOwner() ? true : false);
+		v->type.infer(func->returnType());
+		currentScope()->define(v);
+		result = new VariableReference(v);
+		mods.returnValueRedirector = v;
+	}else result = new UnitExpression();
+	auto block = new BlockExpression(mods.target);
+	func->body._duplicate(block,&mods);
+	mixinedExpression = eval(block);
+	return result;
 }
 
 //TODO function duplication with certain wildcard params
