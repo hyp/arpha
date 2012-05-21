@@ -4,6 +4,7 @@
 #include "scope.h"
 #include "node.h"
 #include "declarations.h"
+#include "evaluate.h"
 #include "../intrinsics/types.h"
 
 PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){
@@ -215,7 +216,7 @@ Function* Scope::resolveFunction(SymbolID name,Node* argument){
 	//step 1 - check current scope for matching function
 	if(auto hasDef = containsPrefix(name)){
 		if(auto os = hasDef->asOverloadset()){
-			findMatches(os->functions,results,argument);
+			Evaluator::findMatchingFunctions(os->functions,results,argument);
 			if(results.size() == 1) return results[0];
 			else if(results.size()>1) return errorOnMultipleMatches(results);
 		}
@@ -228,7 +229,7 @@ Function* Scope::resolveFunction(SymbolID name,Node* argument){
 				if(auto os = hasDef->asOverloadset()) overloads.insert(overloads.end(),os->functions.begin(),os->functions.end()); 
 			}
 		}
-		findMatches(overloads,results,argument,true);
+		Evaluator::findMatchingFunctions(overloads,results,argument,true);
 		if(results.size() == 1) return results[0];
 		else if(results.size()>1) return errorOnMultipleMatches(results);
 	}

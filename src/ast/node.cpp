@@ -277,10 +277,14 @@ BlockExpression::BlockExpression(Scope* scope){
 	this->scope = scope;
 	_resolved = false;
 }
+void BlockExpression::_duplicate(BlockExpression* dest) const {
+	dest->children.reserve(children.size());//Single alocation
+	for(auto i=children.begin();i!=children.end();i++) dest->children.push_back((*i)->duplicate());
+	copyProperties(dest);
+}
 Node* BlockExpression::duplicate() const {
 	auto dup = new BlockExpression(scope);//TODO scope->dup???
-	dup->children.reserve(children.size());//Single alocation
-	for(auto i=children.begin();i!=children.end();i++) dup->children.push_back((*i)->duplicate());
+	_duplicate(dup);
 	return copyProperties(dup);
 }
 bool BlockExpression::isResolved() const {
@@ -394,6 +398,18 @@ bool TypeExpression::isSame(TypeExpression* other){
 			throw std::runtime_error("TypeExpression type invariant failed");	
 			return false;
 	}
+}
+bool TypeExpression::canAssignFrom(Node* expression,TypeExpression* type){
+	if(this->isSame(type)) return true;
+
+	else if(this->type == INTEGER && type->type == INTEGER){
+		//literal integer constants.. check to see if the type can accept it's value
+		if(auto intConst = expression->asIntegerLiteral()){
+			if(!intConst->_type && this->integer->isValid(intConst->integer)) return true;
+		}
+	}
+	//TODO
+	return false;
 }
 Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 	if(this->isSame(type)) return expression;//like a baws

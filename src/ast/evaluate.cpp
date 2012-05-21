@@ -11,117 +11,14 @@
 
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
 
-namespace {
-	std::map<Function*,Node* (*)(Scope*,CallExpression*,Node*)> functionBindings;
-	Function* realAssert;
-}
 
-void Evaluator::init(Scope* arphaScope){
-	#define _HANDLE(module,func,type,body)  { \
-		struct Handler { \
-			static Node* handle(Scope* scope,CallExpression* node,Node* argument) body \
-	    }; \
-		functionBindings[module->resolve(func,type)] = &(Handler::handle); }
-
-	#define HANDLE(func,type,body) _HANDLE(compilerScope,func,type,body)
-		
-/*	std::vector<std::pair<SymbolID,Type*>> r(2,std::make_pair(SymbolID(),arpha::constantString));
-	r[1] = std::make_pair(SymbolID(),compiler::type);
-	auto string_type = Type::tuple(r);
-	HANDLE("resolve",string_type,{ 
-		
-		//auto r = argument->asTupleExpression();
-		//auto f = scope->resolve(r->children[0]->asConstantExpression()->string.ptr(),r->children[1]->asTypeReference()->type());
-		//System::print(format("compiler.Resolved %s %s!\n",argument,f->id));
-		//return FunctionReference::create(f);
-		return node;
-	});
-	HANDLE("error",arpha::constantString,{ 
-		//error(node->location,argument->asConstantExpression()->string.ptr());
-		return argument; 
-	});
-	HANDLE("constexpr",compiler::expression,{ 
-		/*if(!argument->asConstantExpression()){
-			error(node->location,"Expected a constant expression instead of %s!",argument);
-		}
-		return argument; 
-	});
-	HANDLE("dumpAST",compiler::expression,{ 
-		System::print(format("------------------- AST dump: ------------------------------\n%s\n\n",argument));
-		return argument; 
-	});
-	HANDLE("dumpDEF",compiler::expression,{ 
-		if(auto typeRef = argument->asTypeReference()){
-			System::print(format("------------------- DEF dump: ------------------------------\nType %s (sizeof %s)\n",typeRef->type()->id,typeRef->type()->size()));
-			for(auto i = typeRef->type()->fields.begin();i!=typeRef->type()->fields.end();++i){
-				System::print(format("  field %s of type %s\n",(*i).id,(*i).type->id));
-			}
-			System::print("\n");
-		}
-		else if(auto funcRef = argument->asFunctionReference()){
-			auto f = funcRef->function();
-			System::print(format("------------------- DEF dump: ------------------------------\nFunction %s type %s -> %s \n",
-				f->id,f->argument->id,f->returnType->id));
-			System::print(format("%s",f->body));
-			System::print("\n");
-		}
-		return argument; 
-	});
-
-	#undef HANDLE
-	#define HANDLE(func,type,body) _HANDLE(arphaScope,func,type,body)
-
-	HANDLE("typeof",compiler::expression,{ 
-		return TypeReference::create(argument->returnType()); 
-	});
-	HANDLE("sizeof",compiler::expression,{ 
-		/*auto size = ConstantExpression::create(arpha::uint64);//TODO arpha.natural
-		auto typeRef = argument->asTypeReference();
-		assert(typeRef ? typeRef->type() != compiler::Unresolved : true);
-		size->u64  = uint64( (typeRef?typeRef->type():argument->returnType())->size() );
-		//TODO isLiteral?
-		return size;
-		return node;
-	});
-	//TODO - implement
-	//realAssert = arphaScope->resolve("assert",arpha::boolean);
-	//TODO - implement in Arpha
-	HANDLE("assert",compiler::expression,{
-		//auto cnst = argument->asConstantExpression();
-		//if(cnst && cnst->type == arpha::boolean && cnst->u64==1){
-		//	return node;		
-		//}
-		error(argument->location,"Test error - Assertion failed");
-		return node;
-	});
-
-	//
-	std::vector<std::pair<SymbolID,Type*>> record(2,std::make_pair(SymbolID(),compiler::type));
-	auto type_type = Type::tuple(record);
-	HANDLE("equals",type_type,{
-		/*auto twoTypes = argument->asTupleExpression();
-		auto t1 = twoTypes->children[0]->asTypeReference()->type();
-		auto t2 = twoTypes->children[1]->asTypeReference()->type();
-		auto result = ConstantExpression::create(arpha::boolean);
-		result->u64 =  t1 == t2 ? 1 : 0; //TODO tuple comparsion as well
-		return result;
-		return node;
-	});*/
-
-	#undef HANDLE
-	#undef _HANDLE
-}
 
 
 Node* evaluateResolvedFunctionCall(Evaluator* evaluator,CallExpression* node){
 	auto function = node->object->asFunctionReference()->function;
 
 	//Try to expand the function
-	auto handler = functionBindings.find(function);
-	if(handler != functionBindings.end()){
-		debug("Expanding a function call %s with %s",function->id,node->arg);
-		return handler->second(evaluator->currentScope(),node,node->arg);
-	}else if(function->intrinsicEvaluator) 
+	if(function->intrinsicEvaluator) 
 		return function->intrinsicEvaluator(node,evaluator);
 	return node;
 }
@@ -244,7 +141,7 @@ struct AstExpander: NodeVisitor {
 
 	Node* visit(VariableReference* node){
 		if(node->variable->expandMe)
-			return node->variable->value->duplicate();//TODO is duplicate really needed?
+			return node->copyProperties(node->variable->value->duplicate());
 		return node;
 	}	
 
@@ -594,6 +491,10 @@ void Evaluator::markUnresolved(Node* node){
 
 void Evaluator::markUnresolved(PrefixDefinition* node){
 	unresolvedExpressions++;
+	if(reportUnevaluated){
+		//TODO more progressive error message
+		error(node->location,"  Can't resolve definition %s!",node->id);
+	}
 }
 
 bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
@@ -619,7 +520,9 @@ Node* Evaluator::eval(Node* node){
 	return node->accept(&expander);
 }
 
+//TODO ignore unresolved functions which cant be resolved
 void Evaluator::evaluateModule(BlockExpression* module){
+	
 	if(unresolvedExpressions == 0) return;
 	unresolvedExpressions = 0;
 	size_t prevUnresolvedExpressions;
@@ -633,6 +536,121 @@ void Evaluator::evaluateModule(BlockExpression* module){
 	}
 	while(prevUnresolvedExpressions > unresolvedExpressions);
 	if(unresolvedExpressions > 0){
-		error(module->location,"Can't resolve %s expressions!",unresolvedExpressions);
+		error(module->location,"Can't resolve %s expressions and definitions:",unresolvedExpressions);
+		//Do an extra pass gathering unresolved definitions
+		reportUnevaluated = true;
+		eval(module);
+	}
+}
+
+/**
+*How inlining and mixining should work:
+
+*def f(x Type){ var y x = 0; return y + 1; }
+*mixin(f(int32)) =>
+*	var r04903
+*	var y int32
+*	r04903 = y + 1
+*	r04903
+*inline(f(int32)) =>
+*	var r04903
+*	{
+*		var y int32
+*		r04903 = y + 1
+*	}
+*	r04903
+*/
+Node* Evaluator::inlineFunction(CallExpression* node){
+	assert(node->isResolved());
+	return nullptr;
+}
+Node* Evaluator::mixinFunction(CallExpression* node){
+	assert(node->isResolved());
+	auto f = node->object->asFunctionReference()->function;
+	DuplicationModifiers mods;
+	//set up redirectiong map
+	mods.location = node->location;
+	mods.target = currentScope();
+	f->body.scope->duplicate(&mods);
+	return node->arg;//TODO
+}
+
+//TODO argument adjusting
+/**
+*Overload resolving:
+*Scenario 1 - no arg:
+*	f() matches f(), f(x T|Nothing)???, f(x = true,y = false)
+*Scenario 2 - expression|tuple without labeled expressions:
+*	f(1,2) matches f(a,b), f(a,b,x = true)
+*Scenario 3 - expression|tuple with all expressions labeled:
+*	f(a:1,b:2) matches f(a,b), f(a,b,c), f(a,b,x = true)
+*Scenario 4 - tuple with expressions being non labeled and labeled:
+*	f(1,a:5) matches f(b,a), f(b,a,x = true)
+*	f(a:5,1) matches f(a,b), f(b,a,x = true)
+*/
+bool match(Function* func,Node* arg){
+	size_t currentArg = 0;
+	size_t currentExpr = 0;
+	size_t lastNonLabeledExpr = 0;
+	size_t resolvedArgs = 0;
+	auto argsCount = func->arguments.size();
+	Node* expr = arg;//nonTuple
+	Node** exprBegin;
+	size_t expressionCount;
+	if(auto tuple = arg->asTupleExpression()){
+		exprBegin = tuple->children.begin()._Ptr;
+		expressionCount = tuple->children.size();
+	}else if(arg->asUnitExpression()){
+		expressionCount = 0;
+	}
+	else{
+		exprBegin = &arg;
+		expressionCount = 1;
+	}
+
+	if(argsCount < expressionCount) return false;//TODO f(x,1,2) matches f(x,y) as f(x,(1,2))??
+
+	while(currentExpr<expressionCount){
+		auto label = exprBegin[currentExpr]->label();
+		if(!label.isNull()){
+			//Labeled
+			//TODO same label multiple times error!
+			bool foundMatch = false;
+			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
+				if(func->arguments[currentArg]->id == label){
+					if(func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
+						foundMatch = true;
+						break;
+					}else{
+						return false;	
+					}
+				}
+			}
+			if(!foundMatch) return false;
+			currentArg++;resolvedArgs++;currentExpr++;	
+		}
+		else{
+			//NonLabeled
+			if(!(currentArg < argsCount)) return false;//f(x:5,6) where x is the last arg
+			if( func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
+				currentArg++;resolvedArgs++;currentExpr++;
+				lastNonLabeledExpr = currentExpr;
+			}
+			else return false;
+		}
+	}
+
+	//Ending
+	if(resolvedArgs == argsCount) return true;//() matches ()
+	for(currentArg = resolvedArgs; currentArg < argsCount;currentArg ++){
+		if(!func->arguments[currentArg]->defaultValue()) return false; //() doesn't match (x,y)
+	}
+	return true; //() matches (x = 1,y = false)
+}
+
+void Evaluator::findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic){
+	for(auto i=overloads.begin();i!=overloads.end();++i){
+		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
+		if(match((*i),argument)) results.push_back(*i);
 	}
 }

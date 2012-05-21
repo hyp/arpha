@@ -757,7 +757,6 @@ namespace compiler {
 		//Load language definitions.
 		auto arphaModule = newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
 
-		Evaluator::init(arphaModule->second.scope);
 	
 	}
 

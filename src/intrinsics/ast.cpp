@@ -7,7 +7,6 @@
 #include "ast.h"
 #include "types.h"
 
-#define INTRINSIC_TYPE(x) ensure(dynamic_cast<Type*>(moduleScope->lookupPrefix(#x)))
 
 #define INTRINSIC_FUNC(x)  \
 	auto x = ensure( ensure(moduleScope->lookupPrefix(#x))->asOverloadset() )->functions[0]; \
@@ -15,14 +14,7 @@
 
 Node* mixin(CallExpression* node,Evaluator* evaluator){
 	if(auto call = node->arg->asCallExpression()){
-		if(call->isResolved()){
-			auto f = call->object->asFunctionReference()->function;
-			DuplicationModifiers mods;
-			mods.location = node->location;
-			mods.target = evaluator->currentScope();
-			f->body.scope->duplicate(&mods);
-			return call->arg;//TODO
-		}
+		return evaluator->mixinFunction(node);
 	}else{
 		error(node->location,"Mixin expression expects to recieve an call to a function as an argument!");
 	}

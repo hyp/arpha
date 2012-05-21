@@ -9,13 +9,9 @@ struct Node;
 struct Scope;
 
 struct Evaluator {
-	Node* eval(Node* node);
-	
-
-	static void init(Scope* arphaScope);
 private:
 	Scope* _currentScope;
-	
+	bool reportUnevaluated;
 public:
 	bool evaluateExpressionReferences; // = false
 
@@ -26,7 +22,14 @@ public:
 
 	size_t unresolvedExpressions;
 
-	Evaluator() : evaluateExpressionReferences(false),expectedTypeForEvaluatedExpression(nullptr),unresolvedExpressions(0) {}
+	Evaluator() : evaluateExpressionReferences(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),unresolvedExpressions(0) {}
+
+	Node* eval(Node* node);
+	// Resolves expressions and definitions in a module using multiple passes
+	void evaluateModule(BlockExpression* module);
+
+	Node* inlineFunction(CallExpression* node);
+	Node* mixinFunction(CallExpression* node);
 
 	inline Scope* currentScope() const { return _currentScope; }
 	void currentScope(Scope* scope){ _currentScope = scope; }
@@ -34,8 +37,9 @@ public:
 	void markUnresolved(Node* node);
 	void markUnresolved(PrefixDefinition* node);
 
-	// Resolves expressions and definitions in a module using multiple passes
-	void evaluateModule(BlockExpression* module);
+	//function overloads resolving
+	static void findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic = false);
+
 };
 
 #endif

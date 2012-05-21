@@ -69,7 +69,8 @@ struct Node;
 struct DuplicationModifiers {
 	Location location;
 	Scope* target;
-	std::vector<std::pair<Variable*,Variable*> > duplicatedVariables;
+
+	std::map<void*,void*> redirectors;//Used to redirect references for duplicated definitions
 };
 
 //An AST node
@@ -134,7 +135,7 @@ private:
 	WildcardExpression(const WildcardExpression& other){}
 };
 
-//: intrinsics::types::Expression
+//: intrinsics::types::Expression TODO rm
 struct ExpressionReference : Node {
 	ExpressionReference(Node* node);
 	
@@ -213,6 +214,7 @@ struct TypeExpression : Node {
 	* If not, it will return null.
 	*/
 	Node* assignableFrom(Node* expression,TypeExpression* type);
+	bool canAssignFrom(Node* expression,TypeExpression* type);
 
 	DECLARE_NODE(TypeExpression);
 public:
@@ -358,6 +360,8 @@ struct BlockExpression : Node {
 	BlockExpression(Scope* scope);
 
 	bool isResolved() const;//TODO true or false?
+
+	void _duplicate(BlockExpression* dest) const;
 
 	std::vector<Node*> children;
 	Scope* scope;

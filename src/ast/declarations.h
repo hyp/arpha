@@ -188,7 +188,7 @@ struct Function: public PrefixDefinition {
 	TypeExpression* argumentType();
 	TypeExpression* returnType();
 
-	PrefixDefinition* duplicate(DuplicationModifiers* mods);
+	Function* duplicate(DuplicationModifiers* mods);
 
 	InferredUnresolvedTypeExpression _returnType;
 	BlockExpression body;

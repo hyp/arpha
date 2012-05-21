@@ -11,13 +11,7 @@
 Variable::Variable(SymbolID name,Location& location,bool isLocal) : PrefixDefinition(name,location),value(nullptr),isMutable(true),expandMe(false) {
 	_local = isLocal;
 }
-PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
-	auto var = new Variable(id,location,mods->target->functionOwner() ? true : false);
-	var->type = type.duplicate(mods);
-	var->isMutable = isMutable;
-	mods->duplicatedVariables.push_back(std::make_pair(this,var));
-	return var;
-}
+
 bool Variable::isLocal(){
 	return _local;
 }
@@ -42,8 +36,37 @@ void Variable::setImmutableValue(Node* value){
 	}
 }
 
+PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
+	auto duplicatedReplacement = new Variable(id,location,mods->target->functionOwner() ? true : false);
+	duplicatedReplacement->type = type.duplicate(mods);
+	duplicatedReplacement->isMutable = isMutable;
+	mods->redirectors[reinterpret_cast<void*>(this)] = reinterpret_cast<void*>(duplicatedReplacement);
+	return duplicatedReplacement;
+}
+
 PrefixDefinition* Argument::duplicate(DuplicationModifiers* mods){
-	return nullptr;//TODO
+	Argument* dup = new Argument(id,location);
+	dup->type = type.duplicate(mods);
+	dup->isMutable = isMutable;
+	dup->_defaultValue = _defaultValue ? _defaultValue->duplicate() : nullptr;
+	mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(this))] = reinterpret_cast<void*>(static_cast<Variable*>(dup));
+	return dup;
+}
+
+Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr) {
+}
+void Argument::defaultValue(Node* expression,bool inferType){
+	assert(expression->isResolved());
+	if(inferType){
+		type._type = expression->_returnType();
+	}
+	else {
+		expression = typecheck(expression->location,expression,type.type());
+	}
+	_defaultValue = expression;
+}
+Node* Argument::defaultValue() const {
+	return _defaultValue;
 }
 
 //intrinsic type
@@ -421,28 +444,15 @@ bool Overloadset::resolve(Evaluator* evaluator){
 	return _resolved;
 }
 PrefixDefinition* Overloadset::duplicate(DuplicationModifiers* mods){
-	//auto os = new Overloadset(functions[0]->duplicate(mods));
-	return nullptr;//TODO
+	auto os = new Overloadset(functions[0]->duplicate(mods));
+	auto i = functions.begin();
+	for(i++;i!=functions.end();i++){
+		os->push_back((*i)->duplicate(mods));
+	}
+	return os;
 }
 
 //Function
-
-Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr) {
-}
-void Argument::defaultValue(Node* expression,bool inferType){
-	assert(expression->isResolved());
-	if(inferType){
-		type._type = expression->_returnType();
-	}
-	else {
-		//TODO typecheck
-		expression = typecheck(expression->location,expression,type.type());
-	}
-	_defaultValue = expression;
-}
-Node* Argument::defaultValue() const {
-	return _defaultValue;
-}
 
 Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDefinition(name,location), body(bodyScope) {
 	intrinsicEvaluator = nullptr;
@@ -496,10 +506,17 @@ TypeExpression* Function::returnType() {
 	assert(_resolved);
 	return _returnType.type();
 }
-PrefixDefinition* Function::duplicate(DuplicationModifiers* mods){
+Function* Function::duplicate(DuplicationModifiers* mods){
 	auto func = new Function(id,location,new Scope(mods->target));
-	func->body.scope->_functionOwner = func;
+	//NB arguments are duplicated inside the scope!
 	func->_returnType = _returnType.duplicate(mods);//TODO
+	func->body.scope->_functionOwner = func;
+	auto oldTarget = mods->target;
+	mods->target = func->body.scope;
+	body.scope->duplicate(mods);
+	body._duplicate(&func->body);
+	mods->target = oldTarget;
+	mods->redirectors[reinterpret_cast<void*>(this)] = reinterpret_cast<void*>(func);
 	return func;
 }
 

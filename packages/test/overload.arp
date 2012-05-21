@@ -1,0 +1,34 @@
+# temporary module used to test how overloads are resolved
+
+def foo() = 55
+foo()
+
+def bar(x int32 = 66) = 88
+bar()
+bar(5)
+bar(x:55)
+
+def f(x int32,y int32 = 5) = 5
+f(1)
+f(1,2)
+f(x:1,y:2)
+f(x:1)
+f(x:1,2)
+f(1,y:2)
+f(y:2,x:1)
+
+def grom(start int32,end int32,isTrue bool = true) = start + end
+grom(1,2)
+grom(1,2,true)
+grom(1,2,isTrue:true)
+grom(1,end:2)
+grom(1,end:2,false)
+grom(1,end:2,isTrue:true)
+grom(start:1,2)
+grom(start:1,2,false)
+grom(start:1,2,isTrue:true)
+grom(start:1,end:2)
+grom(start:1,end:2,false)
+grom(start:1,end:2,isTrue:true)
+grom(end:2,start:1)
+grom(end:2,start:1,isTrue:false)
