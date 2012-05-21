@@ -493,7 +493,7 @@ void Evaluator::markUnresolved(PrefixDefinition* node){
 	unresolvedExpressions++;
 	if(reportUnevaluated){
 		//TODO more progressive error message
-		error(node->location,"  Can't resolve definition %s!",node->id);
+		error(node->location,"Can't resolve definition %s!",node->id);
 	}
 }
 
@@ -587,6 +587,10 @@ Node* Evaluator::mixinFunction(CallExpression* node){
 *Scenario 4 - tuple with expressions being non labeled and labeled:
 *	f(1,a:5) matches f(b,a), f(b,a,x = true)
 *	f(a:5,1) matches f(a,b), f(b,a,x = true)
+*Also:
+*	f(1,2) matches f(x)
+*	f(1,2,3) matches f(x,y)
+*TODO weight system for f(x) and f(x int32)
 */
 bool match(Function* func,Node* arg){
 	size_t currentArg = 0;
@@ -608,7 +612,13 @@ bool match(Function* func,Node* arg){
 		expressionCount = 1;
 	}
 
-	if(argsCount < expressionCount) return false;//TODO f(x,1,2) matches f(x,y) as f(x,(1,2))??
+	if(argsCount < expressionCount){
+		if(argsCount > 0 && func->arguments[argsCount-1]->type.type()->isSame(intrinsics::types::AnyType)){
+			argsCount--;
+			expressionCount = argsCount;
+		}
+		else return false;
+	}
 
 	while(currentExpr<expressionCount){
 		auto label = exprBegin[currentExpr]->label();
@@ -618,7 +628,8 @@ bool match(Function* func,Node* arg){
 			bool foundMatch = false;
 			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
 				if(func->arguments[currentArg]->id == label){
-					if(func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
+					if( func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ||
+						func->arguments[currentArg]->type.type()->isSame(intrinsics::types::AnyType) ){
 						foundMatch = true;
 						break;
 					}else{
@@ -632,7 +643,8 @@ bool match(Function* func,Node* arg){
 		else{
 			//NonLabeled
 			if(!(currentArg < argsCount)) return false;//f(x:5,6) where x is the last arg
-			if( func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
+			if( func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ||
+				func->arguments[currentArg]->type.type()->isSame(intrinsics::types::AnyType) ){
 				currentArg++;resolvedArgs++;currentExpr++;
 				lastNonLabeledExpr = currentExpr;
 			}

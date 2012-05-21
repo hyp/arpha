@@ -121,8 +121,11 @@ struct ParenthesisParser: PrefixDefinition {
 	Node* parse(Parser* parser){
 		if( parser->match(closingParenthesis) )
 			return new UnitExpression;
+		auto l = parser->labelForNextNode;//NB x:(1,2) proper parsing
+		parser->labelForNextNode = SymbolID();
 		auto e = parser->parse();
 		parser->expect(closingParenthesis);
+		parser->labelForNextNode = l;
 		return e;
 	}
 };

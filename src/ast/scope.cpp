@@ -137,66 +137,6 @@ void Scope::define(InfixDefinition* definition){
 	else infixDefinitions[definition->id] = definition;
 }
 
-void findMatches(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic = false){
-	auto argumentType = argument->_returnType();
-
-	std::vector<Node*> nonLabeled;
-	std::vector<Node*> labeled;
-	//Step 1 - gather parameters
-	if(auto tuple = argument->asTupleExpression()){
-		for(auto i = tuple->children.begin();i!=tuple->children.end();i++){
-			(*i)->label().isNull() ? nonLabeled.push_back(*i) : labeled.push_back(*i);
-		}	
-	}else{
-		argument->label().isNull() ? nonLabeled.push_back(argument) : labeled.push_back(argument);
-	}
-	auto nonLabeledCount = nonLabeled.size();
-	auto labeledCount = labeled.size();
-
-	for(auto i=overloads.begin();i!=overloads.end();++i){
-		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
-		auto func = (*i);
-		if(0 == func->arguments.size()){
-			if(argumentType == intrinsics::types::Void) results.push_back(func);
-		}else {
-			//Fit all nonLabeledFirst
-			size_t currentNonLabeled = 0;
-			bool allMatched = true;
-			for(auto j = func->arguments.begin();j!=func->arguments.end();j++){
-				if((*j)->type.type()->isSame(nonLabeled[currentNonLabeled]->_returnType())){
-					currentNonLabeled++;
-				}else if((*j)->type.type()->isSame(intrinsics::types::AnyType)){
-					currentNonLabeled = nonLabeledCount;//TODO
-				}
-				else allMatched = false;
-			}
-			if(allMatched && currentNonLabeled == nonLabeledCount) results.push_back(func);
-		}
-	}
-
-	/*Type* argumentType = argument->returnType();
-	Function *implicitMatch = nullptr,*inferMatch = nullptr,*exprMatch = nullptr;//lastResort
-	int extender;
-	for(auto i=overloads.begin();i!=overloads.end();++i){
-		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
-		auto argumentType = argument->returnType();
-		if((*i)->argument == argumentType){
-			//debug("-d");
-			results.push_back(*i);
-		}
-		else if(argumentType->isRecord() && Type::recordsSameTypes((*i)->argument, argumentType) ){
-			//debug("-dr");
-			results.push_back(*i);
-		}
-		else if((extender = argumentType->extendsType((*i)->argument)) != -1){
-			debug("e-m");
-			results.push_back(*i);
-		}
-		else if((*i)->argument == compiler::expression){ /*debug("-c"); exprMatch = *i; }
-	}
-	if(exprMatch && results.size()==0) results.push_back( exprMatch );//TODO careful with imports*/
-}
-
 Function* errorOnMultipleMatches(std::vector<Function*>& results){
 	//TODO
 	error(Location(),"multiple matches possible!");
