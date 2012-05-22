@@ -1,0 +1,25 @@
+# temporary module used to test how functions are constructed using determined generic arguments
+def f(x) = x
+f(6) # ok
+f(true) # ok
+
+def inc(x) = x + 1
+inc(7) # ok
+inc(true) # error, body will never be resolved
+
+#
+	TODO expansion of parameters of type type
+	def foo(T){
+		var x T
+		return x
+	}
+	foo(int32) # ok
+	foo(bool) # ok
+	
+	def bar(T,value T){
+		var x T = 0
+		return x + value
+	}
+	bar(int32,2) # ok
+	bar(int8,6) # ok
+#
