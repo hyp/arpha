@@ -44,20 +44,31 @@ PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
 	return duplicatedReplacement;
 }
 
+
+Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr) {
+}
 PrefixDefinition* Argument::duplicate(DuplicationModifiers* mods){
+	return nullptr; //Arguments are duplicates inside function resolve
+}
+Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* newType){
 	Argument* dup = new Argument(id,location);
-	dup->type = type.duplicate(mods);
+	if(newType && type.isWildcard()){
+		dup->type._type = newType;//TODO dup?
+		dup->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+	}
+	else dup->type = type.duplicate(mods);
 	dup->isMutable = isMutable;
 	dup->_defaultValue = _defaultValue ? _defaultValue->duplicate() : nullptr;
 	mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(this))] = std::make_pair(reinterpret_cast<void*>(static_cast<Variable*>(dup)),false);
 	return dup;
 }
-
-Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr) {
+bool Argument::resolve(Evaluator* evaluator){
+	return false;//Arguments are resolved inside function resolve
 }
 void Argument::defaultValue(Node* expression,bool inferType){
 	assert(expression->isResolved());
 	if(inferType){
+		type.kind = InferredUnresolvedTypeExpression::Type;
 		type._type = expression->_returnType();
 	}
 	else {
@@ -461,7 +472,7 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 }
 
 bool Function::isResolved(){
-	return _resolved;
+	return  _hasGenericArguments ? _argsResolved : _resolved;
 }
 bool Function::isPartiallyResolved(){
 	return true;//TODO
@@ -469,11 +480,15 @@ bool Function::isPartiallyResolved(){
 bool Function::resolve(Evaluator* evaluator){
 	assert(!_resolved);
 	_resolved = true;
+	_argsResolved = true;
+	_hasGenericArguments = false;
 	for(auto i = arguments.begin();i!=arguments.end();++i){
-		if(!(*i)->isResolved()){
+		if((*i)->type.isWildcard()) _hasGenericArguments = true; //TODO constraints
+		else if(!(*i)->isResolved()){
 			if(!(*i)->resolve(evaluator)) _resolved = false;
 		}
 	}
+	_argsResolved = _resolved;
 	//Body has no return expression => return void
 	if(!_hasReturnInside && _returnType.isInferred()) _returnType.infer(intrinsics::types::Void);
 	//resolve return type
@@ -493,6 +508,7 @@ bool Function::resolve(Evaluator* evaluator){
 
 TypeExpression* Function::argumentType()  {
 	assert(_resolved);
+	assert(!_hasGenericArguments);
 	auto args = arguments.size();
 	if(args == 0) return intrinsics::types::Void;
 	else if(args == 1) return arguments[0]->type.type();
@@ -508,8 +524,14 @@ TypeExpression* Function::returnType() {
 }
 Function* Function::duplicate(DuplicationModifiers* mods){
 	auto func = new Function(id,location,new Scope(mods->target));
-	//NB arguments are duplicated inside the scope!
+	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);//NB before body duplication to account for recursion
+	//args
+	for(auto i = arguments.begin();i!=arguments.end();++i){
+		func->arguments.push_back((*i)->reallyDuplicate(mods,nullptr));
+	}
+	//return type
 	func->_returnType = _returnType.duplicate(mods);
+	//body
 	func->body.scope->_functionOwner = func;
 	auto oldTarget = mods->target;
 	mods->target = func->body.scope;
@@ -519,7 +541,7 @@ Function* Function::duplicate(DuplicationModifiers* mods){
 	body._duplicate(&func->body,mods);
 	mods->target = oldTarget;
 	mods->returnValueRedirector = oldRed;
-	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);
+	//TODO resolve
 	return func;
 }
 

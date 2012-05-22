@@ -5,7 +5,7 @@
 namespace intrinsics {
 	namespace types {
 
-		extern TypeExpression *Void,*AnyType;
+		extern TypeExpression *Void;
 
 		extern TypeExpression *Type,*Expression;
 

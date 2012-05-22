@@ -42,6 +42,10 @@ struct Argument : Variable {
 
 	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 
+	Argument* reallyDuplicate(DuplicationModifiers* mods,TypeExpression* newType);
+
+	bool resolve(Evaluator* evaluator);
+
 	void defaultValue(Node* expression,bool inferType);
 	Node* defaultValue() const;
 private:
@@ -195,7 +199,9 @@ struct Function: public PrefixDefinition {
 	Node* (*intrinsicEvaluator)(CallExpression*,Evaluator* evaluator);
 	std::vector<Argument*> arguments;
 	bool _hasReturnInside;
+	bool _hasGenericArguments;
 private:
+	bool _argsResolved;
 	bool _resolved;
 };
 

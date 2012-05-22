@@ -160,12 +160,13 @@ struct ImportedScopeReference : Node {
 	DECLARE_NODE(ImportedScopeReference);
 };
 
-// Inferred [i.e. no type expression given] | Unresolved expression | valid type expression
+// Inferred [i.e. no type expression given] | Unresolved expression | valid type expression | wildcard type with possible constraint
 struct InferredUnresolvedTypeExpression {
 	enum {
 		Inferred,
 		Unresolved,
-		Type
+		Type,
+		Wildcard
 	};
 	int kind;
 	union {
@@ -185,6 +186,7 @@ struct InferredUnresolvedTypeExpression {
 	void parse(Parser* parser,int stickiness);
 
 	inline bool isInferred(){ return kind == Inferred; }
+	inline bool isWildcard(){ return kind == Wildcard; }
 };
 
 //(type ...): intrinsics::types::Type

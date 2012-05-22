@@ -561,9 +561,9 @@ Node* Evaluator::mixinFunction(CallExpression* node){
 	//Mixin definitions
 	mods.location = node->location;
 	mods.target = currentScope();
-	func->body.scope->duplicate(&mods,true);
+	func->body.scope->duplicate(&mods);
 	//inline body
-	if(!func->returnType()->isSame(intrinsics::types::Void)){
+	if(!func->returnType()->isSame(intrinsics::types::Void)){//NB Throws assert when mixing generic function now.. need to proper dup generi funcs
 		auto v = new Variable("$",node->location,currentScope()->functionOwner() ? true : false);
 		v->type.infer(func->returnType());
 		currentScope()->define(v);
@@ -602,7 +602,7 @@ Node* constructFittingArgument(Function* func,Node *arg){
 	}
 
 	if(argsCount < expressionCount){
-		if(argsCount > 0 && func->arguments[argsCount-1]->type.type()->isSame(intrinsics::types::AnyType)){
+		if(argsCount > 0 && func->arguments[argsCount-1]->type.isWildcard()){
 			argsCount--;
 			auto tuple = new TupleExpression();
 			for(auto i = argsCount;i<expressionCount;i++)
@@ -619,7 +619,7 @@ Node* constructFittingArgument(Function* func,Node *arg){
 			//Labeled
 			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
 				if(func->arguments[currentArg]->id == label){
-					if(func->arguments[currentArg]->type.type()->isSame(intrinsics::types::AnyType)){
+					if(func->arguments[currentArg]->type.isWildcard()){
 						result[currentArg] = exprBegin[currentExpr];
 						//TODO func dup
 					}
@@ -630,7 +630,7 @@ Node* constructFittingArgument(Function* func,Node *arg){
 		}
 		else{
 			//NonLabeled
-			if(func->arguments[currentArg]->type.type()->isSame(intrinsics::types::AnyType)){
+			if(func->arguments[currentArg]->type.isWildcard()){
 				result[currentArg] = exprBegin[currentExpr];
 				//TODO func dup
 			}
@@ -700,7 +700,7 @@ bool match(Function* func,Node* arg){
 	}
 
 	if(argsCount < expressionCount){
-		if(argsCount > 0 && func->arguments[argsCount-1]->type.type()->isSame(intrinsics::types::AnyType)){
+		if(argsCount > 0 && func->arguments[argsCount-1]->type.isWildcard()){
 			argsCount--;
 			expressionCount = argsCount;
 		}
@@ -715,8 +715,8 @@ bool match(Function* func,Node* arg){
 			bool foundMatch = false;
 			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
 				if(func->arguments[currentArg]->id == label){
-					if( func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ||
-						func->arguments[currentArg]->type.type()->isSame(intrinsics::types::AnyType) ){
+					if( func->arguments[currentArg]->type.isWildcard() ||
+						func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
 						foundMatch = true;
 						break;
 					}else{
@@ -729,8 +729,8 @@ bool match(Function* func,Node* arg){
 		else{
 			//NonLabeled
 			if(!(currentArg < argsCount)) return false;//f(x:5,6) where x is the last arg
-			if( func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ||
-				func->arguments[currentArg]->type.type()->isSame(intrinsics::types::AnyType) ){
+			if( func->arguments[currentArg]->type.isWildcard() ||
+				func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
 				lastNonLabeledExpr = currentExpr;
 			}
 			else return false;

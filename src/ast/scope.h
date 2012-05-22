@@ -85,7 +85,7 @@ struct Scope: memory::ManagedDefinition {
 	Function* resolveFunction(SymbolID name,Node* argument);
 	void defineFunction(Function* definition);
 
-	void duplicate(DuplicationModifiers* mods,bool ignoreArguments = false);
+	void duplicate(DuplicationModifiers* mods);
 
 	Scope* parent;
 

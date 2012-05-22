@@ -316,7 +316,7 @@ struct DefParser: PrefixDefinition {
 				auto next = parser->peek();
 				bool inferOnDefault = false;
 				if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")" || next.symbol == "=")){
-					param->type.infer(intrinsics::types::AnyType);
+					param->type.kind = InferredUnresolvedTypeExpression::Wildcard;
 					inferOnDefault = true;
 				}else{
 					param->type.parse(parser,arpha::Precedence::Tuple);
@@ -347,9 +347,8 @@ struct DefParser: PrefixDefinition {
 			}
 			functionBody(func,parser);
 		}
-		//def infer return type void on no return statements in body TODO
 		func->resolve(parser->evaluator());
-		return new FunctionReference(func);
+		return new UnitExpression();//new FunctionReference(func);//TODO return reference when func has no generic args
 	}
 
 	Node* parse(Parser* parser){
