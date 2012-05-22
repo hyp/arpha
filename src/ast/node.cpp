@@ -128,7 +128,7 @@ Node* TupleExpression::duplicate(DuplicationModifiers* mods) const {
 	for(auto i = children.begin();i!=children.end();i++){
 		dup->children.push_back((*i)->duplicate(mods));
 	}
-	dup->type = type->duplicate(mods)->asTypeExpression();
+	dup->type = type ? type->duplicate(mods)->asTypeExpression() : nullptr;
 	return copyProperties(dup);
 };
 
@@ -154,15 +154,17 @@ Node* AssignmentExpression::duplicate(DuplicationModifiers* mods) const {
 }
 
 // Return expression
-ReturnExpression::ReturnExpression(Node* expression) : value(expression) {}
+ReturnExpression::ReturnExpression(Node* expression) : value(expression),_resolved(false) {}
 bool ReturnExpression::isResolved() const {
-	return value ? value->isResolved() : true;
+	return _resolved;
 }
 Node* ReturnExpression::duplicate(DuplicationModifiers* mods) const {
 	if(mods->returnValueRedirector){
 		return copyProperties(new AssignmentExpression(new VariableReference(mods->returnValueRedirector),value->duplicate(mods)));
 	}
-	return copyProperties(new ReturnExpression(value?value->duplicate(mods):nullptr));
+	auto r = new ReturnExpression(value?value->duplicate(mods):nullptr);
+	r->_resolved = _resolved;
+	return copyProperties(r);
 }
 
 //Pointer operation
@@ -212,6 +214,7 @@ Node* MatchExpression::duplicate(DuplicationModifiers* mods) const{
 
 // Function reference
 FunctionReference::FunctionReference(Function* func) : function(func) {
+	assert(!func->_hasGenericArguments);
 }
 TypeExpression* FunctionReference::_returnType() const {
 	assert(isResolved());

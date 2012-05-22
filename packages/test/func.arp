@@ -51,6 +51,18 @@ def f23(){
 	return &x # NB this should be an error! Don't allow to infer a return type with local semantic!
 }
 
+def f40(x int32){
+  var z Foo
+  return z
+}
+def f41(x int32) Foo {
+	var z Foo
+	return z
+}
+f40(4)
+f41(2)
+type Foo { var x int32 }
+
 #
 TODO
 

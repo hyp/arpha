@@ -12,8 +12,6 @@
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
 
 
-Node* constructFittingArgument(Function* func,Node *arg);
-
 Node* evaluateResolvedFunctionCall(Evaluator* evaluator,CallExpression* node){
 	auto function = node->object->asFunctionReference()->function;
 
@@ -93,8 +91,8 @@ struct AstExpander: NodeVisitor {
 			auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : evaluator->currentScope());
 			auto func =  scope->resolveFunction(callingOverloadSet->symbol,node->arg);
 			if(func){
+				node->arg = evaluator->constructFittingArgument(&func,node->arg)->accept(this);
 				node->object = new FunctionReference(func);
-				node->arg = constructFittingArgument(func,node->arg)->accept(this);
 				node->_resolved = true;
 				return evaluateResolvedFunctionCall(evaluator,node);
 			}else{
@@ -353,11 +351,14 @@ struct AstExpander: NodeVisitor {
 			if(node->value){
 				node->value = node->value->accept(this);
 				if(node->value->isResolved()){
+					node->_resolved = true;
 					if(func->_returnType.isInferred()){
 						//TODO Don't allow to return local types
 						auto valRet = node->value->_returnType();
-						if(!valRet->hasLocalSemantics())
+						if(!valRet->hasLocalSemantics()){
+							debug("Inferring return type %s for function %s",valRet,func->id);
 							func->_returnType.infer(valRet);
+						}
 						else
 							error(node->location,"Can't return %s because of local semantics!",node->value);
 					}
@@ -366,6 +367,7 @@ struct AstExpander: NodeVisitor {
 					}
 				}
 			}else {
+				node->_resolved = true;
 				if(func->_returnType.isInferred()) func->_returnType.infer(intrinsics::types::Void);
 				else if(func->_returnType.isResolved()){
 					//TODO proper typecheck?
@@ -577,9 +579,12 @@ Node* Evaluator::mixinFunction(CallExpression* node){
 }
 
 //TODO function duplication with certain wildcard params
-Node* constructFittingArgument(Function* func,Node *arg){
+Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
+	Function* func = *function;
 	std::vector<Node*> result;
 	result.resize(func->arguments.size());
+	bool determinedFunction = false;
+	std::vector<TypeExpression*> determinedArguments;
 
 	//..
 	size_t currentArg = 0;
@@ -607,8 +612,13 @@ Node* constructFittingArgument(Function* func,Node *arg){
 			auto tuple = new TupleExpression();
 			for(auto i = argsCount;i<expressionCount;i++)
 				tuple->children.push_back(exprBegin[i]);
-			result[argsCount] = tuple;
+			result[argsCount] = eval(tuple);
+			assert(result[argsCount]->isResolved());
 			expressionCount = argsCount;
+
+			determinedFunction = true;
+			determinedArguments.resize(argsCount+1,nullptr);
+			determinedArguments[argsCount] = result[argsCount]->_returnType();
 		}
 		else assert(false);
 	}
@@ -621,7 +631,11 @@ Node* constructFittingArgument(Function* func,Node *arg){
 				if(func->arguments[currentArg]->id == label){
 					if(func->arguments[currentArg]->type.isWildcard()){
 						result[currentArg] = exprBegin[currentExpr];
-						//TODO func dup
+						if(!determinedFunction){
+							determinedFunction = true;
+							determinedArguments.resize(argsCount,nullptr);
+						}
+						determinedArguments[currentArg] = result[currentArg]->_returnType();
 					}
 					else result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType());
 					break;
@@ -632,7 +646,11 @@ Node* constructFittingArgument(Function* func,Node *arg){
 			//NonLabeled
 			if(func->arguments[currentArg]->type.isWildcard()){
 				result[currentArg] = exprBegin[currentExpr];
-				//TODO func dup
+				if(!determinedFunction){
+					determinedFunction = true;
+					determinedArguments.resize(argsCount,nullptr);
+				}
+				determinedArguments[currentArg] = result[currentArg]->_returnType();
 			}
 			else result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType());
 			lastNonLabeledExpr = currentExpr;
@@ -643,6 +661,18 @@ Node* constructFittingArgument(Function* func,Node *arg){
 	//Default args at end
 	for(currentArg = resolvedArgs; currentArg < argsCount;currentArg ++){
 		result[currentArg] = func->arguments[currentArg]->defaultValue()->duplicate();
+	}
+
+	//Determine the function?
+	if(determinedFunction){
+		DuplicationModifiers mods;
+		mods.target = currentScope();
+		mods.location = arg->location;
+		mods.functionArgumentTypeFix = &determinedArguments;
+		auto f = func->duplicate(&mods);
+		f->resolve(this);
+		*function = f;
+		debug("Need to duplicate determined function!");
 	}
 
 	//Construct a proper argument

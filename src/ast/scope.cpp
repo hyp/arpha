@@ -202,7 +202,7 @@ bool Scope::resolve(Evaluator* evaluator){
 	debug("RSLV scope");
 	_resolved = true;
 	for(auto i = prefixDefinitions.begin();i!=prefixDefinitions.end();i++){
-		if(!(*i).second->isResolved()){
+		if((!dynamic_cast<Argument*>((*i).second)) && !(*i).second->isResolved()){
 			if(!(*i).second->resolve(evaluator)) _resolved = false;
 		}
 	}

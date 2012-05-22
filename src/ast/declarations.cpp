@@ -54,7 +54,7 @@ Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* n
 	Argument* dup = new Argument(id,location);
 	if(newType && type.isWildcard()){
 		dup->type._type = newType;//TODO dup?
-		dup->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+		dup->type.kind = InferredUnresolvedTypeExpression::Type;
 	}
 	else dup->type = type.duplicate(mods);
 	dup->isMutable = isMutable;
@@ -489,20 +489,27 @@ bool Function::resolve(Evaluator* evaluator){
 		}
 	}
 	_argsResolved = _resolved;
-	//Body has no return expression => return void
-	if(!_hasReturnInside && _returnType.isInferred()) _returnType.infer(intrinsics::types::Void);
-	//resolve return type
-	if(!_returnType.isResolved()){
-		if(_returnType.isInferred() || !_returnType.resolve(evaluator)) _resolved = false;
-	}
+
+	//resolve body
 	if(!body.isResolved()){
 		evaluator->eval(&body);
 		if(!body.isResolved()) _resolved = false;
 	}
-	if(_resolved){
-		debug("Function %s is fully resolved!\n Body: %s",id,&body);
+
+	//resolve return type
+	//Body has no return expression => return void
+	if(!_hasReturnInside && _returnType.isInferred()) _returnType.infer(intrinsics::types::Void);
+	if(!_returnType.isResolved()){
+		if(_returnType.isInferred() || !_returnType.resolve(evaluator)) _resolved = false;
 	}
-	else evaluator->markUnresolved(this);
+
+	if(_resolved){
+		debug("Function %s is fully resolved!\n G : %s Ret : %s Body: %s",id,_hasGenericArguments,_returnType.type(),&body);
+	}
+	else {
+		debug("Function %s isn't resolved!\n Body: %s,%s,%s,%s",id,&body,_argsResolved,body.isResolved(),_returnType.kind);
+		evaluator->markUnresolved(this);
+	}
 	return _resolved;
 }
 
@@ -526,8 +533,16 @@ Function* Function::duplicate(DuplicationModifiers* mods){
 	auto func = new Function(id,location,new Scope(mods->target));
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);//NB before body duplication to account for recursion
 	//args
-	for(auto i = arguments.begin();i!=arguments.end();++i){
-		func->arguments.push_back((*i)->reallyDuplicate(mods,nullptr));
+	auto argFix = mods->functionArgumentTypeFix;
+	if(argFix) {
+		for(size_t i = 0;i!=arguments.size();++i){
+			func->arguments.push_back(arguments[i]->reallyDuplicate(mods,(*argFix)[i]));
+		}
+	}
+	else {
+		for(auto i = arguments.begin();i!=arguments.end();++i){
+			func->arguments.push_back((*i)->reallyDuplicate(mods,nullptr));
+		}
 	}
 	//return type
 	func->_returnType = _returnType.duplicate(mods);

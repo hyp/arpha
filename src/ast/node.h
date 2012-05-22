@@ -75,7 +75,9 @@ struct DuplicationModifiers {
 	
 	Variable* returnValueRedirector;//The variable to which the return value is assigned in inlined and mixined functions
 
-	DuplicationModifiers() : returnValueRedirector(nullptr) {}
+	std::vector<TypeExpression*>* functionArgumentTypeFix; //Used for duplicating generic functions to determined functions
+
+	DuplicationModifiers() : returnValueRedirector(nullptr),functionArgumentTypeFix(nullptr) {}
 };
 
 //An AST node
@@ -325,6 +327,7 @@ struct ReturnExpression : Node {
 	bool isResolved() const;
 
 	Node* value; //can be null
+	bool _resolved;
 	DECLARE_NODE(ReturnExpression);
 };
 

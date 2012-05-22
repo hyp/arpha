@@ -28,7 +28,7 @@ public:
 	Node* eval(Node* node);
 	// Resolves expressions and definitions in a module using multiple passes
 	void evaluateModule(BlockExpression* module);
-
+	
 	Node* mixinedExpression;
 	Node* inlineFunction(CallExpression* node);
 	Node* mixinFunction(CallExpression* node);
@@ -40,6 +40,9 @@ public:
 	void markUnresolved(PrefixDefinition* node);
 
 	//function overloads resolving
+
+	Node* constructFittingArgument(Function** function,Node *arg);
+
 	static void findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic = false);
 
 };

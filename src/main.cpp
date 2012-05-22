@@ -704,7 +704,7 @@ namespace compiler {
 		debug("%s\n",currentModule->second.body);
 
 
-		if(std::string("source") == moduleName || (packageDir + "/test/types.arp") == moduleName){
+		if(std::string("source") == moduleName || (packageDir + "/test/types.arp") == moduleName || (packageDir + "/test/func.arp") == moduleName){
 
 			parser.evaluator()->evaluateModule(currentModule->second.body->asBlockExpression());
 		}
