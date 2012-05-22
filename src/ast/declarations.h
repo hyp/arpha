@@ -48,6 +48,8 @@ struct Argument : Variable {
 
 	void defaultValue(Node* expression,bool inferType);
 	Node* defaultValue() const;
+
+	bool expandAtCompileTime();
 private:
 	Node* _defaultValue;
 };
@@ -188,11 +190,15 @@ struct Function: public PrefixDefinition {
 	bool isResolved();
 	bool isPartiallyResolved();//It's when arguments and return type are resolved! The function's body doesn't have to be resolved yet.
 	bool resolve(Evaluator* evaluator);
+	bool canExpandAtCompileTime();//i.e. f(T Type)
 
 	TypeExpression* argumentType();
 	TypeExpression* returnType();
 
 	Function* duplicate(DuplicationModifiers* mods);
+	//Used to specialise a function with wildcard parameters
+	Function* specializedDuplicate(DuplicationModifiers* mods,std::vector<TypeExpression* >& specializedArgTypes);
+	Function* expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters);
 
 	InferredUnresolvedTypeExpression _returnType;
 	BlockExpression body;
@@ -201,6 +207,7 @@ struct Function: public PrefixDefinition {
 	bool _hasReturnInside;
 	bool _hasGenericArguments;
 private:
+	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
 	bool _argsResolved;
 	bool _resolved;
 };

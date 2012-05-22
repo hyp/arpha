@@ -584,7 +584,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
 	std::vector<Node*> result;
 	result.resize(func->arguments.size());
 	bool determinedFunction = false;
-	std::vector<TypeExpression*> determinedArguments;
+	std::vector<TypeExpression* > determinedArguments;//Boolean to indicate whether the argument was expanded at compile time and is no longer needed
 
 	//..
 	size_t currentArg = 0;
@@ -668,15 +668,26 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
 		DuplicationModifiers mods;
 		mods.target = currentScope();
 		mods.location = arg->location;
-		mods.functionArgumentTypeFix = &determinedArguments;
-		auto f = func->duplicate(&mods);
+		auto f = func->specializedDuplicate(&mods,determinedArguments);
 		f->resolve(this);
 		*function = f;
-		debug("Need to duplicate determined function!");
+	}
+
+	if((*function)->canExpandAtCompileTime()){
+		DuplicationModifiers mods;
+		mods.target = currentScope();
+		mods.location = arg->location;
+		auto f = (*function)->expandedDuplicate(&mods,result);
+		f->resolve(this);
+		*function = f;
 	}
 
 	//Construct a proper argument
-	if(result.size() == 0) return arg; //arg is ()
+	if(result.size() == 0){
+		if(auto u = arg->asUnitExpression()) return arg; //arg is ()
+		//delete arg;
+		return new UnitExpression();
+	}
 	else if(result.size() == 1){
 		if(auto u = arg->asUnitExpression()) delete arg;
 		return result[0];

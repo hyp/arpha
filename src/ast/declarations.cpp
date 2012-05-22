@@ -47,6 +47,10 @@ PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
 
 Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr) {
 }
+bool Argument::expandAtCompileTime() {
+	assert(isResolved());
+	return type.type()->isSame(intrinsics::types::Type);
+}
 PrefixDefinition* Argument::duplicate(DuplicationModifiers* mods){
 	return nullptr; //Arguments are duplicates inside function resolve
 }
@@ -529,24 +533,60 @@ TypeExpression* Function::returnType() {
 	assert(_resolved);
 	return _returnType.type();
 }
+bool Function::canExpandAtCompileTime(){
+	assert(_argsResolved);
+	for(auto i = arguments.begin();i!=arguments.end();++i){
+		if((*i)->expandAtCompileTime()) return true;
+	}
+	return false;
+}
+Function* Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters){
+	debug("Need to duplicate expand function %s!",id);
+	auto func = new Function(id,location,new Scope(mods->target));
+	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);//NB before body duplication to account for recursion
+	//args
+	size_t erased = 0;
+	for(size_t i = 0;i!=arguments.size();++i){
+		if(arguments[i]->expandAtCompileTime()){
+			debug("Exp");
+			mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(arguments[i]))] = 
+				std::make_pair(reinterpret_cast<void*>(parameters[i - erased]),true);
+			parameters.erase(parameters.begin() + (i - erased));
+			erased++;
+		}
+		else func->arguments.push_back(arguments[i]->reallyDuplicate(mods,nullptr));
+	}
+	//TODO fancy name for expanded function
+
+	duplicateReturnBody(mods,func);
+	//TODO resolve
+	return func;
+}
+Function* Function::specializedDuplicate(DuplicationModifiers* mods,std::vector<TypeExpression* >& specializedArgTypes){
+	debug("Need to duplicate determined function %s!",id);
+	auto func = new Function(id,location,new Scope(mods->target));
+	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);//NB before body duplication to account for recursion
+	//args
+	for(size_t i = 0;i!=arguments.size();++i){
+		func->arguments.push_back(arguments[i]->reallyDuplicate(mods,specializedArgTypes[i]));
+	}
+
+	duplicateReturnBody(mods,func);
+	//TODO resolve
+	return func;
+}
 Function* Function::duplicate(DuplicationModifiers* mods){
 	auto func = new Function(id,location,new Scope(mods->target));
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);//NB before body duplication to account for recursion
 	//args
-	auto argFix = mods->functionArgumentTypeFix;
-	if(argFix) {
-		for(size_t i = 0;i!=arguments.size();++i){
-			func->arguments.push_back(arguments[i]->reallyDuplicate(mods,(*argFix)[i]));
-		}
+	for(auto i = arguments.begin();i!=arguments.end();++i){
+		func->arguments.push_back((*i)->reallyDuplicate(mods,nullptr));
 	}
-	else {
-		for(auto i = arguments.begin();i!=arguments.end();++i){
-			func->arguments.push_back((*i)->reallyDuplicate(mods,nullptr));
-		}
-	}
-	//return type
+	return duplicateReturnBody(mods,func);//TODO resolve?
+}
+Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* func){
 	func->_returnType = _returnType.duplicate(mods);
-	//body
+	
 	func->body.scope->_functionOwner = func;
 	auto oldTarget = mods->target;
 	mods->target = func->body.scope;
@@ -556,7 +596,6 @@ Function* Function::duplicate(DuplicationModifiers* mods){
 	body._duplicate(&func->body,mods);
 	mods->target = oldTarget;
 	mods->returnValueRedirector = oldRed;
-	//TODO resolve
 	return func;
 }
 

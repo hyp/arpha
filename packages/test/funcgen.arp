@@ -7,15 +7,30 @@ def inc(x) = x + 1
 inc(7) # ok
 inc(true) # error, body will never be resolved
 
+#expanded arguments
+
+def foo(T){
+	var x T
+	return x
+}
+foo(int32) # ok
+foo(bool) # ok
+
+def foo2(T,x int32) T {
+	var z T = x
+	return z
+}
+foo2(int32,2) # ok
+
+def foo3(T = bool){
+	var x T
+	return x
+}
+foo3() # ok
+foo3(int32) # ok
+
 #
-	TODO expansion of parameters of type type
-	def foo(T){
-		var x T
-		return x
-	}
-	foo(int32) # ok
-	foo(bool) # ok
-	
+This doesnt't work.. should it work?
 	def bar(T,value T){
 		var x T = 0
 		return x + value

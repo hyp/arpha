@@ -286,15 +286,12 @@ struct DefParser: PrefixDefinition {
 		if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
 			;
 		}else{
-			auto oldScope = parser->currentScope();
-			parser->currentScope(func->body.scope);
 			if(parser->match("="))
 				func->body.children.push_back(parser->evaluate(new ReturnExpression(parser->parse())));
 			else {
 				parser->expect("{");
 				blockParser->body(parser,BlockParser::BlockChildParser(&func->body));
 			}
-			parser->currentScope(oldScope);
 		}
 	}
 
@@ -306,6 +303,8 @@ struct DefParser: PrefixDefinition {
 		bodyScope->_functionOwner = func;
 		parser->currentScope()->defineFunction(func);
 
+		auto oldScope = parser->currentScope();
+		parser->currentScope(bodyScope);
 		//parse arguments
 		if(!parser->match(")")){
 			while(1){
@@ -347,6 +346,8 @@ struct DefParser: PrefixDefinition {
 			}
 			functionBody(func,parser);
 		}
+		parser->currentScope(oldScope);
+
 		func->resolve(parser->evaluator());
 		return new UnitExpression();//new FunctionReference(func);//TODO return reference when func has no generic args
 	}
