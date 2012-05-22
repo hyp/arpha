@@ -211,6 +211,15 @@ bool Scope::resolve(Evaluator* evaluator){
 
 void Scope::duplicate(DuplicationModifiers* mods){
 	for(auto i = prefixDefinitions.begin();i!=prefixDefinitions.end();i++){
+		
+		if(auto os = (*i).second->asOverloadset()){
+			if(auto def  = mods->target->containsPrefix((*i).first)){
+				if(auto destOs = def->asOverloadset()){
+					os->mergedDuplicate(mods,destOs);
+					continue;
+				}
+			}
+		}
 		if(auto dup = (*i).second->duplicate(mods)){
 			mods->target->define(dup);
 		}else{

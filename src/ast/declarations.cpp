@@ -66,9 +66,6 @@ Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* n
 	mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(this))] = std::make_pair(reinterpret_cast<void*>(static_cast<Variable*>(dup)),false);
 	return dup;
 }
-bool Argument::resolve(Evaluator* evaluator){
-	return false;//Arguments are resolved inside function resolve
-}
 void Argument::defaultValue(Node* expression,bool inferType){
 	assert(expression->isResolved());
 	if(inferType){
@@ -466,6 +463,12 @@ PrefixDefinition* Overloadset::duplicate(DuplicationModifiers* mods){
 	}
 	return os;
 }
+PrefixDefinition* Overloadset::mergedDuplicate(DuplicationModifiers* mods,Overloadset* dest){
+	for(auto i = functions.begin();i!=functions.end();i++){
+		dest->push_back((*i)->duplicate(mods));
+	}
+	return dest;
+}
 
 //Function
 
@@ -476,7 +479,7 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 }
 
 bool Function::isResolved(){
-	return  _hasGenericArguments ? _argsResolved : _resolved;
+	return  (_hasGenericArguments || _hasExpandableArguments) ? _argsResolved : _resolved;
 }
 bool Function::isPartiallyResolved(){
 	return true;//TODO
@@ -486,11 +489,13 @@ bool Function::resolve(Evaluator* evaluator){
 	_resolved = true;
 	_argsResolved = true;
 	_hasGenericArguments = false;
+	_hasExpandableArguments = false;
 	for(auto i = arguments.begin();i!=arguments.end();++i){
 		if((*i)->type.isWildcard()) _hasGenericArguments = true; //TODO constraints
 		else if(!(*i)->isResolved()){
 			if(!(*i)->resolve(evaluator)) _resolved = false;
 		}
+		if((*i)->isResolved() && (*i)->expandAtCompileTime()) _hasExpandableArguments = true;
 	}
 	_argsResolved = _resolved;
 
@@ -508,10 +513,13 @@ bool Function::resolve(Evaluator* evaluator){
 	}
 
 	if(_resolved){
-		debug("Function %s is fully resolved!\n G : %s Ret : %s Body: %s",id,_hasGenericArguments,_returnType.type(),&body);
+		debug("Function %s is fully resolved!\n E : %s G : %s Ret : %s Body: %s",id,_hasExpandableArguments,_hasGenericArguments,_returnType.type(),&body);
 	}
 	else {
 		debug("Function %s isn't resolved!\n Body: %s,%s,%s,%s",id,&body,_argsResolved,body.isResolved(),_returnType.kind);
+		/*for(auto i=arguments.begin();i!=arguments.end();++i){
+			debug("%s:%s",(*i)->id,(*i)->type.kind);
+		}*/
 		evaluator->markUnresolved(this);
 	}
 	return _resolved;
@@ -535,10 +543,7 @@ TypeExpression* Function::returnType() {
 }
 bool Function::canExpandAtCompileTime(){
 	assert(_argsResolved);
-	for(auto i = arguments.begin();i!=arguments.end();++i){
-		if((*i)->expandAtCompileTime()) return true;
-	}
-	return false;
+	return _hasExpandableArguments;
 }
 Function* Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters){
 	debug("Need to duplicate expand function %s!",id);
@@ -576,13 +581,16 @@ Function* Function::specializedDuplicate(DuplicationModifiers* mods,std::vector<
 	return func;
 }
 Function* Function::duplicate(DuplicationModifiers* mods){
+	debug("Duplicating function %s",id);
 	auto func = new Function(id,location,new Scope(mods->target));
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);//NB before body duplication to account for recursion
 	//args
 	for(auto i = arguments.begin();i!=arguments.end();++i){
+		
 		func->arguments.push_back((*i)->reallyDuplicate(mods,nullptr));
+		debug("Duplicating arg %s,%s,%s",(*i)->id,(*i)->type.kind,func->arguments.back()->type.kind);
 	}
-	return duplicateReturnBody(mods,func);//TODO resolve?
+	return duplicateReturnBody(mods,func);
 }
 Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* func){
 	func->_returnType = _returnType.duplicate(mods);
@@ -596,6 +604,12 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	body._duplicate(&func->body,mods);
 	mods->target = oldTarget;
 	mods->returnValueRedirector = oldRed;
+
+	func->_resolved = _resolved;
+	func->_argsResolved = _argsResolved;
+	func->_hasReturnInside = _hasReturnInside;
+	func->_hasGenericArguments = _hasGenericArguments;
+	func->_hasExpandableArguments = _hasExpandableArguments;
 	return func;
 }
 

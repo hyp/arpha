@@ -44,8 +44,6 @@ struct Argument : Variable {
 
 	Argument* reallyDuplicate(DuplicationModifiers* mods,TypeExpression* newType);
 
-	bool resolve(Evaluator* evaluator);
-
 	void defaultValue(Node* expression,bool inferType);
 	Node* defaultValue() const;
 
@@ -171,6 +169,7 @@ struct Overloadset: public PrefixDefinition {
 	bool isResolved();
 	bool resolve(Evaluator* evaluator);
 	PrefixDefinition* duplicate(DuplicationModifiers* mods);
+	PrefixDefinition* mergedDuplicate(DuplicationModifiers* mods,Overloadset* dest);
 	void push_back(Function* function);
 
 	Overloadset* asOverloadset();
@@ -206,9 +205,11 @@ struct Function: public PrefixDefinition {
 	std::vector<Argument*> arguments;
 	bool _hasReturnInside;
 	bool _hasGenericArguments;
+	bool _hasExpandableArguments;
+	bool _argsResolved;
 private:
 	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
-	bool _argsResolved;
+	
 	bool _resolved;
 };
 

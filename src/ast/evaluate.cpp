@@ -664,7 +664,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
 	}
 
 	//Determine the function?
-	if(determinedFunction){
+	if(determinedFunction && !func->intrinsicEvaluator){
 		DuplicationModifiers mods;
 		mods.target = currentScope();
 		mods.location = arg->location;
@@ -790,6 +790,7 @@ bool match(Function* func,Node* arg){
 void Evaluator::findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic){
 	for(auto i=overloads.begin();i!=overloads.end();++i){
 		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
+		if(!(*i)->_argsResolved) continue; //TODO what if we need this
 		if(match((*i),argument)) results.push_back(*i);
 	}
 }

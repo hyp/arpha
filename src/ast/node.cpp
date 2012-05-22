@@ -214,7 +214,7 @@ Node* MatchExpression::duplicate(DuplicationModifiers* mods) const{
 
 // Function reference
 FunctionReference::FunctionReference(Function* func) : function(func) {
-	assert(!func->_hasGenericArguments);
+	if(!func->intrinsicEvaluator) assert(!func->_hasGenericArguments );
 }
 TypeExpression* FunctionReference::_returnType() const {
 	assert(isResolved());

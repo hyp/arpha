@@ -11,18 +11,25 @@ def or(x bool,y bool) bool
 def equals(x bool,y bool) bool
 def notEquals(x,y) = not(x==y)
 
-# Arithmetics
-def minus(x int32) int32
+#TODO macro me, use type type
+def defineOperations(T = bool){
+	# Arithmetics
+	def minus(x T) T
 
-def add(x int32,y int32) int32
-def subtract(x int32,y int32) int32
-def multiply(x int32,y int32) int32
-def divide(x int32,y int32) int32
-def mod(x int32,y int32) int32
+	def add(x T,y T) T
+	def subtract(x T,y T) T
+	def multiply(x T,y T) T
+	def divide(x T,y T) T
+	def mod(x T,y T) T
+	
+	# Comparsion
+	def equals(x T,y T) bool
+	def less(x T,y T) bool
+	def greater(x T,y T) bool
+	def lessEquals(x T,y T) bool
+	def greaterEquals(x T,y T) bool
+}
 
-def equals(x int32,y int32) bool
-def less(x int32,y int32) bool
-def greater(x int32,y int32) bool
-def lessEquals(x int32,y int32) bool
-def greaterEquals(x int32,y int32) bool
+arpha.ast.mixin(defineOperations(int32))
+arpha.ast.mixin(defineOperations(int64))
 
