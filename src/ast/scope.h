@@ -96,6 +96,8 @@ struct Scope: memory::ManagedDefinition {
 
 	Function* _functionOwner;
 
+	size_t numberOfDefinitions() const;
+
 private:
 
 	bool _resolved;

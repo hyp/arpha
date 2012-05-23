@@ -355,32 +355,21 @@ struct AstExpander: NodeVisitor {
 		auto func = evaluator->currentScope()->functionOwner();
 		if(func){
 			func->_hasReturnInside = true;
-			if(node->value){
-				node->value = node->value->accept(this);
-				if(node->value->isResolved()){
-					node->_resolved = true;
-					if(func->_returnType.isInferred()){
-						//TODO Don't allow to return local types
-						auto valRet = node->value->_returnType();
-						if(!valRet->hasLocalSemantics()){
-							debug("Inferring return type %s for function %s",valRet,func->id);
-							func->_returnType.infer(valRet);
-						}
-						else
-							error(node->location,"Can't return %s because of local semantics!",node->value);
-					}
-					else if(func->_returnType.isResolved()){
-						node->value = typecheck(node->value->location,node->value,func->_returnType.type());
-					}
-				}
-			}else {
+			node->value = node->value->accept(this);
+			if(node->value->isResolved()){
 				node->_resolved = true;
-				if(func->_returnType.isInferred()) func->_returnType.infer(intrinsics::types::Void);
-				else if(func->_returnType.isResolved()){
-					//TODO proper typecheck?
-					if(!func->_returnType.type()->isSame(intrinsics::types::Void)){
-						error(node->location,"This function is expected to return void, not %s!",func->_returnType.type());
+				if(func->_returnType.isInferred()){
+					//TODO Don't allow to return local types
+					auto valRet = node->value->_returnType();
+					if(!valRet->hasLocalSemantics()){
+						debug("Inferring return type %s for function %s",valRet,func->id);
+						func->_returnType.infer(valRet);
 					}
+					else
+						error(node->location,"Can't return %s because of local semantics!",node->value);
+				}
+				else if(func->_returnType.isResolved()){
+					node->value = typecheck(node->value->location,node->value,func->_returnType.type());
 				}
 			}
 		}else error(node->location,"Return statement is allowed only inside function's body!");
@@ -556,6 +545,10 @@ Node* Evaluator::mixinFunction(CallExpression* node,bool inlined){
 	Node* result;
 	assert(node->isResolved());
 	auto func = node->object->asFunctionReference()->function;
+	if(!func->body.children.size()){
+		error(node->location,"Can't mixin a function %s without body!",func->id);
+		return ErrorExpression::getInstance();
+	}
 	debug("<<M");
 	DuplicationModifiers mods;
 	//Replace arguments
@@ -564,6 +557,12 @@ Node* Evaluator::mixinFunction(CallExpression* node,bool inlined){
 	auto argsBegin = node->arg->asTupleExpression() ? node->arg->asTupleExpression()->children.begin()._Ptr : &(node->arg);
 	for(size_t i =0;i<func->arguments.size();i++){
 		mods.redirectors[reinterpret_cast<void*>(static_cast<Variable*>(func->arguments[i]))] = std::make_pair(reinterpret_cast<void*>(argsBegin[i]),true);
+	}
+	//Simple form of f(x) = x
+	if(func->body.scope->numberOfDefinitions() <= func->arguments.size() && func->body.children.size() == 1){
+		if(auto ret = func->body.children[0]->asReturnExpression()){
+			return eval(ret->value->duplicate(&mods));
+		}
 	}
 	//Mixin definitions
 	auto target = inlined ? new Scope(currentScope()) : currentScope();

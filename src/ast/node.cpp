@@ -178,7 +178,7 @@ Node* ReturnExpression::duplicate(DuplicationModifiers* mods) const {
 		assign->isInitializingAssignment = true;//NB when mixing in we assign the return to a immutable value
 		return copyProperties(assign);
 	}
-	auto r = new ReturnExpression(value?value->duplicate(mods):nullptr);
+	auto r = new ReturnExpression(value->duplicate(mods));
 	r->_resolved = _resolved;
 	return copyProperties(r);
 }
@@ -618,8 +618,7 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(ReturnExpression* node){
-		stream<<"return";
-		if(node->value) stream<<' '<<node->value;
+		stream<<"return"<<' '<<node->value;
 		return node;
 	}
 	Node* visit(PointerOperation* node){

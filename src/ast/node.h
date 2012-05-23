@@ -335,7 +335,7 @@ struct ReturnExpression : Node {
 
 	bool isResolved() const;
 
-	Node* value; //can be null
+	Node* value;
 	bool _resolved;
 	DECLARE_NODE(ReturnExpression);
 };

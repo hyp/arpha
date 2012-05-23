@@ -25,7 +25,9 @@ Scope::Scope(Scope* parent) : _functionOwner(parent ? parent->_functionOwner : n
 Function* Scope::functionOwner() const {
 	return _functionOwner;
 }
-
+size_t Scope::numberOfDefinitions() const {
+	return prefixDefinitions.size() + infixDefinitions.size();
+}
 void Scope::import(Scope* scope,const char* alias,bool qualified,bool exported){
 	//alias in a form of single file
 	const char* path = alias;

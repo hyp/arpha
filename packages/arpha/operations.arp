@@ -11,7 +11,7 @@ def or(x bool,y bool) bool
 def equals(x bool,y bool) bool
 def notEquals(x,y) = not(x==y)
 
-macro defineOperations(T Type){
+macro defineOperations (T Type){
 	# Arithmetics
 	def minus(x T) T
 
@@ -21,7 +21,7 @@ macro defineOperations(T Type){
 	def divide(x T,y T) T
 	def mod(x T,y T) T
 	
-	# Comparsion
+	# Comparison
 	def equals(x T,y T) bool
 	def less(x T,y T) bool
 	def greater(x T,y T) bool
