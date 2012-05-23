@@ -20,6 +20,14 @@ Node* mixin(CallExpression* node,Evaluator* evaluator){
 	}
 	return node;
 }
+Node* defineVariable(CallExpression* node,Evaluator* evaluator){
+	auto tuple = node->arg->asTupleExpression();
+	auto str = tuple->children[0]->asStringLiteral();
+	auto var = new Variable(SymbolID(str->block.ptr(),str->block.length()),node->location,evaluator->currentScope()->functionOwner()!=nullptr);
+	evaluator->currentScope()->define(var);
+	//TODO type and isMutable
+	return new VariableReference(var);
+}
 
 namespace intrinsics {
 	Function* ast::mixin = nullptr;
@@ -28,5 +36,6 @@ namespace intrinsics {
 	void ast::init(Scope* moduleScope){
 		//TODO
 		INTRINSIC_FUNC(mixin)
+		INTRINSIC_FUNC(defineVariable)
 	}
 };

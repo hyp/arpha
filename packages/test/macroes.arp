@@ -2,11 +2,12 @@
 
 macro foo() syntax("foo") = 5
 foo # ok
-macro foo2() syntax("foo2","bar") = 5
+macro foo2() syntax("foo2","bar") = 1,5
 foo2 bar # ok
 
 macro foo3(expr) syntax("foo3","[",expr,"]") = expr
 foo3 [ 5 ] # ok
+foo3 [ 1,2 ] # ok
 
 macro foo4(expr) syntax("foo4",expr) = typeof(expr)
 foo4 5 # ok
@@ -25,3 +26,29 @@ macro foo10(x) syntax("foo10",optional("opt",x)) = x
 foo10 # ok
 foo10 opt 10 # ok
 
+macro foo11(x) syntax("foo11",optional(x),"opt")) = x
+foo11 opt # ok
+foo11 11 opt # ok
+
+macro parentheses(expression) syntax("begin",optional(expression),"end") = expression
+begin end # ok
+begin 12 end # ok
+begin 12,13 end # ok
+
+macro for(init,cond = true,change,body) syntax("for","(",optional(init),";",optional(cond),";",optional(change),")",body) {
+	init
+	while(cond){
+		body
+		change
+	}
+}
+
+for(var i = 0;i<10;i = i + 1) () # ok
+
+i #NB i will be accessible at this point.. TODO how to make it not accessible?
+
+for(;true;) () # ok
+
+for(;;) {
+	# ok 
+}

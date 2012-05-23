@@ -6,6 +6,52 @@
 
 import export types
 
+import qualified precedence
+
+def false bool = 0
+def true bool = 1
+
+macro parentheses(expression) syntax("(",optional(expression),")") = expression
+
+macro nothing() syntax("nothing") = ()
+
+#macro call(object,argument) syntax(object,precedence(precedence.call) "(",optional(argument),")")
+
+#macro assignment(object,value) syntax(object,precedence(precedence.assignment) "=",precedence(precedence.assignment - 1) value)
+
+#macro index(object,argument) syntax(object,precedence(arpha.precedence.index) "[",argument,"]")
+
+macro while(condition,body) syntax("while","(",condition,")",body)
+
+macro if(condition,consequence,alternative) syntax("if","(",condition,")",consequence,optional("else",alternative)) {
+	return match condition {
+		to(true) consequence
+		to(false) alternative
+	}
+}
+
+# TODO proper and argument name
+macro for(sequence,body) syntax("for","(","i","in",sequence,")",body) {
+#
+	var r = sequence.begin()
+	while(r != sequence.end()){
+		arpha.ast.defineVariable("i") = r
+		body
+		r.inc()
+	}
+#
+	def i = 1
+	body
+}
+
+# TODO generation + name
+macro unittest(body) syntax("unittest",body) {
+	def test() {
+		#print("Running unittest")
+		body
+	}
+}
+
 # Returns true if two given types are the same type. TOCONSIDER move to compiler
 def equals(x Type,y Type) bool
 
@@ -14,9 +60,6 @@ def typeof(expression) Type
 
 # Returns the size(in bytes) of a given type. If an expression was given instead, returns the size of that expression's type.
 def sizeof(expression) uint32
-
-def false bool = 0
-def true bool = 1
 
 
 #

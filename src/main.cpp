@@ -118,7 +118,9 @@ BlockExpression* parseModule(Parser* parser,Scope* scope){
 	return block;
 }
 
-/// ::= '(' expression ')'
+//TODO NB x:(1,2) proper parsing using parser extensions
+
+/// ::= '(' expression ')' TODO rm
 struct ParenthesisParser: PrefixDefinition {
 	SymbolID closingParenthesis;
 	ParenthesisParser(): PrefixDefinition("(",Location()) {
@@ -127,7 +129,7 @@ struct ParenthesisParser: PrefixDefinition {
 	Node* parse(Parser* parser){
 		if( parser->match(closingParenthesis) )
 			return new UnitExpression;
-		auto l = parser->labelForNextNode;//NB x:(1,2) proper parsing
+		auto l = parser->labelForNextNode;
 		parser->labelForNextNode = SymbolID();
 		auto e = parser->parse();
 		parser->expect(closingParenthesis);
@@ -150,14 +152,6 @@ struct CallParser: InfixDefinition {
 			parser->expect(closingParenthesis);
 		}
 		return new CallExpression(node,arg);
-	}
-};
-
-/// ::= expression '[' expression ']'
-struct IndexParser: InfixDefinition {
-	IndexParser(): InfixDefinition("[",arpha::Precedence::Call,Location()) {}
-	Node* parse(Parser* parser,Node* node){
-		return nullptr;//TODO
 	}
 };
 
@@ -307,6 +301,8 @@ struct MacroSyntax {
 	Function* function;
 	size_t numArgs;
 
+	Node* (*intrinsicEvaluator)(Node**,size_t);
+
 	MacroSyntax(Function* func);
 
 	int parse(Parser* parser);
@@ -353,7 +349,7 @@ MacroSyntax::Instruction::Instruction(Function* func,Node* node,int sticky) : st
 	}
 	else error(node->location,"%s is not a valid syntax rule!",node);
 }
-MacroSyntax::MacroSyntax(Function* func) : function(func) {
+MacroSyntax::MacroSyntax(Function* func) : function(func),intrinsicEvaluator(nullptr) {
 	numArgs = func->arguments.size();
 }
 void MacroSyntax::compile(Scope* scope){
@@ -386,30 +382,43 @@ Node* MacroSyntax::execute(Parser* parser,Node* node){
 		arg = tupleArg;
 	}
 	for(auto i = instructions.begin();i!=instructions.end();i++){
-		//debug("Executing instruction %s , stickiness:%s, special:%d",(*i).kind,(*i).stickiness,(*i).innerRangeSize);
+		debug("Executing instruction %s , stickiness:%s, special:%d",(*i).kind,(*i).stickiness,(*i).innerRangeSize);
 		if((*i).kind == Instruction::SYMBOL) parser->expect((*i).symbol);
 		else if((*i).kind == Instruction::EXPR){
 			if(tupleArg)
 				tupleArg->children[(*i).argId] = parser->parse((*i).stickiness);
 			else arg = parser->parse((*i).stickiness);
 		}
-		else if((*i).kind == Instruction::OPTIONAL && parser->match((*(i+1)).symbol) ){
+		else if((*i).kind == Instruction::OPTIONAL){
+			int rangeSize = (*i).innerRangeSize;
+			bool skip = false;
 			i++;
-		}else{
-			//skip optional block, replacing expression with ()		
-			auto skipTo = i + ((*i).innerRangeSize+1);
-			i++;
-			for(;i!=skipTo;i++){
-				if((*i).kind == Instruction::EXPR){
-					if(tupleArg)
-						tupleArg->children[(*i).argId] = new UnitExpression();
-					else arg = new UnitExpression();
-				}
+			if((*i).kind == Instruction::SYMBOL){
+				if(!parser->match((*i).symbol) ) skip = true; 				//optional("foo")
 			}
-			i--;
+			else if((*i).kind == Instruction::EXPR){
+				auto next =parser->peek();
+				if(next.isSymbol() && next.symbol == (*(i+rangeSize)).symbol ) skip = true; //optional(expr),"foo"
+				else i--;
+			}
+			if(skip){
+				//skip optional block, replacing expression with ()	or argument's defualt value	
+				auto skipTo = i + rangeSize;
+				for(;i!=skipTo;i++){
+					if((*i).kind == Instruction::EXPR){
+						if(tupleArg)
+							tupleArg->children[(*i).argId] = function->arguments[(*i).argId]->defaultValue() ? function->arguments[(*i).argId]->defaultValue()->duplicate() : new UnitExpression();
+						else arg = new UnitExpression();
+					}
+				}
+				i--;
+			}
 		}
 	}
-	return parser->evaluator()->mixinFunction(loc,function,arg);
+	if(intrinsicEvaluator){	
+		return intrinsicEvaluator(tupleArg?tupleArg->children.begin()._Ptr:&arg,0);
+	}
+	else return parser->evaluator()->mixinFunction(loc,function,arg);
 }
 
 int MacroSyntax::parse(Parser* parser){
@@ -649,31 +658,6 @@ struct DereferenceParser: PrefixDefinition {
 	}
 };
 
-/// ::= 'if' '(' condition ')' consequence [ 'else' alternative ]
-/// TODO implement as macro in arpha
-struct IfParser: PrefixDefinition {
-	IfParser(): PrefixDefinition("if",Location()) {}
-	Node* parse(Parser* parser){
-		parser->expect("(");
-		auto condition = parser->parse();
-		parser->expect(")");
-		auto consq = parser->parse();
-		Node* alt = parser->match("else") ? parser->parse() : nullptr;
-		return nullptr;//TODO//IfExpression::create(condition,consq,alt);
-	}
-};
-
-/// ::= 'while' condition body
-//TODO should it be '(' condition ')' ???
-struct WhileParser: PrefixDefinition {
-	WhileParser(): PrefixDefinition("while",Location()) {}
-	Node* parse(Parser* parser){
-		auto condition = parser->parse();
-		auto body = parser->parse();
-		return new WhileExpression(condition,body);
-	}
-};
-
 /// ::= match expr { to pattern: ... }
 struct MatchParser: PrefixDefinition {
 	MatchParser(): PrefixDefinition("match",Location()){}
@@ -690,13 +674,15 @@ struct MatchParser: PrefixDefinition {
 		bool operator()(Parser* parser){
 			auto token = parser->consume();
 			if(token.isSymbol() && token.symbol == "to"){
+				parser->expect("(");
 				bool fallthrough = true;
 				Node* consq = nullptr;
 				auto pattern = MatchParser::pattern(parser);
-				if(parser->match(":")){
+				parser->expect(")");
+				//if(parser->match("=>")){
 					fallthrough = false;
 					consq = parser->parse();
-				}
+				//}
 				node->cases.push_back(MatchExpression::Case(pattern,consq,fallthrough));
 				return true;
 			}
@@ -786,20 +772,35 @@ Node* _typeof(CallExpression* node,Evaluator* evaluator){
 	return node->arg->_returnType();
 }
 
+Node* createCall(Node** expr,size_t numNodes){
+	return new CallExpression(expr[0],expr[1]);
+}
+Node* createWhile(Node** expr,size_t numNodes){
+	return new WhileExpression(expr[0],expr[1]);
+}
+
 
 void arphaPostInit(Scope* moduleScope){
 	auto x = ensure( ensure(moduleScope->lookupPrefix("equals"))->asOverloadset() )->functions[0];
 	x->intrinsicEvaluator = equals;
 	x = ensure( ensure(moduleScope->lookupPrefix("typeof"))->asOverloadset() )->functions[0];
 	x->intrinsicEvaluator = _typeof;
+
+	auto macro = ensure( dynamic_cast<PrefixMacro*>( ensure(moduleScope->containsPrefix("while")) ) );
+	macro->syntax->intrinsicEvaluator = createWhile;
+	//ensure( dynamic_cast<InfixMacro*>( ensure(moduleScope->containsInfix("(")) ) )->syntax->intrinsicEvaluator = createCall;
 }
+void coreSyntaxPostInit(Scope* moduleScope){
+
+}
+
 void arpha::defineCoreSyntax(Scope* scope){
 	Location location(0,0);
 	::arpha::scope = scope;
 
 	blockParser = new BlockParser;
+	scope->define(new ImportParser);
 	scope->define(blockParser);
-	scope->define(new ParenthesisParser);
 	scope->define(new CallParser);
 	scope->define(new TupleParser);
 	scope->define(new AccessParser);
@@ -809,11 +810,9 @@ void arpha::defineCoreSyntax(Scope* scope){
 	scope->define(new MacroParser);
 	scope->define(new TypeParser);
 	scope->define(new VarParser);
-	scope->define(new ImportParser);
+	
 
 	scope->define(new ReturnParser);
-	scope->define(new IfParser);
-	scope->define(new WhileParser);
 	scope->define(new MatchParser);
 
 	scope->define(new AddressParser);
@@ -862,7 +861,8 @@ namespace compiler {
 		Scope* scope;
 		//Special case for 'packages/arpha/arp.arp'
 		if((packageDir + "/arpha/arpha.arp") == moduleName){
-			scope = new Scope(nullptr);
+			scope = new Scope(nullptr);	
+			//import 'arpha' by default
 			arpha::defineCoreSyntax(scope);
 		}
 		else {
@@ -940,7 +940,8 @@ namespace compiler {
 		reportLevel = ReportDebug;
 
 		//Load language definitions.
-		auto arphaModule = newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
+		newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
+		//auto arphaModule = newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
 
 	
 	}

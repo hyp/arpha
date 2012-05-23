@@ -556,13 +556,15 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	//Replace arguments
 	std::vector<Node*> inlinedArguments;
 	inlinedArguments.resize(func->arguments.size());
-	auto argsBegin = arg->asTupleExpression() ? arg->asTupleExpression()->children.begin()._Ptr : &(arg);
+	//NB args > 1 because of def f(x) mixin f(1,2)
+	auto argsBegin = arg->asTupleExpression() && func->arguments.size()>1 ? arg->asTupleExpression()->children.begin()._Ptr : &(arg);
 	for(size_t i =0;i<func->arguments.size();i++){
 		mods.redirectors[reinterpret_cast<void*>(static_cast<Variable*>(func->arguments[i]))] = std::make_pair(reinterpret_cast<void*>(argsBegin[i]),true);
 	}
 	//Simple form of f(x) = x
 	if(func->body.scope->numberOfDefinitions() <= func->arguments.size() && func->body.children.size() == 1){
 		if(auto ret = func->body.children[0]->asReturnExpression()){
+			debug("SimpleForm");
 			return eval(ret->value->duplicate(&mods));
 		}
 	}

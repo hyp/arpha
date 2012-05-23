@@ -11,3 +11,5 @@
 #def duplicate(expression Expression) Expression
 # Mixins a given expression into the AST
 def mixin(expression)
+
+def defineVariable(name,type = nothing,isMutable = true)

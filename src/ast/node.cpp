@@ -220,7 +220,7 @@ bool MatchExpression::isResolved() const {
 	return false;
 }
 Node* MatchExpression::duplicate(DuplicationModifiers* mods) const{
-	auto dup = new MatchExpression(object);
+	auto dup = new MatchExpression(object->duplicate(mods));
 	dup->cases.reserve(cases.size());
 	for(auto i = cases.begin();i!=cases.end();i++){
 		dup->cases.push_back(Case((*i).pattern->duplicate(mods),(*i).consequence ? (*i).consequence->duplicate(mods) : nullptr,(*i).fallThrough));
