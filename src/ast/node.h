@@ -37,6 +37,7 @@ struct Evaluator;
 //This is a list of node types. TODO refactor into NODETYPE_LIST
 #define NODE_LIST(X) \
 	X(IntegerLiteral)    \
+	X(StringLiteral) \
 	X(UnitExpression)    \
 	X(ErrorExpression)       \
 	X(WildcardExpression)       \
@@ -118,6 +119,16 @@ struct IntegerLiteral : Node {
 	BigInt integer;
 	TypeExpression* _type;//optional
 	DECLARE_NODE(IntegerLiteral);
+};
+
+struct StringLiteral : Node {
+	StringLiteral(memory::Block& block);
+	TypeExpression* _returnType() const;
+	bool isConst() const;
+	
+	
+	memory::Block block;
+	DECLARE_NODE(StringLiteral);
 };
 
 //():void

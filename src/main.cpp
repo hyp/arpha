@@ -302,7 +302,7 @@ struct DefParser: PrefixDefinition {
 		//Function
 		auto bodyScope = new Scope(parser->currentScope());
 		auto func = new Function(name,location,bodyScope);
-		if(macro) func->intrinsicEvaluator = Evaluator::macroEvaluator;
+		if(macro) func->_mixinOnCall = true;
 		bodyScope->_functionOwner = func;
 		parser->currentScope()->defineFunction(func);
 
@@ -360,6 +360,19 @@ struct DefParser: PrefixDefinition {
 		auto name = parser->expectName();
 		if(parser->match("(")) return function(name,location,parser);
 		else VarParser::parseVar(parser,name,false);
+	}
+};
+
+struct MacroParser: PrefixDefinition {
+	MacroParser(): PrefixDefinition("macro",Location()) {  }
+	Node* parse(Parser* parser){
+		auto location  = parser->previousLocation();
+		auto name = parser->expectName();
+		if(parser->match("(")) return DefParser::function(name,location,parser,true);
+		else {
+			parser->expect("syntax");
+			return new UnitExpression();//TODO
+		}
 	}
 };
 
@@ -657,6 +670,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 	scope->define(new AssignmentParser);
 
 	scope->define(new DefParser);
+	scope->define(new MacroParser);
 	scope->define(new TypeParser);
 	scope->define(new VarParser);
 	scope->define(new OperatorParser);

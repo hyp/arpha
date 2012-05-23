@@ -477,8 +477,11 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 	intrinsicEvaluator = nullptr;
 	_resolved = false;
 	_hasReturnInside = false;
+	_mixinOnCall = false;
 }
-
+bool Function::mixinOnCall(){
+	return _mixinOnCall;
+}
 bool Function::isResolved(){
 	return  (_hasGenericArguments || _hasExpandableArguments) ? _argsResolved : _resolved;
 }
@@ -611,6 +614,7 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	func->_hasReturnInside = _hasReturnInside;
 	func->_hasGenericArguments = _hasGenericArguments;
 	func->_hasExpandableArguments = _hasExpandableArguments;
+	func->_mixinOnCall = _mixinOnCall;
 	return func;
 }
 

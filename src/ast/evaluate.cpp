@@ -15,8 +15,9 @@
 Node* evaluateResolvedFunctionCall(Evaluator* evaluator,CallExpression* node){
 	auto function = node->object->asFunctionReference()->function;
 
+	if(function->mixinOnCall()) return evaluator->mixinFunction(node);
 	//Try to expand the function
-	if(function->intrinsicEvaluator) 
+	else if(function->intrinsicEvaluator) 
 		return function->intrinsicEvaluator(node,evaluator);
 	return node;
 }
@@ -142,7 +143,7 @@ struct AstExpander: NodeVisitor {
 		else return nullptr;
 	}
 
-	//TODO def x = 1;x = 1 => 1=1 on not first use!
+	//TODO def x = 1;x = 1 => 1=1 on not first use?
 	Node* assign(AssignmentExpression* assignment,Node* object,Node* value,bool* error){
 		if(auto t1 = object->asTupleExpression()){
 			if(auto t2 = value->asTupleExpression()){
@@ -323,6 +324,7 @@ struct AstExpander: NodeVisitor {
 		}
 		return node;
 	}
+	//TODO simplify when 1 child and empty scope.. help for mixing and inling as well!
 	Node* visit(BlockExpression* node){
 		assert(!node->isResolved());
 		auto scp = evaluator->currentScope();
@@ -536,23 +538,21 @@ void Evaluator::evaluateModule(BlockExpression* module){
 
 *def f(x Type){ var y x = 0; return y + 1; }
 *mixin(f(int32)) =>
-*	var r04903
+*	def r04903
 *	var y int32
-*	r04903 = y + 1
+*	{
+*		r04903 = y + 1
+*	}
 *	r04903
 *inline(f(int32)) =>
-*	var r04903
+*	def r04903
 *	{
 *		var y int32
 *		r04903 = y + 1
 *	}
 *	r04903
 */
-Node* Evaluator::inlineFunction(CallExpression* node){
-	assert(node->isResolved());
-	return nullptr;
-}
-Node* Evaluator::mixinFunction(CallExpression* node){
+Node* Evaluator::mixinFunction(CallExpression* node,bool inlined){
 	Node* result;
 	assert(node->isResolved());
 	auto func = node->object->asFunctionReference()->function;
@@ -566,28 +566,28 @@ Node* Evaluator::mixinFunction(CallExpression* node){
 		mods.redirectors[reinterpret_cast<void*>(static_cast<Variable*>(func->arguments[i]))] = std::make_pair(reinterpret_cast<void*>(argsBegin[i]),true);
 	}
 	//Mixin definitions
+	auto target = inlined ? new Scope(currentScope()) : currentScope();
 	mods.location = node->location;
-	mods.target = currentScope();
+	mods.target = target;
 	func->body.scope->duplicate(&mods);
 	//inline body
-	if(!func->_returnType.isResolved() || !func->returnType()->isSame(intrinsics::types::Void)){//NB Throws assert when mixing generic function now.. need to proper dup generi funcs
-		auto v = new Variable("$",node->location,currentScope()->functionOwner() ? true : false);
+	if(!func->_returnType.isResolved() || !func->returnType()->isSame(intrinsics::types::Void)){
+		auto varName = std::string(inlined ? "_inlined_" : "_mixined_") + std::string(func->id.ptr());
+		auto v = new Variable(SymbolID(varName.begin()._Ptr,varName.length()),node->location,currentScope()->functionOwner() ? true : false);
 		v->isMutable = false;
 		//v->type.infer(func->returnType());
 		currentScope()->define(v);
 		result = new VariableReference(v);
 		mods.returnValueRedirector = v;
 	}else result = new UnitExpression();
-	auto block = new BlockExpression(mods.target);
+	//NB when not inlined still need to create a new empty scope anyway!!
+	auto block = new BlockExpression(inlined ? target : new Scope(currentScope()));
 	func->body._duplicate(block,&mods);
 	mixinedExpression = eval(block);
 	return eval(result);
 }
-Node* Evaluator::macroEvaluator(CallExpression* node,Evaluator* evaluator){
-	return evaluator->mixinFunction(node);
-}
 
-//TODO function duplication with certain wildcard params
+//TODO function duplication with certain wildcard params - which scope to put in generated functions?
 Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
 	Function* func = *function;
 	std::vector<Node*> result;

@@ -190,6 +190,7 @@ struct Function: public PrefixDefinition {
 	bool isPartiallyResolved();//It's when arguments and return type are resolved! The function's body doesn't have to be resolved yet.
 	bool resolve(Evaluator* evaluator);
 	bool canExpandAtCompileTime();//i.e. f(T Type)
+	bool mixinOnCall();
 
 	TypeExpression* argumentType();
 	TypeExpression* returnType();
@@ -207,6 +208,7 @@ struct Function: public PrefixDefinition {
 	bool _hasGenericArguments;
 	bool _hasExpandableArguments;
 	bool _argsResolved;
+	bool _mixinOnCall;
 private:
 	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
 	

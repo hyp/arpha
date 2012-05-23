@@ -11,7 +11,7 @@ def or(x bool,y bool) bool
 def equals(x bool,y bool) bool
 def notEquals(x,y) = not(x==y)
 
-def defineOperations(T Type){
+macro defineOperations(T Type){
 	# Arithmetics
 	def minus(x T) T
 
@@ -29,6 +29,6 @@ def defineOperations(T Type){
 	def greaterEquals(x T,y T) bool
 }
 
-arpha.ast.mixin(defineOperations(int32))
-arpha.ast.mixin(defineOperations(int64))
+defineOperations(int32)
+defineOperations(int64)
 

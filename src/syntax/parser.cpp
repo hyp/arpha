@@ -56,7 +56,11 @@ static Node* parseNotSymbol(Parser* parser){
 	Token& token = parser->lookedUpToken;
 	if(token.isUinteger()){
 		return new IntegerLiteral(BigInt(token.uinteger));
-	}else{
+	}
+	else if(token.isString()){
+		return new StringLiteral(token.string);
+	}
+	else{
 		error(parser->previousLocation(),"Unexpected token %s!",token);
 		return ErrorExpression::getInstance();
 	}

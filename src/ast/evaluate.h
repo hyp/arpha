@@ -31,11 +31,7 @@ public:
 	void evaluateModule(BlockExpression* module);
 	
 	Node* mixinedExpression;
-	Node* inlineFunction(CallExpression* node);
-	Node* mixinFunction(CallExpression* node);
-
-	//Intrinsic evaluator for macroed functions
-	static Node* macroEvaluator(CallExpression* node,Evaluator* evaluator);
+	Node* mixinFunction(CallExpression* node,bool inlined = false);
 
 	inline Scope* currentScope() const { return _currentScope; }
 	void currentScope(Scope* scope){ _currentScope = scope; }

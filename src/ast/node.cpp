@@ -45,6 +45,20 @@ bool IntegerLiteral::isConst() const {
 	return true;
 }
 
+StringLiteral::StringLiteral(memory::Block& block){
+	this->block.aquire(block);
+}
+TypeExpression* StringLiteral::_returnType() const{
+	return intrinsics::types::Void;//TODO
+}
+Node* StringLiteral::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new StringLiteral(block.duplicate()));
+}
+bool StringLiteral::isConst() const {
+	return true;
+}
+
+
 // Unit expression
 TypeExpression* UnitExpression::_returnType() const {
 	return intrinsics::types::Void;
@@ -555,6 +569,14 @@ struct NodeToString: NodeVisitor {
 	}
 	Node* visit(ErrorExpression* node){
 		stream<<"error";
+		return node;
+	}
+	Node* visit(StringLiteral* node){
+		stream<<'"';
+		for(size_t i = 0;i<node->block.length();i++){
+			stream<<node->block[i];
+		}
+		stream<<'"';
 		return node;
 	}
 	Node* visit(UnitExpression* node){
