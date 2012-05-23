@@ -110,7 +110,7 @@ struct AstExpander: NodeVisitor {
 	}
 
 	Node* visit(VariableReference* node){
-		if(node->variable->expandMe)
+		if(node->variable->expandMe && !evaluator->isRHS)
 			return node->copyProperties(node->variable->value->duplicate());
 		return node;
 	}	
@@ -142,7 +142,7 @@ struct AstExpander: NodeVisitor {
 		else return nullptr;
 	}
 
-	//TODO def x = 1;x = 1 => 1=1
+	//TODO def x = 1;x = 1 => 1=1 on not first use!
 	Node* assign(AssignmentExpression* assignment,Node* object,Node* value,bool* error){
 		if(auto t1 = object->asTupleExpression()){
 			if(auto t2 = value->asTupleExpression()){
@@ -222,7 +222,12 @@ struct AstExpander: NodeVisitor {
 			node->value = newValue;
 		}
 		else node->_resolved = false;
-		if(node->_resolved) node->object = node->object->accept(this); // Need to resolve object's tuple's type when some variable is inferred
+		if(node->_resolved){
+			auto oldRHS = evaluator->isRHS;
+			evaluator->isRHS = true;
+			node->object = node->object->accept(this); // Need to resolve object's tuple's type when some variable is inferred
+			evaluator->isRHS = oldRHS;
+		}
 
 		if(error){
 			//TODO delete tuple's children
@@ -565,9 +570,10 @@ Node* Evaluator::mixinFunction(CallExpression* node){
 	mods.target = currentScope();
 	func->body.scope->duplicate(&mods);
 	//inline body
-	if(!func->returnType()->isSame(intrinsics::types::Void)){//NB Throws assert when mixing generic function now.. need to proper dup generi funcs
+	if(!func->_returnType.isResolved() || !func->returnType()->isSame(intrinsics::types::Void)){//NB Throws assert when mixing generic function now.. need to proper dup generi funcs
 		auto v = new Variable("$",node->location,currentScope()->functionOwner() ? true : false);
-		v->type.infer(func->returnType());
+		v->isMutable = false;
+		//v->type.infer(func->returnType());
 		currentScope()->define(v);
 		result = new VariableReference(v);
 		mods.returnValueRedirector = v;
@@ -575,7 +581,10 @@ Node* Evaluator::mixinFunction(CallExpression* node){
 	auto block = new BlockExpression(mods.target);
 	func->body._duplicate(block,&mods);
 	mixinedExpression = eval(block);
-	return result;
+	return eval(result);
+}
+Node* Evaluator::macroEvaluator(CallExpression* node,Evaluator* evaluator){
+	return evaluator->mixinFunction(node);
 }
 
 //TODO function duplication with certain wildcard params
@@ -673,7 +682,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
 		*function = f;
 	}
 
-	if((*function)->canExpandAtCompileTime()){
+	if((*function)->canExpandAtCompileTime() && !(*function)->intrinsicEvaluator){
 		DuplicationModifiers mods;
 		mods.target = currentScope();
 		mods.location = arg->location;

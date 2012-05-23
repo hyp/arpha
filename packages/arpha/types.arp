@@ -6,6 +6,10 @@
 		max/min information in here.
 #
 
+type Type intrinsic
+type Expression intrinsic
+type Nothing intrinsic
+
 type bool integer
 
 type int8 integer
@@ -21,4 +25,3 @@ type uint64 integer
 # utf32 char type char integer
 
 type Pointer pointer
-

@@ -538,7 +538,7 @@ TypeExpression* Function::argumentType()  {
 	return new TypeExpression(Record::findAnonymousRecord(fields));
 }
 TypeExpression* Function::returnType() {
-	assert(_resolved);
+	//assert(_resolved);
 	return _returnType.type();
 }
 bool Function::canExpandAtCompileTime(){
@@ -564,7 +564,7 @@ Function* Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Nod
 	//TODO fancy name for expanded function
 
 	duplicateReturnBody(mods,func);
-	//TODO resolve
+	func->_resolved = false;
 	return func;
 }
 Function* Function::specializedDuplicate(DuplicationModifiers* mods,std::vector<TypeExpression* >& specializedArgTypes){
@@ -577,7 +577,7 @@ Function* Function::specializedDuplicate(DuplicationModifiers* mods,std::vector<
 	}
 
 	duplicateReturnBody(mods,func);
-	//TODO resolve
+	func->_resolved = false;
 	return func;
 }
 Function* Function::duplicate(DuplicationModifiers* mods){

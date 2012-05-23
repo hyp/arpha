@@ -160,7 +160,9 @@ bool ReturnExpression::isResolved() const {
 }
 Node* ReturnExpression::duplicate(DuplicationModifiers* mods) const {
 	if(mods->returnValueRedirector){
-		return copyProperties(new AssignmentExpression(new VariableReference(mods->returnValueRedirector),value->duplicate(mods)));
+		auto assign = new AssignmentExpression(new VariableReference(mods->returnValueRedirector),value->duplicate(mods));
+		assign->isInitializingAssignment = true;//NB when mixing in we assign the return to a immutable value
+		return copyProperties(assign);
 	}
 	auto r = new ReturnExpression(value?value->duplicate(mods):nullptr);
 	r->_resolved = _resolved;

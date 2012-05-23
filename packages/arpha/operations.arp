@@ -11,8 +11,7 @@ def or(x bool,y bool) bool
 def equals(x bool,y bool) bool
 def notEquals(x,y) = not(x==y)
 
-#TODO macro me, use type type
-def defineOperations(T = bool){
+def defineOperations(T Type){
 	# Arithmetics
 	def minus(x T) T
 

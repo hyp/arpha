@@ -9,6 +9,9 @@ inc(true) # error, body will never be resolved
 
 #expanded arguments
 
+def foo0(x) = 5
+foo0(int32)
+
 def foo(T){
 	var x T
 	return x

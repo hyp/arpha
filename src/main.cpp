@@ -275,6 +275,8 @@ struct VarParser: PrefixDefinition {
 	}
 };
 
+
+
 /// ::= 'def' <name> '=' expression
 /// ::= 'def' <name> '(' args ')' [returnType] body
 struct DefParser: PrefixDefinition {
@@ -296,10 +298,11 @@ struct DefParser: PrefixDefinition {
 	}
 
 
-	static Node* function(SymbolID name,Location location,Parser* parser){
+	static Node* function(SymbolID name,Location location,Parser* parser,bool macro = false){
 		//Function
 		auto bodyScope = new Scope(parser->currentScope());
 		auto func = new Function(name,location,bodyScope);
+		if(macro) func->intrinsicEvaluator = Evaluator::macroEvaluator;
 		bodyScope->_functionOwner = func;
 		parser->currentScope()->defineFunction(func);
 
@@ -359,6 +362,7 @@ struct DefParser: PrefixDefinition {
 		else VarParser::parseVar(parser,name,false);
 	}
 };
+
 
 /// ::= 'type' <name> {body|'=' type}
 struct TypeParser: PrefixDefinition {

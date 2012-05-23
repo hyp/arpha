@@ -2,9 +2,20 @@
 #include "../ast/node.h"
 #include "../ast/scope.h"
 #include "../ast/declarations.h"
+#include "../ast/evaluate.h"
 #include "types.h"
 
 #define INTRINSIC_INTTYPE(x) x = (ensure( dynamic_cast<IntegerType*>(moduleScope->lookupPrefix(#x)) ))->reference()
+#define INTRINSIC_FUNC(x)  \
+	auto x = ensure( ensure(moduleScope->lookupPrefix(#x))->asOverloadset() )->functions[0]; \
+	x->intrinsicEvaluator = &::x;
+
+Node* equals(CallExpression* node,Evaluator* evaluator){
+	auto t = node->arg->asTupleExpression();
+	auto e = new IntegerLiteral(BigInt((int64) t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()) ));
+	e->_type = intrinsics::types::boolean;
+	return e;
+}
 
 namespace intrinsics {
 	namespace types {
@@ -23,11 +34,6 @@ namespace intrinsics {
 		TypeExpression* uint64 = nullptr;
 
 		void preinit(){
-			auto VoidType = new IntrinsicType("void",Location());
-			Void = VoidType->reference();
-
-			Type = (new IntrinsicType("Type",Location()))->reference();
-			Expression = (new IntrinsicType("Expression",Location()))->reference();
 		}
 		void init(Scope* moduleScope){
 
@@ -41,6 +47,12 @@ namespace intrinsics {
 			INTRINSIC_INTTYPE(uint16);
 			INTRINSIC_INTTYPE(uint32);
 			INTRINSIC_INTTYPE(uint64);
+
+			Type = (ensure( dynamic_cast<IntrinsicType*>(moduleScope->lookupPrefix("Type")) ))->reference();
+			Expression = (ensure( dynamic_cast<IntrinsicType*>(moduleScope->lookupPrefix("Expression")) ))->reference();
+			Void = (ensure( dynamic_cast<IntrinsicType*>(moduleScope->lookupPrefix("Nothing")) ))->reference();
+
+			//INTRINSIC_FUNC(equals); //type equality
 		};
 	}
 }

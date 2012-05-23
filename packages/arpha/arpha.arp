@@ -6,6 +6,15 @@
 
 import export types
 
+# Returns true if two given types are the same type. TOCONSIDER move to compiler
+def equals(x Type,y Type) bool
+
+# Returns the type of a given expression.
+def typeof(expression Expression) Type
+
+# Returns the size(in bytes) of a given type. If an expression was given instead, returns the size of that expression's type.
+def sizeof(expression Expression) uint32
+
 def false bool = 0
 def true bool = 1
 
@@ -29,16 +38,6 @@ import export operations
 
 
 #
-
-# Returns true if two given types are the same type. TOCONSIDER move to compiler
-def equals(x compiler.Type,y compiler.Type) bool
-
-# Returns the type of a given expression.
-def typeof(expression compiler.Expression) compiler.Type
-
-# Returns the size(in bytes) of a given type. If an expression was given instead, returns the size of that expression's type.
-def sizeof(expression compiler.Expression) natural
-
 
 # Real assert #TODO(Lates) implementation
 def assert(file stringLiteral,line natural,expression stringLiteral)
