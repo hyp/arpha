@@ -49,7 +49,7 @@ StringLiteral::StringLiteral(memory::Block& block){
 	this->block.aquire(block);
 }
 TypeExpression* StringLiteral::_returnType() const{
-	return intrinsics::types::Void;//TODO
+	return intrinsics::types::int32;//TODO
 }
 Node* StringLiteral::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new StringLiteral(block.duplicate()));

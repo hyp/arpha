@@ -18,6 +18,7 @@ def sizeof(expression) uint32
 def false bool = 0
 def true bool = 1
 
+
 #
 # An unsigned integer representing CPU's word.
 # It is equivalent to size_t from C/C++.

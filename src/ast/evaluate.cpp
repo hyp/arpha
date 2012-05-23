@@ -503,17 +503,17 @@ Node* Evaluator::eval(Node* node){
 void Evaluator::evaluateModule(BlockExpression* module){
 	
 	if(unresolvedExpressions == 0) return;
-	unresolvedExpressions = 0;
+	//unresolvedExpressions = 0;
 	size_t prevUnresolvedExpressions;
 	int pass = 1;
 	do{
 		prevUnresolvedExpressions = unresolvedExpressions;
 		unresolvedExpressions = 0;
 		eval(module);
-		debug("After extra pass %d the module is %s",pass,module);
+		debug("After extra pass %d(%d,%d) the module is %s",pass,prevUnresolvedExpressions,unresolvedExpressions,module);
 		pass++;
 	}
-	while(prevUnresolvedExpressions > unresolvedExpressions);
+	while(prevUnresolvedExpressions > unresolvedExpressions && unresolvedExpressions != 0);
 	if(unresolvedExpressions > 0){
 		error(module->location,"Can't resolve %s expressions and definitions:",unresolvedExpressions);
 		//Do an extra pass gathering unresolved definitions

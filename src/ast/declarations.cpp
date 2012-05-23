@@ -472,7 +472,9 @@ PrefixDefinition* Overloadset::mergedDuplicate(DuplicationModifiers* mods,Overlo
 }
 
 //Function
-
+//TODO arguments depending on other arguments i.e. def f(t,v typeof(t)) = ..
+//1. Find if unresolved arguments have a reference to arg
+//2. When resolving the overload set do...
 Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDefinition(name,location), body(bodyScope) {
 	intrinsicEvaluator = nullptr;
 	_resolved = false;
@@ -617,6 +619,7 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	func->_mixinOnCall = _mixinOnCall;
 	return func;
 }
+
 
 //Imported scope
 ImportedScope::ImportedScope(SymbolID name,Location& location) : PrefixDefinition(name,location),scope(nullptr),_reference(this) {
