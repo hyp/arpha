@@ -173,6 +173,7 @@ void Record::add(const Field& var){
 Node* Record::createReference(){
 	return reference();
 }
+//TODO record duplication
 
 //Collects all the extenders field from the record extender hierarchy
 static bool insertUniqueExtender(std::vector<TypeExpression*>& collection,TypeExpression* extender){
@@ -538,7 +539,7 @@ TypeExpression* Function::argumentType()  {
 	return new TypeExpression(Record::findAnonymousRecord(fields));
 }
 TypeExpression* Function::returnType() {
-	//assert(_resolved);
+	//assert(_resolved); TODO retun resolved
 	return _returnType.type();
 }
 bool Function::canExpandAtCompileTime(){

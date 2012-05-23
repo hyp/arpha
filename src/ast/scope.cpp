@@ -103,7 +103,7 @@ InfixDefinition* Scope::lookupImportedInfix(SymbolID name){
 	for(auto i = imports.begin();i!=imports.end();++i){ \
 		auto d = (*i)->lookupImported##c(name); \
 		if(d){ \
-			if(def) error(d->location,"'%s' Symbol import conflict",d->id); /*!!! TODO os conflict resolvement*/\
+			if(def) error(d->location,"'%s' Symbol import conflict",d->id); \
 			else def = d; \
 		} \
 	} \
@@ -113,7 +113,20 @@ InfixDefinition* Scope::lookupImportedInfix(SymbolID name){
 
 
 PrefixDefinition* Scope::lookupPrefix(SymbolID name){
-	LOOKUP(prefix,Prefix);
+	auto var = prefixDefinitions.find(name);
+	if (var != prefixDefinitions.end()) return var->second;
+	PrefixDefinition* def = nullptr; 
+	for(auto i = imports.begin();i!=imports.end();++i){ 
+		auto d = (*i)->lookupImportedPrefix(name); 
+		if(d){ 
+			if(def && !(def->asOverloadset() && d->asOverloadset()) ) 
+				error(d->location,"'%s' Symbol import conflict",d->id); 
+			else def = d; 
+		} 
+	} 
+	if(def) return def;
+	if(parent) return parent->lookupPrefix(name); 
+	return nullptr;
 }
 InfixDefinition* Scope::lookupInfix(SymbolID name){
 	LOOKUP(infix,Infix);
