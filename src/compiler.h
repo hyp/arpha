@@ -14,9 +14,6 @@ namespace compiler {
 	//settings
 
 
-	//types
-
-
 	void init();
 
 	Scope* findModule(const char* name);
@@ -24,18 +21,26 @@ namespace compiler {
 	//
 	void compile(const char* name,const char* source);
 
-	/// Reports a compilation error
-	void onError(Location& location,std::string message);
+	void registerResolvedIntrinsicModuleCallback(const char* name,void (* f)(Scope*));
 
+	/// Reports a compilation error
+	void onError(Location& location,const std::string& message);
+	void onDebug(const std::string& message);
+
+	enum {
+		Silent = 0,
+		ReportErrors,
+		ReportDebug
+	};
+	extern int reportLevel; // = ReportDebug
 	//Target specific settings
 	//4 or 8 bytes for 32 or 64 bits
 	extern size_t wordSize,pointerSize;   
 };
 
 #include "base/format.h"
-#include "base/system.h"
 
 #define error(loc,...) compiler::onError(loc,format(__VA_ARGS__))
-#define debug(...) System::debugPrint(format(__VA_ARGS__))
+#define debug(...) compiler::onDebug(format(__VA_ARGS__))
 
 #endif

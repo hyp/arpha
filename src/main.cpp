@@ -626,6 +626,24 @@ struct CommandParser: PrefixDefinition {
 	}
 };
 
+//TODO refactor
+Node* equals(CallExpression* node,Evaluator* evaluator){
+	auto t = node->arg->asTupleExpression();
+	auto e = new IntegerLiteral(BigInt((int64) t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()) ));
+	e->_type = intrinsics::types::boolean;
+	return e;
+}
+Node* _typeof(CallExpression* node,Evaluator* evaluator){
+	return node->arg->_returnType();
+}
+
+
+void arphaPostInit(Scope* moduleScope){
+	auto x = ensure( ensure(moduleScope->lookupPrefix("equals"))->asOverloadset() )->functions[0];
+	x->intrinsicEvaluator = equals;
+	x = ensure( ensure(moduleScope->lookupPrefix("typeof"))->asOverloadset() )->functions[0];
+	x->intrinsicEvaluator = _typeof;
+}
 void arpha::defineCoreSyntax(Scope* scope){
 	Location location(0,0);
 	::arpha::scope = scope;
@@ -653,6 +671,12 @@ void arpha::defineCoreSyntax(Scope* scope){
 	scope->define(new DereferenceParser);
 
 	scope->define(new CommandParser);
+
+	compiler::registerResolvedIntrinsicModuleCallback("arpha/arpha",arphaPostInit);
+
+	compiler::registerResolvedIntrinsicModuleCallback("arpha/ast/ast",intrinsics::ast::init);
+	compiler::registerResolvedIntrinsicModuleCallback("arpha/types",intrinsics::types::init);
+	compiler::registerResolvedIntrinsicModuleCallback("arpha/compiler/compiler",intrinsics::compiler::init);
 }
 
 
@@ -670,6 +694,12 @@ namespace compiler {
 	ModulePtr currentModule;
 
 	std::string packageDir;
+
+	std::map<std::string,void (*)(Scope*)> postCallbacks;
+
+	void registerResolvedIntrinsicModuleCallback(const char* name,void (* f)(Scope*)){
+		postCallbacks[packageDir+"/"+name+".arp"] = f;
+	}
 
 	ModulePtr newModule(const char* moduleName,const char* source){
 		Module module = {};
@@ -693,27 +723,19 @@ namespace compiler {
 		}
 		currentModule->second.scope = scope;
 
-
 		Parser parser(source);
 		currentModule->second.body = parseModule(&parser,scope);
-		//TODO rm hACKS
-		if((packageDir + "/arpha/ast/ast.arp") == moduleName){
-			intrinsics::ast::init(scope);
-		}else if((packageDir + "/arpha/types.arp") == moduleName){
-			intrinsics::types::init(scope);
-		}else if((packageDir + "/arpha/compiler/compiler.arp") == moduleName){
-			intrinsics::compiler::init(scope);
-		}
 
-				debug("------------------- AST: ------------------------------");
+		auto cb = postCallbacks.find(moduleName);
+		if(cb != postCallbacks.end()) (*cb).second(scope);
+
+		debug("------------------- AST: ------------------------------");
 		debug("%s\n",currentModule->second.body);
 
-
+		//TODO rm hacks
 		if(std::string("source") == moduleName || (packageDir + "/test/types.arp") == moduleName || (packageDir + "/test/func.arp") == moduleName){
-
 			parser.evaluator()->evaluateModule(currentModule->second.body->asBlockExpression());
 		}
-
 
 		//restore old module ptr
 		currentModule = prevModule;
@@ -739,7 +761,7 @@ namespace compiler {
 		//load module
 		auto module = modules.find(filename);
 		if(module == modules.end()){
-			System::debugPrint(format("A new module %s located at '%s' will be loaded.",name,filename));
+			onDebug(format("A new module %s located at '%s' will be loaded.",name,filename));
 			module = newModuleFromFile(filename.c_str());
 		}
 		return module->second.scope;
@@ -755,6 +777,7 @@ namespace compiler {
 		return findModuleFromDirectory(packageDir,name);
 	}
 
+	int reportLevel;
 	//Settings
 	size_t wordSize,pointerSize;
 
@@ -765,7 +788,7 @@ namespace compiler {
 		wordSize = 4;
 		pointerSize = 4;
 
-		intrinsics::types::preinit();
+		reportLevel = ReportDebug;
 
 		//Load language definitions.
 		auto arphaModule = newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
@@ -773,8 +796,12 @@ namespace compiler {
 	
 	}
 
-	void onError(Location& location,std::string message){
-		std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
+	void onDebug(const std::string& message){
+		if(reportLevel >= ReportDebug) System::debugPrint(message);
+	}
+	void onError(Location& location,const std::string& message){
+		if(reportLevel >= ReportErrors)
+			std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
 	}
 
 }

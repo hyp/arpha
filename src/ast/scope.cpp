@@ -1,6 +1,7 @@
 #include "../compiler.h"
 #include "../base/symbol.h"
 #include "../base/bigint.h"
+#include "../base/system.h"
 #include "scope.h"
 #include "node.h"
 #include "declarations.h"
@@ -102,7 +103,7 @@ InfixDefinition* Scope::lookupImportedInfix(SymbolID name){
 	for(auto i = imports.begin();i!=imports.end();++i){ \
 		auto d = (*i)->lookupImported##c(name); \
 		if(d){ \
-			if(def) error(d->location,"'%s' Symbol import conflict",d->id); /*TODO os conflict resolvement*/\
+			if(def) error(d->location,"'%s' Symbol import conflict",d->id); /*!!! TODO os conflict resolvement*/\
 			else def = d; \
 		} \
 	} \

@@ -10,13 +10,6 @@
 	auto x = ensure( ensure(moduleScope->lookupPrefix(#x))->asOverloadset() )->functions[0]; \
 	x->intrinsicEvaluator = &::x;
 
-Node* equals(CallExpression* node,Evaluator* evaluator){
-	auto t = node->arg->asTupleExpression();
-	auto e = new IntegerLiteral(BigInt((int64) t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()) ));
-	e->_type = intrinsics::types::boolean;
-	return e;
-}
-
 namespace intrinsics {
 	namespace types {
 		TypeExpression *Void;
@@ -33,8 +26,6 @@ namespace intrinsics {
 		TypeExpression* uint32 = nullptr;
 		TypeExpression* uint64 = nullptr;
 
-		void preinit(){
-		}
 		void init(Scope* moduleScope){
 
 

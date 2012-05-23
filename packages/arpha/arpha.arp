@@ -10,10 +10,10 @@ import export types
 def equals(x Type,y Type) bool
 
 # Returns the type of a given expression.
-def typeof(expression Expression) Type
+def typeof(expression) Type
 
 # Returns the size(in bytes) of a given type. If an expression was given instead, returns the size of that expression's type.
-def sizeof(expression Expression) uint32
+def sizeof(expression) uint32
 
 def false bool = 0
 def true bool = 1

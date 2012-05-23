@@ -20,7 +20,6 @@ namespace intrinsics {
 		extern TypeExpression* uint32;
 		extern TypeExpression* uint64;
 
-		void preinit();
 		void init(Scope* moduleScope);
 	};
 };
