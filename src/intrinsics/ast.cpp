@@ -14,7 +14,7 @@
 
 Node* mixin(CallExpression* node,Evaluator* evaluator){
 	if(auto call = node->arg->asCallExpression()){
-		return evaluator->mixinFunction(call);
+		return evaluator->mixinFunctionCall(call);
 	}else{
 		error(node->location,"Mixin expression expects to recieve an call to a function as an argument!");
 	}

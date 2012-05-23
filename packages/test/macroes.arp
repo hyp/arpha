@@ -1,0 +1,27 @@
+# temporary module used to test how macroes(specifically syntax ones) are resolved
+
+macro foo() syntax("foo") = 5
+foo # ok
+macro foo2() syntax("foo2","bar") = 5
+foo2 bar # ok
+
+macro foo3(expr) syntax("foo3","[",expr,"]") = expr
+foo3 [ 5 ] # ok
+
+macro foo4(expr) syntax("foo4",expr) = typeof(expr)
+foo4 5 # ok
+
+macro foo5(expr) syntax("foo5","<",precedence(1000) expr,">") = expr
+foo5 < 5 > # ok
+
+
+macro bar(expr) syntax(expr,precedence(50) "postfix") = expr
+1 postfix # ok
+
+macro bar2(a,b) syntax(a,precedence(40) "infix",b) = a,b
+1 infix 2 # ok
+
+macro foo10(x) syntax("foo10",optional("opt",x)) = x
+foo10 # ok
+foo10 opt 10 # ok
+

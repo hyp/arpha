@@ -10,34 +10,34 @@
 import qualified precedence
 
 # Prefix operators
-operator - = minus
-operator + = plus
-operator ! = not
+macro minus(x) syntax("-",precedence(precedence.unary) x) = minus(x)
+macro plus(x) syntax("+",precedence(precedence.unary) x) = plus(x)
+macro not(x) syntax("!",precedence(precedence.unary) x) = not(x)
 
 # Infix operators
 
 ## Logical group
-operator && with priority precedence.logical = and
-operator || with priority precedence.logical = or
+macro and(x,y) syntax(x,precedence(precedence.logical) "&&",precedence(precedence.logical) y) = and(x,y)
+macro or(x,y) syntax(x,precedence(precedence.logical) "||",precedence(precedence.logical) y) = or(x,y)
 
 ## Equality group
-operator == with priority precedence.equality = equals
-operator != with priority precedence.equality = notEquals
+macro equals(x,y) syntax(x,precedence(precedence.equality) "==",precedence(precedence.equality) y) = equals(x,y)
+macro notEquals(x,y) syntax(x,precedence(precedence.equality) "!=",precedence(precedence.equality) y) = notEquals(x,y)
 
 ## Comparison group
-operator < with priority precedence.comparison = less
-operator > with priority precedence.comparison = greater
-operator <= with priority precedence.comparison = lessEquals
-operator => with priority precedence.comparison = greaterEquals
+macro less(x,y) syntax(x,precedence(precedence.comparison) "<",precedence(precedence.comparison) y) = less(x,y)
+macro greater(x,y) syntax(x,precedence(precedence.comparison) ">",precedence(precedence.comparison) y) = greater(x,y)
+macro lessEquals(x,y) syntax(x,precedence(precedence.comparison) "<=",precedence(precedence.comparison) y) = lessEquals(x,y)
+macro greaterEquals(x,y) syntax(x,precedence(precedence.comparison) ">=",precedence(precedence.comparison) y) = greaterEquals(x,y)
 
 ## Sum group
-operator + with priority precedence.term = add
-operator - with priority precedence.term = subtract
+macro add(x,y) syntax(x,precedence(precedence.term) "+",precedence(precedence.term) y) = add(x,y)
+macro subtract(x,y) syntax(x,precedence(precedence.term) "-",precedence(precedence.term) y) = subtract(x,y)
 
 ## Product group
-operator * with priority precedence.product = multiply
-operator / with priority precedence.product = divide
-operator % with priority precedence.product = mod
+macro multiply(x,y) syntax(x,precedence(precedence.product) "*",precedence(precedence.product) y) = multiply(x,y)
+macro divide(x,y) syntax(x,precedence(precedence.product) "/",precedence(precedence.product) y) = divide(x,y)
+macro mod(x,y) syntax(x,precedence(precedence.product) "%",precedence(precedence.product) y) = mod(x,y)
 
 ## Power
-operator ** with priority precedence.power = pow
+macro power(x,y) syntax(x,precedence(precedence.power) "**",precedence(precedence.power) y) = pow(x,y)

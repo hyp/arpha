@@ -167,14 +167,3 @@ Node* Function::parse(Parser* parser){
 Node* Overloadset::parse(Parser* parser){
 	return new UnresolvedSymbol(parser->previousLocation(),parser->lookedUpToken.symbol);
 }
-
-Node* PrefixOperator::parse(Parser* parser){
-	return new CallExpression(new UnresolvedSymbol(parser->previousLocation(),function),parser->parse());
-}
-
-Node* InfixOperator::parse(Parser* parser,Node* node){
-	auto tuple = new TupleExpression;
-	tuple->children.push_back(node);
-	tuple->children.push_back(parser->parse(stickiness));
-	return new CallExpression(new UnresolvedSymbol(parser->previousLocation(),function),tuple);
-}

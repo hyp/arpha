@@ -31,7 +31,8 @@ public:
 	void evaluateModule(BlockExpression* module);
 	
 	Node* mixinedExpression;
-	Node* mixinFunction(CallExpression* node,bool inlined = false);
+	Node* mixinFunctionCall(CallExpression* node,bool inlined = false);
+	Node* mixinFunction(Location &location,Function* func,Node* arg,bool inlined = false);
 
 	inline Scope* currentScope() const { return _currentScope; }
 	void currentScope(Scope* scope){ _currentScope = scope; }

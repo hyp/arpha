@@ -15,7 +15,7 @@
 Node* evaluateResolvedFunctionCall(Evaluator* evaluator,CallExpression* node){
 	auto function = node->object->asFunctionReference()->function;
 
-	if(function->mixinOnCall()) return evaluator->mixinFunction(node);
+	if(function->mixinOnCall()) return evaluator->mixinFunctionCall(node);
 	//Try to expand the function
 	else if(function->intrinsicEvaluator) 
 		return function->intrinsicEvaluator(node,evaluator);
@@ -472,7 +472,9 @@ void Evaluator::markUnresolved(PrefixDefinition* node){
 	unresolvedExpressions++;
 	if(reportUnevaluated){
 		//TODO more progressive error message
+		compiler::reportLevel = compiler::ReportErrors;
 		error(node->location,"Can't resolve definition %s!",node->id);
+		compiler::reportLevel = compiler::Silent;
 	}
 }
 
@@ -503,7 +505,6 @@ Node* Evaluator::eval(Node* node){
 void Evaluator::evaluateModule(BlockExpression* module){
 	
 	if(unresolvedExpressions == 0) return;
-	//unresolvedExpressions = 0;
 	size_t prevUnresolvedExpressions;
 	int pass = 1;
 	do{
@@ -518,7 +519,10 @@ void Evaluator::evaluateModule(BlockExpression* module){
 		error(module->location,"Can't resolve %s expressions and definitions:",unresolvedExpressions);
 		//Do an extra pass gathering unresolved definitions
 		reportUnevaluated = true;
+		auto reportLevel = compiler::reportLevel;
+		compiler::reportLevel = compiler::Silent;
 		eval(module);
+		compiler::reportLevel = reportLevel;
 	}
 }
 
@@ -541,12 +545,10 @@ void Evaluator::evaluateModule(BlockExpression* module){
 *	}
 *	r04903
 */
-Node* Evaluator::mixinFunction(CallExpression* node,bool inlined){
+Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool inlined){
 	Node* result;
-	assert(node->isResolved());
-	auto func = node->object->asFunctionReference()->function;
 	if(!func->body.children.size()){
-		error(node->location,"Can't mixin a function %s without body!",func->id);
+		error(location,"Can't mixin a function %s without body!",func->id);
 		return ErrorExpression::getInstance();
 	}
 	debug("<<M");
@@ -554,7 +556,7 @@ Node* Evaluator::mixinFunction(CallExpression* node,bool inlined){
 	//Replace arguments
 	std::vector<Node*> inlinedArguments;
 	inlinedArguments.resize(func->arguments.size());
-	auto argsBegin = node->arg->asTupleExpression() ? node->arg->asTupleExpression()->children.begin()._Ptr : &(node->arg);
+	auto argsBegin = arg->asTupleExpression() ? arg->asTupleExpression()->children.begin()._Ptr : &(arg);
 	for(size_t i =0;i<func->arguments.size();i++){
 		mods.redirectors[reinterpret_cast<void*>(static_cast<Variable*>(func->arguments[i]))] = std::make_pair(reinterpret_cast<void*>(argsBegin[i]),true);
 	}
@@ -566,13 +568,13 @@ Node* Evaluator::mixinFunction(CallExpression* node,bool inlined){
 	}
 	//Mixin definitions
 	auto target = inlined ? new Scope(currentScope()) : currentScope();
-	mods.location = node->location;
+	mods.location = location;
 	mods.target = target;
 	func->body.scope->duplicate(&mods);
 	//inline body
 	if(!func->_returnType.isResolved() || !func->returnType()->isSame(intrinsics::types::Void)){
 		auto varName = std::string(inlined ? "_inlined_" : "_mixined_") + std::string(func->id.ptr());
-		auto v = new Variable(SymbolID(varName.begin()._Ptr,varName.length()),node->location,currentScope()->functionOwner() ? true : false);
+		auto v = new Variable(SymbolID(varName.begin()._Ptr,varName.length()),location,currentScope()->functionOwner() ? true : false);
 		v->isMutable = false;
 		//v->type.infer(func->returnType());
 		currentScope()->define(v);
@@ -584,6 +586,10 @@ Node* Evaluator::mixinFunction(CallExpression* node,bool inlined){
 	func->body._duplicate(block,&mods);
 	mixinedExpression = eval(block);
 	return eval(result);
+}
+Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
+	assert(node->isResolved());
+	return mixinFunction(node->location,node->object->asFunctionReference()->function,node->arg,inlined);
 }
 
 //TODO function duplication with certain wildcard params - which scope to put in generated functions?

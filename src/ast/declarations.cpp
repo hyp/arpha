@@ -625,11 +625,3 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 ImportedScope::ImportedScope(SymbolID name,Location& location) : PrefixDefinition(name,location),scope(nullptr),_reference(this) {
 	visibilityMode = Visibility::Private;
 }
-
-//operators
-
-PrefixOperator::PrefixOperator(SymbolID name,Location& location) : PrefixDefinition(name,location) {
-}
-
-InfixOperator::InfixOperator(SymbolID name,int stickiness,Location& location) : InfixDefinition(name,stickiness,location){
-}

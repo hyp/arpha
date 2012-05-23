@@ -292,10 +292,12 @@ struct MacroSyntax {
 			EXPR,// bar
 			OPTIONAL,
 		};
-		std::vector<Instruction> instructions;
 		int kind;
 		SymbolID symbol;
-		int argId;
+		union {
+			int argId;
+			int innerRangeSize;//for things like optional()
+		};
 		int stickiness;// = 0
 
 		Instruction();
@@ -307,7 +309,7 @@ struct MacroSyntax {
 
 	MacroSyntax(Function* func);
 
-	void parse(Parser* parser,std::vector<Instruction>* dest);
+	int parse(Parser* parser);
 	void compile(Scope* scope);
 	Node* execute(Parser* parser,Node* node = nullptr);
 };
@@ -334,6 +336,7 @@ int findArgument(Function* func,Variable* var){
 	}
 	return -1;
 }
+//TODO macro with a functional form mixin like syntax macroes for efficiency
 MacroSyntax::Instruction::Instruction(Function* func,Node* node,int sticky) : stickiness(sticky) {
 	if(!node){
 		kind = OPTIONAL;
@@ -372,6 +375,7 @@ void MacroSyntax::compile(Scope* scope){
 }
 Node* MacroSyntax::execute(Parser* parser,Node* node){
 	debug("parsing macro %s",function->id);
+	auto loc = node ? node->location : parser->previousLocation();
 	Node* arg = node;
 	TupleExpression* tupleArg = nullptr;
 	if(numArgs == 0) arg = new UnitExpression();
@@ -382,42 +386,62 @@ Node* MacroSyntax::execute(Parser* parser,Node* node){
 		arg = tupleArg;
 	}
 	for(auto i = instructions.begin();i!=instructions.end();i++){
-		debug("Executing instruction %s , %s",(*i).kind,(*i).stickiness);
+		//debug("Executing instruction %s , stickiness:%s, special:%d",(*i).kind,(*i).stickiness,(*i).innerRangeSize);
 		if((*i).kind == Instruction::SYMBOL) parser->expect((*i).symbol);
 		else if((*i).kind == Instruction::EXPR){
 			if(tupleArg)
 				tupleArg->children[(*i).argId] = parser->parse((*i).stickiness);
 			else arg = parser->parse((*i).stickiness);
 		}
+		else if((*i).kind == Instruction::OPTIONAL && parser->match((*(i+1)).symbol) ){
+			i++;
+		}else{
+			//skip optional block, replacing expression with ()		
+			auto skipTo = i + ((*i).innerRangeSize+1);
+			i++;
+			for(;i!=skipTo;i++){
+				if((*i).kind == Instruction::EXPR){
+					if(tupleArg)
+						tupleArg->children[(*i).argId] = new UnitExpression();
+					else arg = new UnitExpression();
+				}
+			}
+			i--;
+		}
 	}
-	return parser->evaluator()->mixinFunction(new CallExpression(new FunctionReference(function),arg));
+	return parser->evaluator()->mixinFunction(loc,function,arg);
 }
 
-void MacroSyntax::parse(Parser* parser,std::vector<Instruction>* dest){
+int MacroSyntax::parse(Parser* parser){
+	int result = 0;
 	parser->expect("(");
 	do {
 		if(parser->match("precedence")){
 			parser->expect("(");
-			auto instr = parser->parse(arpha::Precedence::Tuple);
-			parser->expect(",");
-			auto stickiness = expectInteger(parser,arpha::Precedence::Tuple);
-			dest->push_back(Instruction(function,instr,stickiness));
+			auto stickiness = expectInteger(parser,arpha::Precedence::Tuple);		
 			parser->expect(")");
+			auto instr = parser->parse(arpha::Precedence::Tuple);
+			instructions.push_back(Instruction(function,instr,stickiness));
 		}
 		else if(parser->match("optional")){
-			dest->push_back(Instruction(function));
-			parse(parser,&dest->back().instructions);
+			auto i = instructions.size();
+			instructions.push_back(Instruction(function));
+			auto n = parse(parser);
+			instructions[i].innerRangeSize = n;
+			result+=n;
 		}
-		else dest->push_back(Instruction(function,parser->parse(arpha::Precedence::Tuple)));
+		else instructions.push_back(Instruction(function,parser->parse(arpha::Precedence::Tuple)));
+		result++;
 
 		if(parser->match(")")) break;
 		parser->expect(",");
 	}while(true);
+	return result;
 }
 
 static void parseMacroSyntax(Function* func,Parser* parser){
 	auto m = new MacroSyntax(func);
-	m->parse(parser,&(m->instructions));
+	m->parse(parser);
 	m->compile(parser->currentScope()->parent);
 }
 
@@ -448,7 +472,6 @@ struct DefParser: PrefixDefinition {
 		auto func = new Function(name,location,bodyScope);
 		if(macro) func->_mixinOnCall = true;
 		bodyScope->_functionOwner = func;
-		parser->currentScope()->defineFunction(func);
 
 		auto oldScope = parser->currentScope();
 		parser->currentScope(bodyScope);
@@ -485,7 +508,8 @@ struct DefParser: PrefixDefinition {
 
 		if(macro && parser->match("syntax")){
 			parseMacroSyntax(func,parser);
-		}
+		}else
+			oldScope->defineFunction(func);
 		//return type & body
 		auto token = parser->peek();
 		if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
@@ -507,7 +531,7 @@ struct DefParser: PrefixDefinition {
 		auto location  = parser->previousLocation();
 		auto name = parser->expectName();
 		if(parser->match("(")) return function(name,location,parser);
-		else VarParser::parseVar(parser,name,false);
+		else return VarParser::parseVar(parser,name,false);
 	}
 };
 
@@ -597,30 +621,6 @@ struct TypeParser: PrefixDefinition {
 		}
 		record->resolve(parser->evaluator());
 		return new TypeExpression(record);
-	}
-};
-
-/// ::= 'operator' <name> ['with' 'priority' <number>] = functionName
-struct OperatorParser: PrefixDefinition {
-	OperatorParser(): PrefixDefinition("operator",Location()) {}
-	Node* parse(Parser* parser){
-		auto loc  = parser->previousLocation();
-		auto name = parser->expectName();
-		if(parser->match("=")){
-			auto op = new PrefixOperator(name,loc);
-			op->function = parser->expectName();
-			parser->currentScope()->define(op);
-		}else{
-			parser->expect("with");
-			parser->expect("priority");
-			auto stickiness = expectInteger(parser,arpha::Precedence::Tuple);
-			parser->expect("=");
-			auto op = new InfixOperator(name,stickiness,loc);
-			debug("defined operator %d with stickiness %d",name,op->stickiness);
-			op->function = parser->expectName();
-			parser->currentScope()->define(op);
-		}
-		return new UnitExpression;
 	}
 };
 
@@ -809,7 +809,6 @@ void arpha::defineCoreSyntax(Scope* scope){
 	scope->define(new MacroParser);
 	scope->define(new TypeParser);
 	scope->define(new VarParser);
-	scope->define(new OperatorParser);
 	scope->define(new ImportParser);
 
 	scope->define(new ReturnParser);
