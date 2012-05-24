@@ -601,7 +601,7 @@ Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
 Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dependentChecker){
 	Function* func = *function;
 	std::vector<Node*> result;
-	result.resize(func->arguments.size());
+	result.resize(func->arguments.size(),nullptr);
 	bool determinedFunction = false;
 	std::vector<TypeExpression* > determinedArguments;//Boolean to indicate whether the argument was expanded at compile time and is no longer needed
 
@@ -672,9 +672,9 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 		currentArg++;resolvedArgs++;currentExpr++;	
 	}
 
-	//Default args at end
-	for(currentArg = resolvedArgs; currentArg < argsCount;currentArg ++){
-		result[currentArg] = func->arguments[currentArg]->defaultValue()->duplicate();
+	//Default args
+	for(currentArg = 0; currentArg < argsCount;currentArg ++){
+		if(!result[currentArg]) result[currentArg] = func->arguments[currentArg]->defaultValue()->duplicate();
 	}
 
 	if(dependentChecker){
@@ -734,8 +734,8 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 		else return new UnitExpression();
 	}
 	else if(result.size() == 1){
-		if(auto u = arg->asUnitExpression()) return arg;
-		else return result[0];
+		if(auto u = arg->asUnitExpression()) delete arg;
+		return result[0];
 	}else{
 		TupleExpression* tuple;
 		if(!(tuple = arg->asTupleExpression())){
@@ -771,6 +771,8 @@ bool match(Evaluator* evaluator,Function* func,Node* arg){
 	bool hasDependentArg = false;
 
 	//
+	std::vector<bool> checked;
+	checked.resize(func->arguments.size());
 	size_t currentArg = 0;
 	size_t currentExpr = 0;
 	size_t lastNonLabeledExpr = 0;
@@ -793,6 +795,7 @@ bool match(Evaluator* evaluator,Function* func,Node* arg){
 	if(argsCount < expressionCount){
 		if(argsCount > 0 && func->arguments[argsCount-1]->type.isWildcard()){
 			argsCount--;
+			checked[argsCount] = true;
 			expressionCount = argsCount;
 		}
 		else return false;
@@ -821,19 +824,21 @@ bool match(Evaluator* evaluator,Function* func,Node* arg){
 		//Typecheck
 		if( func->arguments[currentArg]->isDependent() ){
 			hasDependentArg = true;
+			checked[currentArg] = true;
 		}
 		else if( func->arguments[currentArg]->type.isWildcard() ||
-			func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
+		func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
+			checked[currentArg] = true;
 		}
 		else return false;
 		currentArg++;resolvedArgs++;currentExpr++;	
 	}
 
-	//Ending
-	auto result = true; //() matches () | () matches (x = 1,y = false)
+	//Check for default parameters
+	auto result = true; //() matches ()
 	if(resolvedArgs != argsCount){
-		for(currentArg = resolvedArgs; currentArg < argsCount;currentArg ++){
-			if(!func->arguments[currentArg]->defaultValue()) result = false; //() doesn't match (x,y)
+		for(currentArg = 0; currentArg < argsCount;currentArg ++){
+			if(!checked[currentArg] && !func->arguments[currentArg]->defaultValue()) result = false; //() doesn't match (x,y)
 		}
 	}
 
