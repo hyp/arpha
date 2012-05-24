@@ -90,7 +90,7 @@ struct AstExpander: NodeVisitor {
 		if(!node->arg->isResolved()) return node;
 		if(auto callingOverloadSet = node->object->asUnresolvedSymbol()){
 			auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : evaluator->currentScope());
-			auto func =  scope->resolveFunction(callingOverloadSet->symbol,node->arg);
+			auto func =  scope->resolveFunction(evaluator,callingOverloadSet->symbol,node->arg);
 			if(func){
 				node->arg = evaluator->constructFittingArgument(&func,node->arg)->accept(this);
 				node->object = new FunctionReference(func);
@@ -595,7 +595,7 @@ Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
 }
 
 //TODO function duplication with certain wildcard params - which scope to put in generated functions?
-Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
+Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dependentChecker){
 	Function* func = *function;
 	std::vector<Node*> result;
 	result.resize(func->arguments.size());
@@ -645,7 +645,10 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
 			//Labeled
 			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
 				if(func->arguments[currentArg]->id == label){
-					if(func->arguments[currentArg]->type.isWildcard()){
+					if( func->arguments[currentArg]->isDependent() ){
+						result[currentArg] = exprBegin[currentExpr];
+					}
+					else if(func->arguments[currentArg]->type.isWildcard()){
 						result[currentArg] = exprBegin[currentExpr];
 						if(!determinedFunction){
 							determinedFunction = true;
@@ -660,7 +663,10 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
 		}
 		else{
 			//NonLabeled
-			if(func->arguments[currentArg]->type.isWildcard()){
+			if( func->arguments[currentArg]->isDependent() ){
+				result[currentArg] = exprBegin[currentExpr];
+			}
+			else if(func->arguments[currentArg]->type.isWildcard()){
 				result[currentArg] = exprBegin[currentExpr];
 				if(!determinedFunction){
 					determinedFunction = true;
@@ -677,6 +683,35 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
 	//Default args at end
 	for(currentArg = resolvedArgs; currentArg < argsCount;currentArg ++){
 		result[currentArg] = func->arguments[currentArg]->defaultValue()->duplicate();
+	}
+
+	if(dependentChecker){
+		DuplicationModifiers mods;
+		for(size_t i = 0;i< result.size();i++){
+			if(!func->arguments[i]->isDependent()){
+				mods.redirectors[reinterpret_cast<void*>(static_cast<Variable*>(func->arguments[i]))] =
+					std::make_pair(reinterpret_cast<void*>(result[i]),true);
+			}
+		}
+
+		bool resolved = true;
+		for(size_t i = 0;i< result.size();i++){
+			if(func->arguments[i]->isDependent()){
+				auto dup = func->arguments[i]->reallyDuplicate(&mods,nullptr);
+				//TODO resolve in scope of function
+				if(dup->resolve(this)){
+					//typecheck
+					if(!dup->type.type()->canAssignFrom(result[i],result[i]->_returnType())) resolved = false;
+				}
+				else resolved = false;
+					
+			}
+		}
+
+		if(resolved) debug("Dependent args are resolved!");
+
+		return resolved ? arg : nullptr;
+
 	}
 
 	//Determine the function?
@@ -736,7 +771,11 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg){
 *	f(1,2,3) matches f(x,y)
 *TODO weight system for f(x) and f(x int32)
 */
-bool match(Function* func,Node* arg){
+bool match(Evaluator* evaluator,Function* func,Node* arg){
+	//dependent args
+	bool hasDependentArg = false;
+
+	//
 	size_t currentArg = 0;
 	size_t currentExpr = 0;
 	size_t lastNonLabeledExpr = 0;
@@ -772,7 +811,10 @@ bool match(Function* func,Node* arg){
 			bool foundMatch = false;
 			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
 				if(func->arguments[currentArg]->id == label){
-					if( func->arguments[currentArg]->type.isWildcard() ||
+					if( func->arguments[currentArg]->isDependent() ){
+						hasDependentArg = true;
+					}
+					else if( func->arguments[currentArg]->type.isWildcard() ||
 						func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
 						foundMatch = true;
 						break;
@@ -785,10 +827,13 @@ bool match(Function* func,Node* arg){
 		}
 		else{
 			//NonLabeled
+			lastNonLabeledExpr = currentExpr;
 			if(!(currentArg < argsCount)) return false;//f(x:5,6) where x is the last arg
-			if( func->arguments[currentArg]->type.isWildcard() ||
+			if( func->arguments[currentArg]->isDependent() ){
+				hasDependentArg = true;
+			}
+			else if( func->arguments[currentArg]->type.isWildcard() ||
 				func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
-				lastNonLabeledExpr = currentExpr;
 			}
 			else return false;
 		}
@@ -796,17 +841,26 @@ bool match(Function* func,Node* arg){
 	}
 
 	//Ending
-	if(resolvedArgs == argsCount) return true;//() matches ()
-	for(currentArg = resolvedArgs; currentArg < argsCount;currentArg ++){
-		if(!func->arguments[currentArg]->defaultValue()) return false; //() doesn't match (x,y)
+	auto result = true; //() matches () | () matches (x = 1,y = false)
+	if(resolvedArgs != argsCount){
+		for(currentArg = resolvedArgs; currentArg < argsCount;currentArg ++){
+			if(!func->arguments[currentArg]->defaultValue()) result = false; //() doesn't match (x,y)
+		}
 	}
-	return true; //() matches (x = 1,y = false)
+
+	//Try to match dependent args by solving independent args and then resolving dependent ones
+	if(result && hasDependentArg){
+		debug("Trying to match dependent args");
+		
+		return evaluator->constructFittingArgument(&func,arg,true) != nullptr;
+	}
+	return result; 
 }
 
 void Evaluator::findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic){
 	for(auto i=overloads.begin();i!=overloads.end();++i){
 		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
 		if(!(*i)->_argsResolved) continue; //TODO what if we need this
-		if(match((*i),argument)) results.push_back(*i);
+		if(match(this,(*i),argument)) results.push_back(*i);
 	}
 }

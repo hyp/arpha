@@ -45,7 +45,7 @@ PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
 }
 
 
-Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr) {
+Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr),_dependent(false) {
 }
 bool Argument::expandAtCompileTime() {
 	assert(isResolved());
@@ -79,6 +79,9 @@ void Argument::defaultValue(Node* expression,bool inferType){
 }
 Node* Argument::defaultValue() const {
 	return _defaultValue;
+}
+bool Argument::isDependent() const {
+	return _dependent;
 }
 
 //intrinsic type
@@ -472,6 +475,33 @@ PrefixDefinition* Overloadset::mergedDuplicate(DuplicationModifiers* mods,Overlo
 }
 
 //Function
+
+static bool isUnresolvedArgumentDependent(Variable* argument,const Function* func,Node* unresolvedExpression){
+	if(auto varRef = unresolvedExpression->asVariableReference()){
+		auto arg = func->findArgument(varRef -> variable);
+		if(arg != -1 && (func->arguments[arg]->type.isWildcard() || 
+			(func->arguments[arg]->type.isResolved() && func->arguments[arg]->type.type()->isSame(intrinsics::types::Type)) )
+		){
+				if(argument == func->arguments[arg]){
+					//NB not really needed
+					error(argument->location,"A parameter %s can't use itself to describe it's type!",argument->id);
+				}
+				return true;
+		}
+		return false;
+	}
+	else if(auto tuple = unresolvedExpression->asTupleExpression()){
+		for(auto i = tuple->children.begin();i!=tuple->children.end();i++){
+			if(isUnresolvedArgumentDependent(argument,func,*i)) return true;
+		}
+	}
+	else if(auto call = unresolvedExpression->asCallExpression()){
+		if(isUnresolvedArgumentDependent(argument,func,call->arg)) return true;
+		if(isUnresolvedArgumentDependent(argument,func,call->object)) return true;
+	}
+	return false;
+}
+
 //TODO arguments depending on other arguments i.e. def f(t,v typeof(t)) = ..
 //1. Find if unresolved arguments have a reference to arg
 //2. When resolving the overload set do...
@@ -490,6 +520,12 @@ bool Function::isResolved(){
 bool Function::isPartiallyResolved(){
 	return true;//TODO
 }
+int Function::findArgument(Variable* var) const{
+	for(size_t i =0;i <arguments.size();i++){
+		if(static_cast<Variable*>(arguments[i]) == var) return (int)i;
+	}
+	return -1;
+}
 bool Function::resolve(Evaluator* evaluator){
 	assert(!_resolved);
 	_resolved = true;
@@ -499,7 +535,16 @@ bool Function::resolve(Evaluator* evaluator){
 	for(auto i = arguments.begin();i!=arguments.end();++i){
 		if((*i)->type.isWildcard()) _hasGenericArguments = true; //TODO constraints
 		else if(!(*i)->isResolved()){
-			if(!(*i)->resolve(evaluator)) _resolved = false;
+			if(!(*i)->resolve(evaluator)){
+				//depenent argument
+				//NB pretend that the arg is resolved with
+				//TODO unresolved dependent argument!
+				if((*i)->type.kind == InferredUnresolvedTypeExpression::Unresolved && isUnresolvedArgumentDependent(*i,this,(*i)->type.unresolvedExpression)){
+					debug("Argument %s is dependent!",(*i)->id);
+					(*i)->_dependent = true;
+				}
+				else _resolved = false;
+			}
 		}
 		if((*i)->isResolved() && (*i)->expandAtCompileTime()) _hasExpandableArguments = true;
 	}

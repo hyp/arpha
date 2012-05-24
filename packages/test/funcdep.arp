@@ -1,0 +1,27 @@
+# temporary module used to test how functions resolve with parameters depending on each other
+
+def foo0(x) typeof(x) = x
+foo0(1) # ok
+
+def foo(x,v typeof(x)) = 1
+foo(1,2) # ok
+foo(1,false) # not resolved!
+
+def foo1(x,v typeof(x)) = x,v
+foo1(true,false) # ok
+
+#
+TODO
+type Bar { var x int32 }
+def foo2(x,v typeof(x.x)) = 2
+var bar Bar
+foo2(bar,3) # ok
+foo2(bar,892376895798) # not resolved!
+#
+
+#
+TODO
+def typecheck(x Type,v x) = true
+typecheck(int32,1) # ok
+typecheck(bool,5) # not resolved!
+#

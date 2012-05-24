@@ -82,7 +82,7 @@ struct Scope: memory::ManagedDefinition {
 	void define(InfixDefinition* definition);
 
 	Function* resolve(const char* name,Type* argumentType);
-	Function* resolveFunction(SymbolID name,Node* argument);
+	Function* resolveFunction(Evaluator* evaluator,SymbolID name,Node* argument);
 	void defineFunction(Function* definition);
 
 	void duplicate(DuplicationModifiers* mods);

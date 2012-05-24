@@ -41,3 +41,7 @@ macro mod(x,y) syntax(x,precedence(precedence.product) "%",precedence(precedence
 
 ## Power
 macro power(x,y) syntax(x,precedence(precedence.power) "**",precedence(precedence.power) y) = pow(x,y)
+
+## Increments. Note that they don't return the incremented value unlike C/C++.
+macro inc(x) syntax(x,precedence(precedence.increment) "++") { x = x + 1 }
+macro dec(x) syntax(x,precedence(precedence.increment) "--") { x = x - 1 }

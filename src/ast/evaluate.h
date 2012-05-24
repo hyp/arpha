@@ -42,9 +42,9 @@ public:
 
 	//function overloads resolving
 
-	Node* constructFittingArgument(Function** function,Node *arg);
+	Node* constructFittingArgument(Function** function,Node *arg,bool dependentChecker = false);
 
-	static void findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic = false);
+	void findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic = false);
 
 };
 

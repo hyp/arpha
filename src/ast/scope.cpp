@@ -167,12 +167,12 @@ Function* Scope::resolve(const char* name,Type* argumentType){
 	//return resolveFunction(name,&argument);
 	return nullptr;
 }
-Function* Scope::resolveFunction(SymbolID name,Node* argument){
+Function* Scope::resolveFunction(Evaluator* evaluator,SymbolID name,Node* argument){
 	std::vector<Function*> results;
 	//step 1 - check current scope for matching function
 	if(auto hasDef = containsPrefix(name)){
 		if(auto os = hasDef->asOverloadset()){
-			Evaluator::findMatchingFunctions(os->functions,results,argument);
+			evaluator->findMatchingFunctions(os->functions,results,argument);
 			if(results.size() == 1) return results[0];
 			else if(results.size()>1) return errorOnMultipleMatches(results);
 		}
@@ -185,12 +185,12 @@ Function* Scope::resolveFunction(SymbolID name,Node* argument){
 				if(auto os = hasDef->asOverloadset()) overloads.insert(overloads.end(),os->functions.begin(),os->functions.end()); 
 			}
 		}
-		Evaluator::findMatchingFunctions(overloads,results,argument,true);
+		evaluator->findMatchingFunctions(overloads,results,argument,true);
 		if(results.size() == 1) return results[0];
 		else if(results.size()>1) return errorOnMultipleMatches(results);
 	}
 	//step 3 - check parent scope
-	if(parent) return parent->resolveFunction(name,argument);
+	if(parent) return parent->resolveFunction(evaluator,name,argument);
 	return nullptr;
 }
 

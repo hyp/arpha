@@ -48,6 +48,9 @@ struct Argument : Variable {
 	Node* defaultValue() const;
 
 	bool expandAtCompileTime();
+	bool isDependent() const;
+	
+	bool _dependent;
 private:
 	Node* _defaultValue;
 };
@@ -199,6 +202,9 @@ struct Function: public PrefixDefinition {
 	//Used to specialise a function with wildcard parameters
 	Function* specializedDuplicate(DuplicationModifiers* mods,std::vector<TypeExpression* >& specializedArgTypes);
 	Function* expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters);
+
+	//Returns -1 when an argument isn't found
+	int findArgument(Variable* var) const;
 
 	InferredUnresolvedTypeExpression _returnType;
 	BlockExpression body;

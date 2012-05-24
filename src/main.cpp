@@ -326,12 +326,6 @@ struct InfixMacro : InfixDefinition {
 	}
 };
 
-int findArgument(Function* func,Variable* var){
-	for(size_t i =0;i <func->arguments.size();i++){
-		if(static_cast<Variable*>(func->arguments[i]) == var) return (int)i;
-	}
-	return -1;
-}
 //TODO macro with a functional form mixin like syntax macroes for efficiency
 MacroSyntax::Instruction::Instruction(Function* func,Node* node,int sticky) : stickiness(sticky) {
 	if(!node){
@@ -339,7 +333,7 @@ MacroSyntax::Instruction::Instruction(Function* func,Node* node,int sticky) : st
 		return;
 	}
 	if(auto var = node->asVariableReference()){
-		argId  = findArgument(func,var->variable);
+		argId  = func->findArgument(var->variable);
 		if(argId == -1) error(node->location,"%s is not a valid syntax rule!\n Only macro's parameters are accepted!",node);
 		kind = EXPR;//TODO multiple argument error
 	}
@@ -882,7 +876,9 @@ namespace compiler {
 		debug("%s\n",currentModule->second.body);
 
 		//TODO rm hacks
-		if(std::string("source") == moduleName || (packageDir + "/test/types.arp") == moduleName || (packageDir + "/test/func.arp") == moduleName){
+		if(std::string("source") == moduleName || (packageDir + "/test/types.arp") == moduleName || (packageDir + "/test/func.arp") == moduleName
+			|| (packageDir + "/test/funcdep.arp") == moduleName || (packageDir + "/test/funcgen.arp") == moduleName 
+			|| (packageDir + "/test/macroes.arp") == moduleName){
 			parser.evaluator()->evaluateModule(currentModule->second.body->asBlockExpression());
 		}
 
