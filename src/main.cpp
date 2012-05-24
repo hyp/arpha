@@ -875,12 +875,7 @@ namespace compiler {
 		debug("------------------- AST: ------------------------------");
 		debug("%s\n",currentModule->second.body);
 
-		//TODO rm hacks
-		if(std::string("source") == moduleName || (packageDir + "/test/types.arp") == moduleName || (packageDir + "/test/func.arp") == moduleName
-			|| (packageDir + "/test/funcdep.arp") == moduleName || (packageDir + "/test/funcgen.arp") == moduleName 
-			|| (packageDir + "/test/macroes.arp") == moduleName){
-			parser.evaluator()->evaluateModule(currentModule->second.body->asBlockExpression());
-		}
+		parser.evaluator()->evaluateModule(currentModule->second.body->asBlockExpression());
 
 		//restore old module ptr
 		currentModule = prevModule;

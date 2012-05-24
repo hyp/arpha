@@ -13,3 +13,10 @@
 def mixin(expression)
 
 def defineVariable(name,type = nothing,isMutable = true)
+
+# Makes sure that an expression is of a given type T
+macro typecheck(T Type,expression T) = expression  
+macro typecheck(T Type,expression  ) = () #TODO compiler.error and param weght
+
+#IDEA for spec: when passed int32,2 into typecheck the result should be 2
+#expect when passed bool,2 into typecheck it shouldn't compile

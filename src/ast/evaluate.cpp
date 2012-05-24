@@ -93,6 +93,9 @@ struct AstExpander: NodeVisitor {
 			auto func =  scope->resolveFunction(evaluator,callingOverloadSet->symbol,node->arg);
 			if(func){
 				node->arg = evaluator->constructFittingArgument(&func,node->arg)->accept(this);
+				if(func->mixinOnCall()){//Macro optimization
+					return evaluator->mixinFunction(node->location,func,node->arg);
+				}
 				node->object = new FunctionReference(func);
 				node->_resolved = true;
 				return evaluateResolvedFunctionCall(evaluator,node);
@@ -703,34 +706,36 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 
 	}
 
-	//Determine the function?
-	if(determinedFunction && !func->intrinsicEvaluator){
-		DuplicationModifiers mods;
-		mods.target = currentScope();
-		mods.location = arg->location;
-		auto f = func->specializedDuplicate(&mods,determinedArguments);
-		f->resolve(this);
-		*function = f;
-	}
+	if(!func->mixinOnCall()){//Macro optimization, so that we dont duplicate unnecessary
+		//Determine the function?
+		if(determinedFunction && !func->intrinsicEvaluator){
+			DuplicationModifiers mods;
+			mods.target = currentScope();
+			mods.location = arg->location;
+			auto f = func->specializedDuplicate(&mods,determinedArguments);
+			f->resolve(this);
+			*function = f;
+		}
 
-	if((*function)->canExpandAtCompileTime() && !(*function)->intrinsicEvaluator){
-		DuplicationModifiers mods;
-		mods.target = currentScope();
-		mods.location = arg->location;
-		auto f = (*function)->expandedDuplicate(&mods,result);
-		f->resolve(this);
-		*function = f;
+		if((*function)->canExpandAtCompileTime() && !(*function)->intrinsicEvaluator){
+			DuplicationModifiers mods;
+			mods.target = currentScope();
+			mods.location = arg->location;
+			auto f = (*function)->expandedDuplicate(&mods,result);
+			f->resolve(this);
+			*function = f;
+		}	
 	}
 
 	//Construct a proper argument
 	if(result.size() == 0){
 		if(auto u = arg->asUnitExpression()) return arg; //arg is ()
 		//delete arg;
-		return new UnitExpression();
+		else return new UnitExpression();
 	}
 	else if(result.size() == 1){
-		if(auto u = arg->asUnitExpression()) delete arg;
-		return result[0];
+		if(auto u = arg->asUnitExpression()) return arg;
+		else return result[0];
 	}else{
 		TupleExpression* tuple;
 		if(!(tuple = arg->asTupleExpression())){
@@ -742,6 +747,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 		tuple->children = result;
 		return tuple;
 	}
+
 }
 
 /**
