@@ -33,13 +33,13 @@ grom(start:1,end:2,isTrue:true)
 grom(end:2,start:1)
 grom(end:2,start:1,isTrue:false)
 
-def crack(x)
+def crack(x) = 1
 crack(1)
 crack(x:1)
 crack(1,2)
 crack(x:(1,2))
 
-def break(x int32,y)
+def break(x int32,y) = 2
 break(1,2)
 break(1,2,3)
 break(x:1,2,3)

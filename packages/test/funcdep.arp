@@ -24,4 +24,11 @@ TODO
 def typecheck(x Type,v x) = true
 typecheck(int32,1) # ok
 typecheck(bool,5) # not resolved!
+
+def bar(T,value T){
+	var x T = 0
+	return x + value
+}
+bar(int32,2) # ok
+bar(int8,6) # ok
 #

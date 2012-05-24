@@ -37,14 +37,3 @@ def foo4(T = bool){
 	f(0)
 }
 foo4(int32) # ok
-
-
-#
-This doesnt't work.. should it work?
-	def bar(T,value T){
-		var x T = 0
-		return x + value
-	}
-	bar(int32,2) # ok
-	bar(int8,6) # ok
-#

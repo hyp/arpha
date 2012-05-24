@@ -644,39 +644,28 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 		if(!label.isNull()){
 			//Labeled
 			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
-				if(func->arguments[currentArg]->id == label){
-					if( func->arguments[currentArg]->isDependent() ){
-						result[currentArg] = exprBegin[currentExpr];
-					}
-					else if(func->arguments[currentArg]->type.isWildcard()){
-						result[currentArg] = exprBegin[currentExpr];
-						if(!determinedFunction){
-							determinedFunction = true;
-							determinedArguments.resize(argsCount,nullptr);
-						}
-						determinedArguments[currentArg] = result[currentArg]->_returnType();
-					}
-					else result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType());
+				if(func->arguments[currentArg]->id == label)
 					break;
-				}
-			}		
+			}
 		}
 		else{
 			//NonLabeled
-			if( func->arguments[currentArg]->isDependent() ){
-				result[currentArg] = exprBegin[currentExpr];
-			}
-			else if(func->arguments[currentArg]->type.isWildcard()){
-				result[currentArg] = exprBegin[currentExpr];
-				if(!determinedFunction){
-					determinedFunction = true;
-					determinedArguments.resize(argsCount,nullptr);
-				}
-				determinedArguments[currentArg] = result[currentArg]->_returnType();
-			}
-			else result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType());
 			lastNonLabeledExpr = currentExpr;
 		}
+		
+		//Match given types to the parameter's type
+		if( func->arguments[currentArg]->isDependent() ){
+			result[currentArg] = exprBegin[currentExpr];
+		}
+		else if(func->arguments[currentArg]->type.isWildcard()){
+			result[currentArg] = exprBegin[currentExpr];
+			if(!determinedFunction){
+				determinedFunction = true;
+				determinedArguments.resize(argsCount,nullptr);
+			}
+			determinedArguments[currentArg] = result[currentArg]->_returnType();
+		}
+		else result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType());
 		currentArg++;resolvedArgs++;currentExpr++;	
 	}
 
@@ -804,6 +793,7 @@ bool match(Evaluator* evaluator,Function* func,Node* arg){
 	}
 
 	while(currentExpr<expressionCount){
+		//Find the matching parameter
 		auto label = exprBegin[currentExpr]->label();
 		if(!label.isNull()){
 			//Labeled
@@ -811,16 +801,8 @@ bool match(Evaluator* evaluator,Function* func,Node* arg){
 			bool foundMatch = false;
 			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
 				if(func->arguments[currentArg]->id == label){
-					if( func->arguments[currentArg]->isDependent() ){
-						hasDependentArg = true;
-					}
-					else if( func->arguments[currentArg]->type.isWildcard() ||
-						func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
-						foundMatch = true;
-						break;
-					}else{
-						return false;	
-					}
+					foundMatch = true;
+					break;
 				}
 			}
 			if(!foundMatch) return false;	
@@ -829,14 +811,15 @@ bool match(Evaluator* evaluator,Function* func,Node* arg){
 			//NonLabeled
 			lastNonLabeledExpr = currentExpr;
 			if(!(currentArg < argsCount)) return false;//f(x:5,6) where x is the last arg
-			if( func->arguments[currentArg]->isDependent() ){
-				hasDependentArg = true;
-			}
-			else if( func->arguments[currentArg]->type.isWildcard() ||
-				func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
-			}
-			else return false;
 		}
+		//Typecheck
+		if( func->arguments[currentArg]->isDependent() ){
+			hasDependentArg = true;
+		}
+		else if( func->arguments[currentArg]->type.isWildcard() ||
+			func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
+		}
+		else return false;
 		currentArg++;resolvedArgs++;currentExpr++;	
 	}
 
