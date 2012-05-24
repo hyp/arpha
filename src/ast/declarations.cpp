@@ -603,7 +603,7 @@ Function* Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Nod
 	//args
 	size_t erased = 0;
 	for(size_t i = 0;i!=arguments.size();++i){
-		if(arguments[i]->expandAtCompileTime()){
+		if(!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime()){
 			debug("Exp");
 			mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(arguments[i]))] = 
 				std::make_pair(reinterpret_cast<void*>(parameters[i - erased]),true);

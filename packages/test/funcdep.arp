@@ -19,8 +19,6 @@ foo2(bar,3) # ok
 foo2(bar,892376895798) # not resolved!
 #
 
-#
-TODO
 def typecheck(x Type,v x) = true
 typecheck(int32,1) # ok
 typecheck(bool,5) # not resolved!
@@ -31,4 +29,3 @@ def bar(T,value T){
 }
 bar(int32,2) # ok
 bar(int8,6) # ok
-#
