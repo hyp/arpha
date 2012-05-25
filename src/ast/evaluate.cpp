@@ -766,7 +766,14 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 *	f(1,2,3) matches f(x,y)
 *TODO weight system for f(x) and f(x int32)
 */
-bool match(Evaluator* evaluator,Function* func,Node* arg){
+bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
+	enum {
+		WILDCARD = 1,
+		CONSTRAINED_WILDCARD,
+		EXACT
+	};
+	weight = 0;
+
 	//dependent args
 	bool hasDependentArg = false;
 
@@ -797,6 +804,7 @@ bool match(Evaluator* evaluator,Function* func,Node* arg){
 			argsCount--;
 			checked[argsCount] = true;
 			expressionCount = argsCount;
+			weight += WILDCARD;
 		}
 		else return false;
 	}
@@ -824,13 +832,16 @@ bool match(Evaluator* evaluator,Function* func,Node* arg){
 		//Typecheck
 		if( func->arguments[currentArg]->isDependent() ){
 			hasDependentArg = true;
-			checked[currentArg] = true;
+			//TODO weight
 		}
-		else if( func->arguments[currentArg]->type.isWildcard() ||
-		func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
-			checked[currentArg] = true;
+		else if( func->arguments[currentArg]->type.isWildcard()){
+			weight += WILDCARD;
+		}
+		else if(func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
+			weight += EXACT;
 		}
 		else return false;
+		checked[currentArg] = true;
 		currentArg++;resolvedArgs++;currentExpr++;	
 	}
 
@@ -852,9 +863,19 @@ bool match(Evaluator* evaluator,Function* func,Node* arg){
 }
 
 void Evaluator::findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic){
+	int weight = 0;
+	int maxweight = -1;
 	for(auto i=overloads.begin();i!=overloads.end();++i){
 		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
 		if(!(*i)->_argsResolved) continue; //TODO what if we need this
-		if(match(this,(*i),argument)) results.push_back(*i);
+		if(match(this,(*i),argument,weight)){
+			if(weight == maxweight){
+				results.push_back(*i);
+			}else if(weight >= maxweight){
+				results.clear();
+				results.push_back(*i);
+				maxweight = weight;
+			}
+		}
 	}
 }

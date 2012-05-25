@@ -1,0 +1,7 @@
+# temporary module used to test how function calls get resolved with best overload match
+
+def foo(x) = 1
+def foo(x int32) = 4
+
+foo(1) # ok
+foo(294837438974039) # ok -> generated foo(int64)
