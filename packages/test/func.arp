@@ -81,12 +81,9 @@ bar(&fooInstance) # ok
 bar(&foo2Instance) # ok
 
 
-#
-TODO
-
 def f30(x *int32) = 2
 def f31(x *int32) {
-	*x = 2
+	*x = 2 # TODO
 }
 def f32(x *int32){
 	pointer = x
@@ -97,9 +94,6 @@ def f39(){
 	var x int32
 	f30(&x) # Should be ok
 	f31(&x) # Should be ok
-	f32(&x) # Should fail!
+	f32(&x) # TODO Should fail!
 	f33(&x) # Should be ok!
 }
-
-#
-

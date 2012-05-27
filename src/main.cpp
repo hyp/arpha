@@ -819,6 +819,30 @@ void arphaPostInit(Scope* moduleScope){
 void coreSyntaxPostInit(Scope* moduleScope){
 
 }
+namespace intrinsics {
+	namespace operations {
+		Node* boolOr(CallExpression* node,Evaluator* evaluator){
+			auto t = node->arg->asTupleExpression();
+			auto result = (!t->children[0]->asIntegerLiteral()->integer.isZero()) || (!t->children[1]->asIntegerLiteral()->integer.isZero());
+			auto e = new IntegerLiteral(BigInt((uint64)(result?1:0)));
+			e->_type = intrinsics::types::boolean;
+			return e;
+		}
+		Node* boolAnd(CallExpression* node,Evaluator* evaluator){
+			auto t = node->arg->asTupleExpression();
+			auto result = (!t->children[0]->asIntegerLiteral()->integer.isZero()) && (!t->children[1]->asIntegerLiteral()->integer.isZero());
+			auto e = new IntegerLiteral(BigInt((uint64)(result?1:0)));
+			e->_type = intrinsics::types::boolean;
+			return e;
+		}
+		void init(Scope* moduleScope){
+			auto x = ensure( ensure(moduleScope->lookupPrefix("or"))->asOverloadset() )->functions[0];
+			x->intrinsicEvaluator = boolOr;
+			x = ensure( ensure(moduleScope->lookupPrefix("and"))->asOverloadset() )->functions[0];
+			x->intrinsicEvaluator = boolAnd;
+		};
+	}
+}
 
 void arpha::defineCoreSyntax(Scope* scope){
 	Location location(0,0);
@@ -852,6 +876,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 	compiler::registerResolvedIntrinsicModuleCallback("arpha/ast/ast",intrinsics::ast::init);
 	compiler::registerResolvedIntrinsicModuleCallback("arpha/types",intrinsics::types::init);
 	compiler::registerResolvedIntrinsicModuleCallback("arpha/compiler/compiler",intrinsics::compiler::init);
+	compiler::registerResolvedIntrinsicModuleCallback("arpha/operations",intrinsics::operations::init);
 }
 
 

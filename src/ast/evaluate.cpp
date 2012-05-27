@@ -104,7 +104,9 @@ struct AstExpander: NodeVisitor {
 			}
 		}
 		else if(auto callingFunc = node->object->asFunctionReference()){
-			if(callingFunc->function->intrinsicEvaluator) return evaluateResolvedFunctionCall(evaluator,node);
+			if(callingFunc->function->intrinsicEvaluator){
+				return evaluateResolvedFunctionCall(evaluator,node);
+			}
 			return node;	//TODO eval?
 		}
 		else if(auto callingAccess = node->object->asAccessExpression()){
@@ -281,7 +283,7 @@ struct AstExpander: NodeVisitor {
 
 
 	Node* visit(TupleExpression* node){
-		if(node->isResolved()) return node;//Don't evaluate it again
+		if(node->isResolved() && !evaluator->forcedToEvaluate) return node;//Don't evaluate it again
 		if(node->children.size() == 1){
 			auto child = node->children[0];
 			delete node;
@@ -602,7 +604,10 @@ Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
 //Evaluates the verifier to see if an expression satisfies a constraint
 bool satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* verifier){
 	//TODO force eval???
+	auto oldEv = evaluator->forcedToEvaluate;
+	evaluator->forcedToEvaluate = true;
 	auto result = evaluator->mixinFunction(Location(),verifier,arg->_returnType(),false)->asIntegerLiteral();
+	evaluator->forcedToEvaluate = oldEv;
 	assert(result->_returnType()->isSame(intrinsics::types::boolean));
 	evaluator->mixinedExpression = nullptr;//delete useless block
 	return !(result->integer == BigInt((uint64)0));

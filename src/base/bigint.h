@@ -25,6 +25,7 @@ public:
 
 	inline bool isNegative() const { return negative; }
 	inline bool isPositive() const { return !negative; }
+	inline bool isZero() const { return wordCount == 1 && u64 == 0; }
 
 	void changeSign(){ negative = !negative; }
 };

@@ -540,10 +540,13 @@ bool Function::resolve(Evaluator* evaluator){
 				if((*i)->type.kind == InferredUnresolvedTypeExpression::Unresolved && (*i)->type.unresolvedExpression->asFunctionReference()){
 					//Constrained argument
 					Function* func = (*i)->type.unresolvedExpression->asFunctionReference()->function;
-					debug("Constrained argument :: %s!",func->id);
-					(*i)->type.kind = InferredUnresolvedTypeExpression::Wildcard;
-					(*i)->_constraint = func;
-					_hasGenericArguments = true;
+					if( !(func->isResolved() && func->arguments.size() == 1 && func->arguments[0]->type.type()->isSame(intrinsics::types::Type) && func->returnType()->isSame(intrinsics::types::boolean)) ) _resolved = false;
+					else {
+						debug("Constrained argument :: %s!",func->id);
+						(*i)->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+						(*i)->_constraint = func;
+						_hasGenericArguments = true;
+					}
 				}
 				//depenent argument
 				//NB pretend that the arg is resolved with

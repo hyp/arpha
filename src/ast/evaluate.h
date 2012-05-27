@@ -16,6 +16,7 @@ private:
 public:
 	bool evaluateExpressionReferences; // = false
 	bool isRHS; // = false
+	bool forcedToEvaluate; // = false
 
 	// Sometimes we know that we want an expression of certain type at a given place e.g. var x Foo <- we expect Foo to be TypeExpression
 	// This knowledge can be used to resolve certain ambiguties: 
@@ -24,7 +25,7 @@ public:
 
 	size_t unresolvedExpressions;
 
-	Evaluator() : evaluateExpressionReferences(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {}
+	Evaluator() : forcedToEvaluate(false),evaluateExpressionReferences(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {}
 
 	Node* eval(Node* node);
 	// Resolves expressions and definitions in a module using multiple passes
