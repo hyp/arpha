@@ -63,6 +63,24 @@ f40(4)
 f41(2)
 type Foo { var x int32 }
 
+# Record subtyping argument passing check
+type Foo1 { extends var x int32 }
+type Foo2 { extends var x Foo1 }
+var fooInstance Foo1
+def bar(x int32) = 1
+var integer int32
+bar(integer) # ok
+bar(fooInstance) # ok
+var foo2Instance Foo2
+bar(foo2Instance) #ok
+
+def bar(x *int32) = 2
+
+bar(&integer) # ok
+bar(&fooInstance) # ok
+bar(&foo2Instance) # ok
+
+
 #
 TODO
 

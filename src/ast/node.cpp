@@ -407,7 +407,7 @@ Node* TypeExpression::duplicate(DuplicationModifiers* mods) const {
 	}
 }
 
-
+//TODO non references
 size_t TypeExpression::size() const {
 	switch(type){
 		case RECORD: return record->size();
@@ -433,17 +433,47 @@ bool TypeExpression::isSame(TypeExpression* other){
 			return false;
 	}
 }
-bool TypeExpression::canAssignFrom(Node* expression,TypeExpression* type){
-	if(this->isSame(type)) return true;
+enum {
+	LITERAL_CONVERSION = 3,
+	RECORD_SUBTYPE,
+	EXACT
+};
+int TypeExpression::canAssignFrom(Node* expression,TypeExpression* type){
+	if(this->isSame(type)) return EXACT;
 
 	else if(this->type == INTEGER && type->type == INTEGER){
 		//literal integer constants.. check to see if the type can accept it's value
 		if(auto intConst = expression->asIntegerLiteral()){
-			if(!intConst->_type && this->integer->isValid(intConst->integer)) return true;
+			if(!intConst->_type && this->integer->isValid(intConst->integer)) return LITERAL_CONVERSION;
+		}
+	}else if(type->type == RECORD){
+		//Extenders fields
+		for(size_t i = 0;i < type->record->fields.size();i++){
+			Record::Field* field = &type->record->fields[i];
+			if(field->isExtending && field->type.isResolved()){
+				auto dummyFieldAcess = new FieldAccessExpression(expression,i);
+				if(this->canAssignFrom(dummyFieldAcess,field->type.type()) != -1){
+					delete dummyFieldAcess;
+					return RECORD_SUBTYPE;
+				}
+				delete dummyFieldAcess;
+			}
 		}
 	}
-	//TODO
-	return false;
+	else if(this->type == POINTER){
+		if(type->type == POINTER){		
+			//Extender records on pointers to records
+			if(type->argument->type == RECORD){
+				auto dummyDeref = new PointerOperation(expression,PointerOperation::DEREFERENCE);
+				if(this->argument->canAssignFrom(dummyDeref,type->argument) != -1){
+					delete dummyDeref;
+					return RECORD_SUBTYPE;
+				}
+				delete dummyDeref;
+			}
+		}
+	}
+	return -1;
 }
 Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 	if(this->isSame(type)) return expression;//like a baws

@@ -232,7 +232,7 @@ struct TypeExpression : Node {
 	* If not, it will return null.
 	*/
 	Node* assignableFrom(Node* expression,TypeExpression* type);
-	bool canAssignFrom(Node* expression,TypeExpression* type);
+	int canAssignFrom(Node* expression,TypeExpression* type);
 
 	DECLARE_NODE(TypeExpression);
 public:

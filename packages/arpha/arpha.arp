@@ -79,7 +79,8 @@ import export qualified compiler
 
 import export operations
 
-
+## Is TODO T Type check
+macro is(expression,T) syntax(expression,precedence(precedence.isas) "is", precedence(precedence.isas) T) = typeof(expression) == T
 
 #
 

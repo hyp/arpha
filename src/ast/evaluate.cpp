@@ -598,7 +598,7 @@ Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
 }
 
 //TODO function duplication with certain wildcard params - which scope to put in generated functions?
-Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dependentChecker){
+Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dependentChecker,int* weight){
 	Function* func = *function;
 	std::vector<Node*> result;
 	result.resize(func->arguments.size(),nullptr);
@@ -693,7 +693,9 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 				//TODO resolve in scope of function
 				if(dup->resolve(this)){
 					//typecheck
-					if(!dup->type.type()->canAssignFrom(result[i],result[i]->_returnType())) resolved = false;
+					auto w = dup->type.type()->canAssignFrom(result[i],result[i]->_returnType());
+					if(w == -1) resolved = false;
+					else *weight += w;
 				}
 				else resolved = false;
 					
@@ -764,13 +766,12 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 *Also:
 *	f(1,2) matches f(x)
 *	f(1,2,3) matches f(x,y)
-*TODO weight system for f(x) and f(x int32)
 */
 bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
+	//Weights
 	enum {
 		WILDCARD = 1,
-		CONSTRAINED_WILDCARD,
-		EXACT
+		CONSTRAINED_WILDCARD, //Others in node.cpp via TypeExpression::canAssign
 	};
 	weight = 0;
 
@@ -830,15 +831,15 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 			if(!(currentArg < argsCount)) return false;//f(x:5,6) where x is the last arg
 		}
 		//Typecheck
+		int w;
 		if( func->arguments[currentArg]->isDependent() ){
 			hasDependentArg = true;
-			//TODO weight
 		}
 		else if( func->arguments[currentArg]->type.isWildcard()){
 			weight += WILDCARD;
 		}
-		else if(func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()) ){
-			weight += EXACT;
+		else if((w = func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()))!= -1 ){
+			weight += w;
 		}
 		else return false;
 		checked[currentArg] = true;
@@ -857,7 +858,7 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 	if(result && hasDependentArg){
 		debug("Trying to match dependent args");
 		
-		return evaluator->constructFittingArgument(&func,arg,true) != nullptr;
+		return evaluator->constructFittingArgument(&func,arg,true,&weight) != nullptr;
 	}
 	return result; 
 }

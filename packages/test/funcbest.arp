@@ -1,7 +1,24 @@
 # temporary module used to test how function calls get resolved with best overload match
 
 def foo(x) = 1
-def foo(x int32) = 4
+def foo(x bool) = 2
+def foo(x int32) = 43
 
 foo(1) # ok
+foo(true) # ok
 foo(294837438974039) # ok -> generated foo(int64)
+
+type Foo { extends var x int32 }
+def bar(foo Foo) = 3
+def bar(foo int32) = 5
+var f Foo
+bar(f) # ok, chooses bar(Foo)
+bar(f.x) # ok 
+
+# + dep
+def is(T Type,x T) = true
+def is(T Type,x) = false
+
+is(int32,1) # ok
+is(int32,5454545454545) # ok -> generated is(T = int32,int64)
+

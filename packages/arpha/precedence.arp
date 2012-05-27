@@ -6,6 +6,7 @@
 
 def assignment   = 10   # x = y
 def tuple        = 20   # ,
+def isas		 = 25   # is as
 def logical      = 30   # and or
 def equality     = 40   # == !=
 def comparison   = 50   # < > <= >=
