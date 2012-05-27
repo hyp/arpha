@@ -56,10 +56,10 @@ macro unittest(body) syntax("unittest",body) {
 def equals(x Type,y Type) bool
 
 # Returns the type of a given expression.
-def typeof(expression) Type
+macro typeof(expression) Type
 
 # Returns the size(in bytes) of a given type. If an expression was given instead, returns the size of that expression's type.
-def sizeof(expression) uint32
+macro sizeof(expression) uint32
 
 
 #

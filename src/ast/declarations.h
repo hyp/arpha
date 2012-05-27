@@ -51,6 +51,7 @@ struct Argument : Variable {
 	bool isDependent() const;
 	
 	bool _dependent;
+	Function* _constraint;//For wildcard eyes only!
 private:
 	Node* _defaultValue;
 };
@@ -193,6 +194,7 @@ struct Function: public PrefixDefinition {
 	bool isPartiallyResolved();//It's when arguments and return type are resolved! The function's body doesn't have to be resolved yet.
 	bool resolve(Evaluator* evaluator);
 	bool canExpandAtCompileTime();//i.e. f(T Type)
+	bool canAcceptLocalParameter(size_t argument); 
 	bool mixinOnCall();
 
 	TypeExpression* argumentType();
@@ -219,6 +221,17 @@ private:
 	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
 	
 	bool _resolved;
+};
+
+struct Constraint : PrefixDefinition {
+	Constraint(SymbolID name, Location& location);
+
+	bool isResolved();
+	bool resolve(Evaluator* evaluator);
+
+	Node* parse(Parser* parser);
+
+	Function* verifier;//Checks if a given type matches this constraint
 };
 
 // A single node in an import symbol tree

@@ -15,9 +15,8 @@
 Node* evaluateResolvedFunctionCall(Evaluator* evaluator,CallExpression* node){
 	auto function = node->object->asFunctionReference()->function;
 
-	if(function->mixinOnCall()) return evaluator->mixinFunctionCall(node);
 	//Try to expand the function
-	else if(function->intrinsicEvaluator) 
+	if(node->arg->isConst() && function->intrinsicEvaluator) 
 		return function->intrinsicEvaluator(node,evaluator);
 	return node;
 }
@@ -94,6 +93,7 @@ struct AstExpander: NodeVisitor {
 			if(func){
 				node->arg = evaluator->constructFittingArgument(&func,node->arg)->accept(this);
 				if(func->mixinOnCall()){//Macro optimization
+					if(func->intrinsicEvaluator) return func->intrinsicEvaluator(node,evaluator);
 					return evaluator->mixinFunction(node->location,func,node->arg);
 				}
 				node->object = new FunctionReference(func);
@@ -103,8 +103,10 @@ struct AstExpander: NodeVisitor {
 				evaluator->markUnresolved(node);
 			}
 		}
-		else if(auto callingFunc = node->object->asFunctionReference())
+		else if(auto callingFunc = node->object->asFunctionReference()){
+			if(callingFunc->function->intrinsicEvaluator) return evaluateResolvedFunctionCall(evaluator,node);
 			return node;	//TODO eval?
+		}
 		else if(auto callingAccess = node->object->asAccessExpression()){
 			return transformCallOnAccess(node,callingAccess)->accept(this);
 		}
@@ -597,6 +599,18 @@ Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
 	return mixinFunction(node->location,node->object->asFunctionReference()->function,node->arg,inlined);
 }
 
+//Evaluates the verifier to see if an expression satisfies a constraint
+bool satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* verifier){
+	//TODO force eval???
+	auto result = evaluator->mixinFunction(Location(),verifier,arg->_returnType(),false)->asIntegerLiteral();
+	assert(result->_returnType()->isSame(intrinsics::types::boolean));
+	evaluator->mixinedExpression = nullptr;//delete useless block
+	return !(result->integer == BigInt((uint64)0));
+}
+//Analyze the function's code to check if the parameter is
+bool Function::canAcceptLocalParameter(size_t argument){
+	return true;//TODO
+}
 //TODO function duplication with certain wildcard params - which scope to put in generated functions?
 Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dependentChecker,int* weight){
 	Function* func = *function;
@@ -668,7 +682,13 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			}
 			determinedArguments[currentArg] = result[currentArg]->_returnType();
 		}
-		else result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType());
+		else {
+			auto ret = exprBegin[currentExpr]->_returnType();
+			auto oldLocal = ret->_localSemantics;
+			ret->_localSemantics = false;
+			result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],ret);
+			if(oldLocal) ret->_localSemantics = true;
+		}
 		currentArg++;resolvedArgs++;currentExpr++;	
 	}
 
@@ -691,11 +711,20 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			if(func->arguments[i]->isDependent()){
 				auto dup = func->arguments[i]->reallyDuplicate(&mods,nullptr);
 				//TODO resolve in scope of function
-				if(dup->resolve(this)){
+				if(dup->resolve(this)){ //TODO how about allowing this to be a constraint? >_>
 					//typecheck
-					auto w = dup->type.type()->canAssignFrom(result[i],result[i]->_returnType());
+					auto ret = result[i]->_returnType();
+					auto oldLocal = ret->_localSemantics;
+					ret->_localSemantics= false;
+					auto w = dup->type.type()->canAssignFrom(result[i],ret);
 					if(w == -1) resolved = false;
-					else *weight += w;
+					else {
+						if(oldLocal){
+							oldLocal = true;
+							if(!func->canAcceptLocalParameter(i)) resolved = false;
+						}
+						*weight += w;
+					}
 				}
 				else resolved = false;
 					
@@ -723,6 +752,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			DuplicationModifiers mods;
 			mods.target = currentScope();
 			mods.location = arg->location;
+			//TODO force resolving because of T == int32 not evaluating into const
 			auto f = (*function)->expandedDuplicate(&mods,result);
 			f->resolve(this);
 			*function = f;
@@ -836,12 +866,25 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 			hasDependentArg = true;
 		}
 		else if( func->arguments[currentArg]->type.isWildcard()){
-			weight += WILDCARD;
+			if(func->arguments[currentArg]->_constraint){
+				if(!satisfiesConstraint(evaluator,exprBegin[currentExpr],func->arguments[currentArg]->_constraint)) return false;
+				weight += CONSTRAINED_WILDCARD;
+			}
+			else weight += WILDCARD;
 		}
-		else if((w = func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->_returnType()))!= -1 ){
-			weight += w;
+		else {
+			auto ret = exprBegin[currentExpr]->_returnType();
+			auto oldLocal = ret->_localSemantics;
+			ret->_localSemantics= false;
+			if((w = func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],ret))!= -1 ){
+				weight += w;
+				if(oldLocal){
+					ret->_localSemantics = true;
+					if(!func->canAcceptLocalParameter(currentArg)) return false;
+				}
+			}
+			else return false;
 		}
-		else return false;
 		checked[currentArg] = true;
 		currentArg++;resolvedArgs++;currentExpr++;	
 	}

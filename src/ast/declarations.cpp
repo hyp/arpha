@@ -41,7 +41,7 @@ PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
 	duplicatedReplacement->type = type.duplicate(mods);
 	duplicatedReplacement->isMutable = isMutable;
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(duplicatedReplacement),false);
-	return duplicatedReplacement;
+	return copyProperties(duplicatedReplacement);
 }
 
 
@@ -465,7 +465,7 @@ PrefixDefinition* Overloadset::duplicate(DuplicationModifiers* mods){
 	for(i++;i!=functions.end();i++){
 		os->push_back((*i)->duplicate(mods));
 	}
-	return os;
+	return copyProperties(os);
 }
 PrefixDefinition* Overloadset::mergedDuplicate(DuplicationModifiers* mods,Overloadset* dest){
 	for(auto i = functions.begin();i!=functions.end();i++){
@@ -533,13 +533,22 @@ bool Function::resolve(Evaluator* evaluator){
 	_hasGenericArguments = false;
 	_hasExpandableArguments = false;
 	for(auto i = arguments.begin();i!=arguments.end();++i){
-		if((*i)->type.isWildcard()) _hasGenericArguments = true; //TODO constraints
+		if((*i)->type.isWildcard()) _hasGenericArguments = true;
 		else if(!(*i)->isResolved()){
 			if(!(*i)->resolve(evaluator)){
+				
+				if((*i)->type.kind == InferredUnresolvedTypeExpression::Unresolved && (*i)->type.unresolvedExpression->asFunctionReference()){
+					//Constrained argument
+					Function* func = (*i)->type.unresolvedExpression->asFunctionReference()->function;
+					debug("Constrained argument :: %s!",func->id);
+					(*i)->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+					(*i)->_constraint = func;
+					_hasGenericArguments = true;
+				}
 				//depenent argument
 				//NB pretend that the arg is resolved with
 				//TODO unresolved dependent argument!
-				if((*i)->type.kind == InferredUnresolvedTypeExpression::Unresolved && isUnresolvedArgumentDependent(*i,this,(*i)->type.unresolvedExpression)){
+				else if((*i)->type.kind == InferredUnresolvedTypeExpression::Unresolved && isUnresolvedArgumentDependent(*i,this,(*i)->type.unresolvedExpression)){
 					debug("Argument %s is dependent!",(*i)->id);
 					(*i)->_dependent = true;
 				}
@@ -662,9 +671,20 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	func->_hasGenericArguments = _hasGenericArguments;
 	func->_hasExpandableArguments = _hasExpandableArguments;
 	func->_mixinOnCall = _mixinOnCall;
+	copyProperties(func);
 	return func;
 }
 
+
+//Constraint
+Constraint::Constraint(SymbolID name, Location& location) : PrefixDefinition(name,location) {
+}
+bool Constraint::isResolved(){
+	return verifier->isResolved();
+}
+bool Constraint::resolve(Evaluator* evaluator){
+	return verifier->resolve(evaluator);
+}
 
 //Imported scope
 ImportedScope::ImportedScope(SymbolID name,Location& location) : PrefixDefinition(name,location),scope(nullptr),_reference(this) {

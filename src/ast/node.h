@@ -218,6 +218,7 @@ struct TypeExpression : Node {
 	TypeExpression(TypeExpression* argument,TypeExpression* returns);//function
 
 	bool isResolved() const;
+	bool isConst() const;
 	TypeExpression* _returnType() const;
 	size_t size() const;
 
@@ -270,6 +271,7 @@ struct TupleExpression : Node {
 	TupleExpression(Node* a,Node* b);
 
 	TypeExpression* _returnType() const;
+	bool isConst() const;
 	bool isResolved() const;
 
 	std::vector<Node*> children;

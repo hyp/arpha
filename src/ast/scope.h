@@ -28,7 +28,6 @@ struct PrefixDefinition : memory::ManagedDefinition {
 	SymbolID id;
 	Location location;
 	uint8 visibilityMode;
-	uint8 declarationType;
 
 	PrefixDefinition(SymbolID name,Location& location);
 
@@ -37,6 +36,7 @@ struct PrefixDefinition : memory::ManagedDefinition {
 	virtual Node* createReference(){ return nullptr; }
 
 	virtual PrefixDefinition* duplicate(DuplicationModifiers* mods){ return nullptr; }
+	PrefixDefinition* copyProperties(PrefixDefinition* dest);
 
 	virtual bool isResolved(){ return true; }
 	virtual bool resolve(Evaluator* evaluator){ return true; }
@@ -53,6 +53,9 @@ struct InfixDefinition : memory::ManagedDefinition {
 	
 	InfixDefinition(SymbolID name,int stickiness,Location& location);
 	virtual Node* parse(Parser* parser,Node* node) = 0;
+
+	virtual InfixDefinition* duplicate(DuplicationModifiers* mods){ return nullptr; }
+	InfixDefinition* copyProperties(InfixDefinition* dest);
 };
 
 

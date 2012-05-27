@@ -134,6 +134,12 @@ TypeExpression* TupleExpression::_returnType() const {
 	assert(type);
 	return type;
 }
+bool TupleExpression::isConst() const{
+	for(auto i = children.begin();i != children.end();i++){
+		if(!(*i)->isConst()) return false;
+	}
+	return true;
+}
 bool TupleExpression::isResolved() const {
 	return type != nullptr;
 }
@@ -374,6 +380,9 @@ TypeExpression::TypeExpression(PointerType* pointer,TypeExpression* next) : type
 TypeExpression::TypeExpression(TypeExpression* argument,TypeExpression* returns) : type(FUNCTION),_localSemantics(false) {
 	this->argument = argument;
 	this->returns = returns;
+}
+bool TypeExpression::isConst() const{
+	return true;
 }
 bool TypeExpression::isResolved() const {
 	switch(type){

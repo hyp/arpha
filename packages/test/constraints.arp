@@ -1,0 +1,15 @@
+# temporary module used to test how function calls get resolved with constraints
+
+constraint Integer(T) = T == int32
+def f(x Integer) = 1
+f(true) # error, won't be resolved!
+f(3) # ok
+
+constraint ErrorConstraint(T) = 3 # Error, needs to return bool!
+
+constraint Foo(T){
+	if(T == int32) return true else return false
+}
+
+def f2(x Foo) = 2
+f2(5) # ok

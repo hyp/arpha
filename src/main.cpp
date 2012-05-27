@@ -454,10 +454,10 @@ struct DefParser: PrefixDefinition {
 	DefParser(): PrefixDefinition("def",Location()) {  }
 
 	/// body ::= [nothing|'=' expression|'{' block '}']
-	static void functionBody(Function* func,Parser* parser){
+	static void functionBody(Function* func,Parser* parser,bool allowNoBody = true){
 		auto token = parser->peek();
 		if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
-			;
+			if(!allowNoBody) error(parser->currentLocation(),"The function %s needs to have a body!",func->id);
 		}else{
 			if(parser->match("="))
 				func->body.children.push_back(parser->evaluate(new ReturnExpression(parser->parse())));
@@ -545,6 +545,38 @@ struct MacroParser: PrefixDefinition {
 		auto name = parser->expectName();
 		parser->expect("(");
 		return DefParser::function(name,location,parser,true);
+	}
+};
+
+struct ConstraintParser: PrefixDefinition {
+	ConstraintParser(): PrefixDefinition("constraint",Location()) {}
+	Node* parse(Parser* parser){
+		auto location = parser->previousLocation();
+		auto name = parser->expectName();
+		auto constraint = new Constraint(name,location);
+		parser->currentScope()->define(constraint);
+		//Function
+		auto bodyScope = new Scope(parser->currentScope());
+		auto func = new Function(name,location,bodyScope);
+		constraint->verifier = func;
+		//if(macro) func->_mixinOnCall = true;
+		bodyScope->_functionOwner = func;
+
+		auto oldScope = parser->currentScope();
+		parser->currentScope(bodyScope);
+
+		parser->expect("(");
+		auto param = new Argument(parser->expectName(),parser->previousLocation());
+		param->type.infer(intrinsics::types::Type->duplicate()->asTypeExpression());
+		func->arguments.push_back(param);
+		bodyScope->define(param);
+		parser->expect(")");
+		func->_returnType = intrinsics::types::boolean->duplicate()->asTypeExpression();
+
+		DefParser::functionBody(func,parser,false);
+		parser->currentScope(oldScope);
+		func->resolve(parser->evaluator());
+		return new UnitExpression();
 	}
 };
 
@@ -802,6 +834,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 
 	scope->define(new DefParser);
 	scope->define(new MacroParser);
+	scope->define(new ConstraintParser);
 	scope->define(new TypeParser);
 	scope->define(new VarParser);
 	
