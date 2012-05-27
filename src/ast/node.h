@@ -219,6 +219,7 @@ struct TypeExpression : Node {
 
 	bool isResolved() const;
 	bool isConst() const;
+	bool matchRecord(Record* record) const;
 	TypeExpression* _returnType() const;
 	size_t size() const;
 

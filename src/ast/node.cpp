@@ -396,10 +396,20 @@ TypeExpression* TypeExpression::_returnType() const {
 	assert(isResolved());
 	return intrinsics::types::Type;
 }
+bool TypeExpression::matchRecord(Record* record) const {
+	return type == RECORD && this->record == record;
+}
 Node* TypeExpression::duplicate(DuplicationModifiers* mods) const {
 	TypeExpression* x;
+	
 	switch(type){
-		case RECORD: return record->reference();
+		case RECORD: 
+			{
+			auto red = mods->redirectors.find(record);
+			if(red != mods->redirectors.end())
+				return copyProperties(new TypeExpression(reinterpret_cast<Record*>((*red).second.first)));
+			return copyProperties(new TypeExpression(record));
+			}
 		case INTEGER: return integer->reference();
 		case INTRINSIC: return intrinsic->reference();
 		case POINTER:

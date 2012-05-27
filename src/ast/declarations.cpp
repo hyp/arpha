@@ -45,7 +45,7 @@ PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
 }
 
 
-Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr),_dependent(false) {
+Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr),_dependent(false),_constraint(nullptr) {
 }
 bool Argument::expandAtCompileTime() {
 	assert(isResolved());
@@ -156,7 +156,7 @@ size_t PointerType::size() const { return 0; } //implemented in typeExpression
 
 //type
 
-Record::Record(SymbolID name,Location& location) : TypeBase(name,location),_reference(this) {
+Record::Record(SymbolID name,Location& location) : TypeBase(name,location) {
 	_size = 0;
 	headRecord = nullptr;
 	_resolved = false;
@@ -174,7 +174,7 @@ void Record::add(const Field& var){
 }
 
 Node* Record::createReference(){
-	return reference();
+	return new TypeExpression(this);
 }
 //TODO record duplication
 
@@ -302,7 +302,7 @@ bool Record::resolve(Evaluator* evaluator){
 		//Don't you dare use itself in itself!
 		//TODO rm? This isn't necessary as we are checking hasItself below
 		//TODO don't allow extended Pointer to self
-		if((*i).type.isResolved() && (*i).type.type() == reference()){
+		if((*i).type.isResolved() && (*i).type.type()->matchRecord(this)){
 			error(location,"Recursive type declaration - The type %s has a field %s of its own type!",id,(*i).name);
 			_resolved = false;
 			break;
@@ -337,6 +337,28 @@ void Record::calculateResolvedProperties(){
 		_size += (*i).type.type()->size();
 	}
 	
+}
+Record::Field Record::Field::duplicate(DuplicationModifiers* mods){
+	Field result;
+	result.name = name;
+	result.type = type.duplicate(mods);
+	result.isExtending = isExtending;
+	return result;
+}
+PrefixDefinition* Record::duplicate(DuplicationModifiers* mods){
+	if(headRecord){ //anonymous record
+		return this;
+	}
+
+	auto rec = new Record(id,location);
+	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(rec),false);
+	for(auto i = fields.begin();i!=fields.end();i++){
+		rec->fields.push_back((*i).duplicate(mods));
+	}
+	rec->_resolved = _resolved;
+	rec->_size = _size;
+	
+	return copyProperties(rec);
 }
 
 bool Record::isResolved(){

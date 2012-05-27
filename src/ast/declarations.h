@@ -119,11 +119,11 @@ public:
 		bool isExtending; //a field aliased as this
 
 		Field(SymbolID id,TypeExpression* typ) : name(id),type(typ),isExtending(false) {}
+		Field duplicate(DuplicationModifiers* mods);
+	private:
+		Field(){}
 	};
 	std::vector<Field> fields;
-	//A single reference expression
-	TypeExpression _reference;
-	inline TypeExpression* reference(){ return &_reference; }
 
 	Record(SymbolID name,Location& location);
 
@@ -143,7 +143,7 @@ public:
 	//NB Not used by anonymous records!
 	bool resolve(Evaluator* evaluator);
 
-	
+	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 
 	
 	//Unique anonymous record construction

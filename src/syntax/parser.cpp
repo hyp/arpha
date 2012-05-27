@@ -144,7 +144,7 @@ Node* Variable::parse(Parser* parser){
 }
 
 Node* Record::parse(Parser* parser){
-	return reference();
+	return new TypeExpression(this);
 }
 
 Node* IntegerType::parse(Parser* parser){

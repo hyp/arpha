@@ -17,8 +17,8 @@ macro not(x) syntax("!",precedence(precedence.unary) x) = not(x)
 # Infix operators
 
 ## Logical group
-macro and(x,y) syntax(x,precedence(precedence.logical) "&&",precedence(precedence.logical) y) = and(x,y)
-macro or(x,y) syntax(x,precedence(precedence.logical) "||",precedence(precedence.logical) y) = or(x,y)
+macro and(x,y) syntax(x,precedence(precedence.logical) "and",precedence(precedence.logical) y) = and(x,y)
+macro or(x,y) syntax(x,precedence(precedence.logical) "or",precedence(precedence.logical) y) = or(x,y)
 
 ## Equality group
 macro equals(x,y) syntax(x,precedence(precedence.equality) "==",precedence(precedence.equality) y) = equals(x,y)
