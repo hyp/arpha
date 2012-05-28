@@ -333,17 +333,17 @@ struct AstExpander: NodeVisitor {
 	}
 	//TODO simplify when 1 child and empty scope.. help for mixing and inling as well!
 	Node* visit(BlockExpression* node){
-		assert(!node->isResolved());
+		if(!evaluator->forcedToEvaluate) assert(!node->isResolved());
 		auto scp = evaluator->currentScope();
 		node->_resolved = true;
-		if(!node->scope->isResolved()){
+		if(!node->scope->isResolved() || evaluator->forcedToEvaluate){
 			if(!node->scope->resolve(evaluator)) node->_resolved = false;//Resolve unresolved definitions
 		}
 		evaluator->currentScope(node->scope);
 		auto e = evaluator->mixinedExpression;
 		evaluator->mixinedExpression = nullptr;
 		for(size_t i =0;i<node->children.size();i++){
-			if(!node->children[i]->isResolved()){	
+			if(!node->children[i]->isResolved() || evaluator->forcedToEvaluate){	
 				node->children[i] = node->children[i]->accept(this);
 				if(!node->children[i]->isResolved()) node->_resolved = false;
 				if(evaluator->mixinedExpression){
@@ -558,6 +558,9 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 		error(location,"Can't mixin a function %s without body!",func->id);
 		return ErrorExpression::getInstance();
 	}
+	//set appropriate settings
+	auto oldForcedToEvaluate = forcedToEvaluate;
+	forcedToEvaluate = true;
 	debug("<<M");
 	DuplicationModifiers mods;
 	//Replace arguments
@@ -572,7 +575,9 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	if(func->body.scope->numberOfDefinitions() <= func->arguments.size() && func->body.children.size() == 1){
 		if(auto ret = func->body.children[0]->asReturnExpression()){
 			debug("SimpleForm");
-			return eval(ret->value->duplicate(&mods));
+			auto result = eval(ret->value->duplicate(&mods));
+			forcedToEvaluate = oldForcedToEvaluate;
+			return result;
 		}
 	}
 	//Mixin definitions
@@ -594,7 +599,9 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	auto block = new BlockExpression(inlined ? target : new Scope(currentScope()));
 	func->body._duplicate(block,&mods);
 	mixinedExpression = eval(block);
-	return eval(result);
+	result = eval(result);
+	forcedToEvaluate = oldForcedToEvaluate;
+	return result;
 }
 Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
 	assert(node->isResolved());
@@ -603,11 +610,7 @@ Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
 
 //Evaluates the verifier to see if an expression satisfies a constraint
 bool satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* verifier){
-	//TODO force eval???
-	auto oldEv = evaluator->forcedToEvaluate;
-	evaluator->forcedToEvaluate = true;
 	auto result = evaluator->mixinFunction(Location(),verifier,arg->_returnType(),false)->asIntegerLiteral();
-	evaluator->forcedToEvaluate = oldEv;
 	assert(result->_returnType()->isSame(intrinsics::types::boolean));
 	evaluator->mixinedExpression = nullptr;//delete useless block
 	return !(result->integer == BigInt((uint64)0));
@@ -746,20 +749,30 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 		//Determine the function?
 		if(determinedFunction && !func->intrinsicEvaluator){
 			DuplicationModifiers mods;
-			mods.target = currentScope();
+			mods.target = func->owner();
 			mods.location = arg->location;
+			auto oldForcedToEvaluate = forcedToEvaluate;
+			forcedToEvaluate = true;
 			auto f = func->specializedDuplicate(&mods,determinedArguments);
 			f->resolve(this);
+			forcedToEvaluate = oldForcedToEvaluate;			
+			func->owner()->defineFunction(f);
 			*function = f;
 		}
 
 		if((*function)->canExpandAtCompileTime() && !(*function)->intrinsicEvaluator){
 			DuplicationModifiers mods;
-			mods.target = currentScope();
+			mods.target = (*function)->owner();
 			mods.location = arg->location;
-			//TODO force resolving because of T == int32 not evaluating into const
-			auto f = (*function)->expandedDuplicate(&mods,result);
-			f->resolve(this);
+			auto oldForcedToEvaluate = forcedToEvaluate;
+			forcedToEvaluate = true;
+			Function* f;
+			auto generated = (*function)->expandedDuplicate(&mods,result,&f);
+			if(generated){
+				f->resolve(this);
+				(*function)->owner()->defineFunction(f);
+			}
+			forcedToEvaluate = oldForcedToEvaluate;		
 			*function = f;
 		}	
 	}

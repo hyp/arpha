@@ -14,7 +14,7 @@ def true bool = 1
 macro parentheses(expression) syntax("(",optional(expression),")") = expression
 
 macro nothing() syntax("nothing") = ()
-
+	
 #macro call(object,argument) syntax(object,precedence(precedence.call) "(",optional(argument),")")
 
 #macro assignment(object,value) syntax(object,precedence(precedence.assignment) "=",precedence(precedence.assignment - 1) value)
@@ -29,6 +29,15 @@ macro if(condition,consequence,alternative) syntax("if","(",condition,")",conseq
 		to(false) alternative
 	}
 }
+
+#TODO tuple generation
+macro range(begin,end) syntax(begin,"..",end) = begin
+#TODO array expr, typechecks
+macro array(elements) syntax("[",elements,"]") = elements
+
+# TODO
+macro new(T,expression) syntax("new",precedence(precedence.call) T,optional("(",expression,")")) = T
+
 
 # TODO proper and argument name
 macro for(sequence,body) syntax("for","(","i","in",sequence,")",body) {

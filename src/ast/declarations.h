@@ -199,11 +199,12 @@ struct Function: public PrefixDefinition {
 
 	TypeExpression* argumentType();
 	TypeExpression* returnType();
+	Scope* owner() const;
 
 	Function* duplicate(DuplicationModifiers* mods);
 	//Used to specialise a function with wildcard parameters
 	Function* specializedDuplicate(DuplicationModifiers* mods,std::vector<TypeExpression* >& specializedArgTypes);
-	Function* expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters);
+	bool expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters,Function** dest);
 
 	//Returns -1 when an argument isn't found
 	int findArgument(Variable* var) const;

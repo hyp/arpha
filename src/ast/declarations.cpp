@@ -533,6 +533,11 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 	_hasReturnInside = false;
 	_mixinOnCall = false;
 }
+
+Scope* Function::owner() const {
+	return body.scope->parent;
+}
+
 bool Function::mixinOnCall(){
 	return _mixinOnCall;
 }
@@ -630,27 +635,47 @@ bool Function::canExpandAtCompileTime(){
 	assert(_argsResolved);
 	return _hasExpandableArguments;
 }
-Function* Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters){
-	debug("Need to duplicate expand function %s!",id);
-	auto func = new Function(id,location,new Scope(mods->target));
+//Return true if a new function was generated or false if an already generated function was used.
+bool Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters,Function** dest){
+	
+	//get the new name and see if such function was already generated!
+	std::ostringstream name;
+	name<<id.ptr()<<"_";
+	for(size_t i = 0;i!=arguments.size();++i){
+		if(!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime())
+			name<<"_"<<arguments[i]->id<<"_"<<parameters[i];
+	}
+	auto sym = (SymbolID(name.str().c_str()));
+	if(auto def = mods->target->containsPrefix(sym)){
+		*dest = def->asOverloadset()->functions[0];//TODO safety checks??
+		debug("Reusing duplicated expanded function %s => %s!",id,sym);
+		return false;
+	}
+
+	//duplicate the function
+	debug("Need to duplicate expand function %s => %s!",id,sym);
+	auto func = new Function(sym,location,new Scope(mods->target));
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);//NB before body duplication to account for recursion
+
 	//args
 	size_t erased = 0;
 	for(size_t i = 0;i!=arguments.size();++i){
 		if(!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime()){
 			debug("Exp");
+			name<<"_"<<arguments[i]->id<<"_"<<parameters[i - erased];
 			mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(arguments[i]))] = 
 				std::make_pair(reinterpret_cast<void*>(parameters[i - erased]),true);
 			parameters.erase(parameters.begin() + (i - erased));
 			erased++;
+			
 		}
 		else func->arguments.push_back(arguments[i]->reallyDuplicate(mods,nullptr));
 	}
-	//TODO fancy name for expanded function
 
 	duplicateReturnBody(mods,func);
 	func->_resolved = false;
-	return func;
+	*dest = func;
+	return true;
 }
 Function* Function::specializedDuplicate(DuplicationModifiers* mods,std::vector<TypeExpression* >& specializedArgTypes){
 	debug("Need to duplicate determined function %s!",id);
