@@ -58,6 +58,7 @@ Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* n
 	Argument* dup = new Argument(id,location);
 	if(newType && type.isWildcard()){
 		dup->type._type = newType;//TODO dup?
+		dup->type._type->_localSemantics = false;//Use non-local type
 		dup->type.kind = InferredUnresolvedTypeExpression::Type;
 	}
 	else dup->type = type.duplicate(mods);
@@ -85,7 +86,7 @@ bool Argument::isDependent() const {
 }
 
 //intrinsic type
-IntrinsicType::IntrinsicType(SymbolID name,Location& location) : TypeBase(name,location),_reference(this) {
+IntrinsicType::IntrinsicType(SymbolID name,Location& location,IntrinsicType* base) : TypeBase(name,location),_reference(this),_base(base),construct(nullptr) {
 }
 size_t IntrinsicType::size() const { return 0; }
 
@@ -533,7 +534,6 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 	_hasReturnInside = false;
 	_mixinOnCall = false;
 }
-
 Scope* Function::owner() const {
 	return body.scope->parent;
 }
@@ -567,7 +567,7 @@ bool Function::resolve(Evaluator* evaluator){
 				if((*i)->type.kind == InferredUnresolvedTypeExpression::Unresolved && (*i)->type.unresolvedExpression->asFunctionReference()){
 					//Constrained argument
 					Function* func = (*i)->type.unresolvedExpression->asFunctionReference()->function;
-					if( !(func->isResolved() && func->arguments.size() == 1 && func->arguments[0]->type.type()->isSame(intrinsics::types::Type) && func->returnType()->isSame(intrinsics::types::boolean)) ) _resolved = false;
+					if( !((func->arguments.size() == 1 || func->arguments.size() == 2) && func->arguments[0]->type.type()->isSame(intrinsics::types::Type) && func->returnType()->isSame(intrinsics::types::boolean)) ) _resolved = false;
 					else {
 						debug("Constrained argument :: %s!",func->id);
 						(*i)->type.kind = InferredUnresolvedTypeExpression::Wildcard;
@@ -642,8 +642,10 @@ bool Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& 
 	std::ostringstream name;
 	name<<id.ptr()<<"_";
 	for(size_t i = 0;i!=arguments.size();++i){
-		if(!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime())
+		if(!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime()){
+			if(auto t = parameters[i]->asTypeExpression()) t->_localSemantics = false;
 			name<<"_"<<arguments[i]->id<<"_"<<parameters[i];
+		}
 	}
 	auto sym = (SymbolID(name.str().c_str()));
 	if(auto def = mods->target->containsPrefix(sym)){
@@ -662,7 +664,8 @@ bool Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& 
 	for(size_t i = 0;i!=arguments.size();++i){
 		if(!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime()){
 			debug("Exp");
-			name<<"_"<<arguments[i]->id<<"_"<<parameters[i - erased];
+			//Pass non-local instead of local types
+			if(auto t = parameters[i - erased]->asTypeExpression()) t->_localSemantics = false;
 			mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(arguments[i]))] = 
 				std::make_pair(reinterpret_cast<void*>(parameters[i - erased]),true);
 			parameters.erase(parameters.begin() + (i - erased));

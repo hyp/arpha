@@ -42,7 +42,6 @@ struct Evaluator;
 	X(ErrorExpression)       \
 	X(WildcardExpression)       \
 	X(TypeExpression)         \
-	X(ExpressionReference)   \
 	X(ImportedScopeReference)   \
 	X(VariableReference) \
 	X(FunctionReference)     \
@@ -59,6 +58,7 @@ struct Evaluator;
 	\
 	X(ExpressionVerifier) \
 	X(UnresolvedSymbol) \
+	X(ValueExpression)
 
 //Forward declaration of node types
 struct Node;
@@ -70,13 +70,14 @@ struct Node;
 struct DuplicationModifiers {
 	Location location;
 	Scope* target;
+	bool isMixin;
 
 	//The bool indicates whether the redirector is expression(true) or a definition(false)
 	std::map<void*,std::pair<void*,bool> > redirectors;//Used to redirect references for duplicated definitions
 	
 	Variable* returnValueRedirector;//The variable to which the return value is assigned in inlined and mixined functions
 
-	DuplicationModifiers() : returnValueRedirector(nullptr) {}
+	DuplicationModifiers() : returnValueRedirector(nullptr),isMixin(false) {}
 };
 
 //An AST node
@@ -149,16 +150,6 @@ struct WildcardExpression : Node {
 	DECLARE_NODE(WildcardExpression);
 private:
 	WildcardExpression(const WildcardExpression& other){}
-};
-
-//: intrinsics::types::Expression TODO rm
-struct ExpressionReference : Node {
-	ExpressionReference(Node* node);
-	
-	TypeExpression* _returnType() const;
-
-	Node* expression;
-	DECLARE_NODE(ExpressionReference);
 };
 
 //: intrinsics::types::Scope
@@ -455,5 +446,17 @@ private:
 	ErrorExpression(){}
 	ErrorExpression(const ErrorExpression& other){}
 };
+
+struct ValueExpression : Node {
+	ValueExpression(Node* node,TypeExpression* type); //{> () <}
+	
+	bool isConst() const;
+	TypeExpression* _returnType() const;
+
+	TypeExpression* type;
+	void* data;
+	DECLARE_TEMPNODE(ValueExpression);
+};
+
 
 #endif

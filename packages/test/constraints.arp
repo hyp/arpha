@@ -18,3 +18,9 @@ constraint Fuse(T) = T == int32 or T == bool
 def f3(x Fuse) = 1
 f3(true) # ok
 f3(1) # ok
+
+constraint Man(T,v) = T == Type and v == int32
+def f4(yes Man) = 1
+f4(int32) # ok
+f4(bool) # error, won't be resolved
+

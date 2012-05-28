@@ -279,52 +279,15 @@ int expectInteger(Parser* parser,int stickiness){
 }
 
 
-struct MacroSyntax {
-	struct Instruction {
-		enum {
-			SYMBOL,// "foo"
-			EXPR,// bar
-			OPTIONAL,
-		};
-		int kind;
-		SymbolID symbol;
-		union {
-			int argId;
-			int innerRangeSize;//for things like optional()
-		};
-		int stickiness;// = 0
 
-		Instruction();
-		Instruction(Function* func,Node* node = nullptr,int sticky = 0);
-	};
-	std::vector<Instruction> instructions;
-	Function* function;
-	size_t numArgs;
 
-	Node* (*intrinsicEvaluator)(Node**,size_t);
+Node* PrefixMacro::parse(Parser* parser){
+	return syntax->execute(parser);
+}
+Node* InfixMacro::parse(Parser* parser,Node* node){
+	return syntax->execute(parser,node);
+}
 
-	MacroSyntax(Function* func);
-
-	int parse(Parser* parser);
-	void compile(Scope* scope);
-	Node* execute(Parser* parser,Node* node = nullptr);
-};
-
-struct PrefixMacro : PrefixDefinition {
-	MacroSyntax* syntax;
-	PrefixMacro(SymbolID name,Location& location,MacroSyntax* synt): PrefixDefinition(name,location),syntax(synt) {}
-	Node* parse(Parser* parser){
-		return syntax->execute(parser);
-	}
-};
-
-struct InfixMacro : InfixDefinition {
-	MacroSyntax* syntax;
-	InfixMacro(SymbolID name,Location& location,int sticky,MacroSyntax* synt): InfixDefinition(name,sticky,location),syntax(synt) {}
-	Node* parse(Parser* parser,Node* node){
-		return syntax->execute(parser,node);
-	}
-};
 
 //TODO macro with a functional form mixin like syntax macroes for efficiency
 MacroSyntax::Instruction::Instruction(Function* func,Node* node,int sticky) : stickiness(sticky) {
@@ -410,7 +373,7 @@ Node* MacroSyntax::execute(Parser* parser,Node* node){
 		}
 	}
 	if(intrinsicEvaluator){	
-		return intrinsicEvaluator(tupleArg?tupleArg->children.begin()._Ptr:&arg,0);
+		return intrinsicEvaluator(parser,tupleArg?tupleArg->children.begin()._Ptr:&arg,0);
 	}
 	else return parser->evaluator()->mixinFunction(loc,function,arg);
 }
@@ -570,6 +533,13 @@ struct ConstraintParser: PrefixDefinition {
 		param->type.infer(intrinsics::types::Type->duplicate()->asTypeExpression());
 		func->arguments.push_back(param);
 		bodyScope->define(param);
+
+		if(parser->match(",")){
+			auto param = new Argument(parser->expectName(),parser->previousLocation());
+			param->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+			func->arguments.push_back(param);
+			bodyScope->define(param);
+		}
 		parser->expect(")");
 		func->_returnType = intrinsics::types::boolean->duplicate()->asTypeExpression();
 
@@ -797,11 +767,19 @@ Node* equals(CallExpression* node,Evaluator* evaluator){
 Node* _typeof(CallExpression* node,Evaluator* evaluator){
 	return node->arg->_returnType();
 }
+Node* _sizeof(CallExpression* node,Evaluator* evaluator){
+	size_t size;
+	if(auto t = node->arg->asTypeExpression()) size = t->size();
+	else size = node->arg->_returnType()->size();
+	auto e = new IntegerLiteral(BigInt((uint64) size));
+	e->_type = intrinsics::types::int32;//TODO natural
+	return e;
+}
 
-Node* createCall(Node** expr,size_t numNodes){
+Node* createCall(Parser*,Node** expr,size_t numNodes){
 	return new CallExpression(expr[0],expr[1]);
 }
-Node* createWhile(Node** expr,size_t numNodes){
+Node* createWhile(Parser*,Node** expr,size_t numNodes){
 	return new WhileExpression(expr[0],expr[1]);
 }
 
@@ -811,6 +789,8 @@ void arphaPostInit(Scope* moduleScope){
 	x->intrinsicEvaluator = equals;
 	x = ensure( ensure(moduleScope->lookupPrefix("typeof"))->asOverloadset() )->functions[0];
 	x->intrinsicEvaluator = _typeof;
+	x = ensure( ensure(moduleScope->lookupPrefix("sizeof"))->asOverloadset() )->functions[0];
+	x->intrinsicEvaluator = _sizeof;
 
 	auto macro = ensure( dynamic_cast<PrefixMacro*>( ensure(moduleScope->containsPrefix("while")) ) );
 	macro->syntax->intrinsicEvaluator = createWhile;

@@ -12,15 +12,6 @@
 //expression evaluation - resolving overloads, inferring types, invoking ctfe
 
 
-Node* evaluateResolvedFunctionCall(Evaluator* evaluator,CallExpression* node){
-	auto function = node->object->asFunctionReference()->function;
-
-	//Try to expand the function
-	if(node->arg->isConst() && function->intrinsicEvaluator) 
-		return function->intrinsicEvaluator(node,evaluator);
-	return node;
-}
-
 //Typecheks an expression
 Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
 	if(auto assigns = expectedType->assignableFrom(expression,expression->_returnType())){
@@ -37,15 +28,6 @@ Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
 struct AstExpander: NodeVisitor {
 	Evaluator* evaluator;
 	AstExpander(Evaluator* ev) : evaluator(ev) {}
-
-
-	Node* visit(ExpressionReference* node){
-		if(evaluator->evaluateExpressionReferences){
-			//delete node
-			return node->expression->accept(this);
-		}
-		return node;
-	}
 
 	//on a.foo(...)
 	static Node* transformCallOnAccess(CallExpression* node,AccessExpression* acessingObject){
@@ -98,14 +80,17 @@ struct AstExpander: NodeVisitor {
 				}
 				node->object = new FunctionReference(func);
 				node->_resolved = true;
-				return evaluateResolvedFunctionCall(evaluator,node);
+				if(auto f = func->intrinsicEvaluator){
+					if(node->arg->isConst()) return f(node,evaluator);
+				}
+				return node;
 			}else{
 				evaluator->markUnresolved(node);
 			}
 		}
 		else if(auto callingFunc = node->object->asFunctionReference()){
-			if(callingFunc->function->intrinsicEvaluator){
-				return evaluateResolvedFunctionCall(evaluator,node);
+			if(auto f = callingFunc->function->intrinsicEvaluator){
+				if(node->arg->isConst()) return f(node,evaluator);
 			}
 			return node;	//TODO eval?
 		}
@@ -218,7 +203,7 @@ struct AstExpander: NodeVisitor {
 		}		
 	}
 	Node* visit(AssignmentExpression* node){
-		if(node->_resolved) return node;//Don't evaluate it again
+		if(node->_resolved && !evaluator->forcedToEvaluate) return node;//Don't evaluate it again
 
 		node->value = node->value->accept(this);
 		if(!node->value->isResolved()) return node;//Don't bother until the value is fully resolved
@@ -571,20 +556,22 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	for(size_t i =0;i<func->arguments.size();i++){
 		mods.redirectors[reinterpret_cast<void*>(static_cast<Variable*>(func->arguments[i]))] = std::make_pair(reinterpret_cast<void*>(argsBegin[i]),true);
 	}
+	mods.location = location;
+	auto target = inlined ? new Scope(currentScope()) : currentScope();
+	mods.target = target;
 	//Simple form of f(x) = x
 	if(func->body.scope->numberOfDefinitions() <= func->arguments.size() && func->body.children.size() == 1){
 		if(auto ret = func->body.children[0]->asReturnExpression()){
 			debug("SimpleForm");
+			mods.isMixin = true;
 			auto result = eval(ret->value->duplicate(&mods));
 			forcedToEvaluate = oldForcedToEvaluate;
 			return result;
 		}
 	}
 	//Mixin definitions
-	auto target = inlined ? new Scope(currentScope()) : currentScope();
-	mods.location = location;
-	mods.target = target;
 	func->body.scope->duplicate(&mods);
+	mods.isMixin = true;
 	//inline body
 	if(!func->_returnType.isResolved() || !func->returnType()->isSame(intrinsics::types::Void)){
 		auto varName = std::string(inlined ? "_inlined_" : "_mixined_") + std::string(func->id.ptr());
@@ -597,8 +584,11 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	}else result = new UnitExpression();
 	//NB when not inlined still need to create a new empty scope anyway!!
 	auto block = new BlockExpression(inlined ? target : new Scope(currentScope()));
+	debug("M0: %s",&func->body);
 	func->body._duplicate(block,&mods);
+	debug("M1: %s",block);
 	mixinedExpression = eval(block);
+	debug("M2: %s",mixinedExpression);
 	result = eval(result);
 	forcedToEvaluate = oldForcedToEvaluate;
 	return result;
@@ -609,11 +599,18 @@ Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
 }
 
 //Evaluates the verifier to see if an expression satisfies a constraint
-bool satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* verifier){
-	auto result = evaluator->mixinFunction(Location(),verifier,arg->_returnType(),false)->asIntegerLiteral();
-	assert(result->_returnType()->isSame(intrinsics::types::boolean));
-	evaluator->mixinedExpression = nullptr;//delete useless block
-	return !(result->integer == BigInt((uint64)0));
+int satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* verifier){
+	auto args = verifier->arguments.size() == 1 ? static_cast<Node*>(arg->_returnType()) : new TupleExpression(arg->_returnType(),arg);
+	auto result = evaluator->mixinFunction(Location(),verifier,args,false);
+	if(auto resolved = result->asIntegerLiteral()){
+		assert(result->_returnType()->isSame(intrinsics::types::boolean));
+		evaluator->mixinedExpression = nullptr;//delete useless block
+		return resolved->integer.isZero() ? -1 : (verifier->arguments.size() == 1 ? 0 : 1);
+	}else{
+		evaluator->mixinedExpression = nullptr;//delete useless block
+		error(arg->location,"Can't evaluate constraint %s with argument %s at compile time!",verifier,arg);
+		return -1;
+	}
 }
 //Analyze the function's code to check if the parameter is
 bool Function::canAcceptLocalParameter(size_t argument){
@@ -756,7 +753,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			auto f = func->specializedDuplicate(&mods,determinedArguments);
 			f->resolve(this);
 			forcedToEvaluate = oldForcedToEvaluate;			
-			func->owner()->defineFunction(f);
+			if(!f->canExpandAtCompileTime()) func->owner()->defineFunction(f);
 			*function = f;
 		}
 
@@ -820,6 +817,7 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 	enum {
 		WILDCARD = 1,
 		CONSTRAINED_WILDCARD, //Others in node.cpp via TypeExpression::canAssign
+		//CONSTRAINED_WILDCARD_VALUE
 	};
 	weight = 0;
 
@@ -885,8 +883,9 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 		}
 		else if( func->arguments[currentArg]->type.isWildcard()){
 			if(func->arguments[currentArg]->_constraint){
-				if(!satisfiesConstraint(evaluator,exprBegin[currentExpr],func->arguments[currentArg]->_constraint)) return false;
-				weight += CONSTRAINED_WILDCARD;
+				int c;//TODO constraint type and value lower weight than direct type match fix?
+				if((c = satisfiesConstraint(evaluator,exprBegin[currentExpr],func->arguments[currentArg]->_constraint))==-1) return false;
+				weight += CONSTRAINED_WILDCARD+c;
 			}
 			else weight += WILDCARD;
 		}

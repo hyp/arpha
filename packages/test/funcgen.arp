@@ -37,3 +37,13 @@ def foo4(T = bool){
 	f(0)
 }
 foo4(int32) # ok
+
+def foo10(x Type) = 2
+def foo11(x) = 1
+
+def main(){
+	var x int32
+	# both ok, use non-local pointer for generated function
+	foo10(typeof(&x)) 
+	foo11(&x)
+}

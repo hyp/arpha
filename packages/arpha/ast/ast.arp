@@ -14,12 +14,7 @@ def mixin(expression)
 
 def defineVariable(name,type = nothing,isMutable = true)
 
-type Scope intrinsics
-def parent(scope *Scope) *Scope # | Nothing
 
-type Expression intrinsic
-def location (expression *Expression) int32
-def duplicate(expression *Expression) *Expression
 
 
 #IDEA for spec: when passed int32,2 into typecheck the result should be 2

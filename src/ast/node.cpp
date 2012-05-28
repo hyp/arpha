@@ -75,15 +75,6 @@ Node* WildcardExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new WildcardExpression);
 };
 
-// Expression reference
-ExpressionReference::ExpressionReference(Node* node) : expression(node){}
-TypeExpression* ExpressionReference::_returnType() const {
-	return intrinsics::types::Expression;
-}
-Node* ExpressionReference::duplicate(DuplicationModifiers* mods) const {
-	return new ExpressionReference(expression->duplicate(mods));
-};
-
 //Scope reference
 ImportedScopeReference::ImportedScopeReference(ImportedScope* scope){
 	this->scope = scope;
@@ -290,6 +281,13 @@ bool CallExpression::isResolved() const {
 	return _resolved;
 }
 Node* CallExpression::duplicate(DuplicationModifiers* mods) const {
+	if(mods->isMixin){
+		if(auto ref = object->asFunctionReference()){
+			if(auto f = ref->function->mixinEvaluator){
+				return copyProperties(f(arg,mods));
+			}
+		}
+	}
 	auto e = new CallExpression(object->duplicate(mods),arg->duplicate(mods));
 	e->_resolved = _resolved;
 	return copyProperties(e);
@@ -453,7 +451,7 @@ bool TypeExpression::isSame(TypeExpression* other){
 	}
 }
 enum {
-	LITERAL_CONVERSION = 3,
+	LITERAL_CONVERSION = 4,
 	RECORD_SUBTYPE,
 	EXACT
 };
@@ -592,6 +590,15 @@ ErrorExpression* ErrorExpression::getInstance() {
 	else return errorInstance = new ErrorExpression;
 }
 
+ValueExpression::ValueExpression(Node* node,TypeExpression* type){
+	data=node;
+	this->type = type;
+}
+bool ValueExpression::isConst() const { return true; }
+TypeExpression* ValueExpression::_returnType() const { return type; }
+Node* ValueExpression::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new ValueExpression(reinterpret_cast<Node*>(data)->duplicate(mods),type));
+}
 /**
 * Node tracer
 */
@@ -634,10 +641,6 @@ struct NodeToString: NodeVisitor {
 	}
 	Node* visit(WildcardExpression* node){
 		stream<<"_";
-		return node;
-	}
-	Node* visit(ExpressionReference* node){
-		stream<<"eref "<<node->expression;
 		return node;
 	}
 	Node* visit(ImportedScopeReference* node){
@@ -685,6 +688,7 @@ struct NodeToString: NodeVisitor {
 	}
 	Node* visit(TupleExpression* node){
 		auto i = node->children.begin();
+		if( i == node->children.end() ) return node;
 		while(1){
 			stream<<(*i);
 			++i;

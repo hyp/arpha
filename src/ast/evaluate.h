@@ -14,7 +14,6 @@ private:
 	bool reportUnevaluated;
 	
 public:
-	bool evaluateExpressionReferences; // = false
 	bool isRHS; // = false
 	bool forcedToEvaluate; // = false
 
@@ -25,7 +24,7 @@ public:
 
 	size_t unresolvedExpressions;
 
-	Evaluator() : forcedToEvaluate(false),evaluateExpressionReferences(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {}
+	Evaluator() : forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {}
 
 	Node* eval(Node* node);
 	// Resolves expressions and definitions in a module using multiple passes

@@ -67,7 +67,8 @@ public:
 
 //An intrinsic type
 struct IntrinsicType : public TypeBase {
-	IntrinsicType(SymbolID name,Location& location);
+	IntrinsicType* _base;
+	IntrinsicType(SymbolID name,Location& location,IntrinsicType* base = nullptr);
 
 	size_t size() const;
 	Node* parse(Parser* parser);
@@ -75,6 +76,9 @@ struct IntrinsicType : public TypeBase {
 	//A single reference expression
 	TypeExpression _reference;
 	inline TypeExpression* reference(){ return &_reference; }
+	
+	//Parsing special types on creation
+	Function* construct;
 };
 
 //An integral type
@@ -185,9 +189,10 @@ struct Overloadset: public PrefixDefinition {
 // A function
 // By defualt function is created with an empty body with null scope
 // Return type is infered by default
+
 struct Function: public PrefixDefinition {
 	Function(SymbolID name,Location& location,Scope* bodyScope);
-
+	
 	Node* parse(Parser* parser);
 
 	bool isResolved();
@@ -211,17 +216,19 @@ struct Function: public PrefixDefinition {
 
 	InferredUnresolvedTypeExpression _returnType;
 	BlockExpression body;
-	Node* (*intrinsicEvaluator)(CallExpression*,Evaluator* evaluator);
+	Node* (*intrinsicEvaluator)(CallExpression*,Evaluator* evaluator); //Can be null. Used for compile time arithmetics etc.
+	Node* (*mixinEvaluator)(Node* args,DuplicationModifiers* evaluator); //Can be null. Used for intrinsic functions like creation of AST nodes evaluated when macroes are being mixined
 	std::vector<Argument*> arguments;
 	bool _hasReturnInside;
 	bool _hasGenericArguments;
 	bool _hasExpandableArguments;
 	bool _argsResolved;
 	bool _mixinOnCall;
+	bool _resolved;
 private:
 	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
 	
-	bool _resolved;
+	
 };
 
 struct Constraint : PrefixDefinition {
@@ -249,6 +256,49 @@ struct ImportedScope : PrefixDefinition {
 	//A single reference expression
 	ImportedScopeReference _reference;
 	inline ImportedScopeReference* reference(){ return &_reference; }
+};
+
+struct MacroSyntax {
+	struct Instruction {
+		enum {
+			SYMBOL,// "foo"
+			EXPR,// bar
+			OPTIONAL,
+		};
+		int kind;
+		SymbolID symbol;
+		union {
+			int argId;
+			int innerRangeSize;//for things like optional()
+		};
+		int stickiness;// = 0
+
+		Instruction();
+		Instruction(Function* func,Node* node = nullptr,int sticky = 0);
+	};
+	std::vector<Instruction> instructions;
+	Function* function;
+	size_t numArgs;
+
+	Node* (*intrinsicEvaluator)(Parser* parser,Node**,size_t);
+
+	MacroSyntax(Function* func);
+
+	int parse(Parser* parser);
+	void compile(Scope* scope);
+	Node* execute(Parser* parser,Node* node = nullptr);
+};
+
+struct PrefixMacro : PrefixDefinition {
+	MacroSyntax* syntax;
+	PrefixMacro(SymbolID name,Location& location,MacroSyntax* synt): PrefixDefinition(name,location),syntax(synt) {}
+	Node* parse(Parser* parser);
+};
+
+struct InfixMacro : InfixDefinition {
+	MacroSyntax* syntax;
+	InfixMacro(SymbolID name,Location& location,int sticky,MacroSyntax* synt): InfixDefinition(name,sticky,location),syntax(synt) {}
+	Node* parse(Parser* parser,Node* node);
 };
 
 

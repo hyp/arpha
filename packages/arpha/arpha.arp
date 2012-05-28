@@ -30,13 +30,12 @@ macro if(condition,consequence,alternative) syntax("if","(",condition,")",conseq
 	}
 }
 
-#TODO tuple generation
-macro range(begin,end) syntax(begin,"..",end) = begin
+#TODO tuple generation, precedence
+macro range(begin,end) syntax(begin,precedence(precedence.index) "..",end) = begin
 #TODO array expr, typechecks
 macro array(elements) syntax("[",elements,"]") = elements
 
-# TODO
-macro new(T,expression) syntax("new",precedence(precedence.call) T,optional("(",expression,")")) = T
+
 
 
 # TODO proper and argument name
@@ -71,11 +70,11 @@ macro typeof(expression) Type
 macro sizeof(expression) uint32
 
 
-#
 # An unsigned integer representing CPU's word.
 # It is equivalent to size_t from C/C++.
 def natural = if(true) uint32 else uint64
 
+#
 # Literal constant strings
 def stringLiteral = String #HACK type "String" is temporary for now
 #
@@ -87,6 +86,20 @@ import export qualified ast
 import export qualified compiler
 
 import export operations
+
+# TODO
+macro new(T Type,expression) syntax("new",precedence(precedence.call) T,optional("(",expression,")")) {
+	#
+	match equals(T,int32) {
+		to(true) 1
+		to(false) ()
+	}
+	def ptr *T = allocate(T,1) #= allocate(T,1) #TODO sizeof(T)
+	construct(ptr) #TODO args
+	return ptr
+	#
+	return 2
+}
 
 ## Is TODO T Type check
 macro is(expression,T) syntax(expression,precedence(precedence.isas) "is", precedence(precedence.isas) T) = typeof(expression) == T
