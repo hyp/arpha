@@ -70,13 +70,14 @@ struct Node;
 struct DuplicationModifiers {
 	Location location;
 	Scope* target;
+	bool isMacroMixin;
 
 	//The bool indicates whether the redirector is expression(true) or a definition(false)
 	std::map<void*,std::pair<void*,bool> > redirectors;//Used to redirect references for duplicated definitions
 	
 	Variable* returnValueRedirector;//The variable to which the return value is assigned in inlined and mixined functions
 
-	DuplicationModifiers() : returnValueRedirector(nullptr) {}
+	DuplicationModifiers() : returnValueRedirector(nullptr),isMacroMixin(false) {}
 };
 
 //An AST node

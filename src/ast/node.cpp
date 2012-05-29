@@ -100,6 +100,19 @@ TypeExpression* VariableReference::_returnType() const {
 	return variable->type.type();
 }
 Node* VariableReference::duplicate(DuplicationModifiers* mods) const {
+	if(mods->isMacroMixin && variable->value){
+		if(auto v = variable->value->asValueExpression()){
+			if(v->type->matchPointerIntrinsic(intrinsics::ast::ExprPtr)){
+				//Simplify blocks
+				auto node = reinterpret_cast<Node*>(v->data);
+				if(auto block = node->asBlockExpression()){
+					if(block->scope->numberOfDefinitions() == 0 && block->children.size() == 1) node = block->children[0];
+				}
+				return node->duplicate(mods);
+			}
+		}
+		return variable->value->duplicate(mods);
+	}
 	auto red = mods->redirectors.find(variable);
 	if(red != mods->redirectors.end()){
 		Node* result;

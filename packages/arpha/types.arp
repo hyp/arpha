@@ -7,7 +7,7 @@
 #
 
 type Type intrinsic
-type Expression intrinsic
+#type Expression intrinsic
 type Nothing intrinsic
 
 type bool integer

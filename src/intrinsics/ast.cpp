@@ -25,19 +25,43 @@ Node* mixin(CallExpression* node,Evaluator* evaluator){
 }
 #include "../ast/interpret.h"
 Node* interpret(CallExpression* node,Evaluator* evaluator){
+	Node* res;
 	if(auto call = node->arg->asCallExpression()){
-		auto res = interpretFunctionCall(evaluator->interpreter(),call->object->asFunctionReference()->function,call->arg);
-		if(!res){
-			Node* position;
-			const char* error;
-			getFailureInfo(evaluator->interpreter(),&position,&error);
-			error(node->location,"Can't interpret %s - Failed to interpret %s(%s) because of %s",node,position,position->location.line(),error?error:"");
-		}
-		else return res;
-	}else{
-		error(node->location,"Mixin expression expects to recieve a *Expression as an argument!");
+		res = interpretFunctionCall(evaluator->interpreter(),call->object->asFunctionReference()->function,call->arg);
 	}
-	return node;
+	else res = interpretNode(evaluator->interpreter(),node->arg);
+	
+	if(!res){
+		Node* position;
+		const char* error;
+		getFailureInfo(evaluator->interpreter(),&position,&error);
+		error(node->location,"Can't interpret %s - Failed to interpret %s(%s) because of %s",node,position,position->location.line(),error?error:"");
+		return ErrorExpression::getInstance();
+	}
+	else return res;
+
+}
+Node* mim(CallExpression* node,Evaluator* evaluator){
+	Node* res = nullptr;
+	if(auto call = node->arg->asCallExpression()){
+		DuplicationModifiers mods;
+		mods.isMacroMixin = true;
+		res = interpretFunctionCall(evaluator->interpreter(),call->object->asFunctionReference()->function,call->arg,false);
+		if(res){
+			auto v = res->asValueExpression();
+			return evaluator->mixin(&mods,reinterpret_cast<Node*>(v->data));
+		}
+	}
+
+	if(!res){
+		Node* position;
+		const char* error;
+		getFailureInfo(evaluator->interpreter(),&position,&error);
+		error(node->location,"Can't interpret %s - Failed to interpret %s(%s) because of %s",node,position,position->location.line(),error?error:"");
+		return ErrorExpression::getInstance();
+	}
+	else return res;
+
 }
 TypeExpression* TuplePtr,* UnitPtr, * UnresolvedPtr, *CallPtr;
 static int precedenceTuple = 20;
@@ -101,5 +125,6 @@ namespace intrinsics {
 		//TODO
 		INTRINSIC_FUNC(mixin)
 		INTRINSIC_FUNC(interpret)
+		INTRINSIC_FUNC(mim)
 	}
 };

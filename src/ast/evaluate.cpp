@@ -107,8 +107,11 @@ struct AstExpander: NodeVisitor {
 	}
 
 	Node* visit(VariableReference* node){
-		if(node->variable->expandMe && !evaluator->isRHS)
-			return node->copyProperties(node->variable->value->duplicate());
+		if(node->variable->expandMe && !evaluator->isRHS){
+			DuplicationModifiers mods;
+			mods.target = evaluator->currentScope();
+			return node->copyProperties(node->variable->value->duplicate(&mods));
+		}
 		return node;
 	}	
 

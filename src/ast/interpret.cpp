@@ -12,6 +12,10 @@
 #include "../intrinsics/types.h"
 
 
+/**
+* Walks the AST node and checks if the node can be interpreted at compile-time.
+* This checks all expressions in the AST node and doesn't account for branches that won't be reached when interpreting
+*/
 struct Interpreter : NodeVisitor {
 
 	Interpreter(InterpreterSettings* settings) {
@@ -22,11 +26,15 @@ struct Interpreter : NodeVisitor {
 		FAILURE //unroll the stack to base
 	};
 	int status;
+	bool clearVars;
+	bool walkEverywhere;
 
 	bool failed() const { return status == FAILURE ; }
 
 	void reset(){
 		status = WALKING;
+		clearVars = true;
+		walkEverywhere = false;
 	}
 
 	Node* failureNode;
@@ -42,11 +50,13 @@ struct Interpreter : NodeVisitor {
 	//Interpreting expressions
 	Node* visit(ReturnExpression* node){
 		auto result = node->value->accept(this);
-		status = RETURN;
+		if(!walkEverywhere) status = RETURN;
 		return result;
 	}
 	Node* visit(VariableReference* node){
-		if(node->variable->value) return node->variable->value;
+		if(node->variable->value){
+			return node->variable->value;
+		}
 		else return fail(node);
 	}
 	Node* visit(AssignmentExpression* node){
@@ -88,8 +98,10 @@ struct Interpreter : NodeVisitor {
 		//intepret body
 		auto result = f->body.accept(this);
 		//Reset arguments' values
-		for(size_t i = 0;i<f->arguments.size();i++){
-			f->arguments[i]->value = nullptr;
+		if(clearVars){
+			for(size_t i = 0;i<f->arguments.size();i++){
+				f->arguments[i]->value = nullptr;
+			}
 		}
 		return result;
 	}
@@ -121,12 +133,14 @@ struct Interpreter : NodeVisitor {
 			else if(status == WALKING) result = new UnitExpression();//return void when no return expressions are present
 		}
 		//Reset the values of variables inside this scope
-		for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
-			if(auto v = dynamic_cast<Variable*>((*i).second)){
-				v->value = nullptr;
+		if(clearVars){
+			for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
+				if(auto v = dynamic_cast<Variable*>((*i).second)){
+					v->value = nullptr;
+				}
 			}
 		}
-		return result;
+		return result;	
 	}
 
 	Node* evaluateIntegerMatch(IntegerLiteral* value,MatchExpression* node){
@@ -150,7 +164,9 @@ struct Interpreter : NodeVisitor {
 	}
 
 	//...
-
+	Node* visit(ErrorExpression* node){
+		return fail(node);
+	}
 };
 
 Interpreter* constructInterpreter(InterpreterSettings* settings){
@@ -161,8 +177,14 @@ Node* interpretNode(Interpreter* interpreter,Node* node){
 	interpreter->reset();
 	return node->accept(interpreter);
 }
-Node* interpretFunctionCall(Interpreter* interpreter,Function* f,Node* parameter){
+bool interpretCheckFunctionCall(Interpreter* interpreter,Function* f,Node* parameter){
 	interpreter->reset();
+	interpreter->walkEverywhere = true;
+	return interpreter->interpretCall(f,parameter) != nullptr;
+}
+Node* interpretFunctionCall(Interpreter* interpreter,Function* f,Node* parameter,bool clearVariables){
+	interpreter->reset();
+	interpreter->clearVars = clearVariables;
 	return interpreter->interpretCall(f,parameter);
 }
 void getFailureInfo(const Interpreter* interpreter,Node** currentNode,const char** extraInfo){

@@ -16,7 +16,8 @@ struct Interpreter;
 
 Interpreter* constructInterpreter(InterpreterSettings* settings);
 Node* interpretNode(Interpreter* interpreter,Node* node);
-Node* interpretFunctionCall(Interpreter* interpreter,Function* f,Node* parameter);
+bool interpretCheckFunctionCall(Interpreter* interpreter,Function* f,Node* parameter);
+Node* interpretFunctionCall(Interpreter* interpreter,Function* f,Node* parameter,bool clearVariables = true);
 void getFailureInfo(const Interpreter* interpreter,Node** currentNode,const char** extraInfo);
 
 

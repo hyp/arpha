@@ -5,6 +5,7 @@
 #include "node.h"
 #include "declarations.h"
 #include "evaluate.h"
+#include "interpret.h"
 #include "../intrinsics/types.h"
 
 //variable
@@ -746,7 +747,16 @@ ConstraintFunction::ConstraintFunction(SymbolID name, Location& location,Scope* 
 }
 bool ConstraintFunction::resolve(Evaluator* evaluator){
 	if(Function::resolve(evaluator)){
-		//TODO validity checks
+		//Report an error if constraint can't be resolved at compile time!
+		if(arguments.size() == 1){
+			auto t = intrinsics::types::Void;
+			if(!interpretCheckFunctionCall(evaluator->interpreter(),this,t)){
+				Node* position;
+				const char* error;
+				getFailureInfo(evaluator->interpreter(),&position,&error);
+				error(position->location,"Constraint %s isn't evaluatable at compile time:\n  Can't evaluate \"%s\" at compile time!",id,position,error?error:"");
+			}
+		}
 		return true;
 	}else return false;
 }
