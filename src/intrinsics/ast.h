@@ -7,6 +7,7 @@
 namespace intrinsics {
 	namespace ast {
 
+		extern IntrinsicType* ExprPtr;
 		extern Function* mixin;
 
 		void init(Scope* moduleScope);

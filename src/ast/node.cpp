@@ -281,13 +281,6 @@ bool CallExpression::isResolved() const {
 	return _resolved;
 }
 Node* CallExpression::duplicate(DuplicationModifiers* mods) const {
-	if(mods->isMixin){
-		if(auto ref = object->asFunctionReference()){
-			if(auto f = ref->function->mixinEvaluator){
-				return copyProperties(f(arg,mods));
-			}
-		}
-	}
 	auto e = new CallExpression(object->duplicate(mods),arg->duplicate(mods));
 	e->_resolved = _resolved;
 	return copyProperties(e);
@@ -396,6 +389,9 @@ TypeExpression* TypeExpression::_returnType() const {
 }
 bool TypeExpression::matchRecord(Record* record) const {
 	return type == RECORD && this->record == record;
+}
+bool TypeExpression::matchPointerIntrinsic(IntrinsicType* intrinsic) const {
+	return type == POINTER && argument->type == INTRINSIC && argument->intrinsic == intrinsic;
 }
 Node* TypeExpression::duplicate(DuplicationModifiers* mods) const {
 	TypeExpression* x;
@@ -597,7 +593,7 @@ ValueExpression::ValueExpression(Node* node,TypeExpression* type){
 bool ValueExpression::isConst() const { return true; }
 TypeExpression* ValueExpression::_returnType() const { return type; }
 Node* ValueExpression::duplicate(DuplicationModifiers* mods) const {
-	return copyProperties(new ValueExpression(reinterpret_cast<Node*>(data)->duplicate(mods),type));
+	return copyProperties(new ValueExpression(reinterpret_cast<Node*>(data)->duplicate(mods),type->duplicate(mods)->asTypeExpression()));
 }
 /**
 * Node tracer
@@ -607,6 +603,11 @@ struct NodeToString: NodeVisitor {
 	std::ostream& stream;
 	NodeToString(std::ostream& ostream) : stream(ostream) {}
 
+	Node* visit(ValueExpression* node){
+		stream<<"A constant value";
+		if(node->type->matchPointerIntrinsic(intrinsics::ast::ExprPtr)) stream<<' '<<reinterpret_cast<Node*>(node->data);
+		return node;
+	}
 	Node* visit(UnresolvedSymbol* node){
 		stream<<node;
 		return node;

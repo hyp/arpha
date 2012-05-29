@@ -34,6 +34,9 @@ public:
 	Node* mixinFunctionCall(CallExpression* node,bool inlined = false);
 	Node* mixinFunction(Location &location,Function* func,Node* arg,bool inlined = false);
 
+	//Used to mixin a value of type Expression* e.g. {> ... <}
+	Node* mixin(DuplicationModifiers* mods,Node* node);
+
 	inline Scope* currentScope() const { return _currentScope; }
 	void currentScope(Scope* scope){ _currentScope = scope; }
 

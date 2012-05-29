@@ -563,7 +563,6 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	if(func->body.scope->numberOfDefinitions() <= func->arguments.size() && func->body.children.size() == 1){
 		if(auto ret = func->body.children[0]->asReturnExpression()){
 			debug("SimpleForm");
-			mods.isMixin = true;
 			auto result = eval(ret->value->duplicate(&mods));
 			forcedToEvaluate = oldForcedToEvaluate;
 			return result;
@@ -571,7 +570,6 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	}
 	//Mixin definitions
 	func->body.scope->duplicate(&mods);
-	mods.isMixin = true;
 	//inline body
 	if(!func->_returnType.isResolved() || !func->returnType()->isSame(intrinsics::types::Void)){
 		auto varName = std::string(inlined ? "_inlined_" : "_mixined_") + std::string(func->id.ptr());
@@ -596,6 +594,31 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
 	assert(node->isResolved());
 	return mixinFunction(node->location,node->object->asFunctionReference()->function,node->arg,inlined);
+}
+Node* Evaluator::mixin(DuplicationModifiers* mods,Node* node){
+	auto oldForcedToEvaluate = forcedToEvaluate;
+	forcedToEvaluate = true;
+	mods->target = currentScope();
+	Node* resultingExpression;
+	if(auto block = node->asBlockExpression()){
+		//Mixin definitions
+		block->scope->duplicate(mods);
+		//Mixin body
+		//If block contains only one expression we simplify it
+		if(block->children.size() == 1) resultingExpression = block->children[0]->duplicate(mods);
+		else {
+			auto b = new BlockExpression(new Scope(currentScope()));
+			block->_duplicate(b,mods);
+			resultingExpression = b;
+		}
+	}
+	else resultingExpression = node->duplicate(mods); //no block
+	resultingExpression->location = mods->location;
+	//Evaluate the result
+	resultingExpression = eval(resultingExpression);
+	//TODO evaluate definitons?
+	forcedToEvaluate = oldForcedToEvaluate;
+	return resultingExpression;
 }
 
 //Evaluates the verifier to see if an expression satisfies a constraint

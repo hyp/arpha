@@ -36,30 +36,6 @@ macro range(begin,end) syntax(begin,precedence(precedence.index) "..",end) = beg
 macro array(elements) syntax("[",elements,"]") = elements
 
 
-
-
-# TODO proper and argument name
-macro for(sequence,body) syntax("for","(","i","in",sequence,")",body) {
-#
-	var r = sequence.begin()
-	while(r != sequence.end()){
-		arpha.ast.defineVariable("i") = r
-		body
-		r.inc()
-	}
-#
-	def i = 1
-	body
-}
-
-# TODO generation + name
-macro unittest(body) syntax("unittest",body) {
-	def test() {
-		#print("Running unittest")
-		body
-	}
-}
-
 # Returns true if two given types are the same type. TOCONSIDER move to compiler
 def equals(x Type,y Type) bool
 
@@ -74,40 +50,10 @@ macro sizeof(expression) uint32
 # It is equivalent to size_t from C/C++.
 def natural = if(true) uint32 else uint64
 
-#
-# Literal constant strings
-def stringLiteral = String #HACK type "String" is temporary for now
-#
-
 import export operators
 
-import export qualified ast
+import export ast
 
 import export qualified compiler
 
 import export operations
-
-# TODO
-macro new(T Type,expression) syntax("new",precedence(precedence.call) T,optional("(",expression,")")) {
-	#
-	match equals(T,int32) {
-		to(true) 1
-		to(false) ()
-	}
-	def ptr *T = allocate(T,1) #= allocate(T,1) #TODO sizeof(T)
-	construct(ptr) #TODO args
-	return ptr
-	#
-	return 2
-}
-
-## Is TODO T Type check
-macro is(expression,T) syntax(expression,precedence(precedence.isas) "is", precedence(precedence.isas) T) = typeof(expression) == T
-
-#
-
-# Real assert #TODO(Lates) implementation
-def assert(file stringLiteral,line natural,expression stringLiteral)
-# Wrapper, currently implemented by compiler
-def assert(expression compiler.Expression)
-#

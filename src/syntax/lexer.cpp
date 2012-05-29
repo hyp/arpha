@@ -35,7 +35,8 @@ Token Lexer::consume(){
 		location.lineNumber++;
 		ptr++;	
 	}
-	else if(*ptr ==';' || *ptr == '(' || *ptr==')' || *ptr == ',' || *ptr == '{' || *ptr == '}' || *ptr == ':'){
+	else if(*ptr ==';' || *ptr == '(' || *ptr==')' || *ptr == ',' || *ptr == ':'){
+
 		token.symbol = SymbolID(ptr,1);
 		ptr++;
 		token.type = Token::Symbol;

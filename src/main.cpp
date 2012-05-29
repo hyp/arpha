@@ -824,6 +824,22 @@ namespace intrinsics {
 	}
 }
 
+struct CaptureParser : PrefixDefinition {
+	CaptureParser(): PrefixDefinition("{>",Location()) {}
+
+	Node* parse(Parser* parser){
+		blockParser->closingBrace = "<}";
+		auto res = new ValueExpression(blockParser->parse(parser),new TypeExpression((PointerType*)nullptr,intrinsics::ast::ExprPtr->reference()));
+		blockParser->closingBrace = "}";
+		return res;
+	}
+};
+
+void astInit(Scope* moduleScope){
+	moduleScope->define(new CaptureParser);
+	intrinsics::ast::init(moduleScope);
+}
+
 void arpha::defineCoreSyntax(Scope* scope){
 	Location location(0,0);
 	::arpha::scope = scope;
@@ -853,7 +869,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 
 	compiler::registerResolvedIntrinsicModuleCallback("arpha/arpha",arphaPostInit);
 
-	compiler::registerResolvedIntrinsicModuleCallback("arpha/ast/ast",intrinsics::ast::init);
+	compiler::registerResolvedIntrinsicModuleCallback("arpha/ast/ast",astInit);
 	compiler::registerResolvedIntrinsicModuleCallback("arpha/types",intrinsics::types::init);
 	compiler::registerResolvedIntrinsicModuleCallback("arpha/compiler/compiler",intrinsics::compiler::init);
 	compiler::registerResolvedIntrinsicModuleCallback("arpha/operations",intrinsics::operations::init);

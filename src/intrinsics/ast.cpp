@@ -14,22 +14,16 @@
 	x->intrinsicEvaluator = &::x;
 
 Node* mixin(CallExpression* node,Evaluator* evaluator){
-	if(auto call = node->arg->asCallExpression()){
-		return evaluator->mixinFunctionCall(call);
+	if(auto call = node->arg->asValueExpression()){
+		DuplicationModifiers mods;
+		mods.location = node->location;
+		return evaluator->mixin(&mods,reinterpret_cast<Node*>(call->data));
 	}else{
-		error(node->location,"Mixin expression expects to recieve an call to a function as an argument!");
+		error(node->location,"Mixin expression expects to recieve a *Expression as an argument!");
 	}
 	return node;
 }
-Node* defineVariable(CallExpression* node,Evaluator* evaluator){
-	auto tuple = node->arg->asTupleExpression();
-	auto str = tuple->children[0]->asStringLiteral();
-	auto var = new Variable(SymbolID(str->block.ptr(),str->block.length()),node->location,evaluator->currentScope()->functionOwner()!=nullptr);
-	evaluator->currentScope()->define(var);
-	//TODO type and isMutable
-	return new VariableReference(var);
-}
-TypeExpression* ExprPtr,* TuplePtr,* UnitPtr, * UnresolvedPtr, *CallPtr;
+TypeExpression* TuplePtr,* UnitPtr, * UnresolvedPtr, *CallPtr;
 static int precedenceTuple = 20;
 
 
@@ -57,15 +51,6 @@ struct NewMacro : PrefixDefinition {
 	}
 };
 
-struct CaptureExpression : PrefixDefinition {
-	CaptureExpression(): PrefixDefinition("`",Location()) {}
-
-	Node* parse(Parser* parser){
-		auto res = new ValueExpression(parser->parse(),ExprPtr);
-		parser->expect("`");
-		return res;
-	}
-};
 
 Node* createUnit(Node* args,DuplicationModifiers* mods){
 	return new ValueExpression(new UnitExpression(),UnitPtr);
@@ -84,16 +69,16 @@ Node* createCall(Node* args,DuplicationModifiers* mods){
 
 
 namespace intrinsics {
+	IntrinsicType* ast::ExprPtr = nullptr;
 	Function* ast::mixin = nullptr;
 
 
 	void ast::init(Scope* moduleScope){
 
 		moduleScope->define(new NewMacro);
-		moduleScope->define(new CaptureExpression);
 
 		auto e = new IntrinsicType("Expression",Location(),nullptr);
-		ExprPtr = new TypeExpression((PointerType*)nullptr,e->reference());
+		ExprPtr = e;
 		moduleScope->define(e);
 
 #define ExprType(T) \
@@ -114,7 +99,6 @@ namespace intrinsics {
 		ExprType(Call)
 		//TODO
 		INTRINSIC_FUNC(mixin)
-		INTRINSIC_FUNC(defineVariable)
 
 	}
 };

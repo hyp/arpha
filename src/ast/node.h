@@ -70,14 +70,13 @@ struct Node;
 struct DuplicationModifiers {
 	Location location;
 	Scope* target;
-	bool isMixin;
 
 	//The bool indicates whether the redirector is expression(true) or a definition(false)
 	std::map<void*,std::pair<void*,bool> > redirectors;//Used to redirect references for duplicated definitions
 	
 	Variable* returnValueRedirector;//The variable to which the return value is assigned in inlined and mixined functions
 
-	DuplicationModifiers() : returnValueRedirector(nullptr),isMixin(false) {}
+	DuplicationModifiers() : returnValueRedirector(nullptr) {}
 };
 
 //An AST node
@@ -211,6 +210,7 @@ struct TypeExpression : Node {
 	bool isResolved() const;
 	bool isConst() const;
 	bool matchRecord(Record* record) const;
+	bool matchPointerIntrinsic(IntrinsicType* intrinsic) const;
 	TypeExpression* _returnType() const;
 	size_t size() const;
 

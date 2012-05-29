@@ -10,7 +10,7 @@
 # Duplicates a given expression
 #def duplicate(expression Expression) Expression
 # Mixins a given expression into the AST
-def mixin(expression)
+macro mixin(expression)
 
 def defineVariable(name,type = nothing,isMutable = true)
 
