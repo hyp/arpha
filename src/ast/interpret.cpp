@@ -129,6 +129,28 @@ struct Interpreter : NodeVisitor {
 		return result;
 	}
 
+	Node* evaluateIntegerMatch(IntegerLiteral* value,MatchExpression* node){
+		
+		//TODO
+		for(auto i =node->cases.begin();i!=node->cases.end();i++){
+			auto intLiteral = (*i).pattern->asIntegerLiteral();
+			assert(intLiteral);
+			if(value->integer == intLiteral->integer) return (*i).consequence;
+		}
+		return node;
+	}
+	Node* visit(MatchExpression* node){
+		auto obj = node->object->accept(this);
+		if(status == FAILURE) return nullptr;
+		if(auto intLiteral = obj->asIntegerLiteral()){
+			auto branch = evaluateIntegerMatch(intLiteral,node);
+			return branch->accept(this);//TODO check if all cases can be interpreted..
+		}
+		return fail(node);
+	}
+
+	//...
+
 };
 
 Interpreter* constructInterpreter(InterpreterSettings* settings){

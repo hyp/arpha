@@ -163,8 +163,8 @@ Node* Function::parse(Parser* parser){
 	assert(false);
 	return nullptr;//TODO remove?
 }
-Node* Constraint::parse(Parser* parser){
-	return new FunctionReference(verifier);
+Node* ConstraintFunction::parse(Parser* parser){
+	return new FunctionReference(this);
 }
 
 Node* Overloadset::parse(Parser* parser){

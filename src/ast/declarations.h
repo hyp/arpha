@@ -191,6 +191,7 @@ struct Overloadset: public PrefixDefinition {
 // Return type is infered by default
 
 struct Function: public PrefixDefinition {
+
 	Function(SymbolID name,Location& location,Scope* bodyScope);
 	
 	Node* parse(Parser* parser);
@@ -226,21 +227,22 @@ struct Function: public PrefixDefinition {
 	bool _argsResolved;
 	bool _mixinOnCall;
 	bool _resolved;
+
+	int setProperty(int id);
+	int getProperty(int id);
+	
 private:
+	int properties;
 	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
 	
 	
 };
 
-struct Constraint : PrefixDefinition {
-	Constraint(SymbolID name, Location& location);
+struct ConstraintFunction : Function {
+	ConstraintFunction(SymbolID name, Location& location,Scope* scope);
 
-	bool isResolved();
 	bool resolve(Evaluator* evaluator);
-
 	Node* parse(Parser* parser);
-
-	Function* verifier;//Checks if a given type matches this constraint
 };
 
 // A single node in an import symbol tree

@@ -517,14 +517,10 @@ struct ConstraintParser: PrefixDefinition {
 	Node* parse(Parser* parser){
 		auto location = parser->previousLocation();
 		auto name = parser->expectName();
-		auto constraint = new Constraint(name,location);
-		parser->currentScope()->define(constraint);
-		//Function
 		auto bodyScope = new Scope(parser->currentScope());
-		auto func = new Function(name,location,bodyScope);
-		constraint->verifier = func;
-		//if(macro) func->_mixinOnCall = true;
-		bodyScope->_functionOwner = func;
+		auto constraint = new ConstraintFunction(name,location,bodyScope);
+		parser->currentScope()->define(constraint);
+		bodyScope->_functionOwner = constraint;
 
 		auto oldScope = parser->currentScope();
 		parser->currentScope(bodyScope);
@@ -532,21 +528,21 @@ struct ConstraintParser: PrefixDefinition {
 		parser->expect("(");
 		auto param = new Argument(parser->expectName(),parser->previousLocation());
 		param->type.infer(intrinsics::types::Type->duplicate()->asTypeExpression());
-		func->arguments.push_back(param);
+		constraint->arguments.push_back(param);
 		bodyScope->define(param);
 
 		if(parser->match(",")){
 			auto param = new Argument(parser->expectName(),parser->previousLocation());
 			param->type.kind = InferredUnresolvedTypeExpression::Wildcard;
-			func->arguments.push_back(param);
+			constraint->arguments.push_back(param);
 			bodyScope->define(param);
 		}
 		parser->expect(")");
-		func->_returnType = intrinsics::types::boolean->duplicate()->asTypeExpression();
+		constraint->_returnType = intrinsics::types::boolean->duplicate()->asTypeExpression();
 
-		DefParser::functionBody(func,parser,false);
+		DefParser::functionBody(constraint,parser,false);
 		parser->currentScope(oldScope);
-		func->resolve(parser->evaluator());
+		constraint->resolve(parser->evaluator());
 		return new UnitExpression();
 	}
 };
@@ -788,13 +784,13 @@ Node* createWhile(Parser*,Node** expr,size_t numNodes){
 void arphaPostInit(Scope* moduleScope){
 	auto x = ensure( ensure(moduleScope->lookupPrefix("equals"))->asOverloadset() )->functions[0];
 	x->constInterpreter = equals;
-	x = ensure( ensure(moduleScope->lookupPrefix("typeof"))->asOverloadset() )->functions[0];
+	/*x = ensure( ensure(moduleScope->lookupPrefix("typeof"))->asOverloadset() )->functions[0];
 	x->intrinsicEvaluator = _typeof;
 	x = ensure( ensure(moduleScope->lookupPrefix("sizeof"))->asOverloadset() )->functions[0];
 	x->intrinsicEvaluator = _sizeof;
 
 	auto macro = ensure( dynamic_cast<PrefixMacro*>( ensure(moduleScope->containsPrefix("while")) ) );
-	macro->syntax->intrinsicEvaluator = createWhile;
+	macro->syntax->intrinsicEvaluator = createWhile;*/
 	//ensure( dynamic_cast<InfixMacro*>( ensure(moduleScope->containsInfix("(")) ) )->syntax->intrinsicEvaluator = createCall;
 }
 void coreSyntaxPostInit(Scope* moduleScope){
@@ -826,12 +822,14 @@ namespace intrinsics {
 }
 
 struct CaptureParser : PrefixDefinition {
-	CaptureParser(): PrefixDefinition("{>",Location()) {}
+	BlockParser* blockParser;
+	CaptureParser(): PrefixDefinition("{>",Location()) {
+		blockParser = new BlockParser;
+		blockParser->closingBrace = "<}"; 
+	}
 
 	Node* parse(Parser* parser){
-		blockParser->closingBrace = "<}";
 		auto res = new ValueExpression(blockParser->parse(parser),new TypeExpression((PointerType*)nullptr,intrinsics::ast::ExprPtr->reference()));
-		blockParser->closingBrace = "}";
 		return res;
 	}
 };

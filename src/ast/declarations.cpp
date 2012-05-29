@@ -534,7 +534,17 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 	_hasReturnInside = false;
 	_mixinOnCall = false;
 	constInterpreter = nullptr;
+	properties = 0;
 }
+int Function::getProperty(int id){
+	return int((properties & id) != 0);
+}
+int Function::setProperty(int id){
+	auto v = getProperty(id);
+	properties|=id;
+	return v;
+}
+
 Scope* Function::owner() const {
 	return body.scope->parent;
 }
@@ -568,7 +578,7 @@ bool Function::resolve(Evaluator* evaluator){
 				if((*i)->type.kind == InferredUnresolvedTypeExpression::Unresolved && (*i)->type.unresolvedExpression->asFunctionReference()){
 					//Constrained argument
 					Function* func = (*i)->type.unresolvedExpression->asFunctionReference()->function;
-					if( !((func->arguments.size() == 1 || func->arguments.size() == 2) && func->arguments[0]->type.type()->isSame(intrinsics::types::Type) && func->returnType()->isSame(intrinsics::types::boolean)) ) _resolved = false;
+					if(!(func->isResolved() && dynamic_cast<ConstraintFunction*>(func))) _resolved = false;
 					else {
 						debug("Constrained argument :: %s!",func->id);
 						(*i)->type.kind = InferredUnresolvedTypeExpression::Wildcard;
@@ -719,6 +729,7 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	mods->target = oldTarget;
 	mods->returnValueRedirector = oldRed;
 
+	func->properties = properties;
 	func->_resolved = _resolved;
 	func->_argsResolved = _argsResolved;
 	func->_hasReturnInside = _hasReturnInside;
@@ -731,13 +742,13 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 
 
 //Constraint
-Constraint::Constraint(SymbolID name, Location& location) : PrefixDefinition(name,location) {
+ConstraintFunction::ConstraintFunction(SymbolID name, Location& location,Scope* scope) : Function(name,location,scope) {
 }
-bool Constraint::isResolved(){
-	return verifier->isResolved();
-}
-bool Constraint::resolve(Evaluator* evaluator){
-	return verifier->resolve(evaluator);
+bool ConstraintFunction::resolve(Evaluator* evaluator){
+	if(Function::resolve(evaluator)){
+		//TODO validity checks
+		return true;
+	}else return false;
 }
 
 //Imported scope

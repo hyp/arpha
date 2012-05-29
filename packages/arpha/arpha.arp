@@ -11,9 +11,10 @@ import qualified precedence
 def false bool = 0
 def true bool = 1
 
-macro parentheses(expression) syntax("(",optional(expression),")") = expression
+import export ast
 
-macro nothing() syntax("nothing") = ()
+macro parentheses(expression) syntax("(",optional(expression),")") = {> expression <}
+
 	
 #macro call(object,argument) syntax(object,precedence(precedence.call) "(",optional(argument),")")
 
@@ -24,36 +25,36 @@ macro nothing() syntax("nothing") = ()
 macro while(condition,body) syntax("while","(",condition,")",body)
 
 macro if(condition,consequence,alternative) syntax("if","(",condition,")",consequence,optional("else",alternative)) {
-	return match condition {
+	return {> match condition {
 		to(true) consequence
 		to(false) alternative
-	}
+	} <}
 }
 
 #TODO tuple generation, precedence
-macro range(begin,end) syntax(begin,precedence(precedence.index) "..",end) = begin
+macro range(begin,end) syntax(begin,precedence(precedence.index) "..",end) = {> begin <}
 #TODO array expr, typechecks
-macro array(elements) syntax("[",elements,"]") = elements
+macro array(elements) syntax("[",elements,"]") = {> elements <}
 
 
 # Returns true if two given types are the same type. TOCONSIDER move to compiler
 def equals(x Type,y Type) bool
 
 # Returns the type of a given expression.
-macro typeof(expression) Type
+#macro typeof(expression) Type
 
 # Returns the size(in bytes) of a given type. If an expression was given instead, returns the size of that expression's type.
-macro sizeof(expression) uint32
+#macro sizeof(expression) uint32
 
 
 # An unsigned integer representing CPU's word.
 # It is equivalent to size_t from C/C++.
-def natural = if(true) uint32 else uint64
+#def natural = if(true) uint32 else uint64
 
-import export operators
+#import export operators
 
-import export ast
 
-import export qualified compiler
 
-import export operations
+#import export qualified compiler
+
+#import export operations

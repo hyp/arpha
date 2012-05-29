@@ -14,8 +14,6 @@ macro mixin(expression)
 
 macro interpret(expression)
 
-def defineVariable(name,type = nothing,isMutable = true)
-
 
 
 

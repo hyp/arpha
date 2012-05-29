@@ -1,4 +1,5 @@
 # temporary module used to test how function calls get resolved with constraints
+# TODO get interpreter working on them again
 
 constraint Integer(T) = T == int32
 def f(x Integer) = 1
