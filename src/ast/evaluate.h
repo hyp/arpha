@@ -8,8 +8,11 @@
 struct Node;
 struct Scope;
 
+struct Interpreter;
+
 struct Evaluator {
 private:
+	Interpreter* _interpreter;
 	Scope* _currentScope;
 	bool reportUnevaluated;
 	
@@ -24,7 +27,7 @@ public:
 
 	size_t unresolvedExpressions;
 
-	Evaluator() : forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {}
+	Evaluator(Interpreter* interpreter);
 
 	Node* eval(Node* node);
 	// Resolves expressions and definitions in a module using multiple passes
@@ -39,6 +42,7 @@ public:
 
 	inline Scope* currentScope() const { return _currentScope; }
 	void currentScope(Scope* scope){ _currentScope = scope; }
+	inline Interpreter* interpreter() const { return _interpreter; }
 
 	void markUnresolved(Node* node);
 	void markUnresolved(PrefixDefinition* node);

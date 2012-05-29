@@ -216,6 +216,7 @@ struct Function: public PrefixDefinition {
 
 	InferredUnresolvedTypeExpression _returnType;
 	BlockExpression body;
+	Node* (*constInterpreter)(Function* function,Node* parameters); //Can be null. Used to interpret the function with const parameters.
 	Node* (*intrinsicEvaluator)(CallExpression*,Evaluator* evaluator); //Can be null. Used for compile time arithmetics etc.
 	Node* (*mixinEvaluator)(Node* args,DuplicationModifiers* evaluator); //Can be null. Used for intrinsic functions like creation of AST nodes evaluated when macroes are being mixined
 	std::vector<Argument*> arguments;

@@ -533,6 +533,7 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 	_resolved = false;
 	_hasReturnInside = false;
 	_mixinOnCall = false;
+	constInterpreter = nullptr;
 }
 Scope* Function::owner() const {
 	return body.scope->parent;

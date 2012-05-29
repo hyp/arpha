@@ -13,7 +13,7 @@ struct Scope;
 
 struct Parser : Lexer {
 
-	Parser(const char* src);
+	Parser(const char* src,Evaluator* evaluator);
 
 	void expect(SymbolID token);
 	SymbolID expectName();
@@ -26,19 +26,18 @@ struct Parser : Lexer {
 	/// Resolve symbols, find the matching function call overloads, constant fold
 	Node* evaluate(Node* node);
 
-	
 
 	//Current parsing state
 	Token  lookedUpToken;
 private:
 	Scope* _currentScope;
-	Evaluator firstRoundEvaluator;
+	Evaluator* _evaluator;
 	
 public:
 	SymbolID labelForNextNode;
 
 	inline Scope* currentScope() const { return _currentScope; }
-	inline Evaluator* evaluator() { return &firstRoundEvaluator; }
+	inline Evaluator* evaluator() const { return _evaluator; }
 	void currentScope(Scope* scope);
 };
 

@@ -23,6 +23,22 @@ Node* mixin(CallExpression* node,Evaluator* evaluator){
 	}
 	return node;
 }
+#include "../ast/interpret.h"
+Node* interpret(CallExpression* node,Evaluator* evaluator){
+	if(auto call = node->arg->asCallExpression()){
+		auto res = interpretFunctionCall(evaluator->interpreter(),call->object->asFunctionReference()->function,call->arg);
+		if(!res){
+			Node* position;
+			const char* error;
+			getFailureInfo(evaluator->interpreter(),&position,&error);
+			error(node->location,"Can't interpret %s - Failed to interpret %s(%s) because of %s",node,position,position->location.line(),error?error:"");
+		}
+		else return res;
+	}else{
+		error(node->location,"Mixin expression expects to recieve a *Expression as an argument!");
+	}
+	return node;
+}
 TypeExpression* TuplePtr,* UnitPtr, * UnresolvedPtr, *CallPtr;
 static int precedenceTuple = 20;
 
@@ -52,20 +68,6 @@ struct NewMacro : PrefixDefinition {
 };
 
 
-Node* createUnit(Node* args,DuplicationModifiers* mods){
-	return new ValueExpression(new UnitExpression(),UnitPtr);
-}
-Node* createTuple(Node* args,DuplicationModifiers* mods){
-	return new ValueExpression(new TupleExpression(),TuplePtr);
-}
-Node* createUnresolved(Node* args,DuplicationModifiers* mods){
-	return new UnitExpression();
-}
-Node* createCall(Node* args,DuplicationModifiers* mods){
-	return new UnitExpression();
-}
-
-
 
 
 namespace intrinsics {
@@ -89,7 +91,6 @@ namespace intrinsics {
 		auto f = new Function(#T,Location(),nullptr); \
 		f->_returnType.infer(T##Ptr); \
 		f->_resolved = true; \
-		f->mixinEvaluator = create##T; \
 		x->construct = f; \
 		}
 
@@ -99,6 +100,6 @@ namespace intrinsics {
 		ExprType(Call)
 		//TODO
 		INTRINSIC_FUNC(mixin)
-
+		INTRINSIC_FUNC(interpret)
 	}
 };

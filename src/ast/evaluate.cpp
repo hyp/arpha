@@ -6,6 +6,7 @@
 #include "declarations.h"
 #include "visitor.h"
 #include "evaluate.h"
+#include "interpret.h"
 #include "../intrinsics/ast.h"
 #include "../intrinsics/types.h"
 
@@ -21,6 +22,9 @@ Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
 		error(loc,"Expected an expression of type %s instead of %s of type %s",expectedType,expression,expression->_returnType());
 		return expression;
 	}
+}
+
+Evaluator::Evaluator(Interpreter* interpreter) : _interpreter(interpreter),forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {
 }
 
 
@@ -80,8 +84,8 @@ struct AstExpander: NodeVisitor {
 				}
 				node->object = new FunctionReference(func);
 				node->_resolved = true;
-				if(auto f = func->intrinsicEvaluator){
-					if(node->arg->isConst()) return f(node,evaluator);
+				if(auto f = func->constInterpreter){
+					if(node->arg->isConst()) return f(func,node->arg);
 				}
 				return node;
 			}else{
@@ -89,8 +93,8 @@ struct AstExpander: NodeVisitor {
 			}
 		}
 		else if(auto callingFunc = node->object->asFunctionReference()){
-			if(auto f = callingFunc->function->intrinsicEvaluator){
-				if(node->arg->isConst()) return f(node,evaluator);
+			if(auto f = callingFunc->function->constInterpreter){
+				if(node->arg->isConst()) return f(callingFunc->function,node->arg);
 			}
 			return node;	//TODO eval?
 		}
@@ -624,17 +628,17 @@ Node* Evaluator::mixin(DuplicationModifiers* mods,Node* node){
 //Evaluates the verifier to see if an expression satisfies a constraint
 int satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* verifier){
 	auto args = verifier->arguments.size() == 1 ? static_cast<Node*>(arg->_returnType()) : new TupleExpression(arg->_returnType(),arg);
-	auto result = evaluator->mixinFunction(Location(),verifier,args,false);
-	if(auto resolved = result->asIntegerLiteral()){
-		assert(result->_returnType()->isSame(intrinsics::types::boolean));
-		evaluator->mixinedExpression = nullptr;//delete useless block
-		return resolved->integer.isZero() ? -1 : (verifier->arguments.size() == 1 ? 0 : 1);
-	}else{
-		evaluator->mixinedExpression = nullptr;//delete useless block
-		error(arg->location,"Can't evaluate constraint %s with argument %s at compile time!",verifier,arg);
-		return -1;
+	auto result = interpretFunctionCall(evaluator->interpreter(),verifier,args);
+	if(result){
+		if(auto resolved = result->asIntegerLiteral()){
+			assert(result->_returnType()->isSame(intrinsics::types::boolean));
+			return resolved->integer.isZero() ? -1 : (verifier->arguments.size() == 1 ? 0 : 1);
+		}
 	}
+	error(arg->location,"Can't evaluate constraint %s with argument %s at compile time!",verifier,arg);
+	return -1;
 }
+
 //Analyze the function's code to check if the parameter is
 bool Function::canAcceptLocalParameter(size_t argument){
 	return true;//TODO
@@ -767,7 +771,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 
 	if(!func->mixinOnCall()){//Macro optimization, so that we dont duplicate unnecessary
 		//Determine the function?
-		if(determinedFunction && !func->intrinsicEvaluator){
+		if(determinedFunction && !func->intrinsicEvaluator && !func->constInterpreter){
 			DuplicationModifiers mods;
 			mods.target = func->owner();
 			mods.location = arg->location;
@@ -780,7 +784,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			*function = f;
 		}
 
-		if((*function)->canExpandAtCompileTime() && !(*function)->intrinsicEvaluator){
+		if((*function)->canExpandAtCompileTime() && !(*function)->intrinsicEvaluator && !func->constInterpreter){
 			DuplicationModifiers mods;
 			mods.target = (*function)->owner();
 			mods.location = arg->location;

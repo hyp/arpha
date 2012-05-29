@@ -101,6 +101,8 @@ struct Scope: memory::ManagedDefinition {
 
 	size_t numberOfDefinitions() const;
 
+	std::map<SymbolID,PrefixDefinition*> prefixDefinitions;
+	std::map<SymbolID,InfixDefinition*> infixDefinitions;
 private:
 
 	bool _resolved;
@@ -108,8 +110,6 @@ private:
 	std::vector<std::pair<Scope*,std::pair<SymbolID,bool> > > exportedImports;
 	std::vector<ImportedScope*> broadcastedImports;
 
-	std::map<SymbolID,PrefixDefinition*> prefixDefinitions;
-	std::map<SymbolID,InfixDefinition*> infixDefinitions;
 	void reach();
 };
 

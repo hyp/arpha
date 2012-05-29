@@ -7,6 +7,7 @@
 #include "ast/node.h"
 #include "ast/declarations.h"
 #include "ast/evaluate.h"
+#include "ast/interpret.h"
 #include "syntax/parser.h"
 #include "intrinsics/ast.h"
 #include "intrinsics/types.h"
@@ -758,8 +759,8 @@ struct CommandParser: PrefixDefinition {
 };
 
 //TODO refactor
-Node* equals(CallExpression* node,Evaluator* evaluator){
-	auto t = node->arg->asTupleExpression();
+Node* equals(Function* function,Node* parameters){
+	auto t = parameters->asTupleExpression();
 	auto e = new IntegerLiteral(BigInt((int64) t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()) ));
 	e->_type = intrinsics::types::boolean;
 	return e;
@@ -786,7 +787,7 @@ Node* createWhile(Parser*,Node** expr,size_t numNodes){
 
 void arphaPostInit(Scope* moduleScope){
 	auto x = ensure( ensure(moduleScope->lookupPrefix("equals"))->asOverloadset() )->functions[0];
-	x->intrinsicEvaluator = equals;
+	x->constInterpreter = equals;
 	x = ensure( ensure(moduleScope->lookupPrefix("typeof"))->asOverloadset() )->functions[0];
 	x->intrinsicEvaluator = _typeof;
 	x = ensure( ensure(moduleScope->lookupPrefix("sizeof"))->asOverloadset() )->functions[0];
@@ -801,15 +802,15 @@ void coreSyntaxPostInit(Scope* moduleScope){
 }
 namespace intrinsics {
 	namespace operations {
-		Node* boolOr(CallExpression* node,Evaluator* evaluator){
-			auto t = node->arg->asTupleExpression();
+		Node* boolOr(Function* function,Node* parameters){
+			auto t = parameters->asTupleExpression();
 			auto result = (!t->children[0]->asIntegerLiteral()->integer.isZero()) || (!t->children[1]->asIntegerLiteral()->integer.isZero());
 			auto e = new IntegerLiteral(BigInt((uint64)(result?1:0)));
 			e->_type = intrinsics::types::boolean;
 			return e;
 		}
-		Node* boolAnd(CallExpression* node,Evaluator* evaluator){
-			auto t = node->arg->asTupleExpression();
+		Node* boolAnd(Function* function,Node* parameters){
+			auto t = parameters->asTupleExpression();
 			auto result = (!t->children[0]->asIntegerLiteral()->integer.isZero()) && (!t->children[1]->asIntegerLiteral()->integer.isZero());
 			auto e = new IntegerLiteral(BigInt((uint64)(result?1:0)));
 			e->_type = intrinsics::types::boolean;
@@ -817,9 +818,9 @@ namespace intrinsics {
 		}
 		void init(Scope* moduleScope){
 			auto x = ensure( ensure(moduleScope->lookupPrefix("or"))->asOverloadset() )->functions[0];
-			x->intrinsicEvaluator = boolOr;
+			x->constInterpreter = boolOr;
 			x = ensure( ensure(moduleScope->lookupPrefix("and"))->asOverloadset() )->functions[0];
-			x->intrinsicEvaluator = boolAnd;
+			x->constInterpreter = boolAnd;
 		};
 	}
 }
@@ -893,9 +894,13 @@ namespace compiler {
 
 	std::map<std::string,void (*)(Scope*)> postCallbacks;
 
+
 	void registerResolvedIntrinsicModuleCallback(const char* name,void (* f)(Scope*)){
 		postCallbacks[packageDir+"/"+name+".arp"] = f;
 	}
+
+	Interpreter* interpreter;
+
 
 	ModulePtr newModule(const char* moduleName,const char* source){
 		Module module = {};
@@ -920,7 +925,8 @@ namespace compiler {
 		}
 		currentModule->second.scope = scope;
 
-		Parser parser(source);
+		Evaluator evaluator(interpreter);
+		Parser parser(source,&evaluator);
 		currentModule->second.body = parseModule(&parser,scope);
 
 		auto cb = postCallbacks.find(moduleName);
@@ -976,6 +982,7 @@ namespace compiler {
 	size_t wordSize,pointerSize;
 
 	void init(){
+		interpreter = constructInterpreter(nullptr);
 		currentModule = modules.end();
 		packageDir = "D:/alex/projects/parser/packages";
 		

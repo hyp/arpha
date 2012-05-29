@@ -8,12 +8,12 @@
 #include "../compiler.h"
 #include "../intrinsics/types.h"
 
-Parser::Parser(const char* src) : Lexer(src) {  
+Parser::Parser(const char* src,Evaluator* evaluator) : Lexer(src),_evaluator(evaluator) {  
 }
 
 void Parser::currentScope(Scope* scope){
 	_currentScope=scope;
-	firstRoundEvaluator.currentScope(scope);
+	_evaluator->currentScope(scope);
 }
 
 void Parser::expect(SymbolID token){
@@ -48,7 +48,7 @@ SymbolID Parser::expectName(){
 }
 
 Node* Parser::evaluate(Node* node){
-	return firstRoundEvaluator.eval(node);
+	return _evaluator->eval(node);
 }
 
 
