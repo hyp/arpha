@@ -48,8 +48,12 @@ bool IntegerLiteral::isConst() const {
 StringLiteral::StringLiteral(memory::Block& block){
 	this->block.aquire(block);
 }
+#include <cstring>
+StringLiteral::StringLiteral(SymbolID symbol){
+	block.construct(symbol.ptr(),strlen(symbol.ptr()));
+}
 TypeExpression* StringLiteral::_returnType() const{
-	return intrinsics::types::int32;//TODO
+	return intrinsics::types::StringLiteral->reference();//TODO
 }
 Node* StringLiteral::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new StringLiteral(block.duplicate()));
@@ -62,6 +66,9 @@ bool StringLiteral::isConst() const {
 // Unit expression
 TypeExpression* UnitExpression::_returnType() const {
 	return intrinsics::types::Void;
+}
+bool UnitExpression::isConst() const {
+	return true;
 }
 Node* UnitExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new UnitExpression);
@@ -102,7 +109,7 @@ TypeExpression* VariableReference::_returnType() const {
 Node* VariableReference::duplicate(DuplicationModifiers* mods) const {
 	if(mods->isMacroMixin && variable->value){
 		if(auto v = variable->value->asValueExpression()){
-			if(v->type->matchPointerIntrinsic(intrinsics::ast::ExprPtr)){
+			if(v->type->isSame(intrinsics::ast::ExprPtr)){
 				//Simplify blocks
 				auto node = reinterpret_cast<Node*>(v->data);
 				if(auto block = node->asBlockExpression()){
@@ -227,7 +234,7 @@ TypeExpression* MatchExpression::_returnType() const {
 	return intrinsics::types::Void;//TODO
 }
 bool MatchExpression::isResolved() const {
-	return false;
+	return false;//Todo
 }
 Node* MatchExpression::duplicate(DuplicationModifiers* mods) const{
 	auto dup = new MatchExpression(object->duplicate(mods));
@@ -470,8 +477,10 @@ int TypeExpression::canAssignFrom(Node* expression,TypeExpression* type){
 	else if(this->type == INTEGER && type->type == INTEGER){
 		//literal integer constants.. check to see if the type can accept it's value
 		if(auto intConst = expression->asIntegerLiteral()){
+			//literal match
 			if(!intConst->_type && this->integer->isValid(intConst->integer)) return LITERAL_CONVERSION;
 		}
+		if(type->integer->isSubset(this->integer)) return RECORD_SUBTYPE;
 	}else if(type->type == RECORD){
 		//Extenders fields
 		for(size_t i = 0;i < type->record->fields.size();i++){
@@ -497,6 +506,8 @@ int TypeExpression::canAssignFrom(Node* expression,TypeExpression* type){
 				}
 				delete dummyDeref;
 			}
+			//Pointer to intrinsics => base
+			else if(this->argument->type == INTRINSIC && type->argument->type == INTRINSIC && type->argument->intrinsic->_base == this->argument->intrinsic) return RECORD_SUBTYPE;
 		}
 	}
 	return -1;
@@ -509,6 +520,7 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 		if(auto intConst = expression->asIntegerLiteral()){
 			if(!intConst->_type && this->integer->isValid(intConst->integer)) return expression;
 		}
+		if(type->integer->isSubset(this->integer)) return expression;
 	}else if(type->type == RECORD){
 		//Extenders fields
 		for(size_t i = 0;i < type->record->fields.size();i++){
@@ -532,6 +544,8 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 				}
 				delete dummyDeref;
 			}
+			//Pointer to intrinsics => base
+			else if(this->argument->type == INTRINSIC && type->argument->type == INTRINSIC && type->argument->intrinsic->_base == this->argument->intrinsic) return expression;
 		}
 	}
 
@@ -599,8 +613,8 @@ ErrorExpression* ErrorExpression::getInstance() {
 	else return errorInstance = new ErrorExpression;
 }
 
-ValueExpression::ValueExpression(Node* node,TypeExpression* type){
-	data=node;
+ValueExpression::ValueExpression(void* d,TypeExpression* type){
+	data = d;
 	this->type = type;
 }
 bool ValueExpression::isConst() const { return true; }
@@ -618,7 +632,7 @@ struct NodeToString: NodeVisitor {
 
 	Node* visit(ValueExpression* node){
 		stream<<"A constant value";
-		if(node->type->matchPointerIntrinsic(intrinsics::ast::ExprPtr)) stream<<' '<<reinterpret_cast<Node*>(node->data);
+		if(node->type->isSame(intrinsics::ast::ExprPtr)) stream<<' '<<reinterpret_cast<Node*>(node->data);
 		return node;
 	}
 	Node* visit(UnresolvedSymbol* node){

@@ -11,14 +11,44 @@
 #include "../intrinsics/ast.h"
 #include "../intrinsics/types.h"
 
+/**
+* Walk the body of a function and assign a stack offset for each variable
+* e.g for f(a) { var b ; { var c } } = {a:0,b:1,c:2}
+*/
+struct ValueRestorer : NodeVisitor {
+	size_t offset;
+	std::vector<Node*>* oldValues;
+
+	ValueRestorer(size_t o,std::vector<Node*>* v) : offset(o),oldValues(v) {}
+	//TODO more nodes
+	Node* visit(BlockExpression* node){
+		for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
+			if(auto v = dynamic_cast<Variable*>((*i).second)){
+				if(!dynamic_cast<Argument*>((*i).second)){
+					v->value = (*oldValues)[offset];offset++;
+				}
+			}
+		}
+		for(auto i = node->children.begin();i!=node->children.end();i++){
+			(*i)->accept(this);
+		}
+		return node;
+	}
+
+
+};
 
 /**
 * Walks the AST node and checks if the node can be interpreted at compile-time.
 * This checks all expressions in the AST node and doesn't account for branches that won't be reached when interpreting
 */
 struct Interpreter : NodeVisitor {
+	std::vector<Node*>* oldValues;
 
-	Interpreter(InterpreterSettings* settings) {
+
+	Interpreter() {
+		status = WALKING;
+		walkEverywhere = false;
 	}
 	enum {
 		WALKING,
@@ -26,16 +56,7 @@ struct Interpreter : NodeVisitor {
 		FAILURE //unroll the stack to base
 	};
 	int status;
-	bool clearVars;
 	bool walkEverywhere;
-
-	bool failed() const { return status == FAILURE ; }
-
-	void reset(){
-		status = WALKING;
-		clearVars = true;
-		walkEverywhere = false;
-	}
 
 	Node* failureNode;
 	const char* failureReason;
@@ -54,8 +75,8 @@ struct Interpreter : NodeVisitor {
 		return result;
 	}
 	Node* visit(VariableReference* node){
-		if(node->variable->value){
-			return node->variable->value;
+		if(auto v =node->variable->value){
+			return v;
 		}
 		else return fail(node);
 	}
@@ -89,21 +110,19 @@ struct Interpreter : NodeVisitor {
 		}
 		else return node;
 	}
-	Node* interpretCall(Function* f,Node* parameter){
+
+
+	Node* interpretCall(Function* f,Node* parameter){	
 		//Set arguments' values
-		auto argsBegin = parameter->asTupleExpression() && f->arguments.size()>1 ? parameter->asTupleExpression()->children.begin()._Ptr : &(parameter);
-		for(size_t i = 0;i<f->arguments.size();i++){
-			f->arguments[i]->value = argsBegin[i];
-		}
-		//intepret body
-		auto result = f->body.accept(this);
-		//Reset arguments' values
-		if(clearVars){
+		if(parameter){	
+			auto argsBegin = parameter->asTupleExpression() && f->arguments.size()>1 ? parameter->asTupleExpression()->children.begin()._Ptr : &(parameter);
 			for(size_t i = 0;i<f->arguments.size();i++){
-				f->arguments[i]->value = nullptr;
+				oldValues->push_back(f->arguments[i]->value);
+				f->arguments[i]->value = argsBegin[i];
 			}
 		}
-		return result;
+		//intepret body
+		return f->body.accept(this);
 	}
 	Node* visit(CallExpression* node){
 		auto arg = node->arg->accept(this);
@@ -111,13 +130,19 @@ struct Interpreter : NodeVisitor {
 		if(status == FAILURE) return nullptr;
 		if(auto func = obj->asFunctionReference()){
 			if(auto f = func->function->constInterpreter){
-				if(arg->isConst()) return f(func->function,arg);
+				if(arg->isConst()) return f(arg);
 			}
 			return fail(node,"The function can't be interpreted!");
 		}
 		else return fail(node);
 	}
 	Node* visit(BlockExpression* node){
+		for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
+			if(auto v = dynamic_cast<Variable*>((*i).second)){
+				if(!dynamic_cast<Argument*>((*i).second)) oldValues->push_back(v->value);
+			}
+		}
+
 		Node* result = nullptr;
 		Node* lastResult;
 		auto i = node->children.begin();
@@ -131,14 +156,6 @@ struct Interpreter : NodeVisitor {
 		if(topmost){
 			if(status == RETURN) status = WALKING;//reset return status
 			else if(status == WALKING) result = new UnitExpression();//return void when no return expressions are present
-		}
-		//Reset the values of variables inside this scope
-		if(clearVars){
-			for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
-				if(auto v = dynamic_cast<Variable*>((*i).second)){
-					v->value = nullptr;
-				}
-			}
 		}
 		return result;	
 	}
@@ -169,23 +186,29 @@ struct Interpreter : NodeVisitor {
 	}
 };
 
-Interpreter* constructInterpreter(InterpreterSettings* settings){
-	auto result = new Interpreter(settings);
+InterpreterInvocation::InterpreterInvocation() {}
+Node* InterpreterInvocation::interpret(Interpreter* interpreter,Function* f,Node* parameter,bool visitAllBranches){
+	func = f;
+	interpreter->oldValues = &oldValues;
+	interpreter->walkEverywhere = visitAllBranches;
+	auto result = interpreter->interpretCall(f,parameter);
+	interpreter->status = Interpreter::WALKING;
 	return result;
 }
-Node* interpretNode(Interpreter* interpreter,Node* node){
-	interpreter->reset();
-	return node->accept(interpreter);
+InterpreterInvocation::~InterpreterInvocation(){
+	size_t i;
+	for(i = 0;i<func->arguments.size();i++){
+		func->arguments[i]->value = oldValues[i];
+	}
+	ValueRestorer restorer(i,&oldValues);
+	func->body.accept(&restorer);
 }
-bool interpretCheckFunctionCall(Interpreter* interpreter,Function* f,Node* parameter){
-	interpreter->reset();
-	interpreter->walkEverywhere = true;
-	return interpreter->interpretCall(f,parameter) != nullptr;
+Node* InterpreterInvocation::getValue(const Variable* variable){
+	return variable->value;
 }
-Node* interpretFunctionCall(Interpreter* interpreter,Function* f,Node* parameter,bool clearVariables){
-	interpreter->reset();
-	interpreter->clearVars = clearVariables;
-	return interpreter->interpretCall(f,parameter);
+
+Interpreter* constructInterpreter(InterpreterSettings* settings){
+	return new Interpreter;
 }
 void getFailureInfo(const Interpreter* interpreter,Node** currentNode,const char** extraInfo){
 	*currentNode = interpreter->failureNode;

@@ -5,9 +5,12 @@
 namespace intrinsics {
 	namespace types {
 
-		extern TypeExpression *Void;
+		extern TypeExpression *Void,*Type;
+		extern IntrinsicType *StringLiteral;
 
-		extern TypeExpression *Type,*Expression;
+		//Boots up the type system by defining the void,type and literal types
+		void startup();
+
 
 		//integers
 		extern TypeExpression* boolean;
@@ -20,6 +23,9 @@ namespace intrinsics {
 		extern TypeExpression* uint32;
 		extern TypeExpression* uint64;
 
+
+
+		//
 		void init(Scope* moduleScope);
 	};
 };

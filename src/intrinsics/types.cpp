@@ -12,9 +12,9 @@
 
 namespace intrinsics {
 	namespace types {
-		TypeExpression *Void;
+		TypeExpression *Void,*Type;
+		IntrinsicType  *StringLiteral;
 
-		TypeExpression *Type,*Expression;
 
 		TypeExpression* boolean = nullptr;
 		TypeExpression* int8 = nullptr;
@@ -26,8 +26,15 @@ namespace intrinsics {
 		TypeExpression* uint32 = nullptr;
 		TypeExpression* uint64 = nullptr;
 
+		void startup() {
+			Void = (new IntrinsicType("Nothing",Location()))->reference();
+			Type = (new IntrinsicType("Type",Location()))->reference();
+			StringLiteral = new IntrinsicType("StringLiteral",Location());
+		};
 		void init(Scope* moduleScope){
 
+			moduleScope->define(Void->intrinsic);
+			moduleScope->define(Type->intrinsic);
 
 			boolean = (ensure( dynamic_cast<IntegerType*>(moduleScope->lookupPrefix("bool")) ))->reference();
 			INTRINSIC_INTTYPE(int8);
@@ -38,12 +45,6 @@ namespace intrinsics {
 			INTRINSIC_INTTYPE(uint16);
 			INTRINSIC_INTTYPE(uint32);
 			INTRINSIC_INTTYPE(uint64);
-
-			Type = (ensure( dynamic_cast<IntrinsicType*>(moduleScope->lookupPrefix("Type")) ))->reference();
-			Expression = (ensure( dynamic_cast<IntrinsicType*>(moduleScope->lookupPrefix("Expression")) ))->reference();
-			Void = (ensure( dynamic_cast<IntrinsicType*>(moduleScope->lookupPrefix("Nothing")) ))->reference();
-
-			//INTRINSIC_FUNC(equals); //type equality
 		};
 	}
 }

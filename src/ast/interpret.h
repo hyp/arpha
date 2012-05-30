@@ -12,12 +12,22 @@ struct InterpreterSettings {
 	size_t timeLimit;       //Maximum time(in ms) for a single interpreter invocation
 	size_t instructionLimit;//Maximum number of instructions for a single interpreter invocation
 };
+
 struct Interpreter;
 
+struct InterpreterInvocation {
+
+	InterpreterInvocation();
+	Node* interpret(Interpreter* interpreter,Function* f,Node* parameter,bool visitAllBranches = false);
+	~InterpreterInvocation();
+	Node* getValue(const Variable* variable);
+private:
+	std::vector<Node*> oldValues;
+	Function* func;
+};
+
+//
 Interpreter* constructInterpreter(InterpreterSettings* settings);
-Node* interpretNode(Interpreter* interpreter,Node* node);
-bool interpretCheckFunctionCall(Interpreter* interpreter,Function* f,Node* parameter);
-Node* interpretFunctionCall(Interpreter* interpreter,Function* f,Node* parameter,bool clearVariables = true);
 void getFailureInfo(const Interpreter* interpreter,Node** currentNode,const char** extraInfo);
 
 

@@ -13,29 +13,53 @@ def true bool = 1
 
 import export ast
 
-macro parentheses(expression) syntax("(",optional(expression),")") = {> expression <}
-
-	
-#macro call(object,argument) syntax(object,precedence(precedence.call) "(",optional(argument),")")
-
-#macro assignment(object,value) syntax(object,precedence(precedence.assignment) "=",precedence(precedence.assignment - 1) value)
-
-#macro index(object,argument) syntax(object,precedence(arpha.precedence.index) "[",argument,"]")
-
-macro while(condition,body) syntax("while","(",condition,")",body)
-
-macro if(condition,consequence,alternative) syntax("if","(",condition,")",consequence,optional("else",alternative)) {
-	return {> match condition {
-		to(true) consequence
-		to(false) alternative
-	} <}
+#TODO condition typecheck?
+macro while {
+	parser.expect("(")
+	var condition = parser.parse()
+	parser.expect(")")
+	return ast.newWhile(condition,parser.parse(ignoreNewline:true)) #TODO(syntax decision) should newLines be really ignored?
 }
 
-#TODO tuple generation, precedence
-macro range(begin,end) syntax(begin,precedence(precedence.index) "..",end) = {> begin <}
-#TODO array expr, typechecks
-macro array(elements) syntax("[",elements,"]") = {> elements <}
+# If macro TODO
+macro if {
+	parser.expect("(")
+	var condition = parser.parse()
+	parser.expect(")")
+	var consequence = parser.parse()
+	var alternative = match parser.match("else") {
+		to(true)	parser.parse()
+		to(false)   [> () <]
+	}
+	return [> match condition { 
+		to(true) consequence
+		to(false) alternative
+	} <]
+}
 
+# TODO
+macro for {
+	parser.expect("(")
+	var vname = parser.symbol()
+	parser.expect("in")
+	var container = parser.parse()
+	parser.expect(")")
+	var body = parser.parse()
+	return [> () <]
+}
+
+#TODO
+macro [ {
+	var expr = parser.parse()
+	parser.expect("]")
+	return [> expr <]
+}
+
+
+
+import export operators
+
+import export operations
 
 # Returns true if two given types are the same type. TOCONSIDER move to compiler
 def equals(x Type,y Type) bool

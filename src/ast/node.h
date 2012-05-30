@@ -124,6 +124,7 @@ struct IntegerLiteral : Node {
 
 struct StringLiteral : Node {
 	StringLiteral(memory::Block& block);
+	StringLiteral(SymbolID symbol);//<-- reuses the string, no duplication
 	TypeExpression* _returnType() const;
 	bool isConst() const;
 	
@@ -136,6 +137,8 @@ struct StringLiteral : Node {
 struct UnitExpression : Node {
 	UnitExpression(){}
 	TypeExpression* _returnType() const;
+
+	bool isConst() const;
 
 	DECLARE_NODE(UnitExpression);
 private:
@@ -449,7 +452,7 @@ private:
 };
 
 struct ValueExpression : Node {
-	ValueExpression(Node* node,TypeExpression* type); //{> () <}
+	ValueExpression(void* d,TypeExpression* type); //..
 	
 	bool isConst() const;
 	TypeExpression* _returnType() const;

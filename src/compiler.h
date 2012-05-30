@@ -10,6 +10,11 @@ struct Scope;
 #include "base/base.h"
 #include "syntax/location.h"
 
+struct Parser;
+struct Evaluator;
+struct Interpreter;
+struct Function;
+
 namespace compiler {
 	//settings
 
@@ -36,6 +41,28 @@ namespace compiler {
 	//Target specific settings
 	//4 or 8 bytes for 32 or 64 bits
 	extern size_t wordSize,pointerSize;   
+
+	//This structure contains the state of the module which is currently being compiled
+	struct Unit {
+		Parser* parser;
+		Evaluator* evaluator;
+		Interpreter* interpreter;
+
+		//Current settings
+		struct State {
+			State();
+			bool interpret; //Interpret constant function calls or not?
+			int reportLevel;
+			int decorationLevel;
+		};
+		
+		void updateState(State& state);
+		const State& state() const;
+	private:
+		State _state;
+	};
+
+	Unit *currentUnit();
 };
 
 #include "base/format.h"

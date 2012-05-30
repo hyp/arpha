@@ -31,7 +31,6 @@ struct Variable : PrefixDefinition  {
 
 	InferredUnresolvedTypeExpression type;
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
-	
 	bool isMutable; // = true
 	bool expandMe;  // = false // assume value != nullptr
 	bool _local;
@@ -44,7 +43,7 @@ struct Argument : Variable {
 
 	Argument* reallyDuplicate(DuplicationModifiers* mods,TypeExpression* newType);
 
-	void defaultValue(Node* expression,bool inferType);
+	void defaultValue(Node* expression,bool inferType,bool typecheck = true);
 	Node* defaultValue() const;
 
 	bool expandAtCompileTime();
@@ -89,11 +88,14 @@ struct IntegerType: public TypeBase {
 	bool isValid(BigInt& value) const;
 	bool isUnsigned() const;
 
+	bool isSubset(IntegerType* other) const;
+
 	Node* parse(Parser* parser);
 	BigInt max,min;
 	//A single reference expression
 	TypeExpression _reference;
 	inline TypeExpression* reference(){ return &_reference; }
+
 private:
 	
 	size_t _size;
@@ -191,6 +193,12 @@ struct Overloadset: public PrefixDefinition {
 // Return type is infered by default
 
 struct Function: public PrefixDefinition {
+	enum {
+		//Indicates whether some function, which can be evaluated at compile time,
+		//is allowed to be interpreted only when it's owner function is being interpreted
+		INTERPRET_ONLY_INSIDE = 0x1,
+
+	};
 
 	Function(SymbolID name,Location& location,Scope* bodyScope);
 	
@@ -217,7 +225,7 @@ struct Function: public PrefixDefinition {
 
 	InferredUnresolvedTypeExpression _returnType;
 	BlockExpression body;
-	Node* (*constInterpreter)(Function* function,Node* parameters); //Can be null. Used to interpret the function with const parameters.
+	Node* (*constInterpreter)(Node* parameters); //Can be null. Used to interpret the function with const parameters.
 	Node* (*intrinsicEvaluator)(CallExpression*,Evaluator* evaluator); //Can be null. Used for compile time arithmetics etc.
 	Node* (*mixinEvaluator)(Node* args,DuplicationModifiers* evaluator); //Can be null. Used for intrinsic functions like creation of AST nodes evaluated when macroes are being mixined
 	std::vector<Argument*> arguments;
@@ -230,7 +238,7 @@ struct Function: public PrefixDefinition {
 
 	int setProperty(int id);
 	int getProperty(int id);
-	
+
 private:
 	int properties;
 	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
@@ -242,7 +250,6 @@ struct ConstraintFunction : Function {
 	ConstraintFunction(SymbolID name, Location& location,Scope* scope);
 
 	bool resolve(Evaluator* evaluator);
-	Node* parse(Parser* parser);
 };
 
 // A single node in an import symbol tree

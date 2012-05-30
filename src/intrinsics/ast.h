@@ -7,8 +7,10 @@
 namespace intrinsics {
 	namespace ast {
 
-		extern IntrinsicType* ExprPtr;
-		extern Function* mixin;
+		extern TypeExpression* ExprPtr;
+
+		void startup();
+		void onMacroScope(Scope* scope);
 
 		void init(Scope* moduleScope);
 	};

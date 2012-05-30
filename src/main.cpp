@@ -121,10 +121,10 @@ BlockExpression* parseModule(Parser* parser,Scope* scope){
 
 //TODO NB x:(1,2) proper parsing using parser extensions
 
-/// ::= '(' expression ')' TODO rm
-struct ParenthesisParser: PrefixDefinition {
+/// ::= '(' expression ')'
+struct ParenParser: PrefixDefinition {
 	SymbolID closingParenthesis;
-	ParenthesisParser(): PrefixDefinition("(",Location()) {
+	ParenParser(): PrefixDefinition("(",Location()) {
 		closingParenthesis = ")";
 	}
 	Node* parse(Parser* parser){
@@ -505,12 +505,111 @@ struct DefParser: PrefixDefinition {
 struct MacroParser: PrefixDefinition {
 	MacroParser(): PrefixDefinition("macro",Location()) {  }
 	Node* parse(Parser* parser){
-		auto location  = parser->previousLocation();
+				auto location  = parser->previousLocation();
 		auto name = parser->expectName();
 		parser->expect("(");
 		return DefParser::function(name,location,parser,true);
+
+
 	}
 };
+
+struct PrefixMacro2: PrefixDefinition {
+	Function* function;
+
+	PrefixMacro2(Function* f) : PrefixDefinition(f->id,f->location),function(f) {}
+	Node* parse(Parser* parser){
+		if(!function->isResolved()){
+			error(parser->currentLocation(),"Can't parse macro %s - the macro isn't resolved at usage time!",id);
+			return ErrorExpression::getInstance();
+		}
+		InterpreterInvocation i;
+		auto res = i.interpret(parser->evaluator()->interpreter(),function,nullptr);
+		if(res){
+			DuplicationModifiers mods;
+			mods.isMacroMixin = true;
+			auto v = res->asValueExpression();
+			return parser->evaluator()->mixin(&mods,reinterpret_cast<Node*>(v->data));
+		}else {
+			error(parser->previousLocation(),"Failed to interpret a macro %s at compile time!",id);
+			return ErrorExpression::getInstance();
+		}
+	}
+
+	bool isResolved(){ return function->isResolved(); }
+	bool resolve(Evaluator* evaluator){ return function->resolve(evaluator); }
+};
+
+struct InfixMacro2: InfixDefinition{
+	Function* function;
+
+	InfixMacro2(Function*f,int stickiness) : InfixDefinition(f->id,stickiness,Location()),function(f) {}
+	Node* parse(Parser* parser,Node* node){
+		if(!function->isResolved()){
+			error(parser->currentLocation(),"Can't parse macro %s - the macro isn't resolved at usage time!",id);
+			return ErrorExpression::getInstance();
+		}
+		auto arg = new ValueExpression(node,intrinsics::ast::ExprPtr);
+		InterpreterInvocation i;
+		auto res = i.interpret(parser->evaluator()->interpreter(),function,arg);
+		if(res){
+			DuplicationModifiers mods;
+			mods.isMacroMixin = true;
+			auto v = res->asValueExpression();
+			return parser->evaluator()->mixin(&mods,reinterpret_cast<Node*>(v->data));
+		}else {
+			error(parser->previousLocation(),"Failed to interpret an infix macro %s at compile time!",id);
+			return ErrorExpression::getInstance();
+		}
+		return nullptr;
+	}
+};
+
+//Todo function macroes
+struct Macro2Parser: PrefixDefinition {
+	Macro2Parser(): PrefixDefinition("macro",Location()) {  }
+	Node* parse(Parser* parser){
+		auto location  = parser->previousLocation();
+		SymbolID name;
+		Argument* infix = nullptr;
+		int precedence;
+		if(parser->match("(")){
+			infix = new Argument(parser->expectName(),parser->currentLocation());
+			parser->expect(")");
+			name = parser->expectName();
+			//sugar
+			//
+			parser->expect("[");
+			parser->expect("precedence");
+			parser->expect(":");
+			precedence = expectInteger(parser,0);
+			parser->expect("]");
+
+		}
+		else name = parser->expectName();
+		
+		auto bodyScope = new Scope(parser->currentScope());
+		Function* func = new Function(name,location,bodyScope);
+		if(infix){
+			infix->type.infer(intrinsics::ast::ExprPtr);
+			func->arguments.push_back(infix);
+			bodyScope->define(infix);
+		}
+		bodyScope->_functionOwner = func;
+		func->_returnType.infer(intrinsics::ast::ExprPtr);
+		if(infix) parser->currentScope()->define(new InfixMacro2(func,precedence));
+		else parser->currentScope()->define(new PrefixMacro2(func));
+
+		auto oldScope = parser->currentScope();
+		parser->currentScope(bodyScope);
+		intrinsics::ast::onMacroScope(bodyScope);
+		DefParser::functionBody(func,parser,false);
+		parser->currentScope(oldScope);
+		func->resolve(parser->evaluator());
+		return new UnitExpression();
+	}
+};
+
 
 struct ConstraintParser: PrefixDefinition {
 	ConstraintParser(): PrefixDefinition("constraint",Location()) {}
@@ -755,7 +854,7 @@ struct CommandParser: PrefixDefinition {
 };
 
 //TODO refactor
-Node* equals(Function* function,Node* parameters){
+Node* equals(Node* parameters){
 	auto t = parameters->asTupleExpression();
 	auto e = new IntegerLiteral(BigInt((int64) t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()) ));
 	e->_type = intrinsics::types::boolean;
@@ -773,12 +872,6 @@ Node* _sizeof(CallExpression* node,Evaluator* evaluator){
 	return e;
 }
 
-Node* createCall(Parser*,Node** expr,size_t numNodes){
-	return new CallExpression(expr[0],expr[1]);
-}
-Node* createWhile(Parser*,Node** expr,size_t numNodes){
-	return new WhileExpression(expr[0],expr[1]);
-}
 
 
 void arphaPostInit(Scope* moduleScope){
@@ -798,14 +891,14 @@ void coreSyntaxPostInit(Scope* moduleScope){
 }
 namespace intrinsics {
 	namespace operations {
-		Node* boolOr(Function* function,Node* parameters){
+		Node* boolOr(Node* parameters){
 			auto t = parameters->asTupleExpression();
 			auto result = (!t->children[0]->asIntegerLiteral()->integer.isZero()) || (!t->children[1]->asIntegerLiteral()->integer.isZero());
 			auto e = new IntegerLiteral(BigInt((uint64)(result?1:0)));
 			e->_type = intrinsics::types::boolean;
 			return e;
 		}
-		Node* boolAnd(Function* function,Node* parameters){
+		Node* boolAnd(Node* parameters){
 			auto t = parameters->asTupleExpression();
 			auto result = (!t->children[0]->asIntegerLiteral()->integer.isZero()) && (!t->children[1]->asIntegerLiteral()->integer.isZero());
 			auto e = new IntegerLiteral(BigInt((uint64)(result?1:0)));
@@ -823,13 +916,13 @@ namespace intrinsics {
 
 struct CaptureParser : PrefixDefinition {
 	BlockParser* blockParser;
-	CaptureParser(): PrefixDefinition("{>",Location()) {
+	CaptureParser(): PrefixDefinition("[>",Location()) {
 		blockParser = new BlockParser;
-		blockParser->closingBrace = "<}"; 
+		blockParser->closingBrace = "<]"; 
 	}
 
 	Node* parse(Parser* parser){
-		auto res = new ValueExpression(blockParser->parse(parser),new TypeExpression((PointerType*)nullptr,intrinsics::ast::ExprPtr->reference()));
+		auto res = new ValueExpression(blockParser->parse(parser),intrinsics::ast::ExprPtr);
 		return res;
 	}
 };
@@ -846,13 +939,14 @@ void arpha::defineCoreSyntax(Scope* scope){
 	blockParser = new BlockParser;
 	scope->define(new ImportParser);
 	scope->define(blockParser);
+	scope->define(new ParenParser);
 	scope->define(new CallParser);
 	scope->define(new TupleParser);
 	scope->define(new AccessParser);
 	scope->define(new AssignmentParser);
 
 	scope->define(new DefParser);
-	scope->define(new MacroParser);
+	scope->define(new Macro2Parser);
 	scope->define(new ConstraintParser);
 	scope->define(new TypeParser);
 	scope->define(new VarParser);
@@ -899,6 +993,16 @@ namespace compiler {
 
 	Interpreter* interpreter;
 
+	Unit _currentUnit;
+
+	Unit *currentUnit(){
+		return &_currentUnit;
+	}
+	Unit::State::State() : interpret(true) {}
+	void Unit::updateState(Unit::State& state){
+		_state = state;
+	}
+	const Unit::State& Unit::state() const { return _state; }
 
 	ModulePtr newModule(const char* moduleName,const char* source){
 		Module module = {};
@@ -925,6 +1029,9 @@ namespace compiler {
 
 		Evaluator evaluator(interpreter);
 		Parser parser(source,&evaluator);
+		_currentUnit.evaluator = &evaluator;
+		_currentUnit.interpreter = interpreter;
+		_currentUnit.parser = &parser;
 		currentModule->second.body = parseModule(&parser,scope);
 
 		auto cb = postCallbacks.find(moduleName);
@@ -989,6 +1096,8 @@ namespace compiler {
 
 		reportLevel = ReportDebug;
 
+		intrinsics::types::startup();
+		intrinsics::ast::startup();
 		//Load language definitions.
 		newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
 		//auto arphaModule = newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());

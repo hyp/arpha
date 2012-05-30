@@ -85,7 +85,7 @@ struct AstExpander: NodeVisitor {
 				node->object = new FunctionReference(func);
 				node->_resolved = true;
 				if(auto f = func->constInterpreter){
-					if(node->arg->isConst()) return f(func,node->arg);
+					if(func->getProperty(Function::INTERPRET_ONLY_INSIDE)==0 && node->arg->isConst()) return f(node->arg);
 				}
 				return node;
 			}else{
@@ -94,7 +94,7 @@ struct AstExpander: NodeVisitor {
 		}
 		else if(auto callingFunc = node->object->asFunctionReference()){
 			if(auto f = callingFunc->function->constInterpreter){
-				if(node->arg->isConst()) return f(callingFunc->function,node->arg);
+				if(callingFunc->function->getProperty(Function::INTERPRET_ONLY_INSIDE)==0 && node->arg->isConst()) return f(node->arg);
 			}
 			return node;	//TODO eval?
 		}
@@ -298,7 +298,10 @@ struct AstExpander: NodeVisitor {
 					error(node->children[i]->location,"A tuple can't contain an expression returning void!");
 					resolved = false;
 				}
-				else fields.push_back(Record::Field(SymbolID(),returns->duplicate()->asTypeExpression()));
+				else {
+					DuplicationModifiers mods;
+					fields.push_back(Record::Field(SymbolID(),returns->duplicate(&mods)->asTypeExpression()));
+				}
 			}
 			else resolved = false;
 		}
@@ -622,7 +625,7 @@ Node* Evaluator::mixin(DuplicationModifiers* mods,Node* node){
 	else resultingExpression = node->duplicate(mods); //no block
 	resultingExpression->location = mods->location;
 	//Evaluate the result
-	resultingExpression = eval(resultingExpression);
+	//resultingExpression = eval(resultingExpression);
 	//TODO evaluate definitons?
 	forcedToEvaluate = oldForcedToEvaluate;
 	return resultingExpression;
@@ -631,7 +634,8 @@ Node* Evaluator::mixin(DuplicationModifiers* mods,Node* node){
 //Evaluates the verifier to see if an expression satisfies a constraint
 int satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* verifier){
 	auto args = verifier->arguments.size() == 1 ? static_cast<Node*>(arg->_returnType()) : new TupleExpression(arg->_returnType(),arg);
-	auto result = interpretFunctionCall(evaluator->interpreter(),verifier,args);
+	InterpreterInvocation i;
+	auto result = i.interpret(evaluator->interpreter(),verifier,args);
 	if(result){
 		if(auto resolved = result->asIntegerLiteral()){
 			assert(result->_returnType()->isSame(intrinsics::types::boolean));

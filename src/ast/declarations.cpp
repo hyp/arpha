@@ -68,14 +68,14 @@ Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* n
 	mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(this))] = std::make_pair(reinterpret_cast<void*>(static_cast<Variable*>(dup)),false);
 	return dup;
 }
-void Argument::defaultValue(Node* expression,bool inferType){
+void Argument::defaultValue(Node* expression,bool inferType,bool typecheck){
 	assert(expression->isResolved());
 	if(inferType){
 		type.kind = InferredUnresolvedTypeExpression::Type;
 		type._type = expression->_returnType();
 	}
-	else {
-		expression = typecheck(expression->location,expression,type.type());
+	else if(typecheck) {
+		expression = ::typecheck(expression->location,expression,type.type());
 	}
 	_defaultValue = expression;
 }
@@ -149,6 +149,9 @@ bool IntegerType::isValid(BigInt& value) const {
 }
 bool IntegerType::isUnsigned() const {
 	return !(min<BigInt((uint64)0));
+}
+bool IntegerType::isSubset(IntegerType* other) const {
+	return (!(min<other->min)) && max<=other->max;
 }
 
 // Pointer type
@@ -536,6 +539,10 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 	_mixinOnCall = false;
 	constInterpreter = nullptr;
 	properties = 0;
+
+	_argsResolved = false;
+	_hasGenericArguments = false;
+	_hasExpandableArguments = false;
 }
 int Function::getProperty(int id){
 	return int((properties & id) != 0);
@@ -647,6 +654,7 @@ bool Function::canExpandAtCompileTime(){
 	assert(_argsResolved);
 	return _hasExpandableArguments;
 }
+//TODO redefine arguments
 //Return true if a new function was generated or false if an already generated function was used.
 bool Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters,Function** dest){
 	
@@ -750,11 +758,12 @@ bool ConstraintFunction::resolve(Evaluator* evaluator){
 		//Report an error if constraint can't be resolved at compile time!
 		if(arguments.size() == 1){
 			auto t = intrinsics::types::Void;
-			if(!interpretCheckFunctionCall(evaluator->interpreter(),this,t)){
+			InterpreterInvocation i;
+			if(!i.interpret(evaluator->interpreter(),this,t,true)){
 				Node* position;
 				const char* error;
 				getFailureInfo(evaluator->interpreter(),&position,&error);
-				error(position->location,"Constraint %s isn't evaluatable at compile time:\n  Can't evaluate \"%s\" at compile time!",id,position,error?error:"");
+				error(position->location,"Constraint %s isn't evaluatable at compile time:\n  Can't evaluate \"%s\" at compile time!",id,position);
 			}
 		}
 		return true;

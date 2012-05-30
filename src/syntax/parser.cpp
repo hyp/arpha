@@ -160,12 +160,9 @@ Node* PointerType::parse(Parser* parser){
 }
 
 Node* Function::parse(Parser* parser){
-	assert(false);
-	return nullptr;//TODO remove?
-}
-Node* ConstraintFunction::parse(Parser* parser){
 	return new FunctionReference(this);
 }
+
 
 Node* Overloadset::parse(Parser* parser){
 	return new UnresolvedSymbol(parser->previousLocation(),parser->lookedUpToken.symbol);
