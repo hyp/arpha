@@ -980,6 +980,9 @@ namespace compiler {
 		if(reportLevel >= ReportErrors)
 			std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
 	}
+	void onWarning(Location& location,const std::string& message){
+		std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Warning: " << message << std::endl;
+	}
 
 }
 

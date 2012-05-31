@@ -243,7 +243,6 @@ struct Function: public PrefixDefinition {
 	Node* (*constInterpreter)(Node* parameters); //Can be null. Used to interpret the function with const parameters.
 	Node* (*intrinsicEvaluator)(CallExpression*,Evaluator* evaluator); //Can be null. Used for compile time arithmetics etc.
 	std::vector<Argument*> arguments;
-	bool _hasReturnInside;
 	bool _hasGenericArguments;
 	bool _hasExpandableArguments;
 	bool _argsResolved;

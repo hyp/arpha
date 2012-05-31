@@ -29,6 +29,7 @@ namespace compiler {
 	void registerResolvedIntrinsicModuleCallback(const char* name,void (* f)(Scope*));
 
 	/// Reports a compilation error
+	void onWarning(Location& location,const std::string& message);
 	void onError(Location& location,const std::string& message);
 	void onDebug(const std::string& message);
 
@@ -68,6 +69,7 @@ namespace compiler {
 
 #include "base/format.h"
 
+#define warning(loc,...) compiler::onWarning(loc,format(__VA_ARGS__))
 #define error(loc,...) compiler::onError(loc,format(__VA_ARGS__))
 #define debug(...) compiler::onDebug(format(__VA_ARGS__))
 

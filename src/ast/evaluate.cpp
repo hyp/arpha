@@ -64,6 +64,7 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
+	//TODO import qualified foo; var x foo.Foo ; foo.method() <-- FIX
 	Node* visit(CallExpression* node){
 		//evaluate argument
 		node->arg = node->arg->accept(this);
@@ -438,6 +439,33 @@ struct AstExpander: NodeVisitor {
 		node->body = node->body->accept(this);
 
 		if(node->condition->isResolved()) node->condition = typecheck(node->location,node->condition,intrinsics::types::boolean);
+		if(node->body->isResolved()){
+			if(auto condLiteral = node->condition->asIntegerLiteral()){
+				//Remove useless code
+				if(condLiteral->integer.isZero()){
+					warning(node->location,"The following while loop will never be executed!");
+				}else{
+					//Make sure we've got a way out of this one..
+					struct FlowControlFinder : NodeVisitor {
+						bool found;
+						FlowControlFinder() : found(false) {}
+						//TODO more nodes..
+						Node* visit(BlockExpression* node){
+							for(auto i = node->children.begin();i!= node->children.end();i++) (*i)->accept(this);
+							return node;
+						}
+						Node* visit(ReturnExpression* node){
+							found = true;
+							return node;
+						}
+					};
+					FlowControlFinder finder;
+					node->body->accept(&finder);
+					if(!finder.found) error(node->location,"Infinite loop - The following while loop has no way for it to stop(such as a return or break expression)!");
+				}
+			}
+			//M
+		}
 		return node;
 	}
 
@@ -798,6 +826,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 
 	if(!func->isFlagSet(Function::MACRO_FUNCTION)){//Macro optimization, so that we dont duplicate unnecessary
 		//Determine the function?
+		//TODO redirect the function to it's definition scope when expanding
 		if(determinedFunction && !func->intrinsicEvaluator && !func->constInterpreter){
 			DuplicationModifiers mods;
 			mods.target = func->owner();

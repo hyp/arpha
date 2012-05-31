@@ -88,6 +88,18 @@ namespace intrinsics {
 			static Node* currentScope(Node* arg){
 				return new ValueExpression(compiler::currentUnit()->evaluator->currentScope(),ScopePtr);
 			}
+			static Node* isConst(Node* arg){
+				bool result;
+				if(auto v = arg->asValueExpression()){
+					result = reinterpret_cast<Node*>(v->data)->isConst();
+					if(auto block = reinterpret_cast<Node*>(v->data)->asBlockExpression()){
+						if(block->children.size() == 1 && block->scope->numberOfDefinitions() == 0) result = block->children[0]->isConst();
+					}
+				}
+				auto x = new IntegerLiteral(BigInt((int64)result));
+				x->_type = intrinsics::types::boolean;
+				return x;
+			}
 			//
 			static Node* newUnit(Node* arg){
 				return new ValueExpression(new UnitExpression,UnitPtr);
@@ -105,6 +117,10 @@ namespace intrinsics {
 				defineFunction("currentScope",ScopePtr,&currentScope);
 
 				ExprPtr = defineType("Expression");
+				{
+					ARG arg = {"expression",ExprPtr};
+					defineFunction("isConst",arg,(new IntegerType("bool",Location()))->reference(),&isConst);
+				}
 				parent = ExprPtr;
 				UnitPtr = defineType("Unit");
 				defineConstructor(newUnit);
