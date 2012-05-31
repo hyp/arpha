@@ -45,7 +45,7 @@ macro for {
 	var container = parser.parse()
 	parser.expect(")")
 	var body = parser.parse()
-	return [> () <]
+	return [> while(false) body <]
 }
 
 #TODO
@@ -54,7 +54,6 @@ macro [ {
 	parser.expect("]")
 	return [> expr <]
 }
-
 
 
 import export operators

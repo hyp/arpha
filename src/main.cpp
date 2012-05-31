@@ -279,137 +279,36 @@ int expectInteger(Parser* parser,int stickiness){
 	return -1;
 }
 
-
-
-
-Node* PrefixMacro::parse(Parser* parser){
-	return syntax->execute(parser);
-}
-Node* InfixMacro::parse(Parser* parser,Node* node){
-	return syntax->execute(parser,node);
-}
-
-
-//TODO macro with a functional form mixin like syntax macroes for efficiency
-MacroSyntax::Instruction::Instruction(Function* func,Node* node,int sticky) : stickiness(sticky) {
-	if(!node){
-		kind = OPTIONAL;
-		return;
-	}
-	if(auto var = node->asVariableReference()){
-		argId  = func->findArgument(var->variable);
-		if(argId == -1) error(node->location,"%s is not a valid syntax rule!\n Only macro's parameters are accepted!",node);
-		kind = EXPR;//TODO multiple argument error
-	}
-	else if(auto str = node->asStringLiteral()){
-		symbol = SymbolID(str->block.ptr(),str->block.length());//TODO "" check
-		kind = SYMBOL;
-	}
-	else error(node->location,"%s is not a valid syntax rule!",node);
-}
-MacroSyntax::MacroSyntax(Function* func) : function(func),intrinsicEvaluator(nullptr) {
-	numArgs = func->arguments.size();
-}
-void MacroSyntax::compile(Scope* scope){
-	//generate definitions
-	if(instructions[0].kind == Instruction::SYMBOL){
-		debug("Created new macro %s",instructions[0].symbol);
-		scope->define(new PrefixMacro(instructions[0].symbol,function->location,this));
-		instructions.erase(instructions.begin());
-	}
-	else if(instructions[0].kind == Instruction::EXPR && instructions.size()>1 && instructions[1].kind == Instruction::SYMBOL){
-		debug("Created new infix macro %s,%s",instructions[1].symbol,instructions[1].stickiness);
-		scope->define(new InfixMacro(instructions[1].symbol,function->location,instructions[1].stickiness,this));
-		instructions.erase(instructions.begin());
-		instructions.erase(instructions.begin());
-	}
-	else{
-		error(function->location,"Can't compile macro's syntax!");
-	}
-}
-Node* MacroSyntax::execute(Parser* parser,Node* node){
-	debug("parsing macro %s",function->id);
-	auto loc = node ? node->location : parser->previousLocation();
-	Node* arg = node;
-	TupleExpression* tupleArg = nullptr;
-	if(numArgs == 0) arg = new UnitExpression();
-	else if(numArgs > 1){
-		tupleArg = new TupleExpression();
-		tupleArg->children.resize(numArgs);
-		if(node) tupleArg->children[0] = node;
-		arg = tupleArg;
-	}
-	for(auto i = instructions.begin();i!=instructions.end();i++){
-		debug("Executing instruction %s , stickiness:%s, special:%d",(*i).kind,(*i).stickiness,(*i).innerRangeSize);
-		if((*i).kind == Instruction::SYMBOL) parser->expect((*i).symbol);
-		else if((*i).kind == Instruction::EXPR){
-			if(tupleArg)
-				tupleArg->children[(*i).argId] = parser->parse((*i).stickiness);
-			else arg = parser->parse((*i).stickiness);
-		}
-		else if((*i).kind == Instruction::OPTIONAL){
-			int rangeSize = (*i).innerRangeSize;
-			bool skip = false;
-			i++;
-			if((*i).kind == Instruction::SYMBOL){
-				if(!parser->match((*i).symbol) ) skip = true; 				//optional("foo")
+void parseFunctionParameters(Parser* parser,Function* func){
+	if(!parser->match(")")){
+		while(1){
+			auto location = parser->currentLocation();
+			auto argName = parser->expectName();
+			auto param = new Argument(argName,location);
+		
+			auto next = parser->peek();
+			bool inferOnDefault = false;
+			if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")" || next.symbol == "=")){
+				param->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+				inferOnDefault = true;
+			}else{
+				param->type.parse(parser,arpha::Precedence::Tuple);
+				next = parser->peek();
 			}
-			else if((*i).kind == Instruction::EXPR){
-				auto next =parser->peek();
-				if(next.isSymbol() && next.symbol == (*(i+rangeSize)).symbol ) skip = true; //optional(expr),"foo"
-				else i--;
+
+			//parameter's default value
+			if(next.isSymbol() && next.symbol == "="){
+				parser->consume();
+				param->defaultValue(parser->parse(arpha::Precedence::Tuple),inferOnDefault);
 			}
-			if(skip){
-				//skip optional block, replacing expression with ()	or argument's defualt value	
-				auto skipTo = i + rangeSize;
-				for(;i!=skipTo;i++){
-					if((*i).kind == Instruction::EXPR){
-						if(tupleArg)
-							tupleArg->children[(*i).argId] = function->arguments[(*i).argId]->defaultValue() ? function->arguments[(*i).argId]->defaultValue()->duplicate() : new UnitExpression();
-						else arg = new UnitExpression();
-					}
-				}
-				i--;
-			}
+
+			func->arguments.push_back(param);
+			func->body.scope->define(param);
+
+			if(parser->match(")")) break;
+			parser->expect(",");
 		}
 	}
-	if(intrinsicEvaluator){	
-		return intrinsicEvaluator(parser,tupleArg?tupleArg->children.begin()._Ptr:&arg,0);
-	}
-	else return parser->evaluator()->mixinFunction(loc,function,arg);
-}
-
-int MacroSyntax::parse(Parser* parser){
-	int result = 0;
-	parser->expect("(");
-	do {
-		if(parser->match("precedence")){
-			parser->expect("(");
-			auto stickiness = expectInteger(parser,arpha::Precedence::Tuple);		
-			parser->expect(")");
-			auto instr = parser->parse(arpha::Precedence::Tuple);
-			instructions.push_back(Instruction(function,instr,stickiness));
-		}
-		else if(parser->match("optional")){
-			auto i = instructions.size();
-			instructions.push_back(Instruction(function));
-			auto n = parse(parser);
-			instructions[i].innerRangeSize = n;
-			result+=n;
-		}
-		else instructions.push_back(Instruction(function,parser->parse(arpha::Precedence::Tuple)));
-		result++;
-
-		if(parser->match(")")) break;
-		parser->expect(",");
-	}while(true);
-	return result;
-}
-
-static void parseMacroSyntax(Function* func,Parser* parser){
-	auto m = new MacroSyntax(func);
-	m->parse(parser);
-	m->compile(parser->currentScope()->parent);
 }
 
 /// ::= 'def' <name> '=' expression
@@ -433,50 +332,19 @@ struct DefParser: PrefixDefinition {
 	}
 
 
-	static Node* function(SymbolID name,Location location,Parser* parser,bool macro = false){
+
+	static Node* function(SymbolID name,Location location,Parser* parser){
 		//Function
 		auto bodyScope = new Scope(parser->currentScope());
 		auto func = new Function(name,location,bodyScope);
-		if(macro) func->_mixinOnCall = true;
 		bodyScope->_functionOwner = func;
 
 		auto oldScope = parser->currentScope();
 		parser->currentScope(bodyScope);
 		//parse arguments
-		if(!parser->match(")")){
-			while(1){
-				auto loc = parser->currentLocation();
-				auto argName = parser->expectName();
-				auto param = new Argument(argName,location);
-		
-				auto next = parser->peek();
-				bool inferOnDefault = false;
-				if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")" || next.symbol == "=")){
-					param->type.kind = InferredUnresolvedTypeExpression::Wildcard;
-					inferOnDefault = true;
-				}else{
-					param->type.parse(parser,arpha::Precedence::Tuple);
-					next = parser->peek();
-				}
+		parseFunctionParameters(parser,func);
 
-				//parameter's default value
-				if(next.isSymbol() && next.symbol == "="){
-					parser->consume();
-					param->defaultValue(parser->parse(arpha::Precedence::Tuple),inferOnDefault);
-				}
-
-				func->arguments.push_back(param);
-				bodyScope->define(param);
-
-				if(parser->match(")")) break;
-				parser->expect(",");
-			}
-		}
-
-		if(macro && parser->match("syntax")){
-			parseMacroSyntax(func,parser);
-		}else
-			oldScope->defineFunction(func);
+		oldScope->defineFunction(func);
 		//return type & body
 		auto token = parser->peek();
 		if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
@@ -499,18 +367,6 @@ struct DefParser: PrefixDefinition {
 		auto name = parser->expectName();
 		if(parser->match("(")) return function(name,location,parser);
 		else return VarParser::parseVar(parser,name,false);
-	}
-};
-
-struct MacroParser: PrefixDefinition {
-	MacroParser(): PrefixDefinition("macro",Location()) {  }
-	Node* parse(Parser* parser){
-				auto location  = parser->previousLocation();
-		auto name = parser->expectName();
-		parser->expect("(");
-		return DefParser::function(name,location,parser,true);
-
-
 	}
 };
 
@@ -570,36 +426,44 @@ struct Macro2Parser: PrefixDefinition {
 	Macro2Parser(): PrefixDefinition("macro",Location()) {  }
 	Node* parse(Parser* parser){
 		auto location  = parser->previousLocation();
-		SymbolID name;
 		Argument* infix = nullptr;
 		int precedence;
+		//create a macro processing function
+		auto bodyScope = new Scope(parser->currentScope());
+		Function* func;
+
+		//infix?
 		if(parser->match("(")){
 			infix = new Argument(parser->expectName(),parser->currentLocation());
 			parser->expect(")");
-			name = parser->expectName();
-			//sugar
-			//
+			func = new Function(parser->expectName(),location,bodyScope);
 			parser->expect("[");
 			parser->expect("precedence");
 			parser->expect(":");
 			precedence = expectInteger(parser,0);
 			parser->expect("]");
 
-		}
-		else name = parser->expectName();
-		
-		auto bodyScope = new Scope(parser->currentScope());
-		Function* func = new Function(name,location,bodyScope);
-		if(infix){
 			infix->type.infer(intrinsics::ast::ExprPtr);
 			func->arguments.push_back(infix);
 			bodyScope->define(infix);
 		}
-		bodyScope->_functionOwner = func;
-		func->_returnType.infer(intrinsics::ast::ExprPtr);
-		if(infix) parser->currentScope()->define(new InfixMacro2(func,precedence));
-		else parser->currentScope()->define(new PrefixMacro2(func));
+		else func = new Function(parser->expectName(),location,bodyScope);
+		func->setFlag(Function::MACRO_FUNCTION);
 
+		bodyScope->_functionOwner = func;
+		func->_returnType.infer(intrinsics::ast::ExprPtr);	
+		if(!infix){
+			if(parser->match("(")){
+				//Function on the outside, but macro lays within!
+				auto oldScope = parser->currentScope();//NB: need to enter a scope for dependent parameters!
+				parser->currentScope(bodyScope);
+				parseFunctionParameters(parser,func);
+				parser->currentScope(oldScope);
+				oldScope->defineFunction(func);
+			}
+			else parser->currentScope()->define(new PrefixMacro2(func));
+		}else parser->currentScope()->define(new InfixMacro2(func,precedence));
+		
 		auto oldScope = parser->currentScope();
 		parser->currentScope(bodyScope);
 		intrinsics::ast::onMacroScope(bodyScope);
@@ -1030,6 +894,7 @@ namespace compiler {
 
 		Evaluator evaluator(interpreter);
 		Parser parser(source,&evaluator);
+		Unit prevUnit = _currentUnit;
 		_currentUnit.evaluator = &evaluator;
 		_currentUnit.interpreter = interpreter;
 		_currentUnit.parser = &parser;
@@ -1046,6 +911,7 @@ namespace compiler {
 
 		//restore old module ptr
 		currentModule = prevModule;
+		_currentUnit = prevUnit;
 		return insertionResult.first;
 	}
 

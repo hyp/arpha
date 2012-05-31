@@ -388,7 +388,6 @@ struct BlockExpression : Node {
 };
 
 // : intrinsics::types::Void
-// Status - syntax[90%],evaluation[100%],optimization[0%],generation[0%]
 struct WhileExpression : Node {
 	WhileExpression(Node* condition,Node* body);
 

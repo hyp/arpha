@@ -69,6 +69,7 @@ namespace intrinsics {
 		TypeExpression* ExprPtr = nullptr;
 		TypeExpression* UnitPtr = nullptr;
 		TypeExpression* WhilePtr = nullptr;
+		TypeExpression* ReturnPtr = nullptr;
 
 		Node* passedExpr(Node* arg){
 			if(auto v = arg->asValueExpression()){
@@ -95,6 +96,9 @@ namespace intrinsics {
 				auto t = arg->asTupleExpression();
 				return new ValueExpression(new WhileExpression(passedExpr(t->children[0]),passedExpr(t->children[1])),WhilePtr);
 			}
+			static Node* newReturn(Node* arg){
+				return new ValueExpression(new ReturnExpression(passedExpr(arg)),ReturnPtr);
+			}
 			void init() {
 
 				ScopePtr = defineType("Scope");
@@ -110,6 +114,11 @@ namespace intrinsics {
 				WhilePtr = defineType("While");
 				ARG args[] = {{"condition",ExprPtr},{"body",ExprPtr}};
 				defineConstructor(newWhile,args,2);
+				{
+				ReturnPtr = defineType("Return");
+				ARG args[] = {{"value",ExprPtr}};
+				defineConstructor(newReturn,args,1);
+				}
 				parent = nullptr;
 			}
 		};

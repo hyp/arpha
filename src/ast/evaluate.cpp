@@ -78,9 +78,18 @@ struct AstExpander: NodeVisitor {
 			auto func =  scope->resolveFunction(evaluator,callingOverloadSet->symbol,node->arg);
 			if(func){
 				node->arg = evaluator->constructFittingArgument(&func,node->arg)->accept(this);
-				if(func->mixinOnCall()){//Macro optimization
-					if(func->intrinsicEvaluator) return func->intrinsicEvaluator(node,evaluator);
-					return evaluator->mixinFunction(node->location,func,node->arg);
+				if(func->isFlagSet(Function::MACRO_FUNCTION)){
+					InterpreterInvocation i;
+					auto res = i.interpret(evaluator->interpreter(),func,node->arg);
+					if(res){
+						DuplicationModifiers mods;
+						mods.isMacroMixin = true;
+						auto v = res->asValueExpression();
+						return evaluator->mixin(&mods,reinterpret_cast<Node*>(v->data));
+					}else {
+						error(node->location,"Failed to interpret a macro %s at compile time!",func->id);
+						return ErrorExpression::getInstance();
+					}
 				}
 				node->object = new FunctionReference(func);
 				node->_resolved = true;
@@ -176,6 +185,17 @@ struct AstExpander: NodeVisitor {
 					if(var->variable->isMutable) return value;
 				}
 				if(var->variable->type.isResolved()){
+					if(var->variable->type.type()->hasConstSemantics()){
+						//If variable has a constant type, assign only at place of declaration
+						if(assignment->isInitializingAssignment){
+							if(!var->variable->value)
+								var->variable->setImmutableValue(value);
+						}else{
+							error(value->location,"Can't assign %s to a constant variable %s!",value,object);
+							*error = true;
+							return nullptr;
+						}
+					}
 					if(auto canBeAssigned = var->variable->type.type()->assignableFrom(value,valuesType)){
 						if(!var->variable->isMutable) {
 							//If variable has a constant type, assign only at place of declaration
@@ -776,7 +796,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 
 	}
 
-	if(!func->mixinOnCall()){//Macro optimization, so that we dont duplicate unnecessary
+	if(!func->isFlagSet(Function::MACRO_FUNCTION)){//Macro optimization, so that we dont duplicate unnecessary
 		//Determine the function?
 		if(determinedFunction && !func->intrinsicEvaluator && !func->constInterpreter){
 			DuplicationModifiers mods;

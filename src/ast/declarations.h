@@ -209,6 +209,8 @@ struct Function: public PrefixDefinition {
 
 		//Allows it to act as a type when declaring arguments for other functions
 		CONSTRAINT_FUNCTION = 0x2,
+
+		MACRO_FUNCTION = 0x4
 	};
 
 	Function(SymbolID name,Location& location,Scope* bodyScope);
@@ -221,7 +223,6 @@ struct Function: public PrefixDefinition {
 	bool resolve(Evaluator* evaluator);
 	bool canExpandAtCompileTime();//i.e. f(T Type)
 	bool canAcceptLocalParameter(size_t argument); 
-	bool mixinOnCall();
 
 	TypeExpression* argumentType();
 	TypeExpression* returnType();
@@ -239,13 +240,11 @@ struct Function: public PrefixDefinition {
 	BlockExpression body;
 	Node* (*constInterpreter)(Node* parameters); //Can be null. Used to interpret the function with const parameters.
 	Node* (*intrinsicEvaluator)(CallExpression*,Evaluator* evaluator); //Can be null. Used for compile time arithmetics etc.
-	Node* (*mixinEvaluator)(Node* args,DuplicationModifiers* evaluator); //Can be null. Used for intrinsic functions like creation of AST nodes evaluated when macroes are being mixined
 	std::vector<Argument*> arguments;
 	bool _hasReturnInside;
 	bool _hasGenericArguments;
 	bool _hasExpandableArguments;
 	bool _argsResolved;
-	bool _mixinOnCall;
 	bool _resolved;
 
 private:
@@ -269,49 +268,5 @@ struct ImportedScope : PrefixDefinition {
 	ImportedScopeReference _reference;
 	inline ImportedScopeReference* reference(){ return &_reference; }
 };
-
-struct MacroSyntax {
-	struct Instruction {
-		enum {
-			SYMBOL,// "foo"
-			EXPR,// bar
-			OPTIONAL,
-		};
-		int kind;
-		SymbolID symbol;
-		union {
-			int argId;
-			int innerRangeSize;//for things like optional()
-		};
-		int stickiness;// = 0
-
-		Instruction();
-		Instruction(Function* func,Node* node = nullptr,int sticky = 0);
-	};
-	std::vector<Instruction> instructions;
-	Function* function;
-	size_t numArgs;
-
-	Node* (*intrinsicEvaluator)(Parser* parser,Node**,size_t);
-
-	MacroSyntax(Function* func);
-
-	int parse(Parser* parser);
-	void compile(Scope* scope);
-	Node* execute(Parser* parser,Node* node = nullptr);
-};
-
-struct PrefixMacro : PrefixDefinition {
-	MacroSyntax* syntax;
-	PrefixMacro(SymbolID name,Location& location,MacroSyntax* synt): PrefixDefinition(name,location),syntax(synt) {}
-	Node* parse(Parser* parser);
-};
-
-struct InfixMacro : InfixDefinition {
-	MacroSyntax* syntax;
-	InfixMacro(SymbolID name,Location& location,int sticky,MacroSyntax* synt): InfixDefinition(name,sticky,location),syntax(synt) {}
-	Node* parse(Parser* parser,Node* node);
-};
-
 
 #endif

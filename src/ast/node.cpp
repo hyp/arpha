@@ -159,7 +159,8 @@ Node* TupleExpression::duplicate(DuplicationModifiers* mods) const {
 	for(auto i = children.begin();i!=children.end();i++){
 		dup->children.push_back((*i)->duplicate(mods));
 	}
-	dup->type = type ? type->duplicate(mods)->asTypeExpression() : nullptr;
+	if(mods->isMacroMixin) dup->type = nullptr;
+	else dup->type = type ? type->duplicate(mods)->asTypeExpression() : nullptr;
 	return copyProperties(dup);
 };
 
