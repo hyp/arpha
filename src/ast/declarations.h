@@ -210,7 +210,9 @@ struct Function: public PrefixDefinition {
 		//Allows it to act as a type when declaring arguments for other functions
 		CONSTRAINT_FUNCTION = 0x2,
 
-		MACRO_FUNCTION = 0x4
+		MACRO_FUNCTION = 0x4,
+
+		CONTAINS_RETURN = 0x10
 	};
 
 	Function(SymbolID name,Location& location,Scope* bodyScope);

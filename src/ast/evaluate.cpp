@@ -376,7 +376,7 @@ struct AstExpander: NodeVisitor {
 	Node* visit(ReturnExpression* node){
 		auto func = evaluator->currentScope()->functionOwner();
 		if(func){
-			func->_hasReturnInside = true;
+			func->setFlag(Function::CONTAINS_RETURN);
 			node->value = node->value->accept(this);
 			if(node->value->isResolved()){
 				node->_resolved = true;

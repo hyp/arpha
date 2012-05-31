@@ -579,7 +579,6 @@ static bool isUnresolvedArgumentDependent(Variable* argument,const Function* fun
 Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDefinition(name,location), body(bodyScope) {
 	intrinsicEvaluator = nullptr;
 	_resolved = false;
-	_hasReturnInside = false;
 	constInterpreter = nullptr;
 
 	_argsResolved = false;
@@ -650,7 +649,11 @@ bool Function::resolve(Evaluator* evaluator){
 
 	//resolve return type
 	//Body has no return expression => return void
-	if(!_hasReturnInside && _returnType.isInferred()) _returnType.infer(intrinsics::types::Void);
+	if(!isFlagSet(CONTAINS_RETURN)){
+		if(_returnType.isInferred()) _returnType.infer(intrinsics::types::Void);
+		else if(body.isResolved() && body.children.size() != 0 && _returnType.isResolved()) 
+			error(location,"The function %s is expected to return a value of type %s, but it contains no return statement!",id,_returnType.type());
+	}
 	if(!_returnType.isResolved()){
 		if(_returnType.isInferred() || !_returnType.resolve(evaluator)) _resolved = false;
 	}
@@ -791,7 +794,6 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 
 	func->_resolved = _resolved;
 	func->_argsResolved = _argsResolved;
-	func->_hasReturnInside = _hasReturnInside;
 	func->_hasGenericArguments = _hasGenericArguments;
 	func->_hasExpandableArguments = _hasExpandableArguments;
 	copyProperties(func);
