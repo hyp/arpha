@@ -410,9 +410,6 @@ TypeExpression* TypeExpression::_returnType() const {
 bool TypeExpression::matchRecord(Record* record) const {
 	return type == RECORD && this->record == record;
 }
-bool TypeExpression::matchPointerIntrinsic(IntrinsicType* intrinsic) const {
-	return type == POINTER && argument->type == INTRINSIC && argument->intrinsic == intrinsic;
-}
 Node* TypeExpression::duplicate(DuplicationModifiers* mods) const {
 	TypeExpression* x;
 	
@@ -553,6 +550,7 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 }
 std::ostream& operator<< (std::ostream& stream,TypeExpression* node){
 	if(node->hasLocalSemantics()) stream<<"local ";
+	if(node->hasConstSemantics()) stream<<"const ";
 	switch(node->type){
 		case TypeExpression::RECORD: stream<<node->record; break;
 		case TypeExpression::INTEGER: stream<<node->integer->id; break;
@@ -560,7 +558,7 @@ std::ostream& operator<< (std::ostream& stream,TypeExpression* node){
 		case TypeExpression::POINTER: 
 			stream<<"Pointer("<<node->argument<<')'; break;
 		case TypeExpression::FUNCTION: 
-			stream<<"FuncType("<<node->argument<<','<<node->returns<<')'; break;
+			stream<<"FuncType("<<node->argument<<"->"<<node->returns<<')'; break;
 	}
 	return stream;
 }
@@ -741,13 +739,16 @@ struct NodeToString: NodeVisitor {
 	}
 };
 std::ostream& operator<< (std::ostream& stream,Node* node){
-	stream<<'(';
+	auto d = compiler::currentUnit()->printingDecorationLevel;
+	if(d) stream<<'(';
 	if(!node->label().isNull()) stream<<node->label()<<':';
 	NodeToString visitor(stream);
 	node->accept(&visitor);
-	stream<<')';
-	stream<<"::";
-	if(node->isResolved()) stream<<node->_returnType();
-	else stream<<"unresolved";
+	if(d) {
+		stream<<')';
+		stream<<"::";
+		if(node->isResolved()) stream<<node->_returnType();
+		else stream<<"unresolved";
+	}
 	return stream;
 }

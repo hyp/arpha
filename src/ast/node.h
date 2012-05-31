@@ -212,15 +212,16 @@ struct TypeExpression : Node {
 	TypeExpression(TypeExpression* argument,TypeExpression* returns);//function
 
 	bool isResolved() const;
-	bool isConst() const;
+	bool isConst() const;//NB: this is very different to hasConstSematics
 	bool matchRecord(Record* record) const;
-	bool matchPointerIntrinsic(IntrinsicType* intrinsic) const;
 	TypeExpression* _returnType() const;
 	size_t size() const;
 
 	bool isSame(TypeExpression* other);
 
 	bool hasLocalSemantics() const { return _localSemantics; }
+	//const int32
+	bool hasConstSemantics() const { return false; }
 
 	/**
 	* This is the one of the key functions of the type system.

@@ -28,6 +28,7 @@ struct PrefixDefinition : memory::ManagedDefinition {
 	SymbolID id;
 	Location location;
 	uint8 visibilityMode;
+	uint16 flags;
 
 	PrefixDefinition(SymbolID name,Location& location);
 
@@ -43,6 +44,8 @@ struct PrefixDefinition : memory::ManagedDefinition {
 
 	virtual Overloadset* asOverloadset(){ return nullptr; }
 
+	bool setFlag(uint16 id);
+	bool isFlagSet(uint16 id);
 };
 
 struct InfixDefinition : memory::ManagedDefinition {
@@ -50,12 +53,16 @@ struct InfixDefinition : memory::ManagedDefinition {
 	int stickiness;
 	Location location;
 	uint8 visibilityMode;
+	uint16 flags;
 	
 	InfixDefinition(SymbolID name,int stickiness,Location& location);
 	virtual Node* parse(Parser* parser,Node* node) = 0;
 
 	virtual InfixDefinition* duplicate(DuplicationModifiers* mods){ return nullptr; }
 	InfixDefinition* copyProperties(InfixDefinition* dest);
+
+	bool setFlag(uint16 id);
+	bool isFlagSet(uint16 id);
 };
 
 

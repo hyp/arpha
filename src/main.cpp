@@ -617,7 +617,8 @@ struct ConstraintParser: PrefixDefinition {
 		auto location = parser->previousLocation();
 		auto name = parser->expectName();
 		auto bodyScope = new Scope(parser->currentScope());
-		auto constraint = new ConstraintFunction(name,location,bodyScope);
+		auto constraint = new Function(name,location,bodyScope);
+		constraint->setFlag(Function::CONSTRAINT_FUNCTION);
 		parser->currentScope()->define(constraint);
 		bodyScope->_functionOwner = constraint;
 
@@ -1032,6 +1033,7 @@ namespace compiler {
 		_currentUnit.evaluator = &evaluator;
 		_currentUnit.interpreter = interpreter;
 		_currentUnit.parser = &parser;
+		_currentUnit.printingDecorationLevel = 1;
 		currentModule->second.body = parseModule(&parser,scope);
 
 		auto cb = postCallbacks.find(moduleName);

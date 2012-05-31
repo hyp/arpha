@@ -53,11 +53,12 @@ namespace compiler {
 			State();
 			bool interpret; //Interpret constant function calls or not?
 			int reportLevel;
-			int decorationLevel;
 		};
 		
 		void updateState(State& state);
 		const State& state() const;
+
+		int printingDecorationLevel; //no need to keep it as state
 	private:
 		State _state;
 	};

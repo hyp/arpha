@@ -43,7 +43,7 @@ struct IntrinsicModule {
 		func->_resolved = true;
 		func->_argsResolved = true;
 		func->constInterpreter = e;
-		func->setProperty(Function::INTERPRET_ONLY_INSIDE);
+		func->setFlag(Function::INTERPRET_ONLY_INSIDE);
 		return func;
 	}
 	Function* defineFunction(const char* name,ARG argument,TypeExpression* returnType,Node* (*e)(Node*)){

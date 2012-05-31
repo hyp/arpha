@@ -8,6 +8,46 @@
 #include "interpret.h"
 #include "../intrinsics/types.h"
 
+PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){
+	this->id = name;this->location = location;
+	visibilityMode = Visibility::Public;
+	flags = 0;
+}
+PrefixDefinition* PrefixDefinition::copyProperties(PrefixDefinition* dest){
+	//Other stuff copied on creation
+	dest->visibilityMode = visibilityMode;
+	dest->flags = flags;
+	return dest;
+}
+InfixDefinition::InfixDefinition(SymbolID name,int stickiness,Location& location){
+	this->id = name;this->stickiness = stickiness;this->location = location;
+	visibilityMode = Visibility::Public;
+	flags = 0;
+}
+InfixDefinition* InfixDefinition::copyProperties(InfixDefinition* dest){
+	//Other stuff copied on creation
+	dest->visibilityMode = visibilityMode;
+	dest->flags = flags;
+	return dest;
+}
+bool PrefixDefinition::isFlagSet(uint16 id){
+	return (flags & id) != 0;
+}
+bool PrefixDefinition::setFlag(uint16 id){
+	auto v = (flags & id) != 0;
+	flags|=id;
+	return v;
+}
+bool InfixDefinition::isFlagSet(uint16 id){
+	return (flags & id) != 0;
+}
+bool InfixDefinition::setFlag(uint16 id){
+	auto v = (flags & id) != 0;
+	flags|=id;
+	return v;
+}
+
+
 //variable
 Variable::Variable(SymbolID name,Location& location,bool isLocal) : PrefixDefinition(name,location),value(nullptr),isMutable(true),expandMe(false) {
 	_local = isLocal;
@@ -45,6 +85,9 @@ PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
 	return copyProperties(duplicatedReplacement);
 }
 
+Argument* Variable::asArgument(){ return nullptr; }
+
+Argument* Argument::asArgument(){ return this; }
 
 Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr),_dependent(false),_constraint(nullptr) {
 }
@@ -66,6 +109,7 @@ Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* n
 	dup->isMutable = isMutable;
 	dup->_defaultValue = _defaultValue ? _defaultValue->duplicate() : nullptr;
 	mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(this))] = std::make_pair(reinterpret_cast<void*>(static_cast<Variable*>(dup)),false);
+	copyProperties(dup);
 	return dup;
 }
 void Argument::defaultValue(Node* expression,bool inferType,bool typecheck){
@@ -538,19 +582,10 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 	_hasReturnInside = false;
 	_mixinOnCall = false;
 	constInterpreter = nullptr;
-	properties = 0;
 
 	_argsResolved = false;
 	_hasGenericArguments = false;
 	_hasExpandableArguments = false;
-}
-int Function::getProperty(int id){
-	return int((properties & id) != 0);
-}
-int Function::setProperty(int id){
-	auto v = getProperty(id);
-	properties|=id;
-	return v;
 }
 
 Scope* Function::owner() const {
@@ -589,7 +624,7 @@ bool Function::resolve(Evaluator* evaluator){
 				if((*i)->type.kind == InferredUnresolvedTypeExpression::Unresolved && (*i)->type.unresolvedExpression->asFunctionReference()){
 					//Constrained argument
 					Function* func = (*i)->type.unresolvedExpression->asFunctionReference()->function;
-					if(!(func->isResolved() && dynamic_cast<ConstraintFunction*>(func))) _resolved = false;
+					if(!(func->isResolved() && func->isFlagSet(CONSTRAINT_FUNCTION))) _resolved = false;
 					else {
 						debug("Constrained argument :: %s!",func->id);
 						(*i)->type.kind = InferredUnresolvedTypeExpression::Wildcard;
@@ -626,6 +661,20 @@ bool Function::resolve(Evaluator* evaluator){
 
 	if(_resolved){
 		debug("Function %s is fully resolved!\n E : %s G : %s Ret : %s Body: %s",id,_hasExpandableArguments,_hasGenericArguments,_returnType.type(),&body);
+		//TODO implement onResolved callbacks
+		if(isFlagSet(CONSTRAINT_FUNCTION)){
+			//Report an error if constraint can't be resolved at compile time!
+			if(arguments.size() == 1){
+				auto t = intrinsics::types::Void;
+				InterpreterInvocation i;
+				if(!i.interpret(evaluator->interpreter(),this,t,true)){
+					Node* position;
+					const char* error;
+					getFailureInfo(evaluator->interpreter(),&position,&error);
+					error(position->location,"Constraint %s isn't evaluatable at compile time:\n  Can't evaluate \"%s\" at compile time!",id,position);
+				}
+			}
+		}
 	}
 	else {
 		debug("Function %s isn't resolved!\n Body: %s,%s,%s,%s",id,&body,_argsResolved,body.isResolved(),_returnType.kind);
@@ -664,12 +713,15 @@ bool Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& 
 	//get the new name and see if such function was already generated!
 	std::ostringstream name;
 	name<<id.ptr()<<"_";
+	auto oldD = compiler::currentUnit()->printingDecorationLevel;
+	compiler::currentUnit()->printingDecorationLevel = 0;
 	for(size_t i = 0;i!=arguments.size();++i){
 		if(!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime()){
 			if(auto t = parameters[i]->asTypeExpression()) t->_localSemantics = false;
 			name<<"_"<<arguments[i]->id<<"_"<<parameters[i];
 		}
 	}
+	compiler::currentUnit()->printingDecorationLevel = oldD;
 	auto sym = (SymbolID(name.str().c_str()));
 	if(auto def = mods->target->containsPrefix(sym)){
 		*dest = def->asOverloadset()->functions[0];//TODO safety checks??
@@ -741,7 +793,6 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	mods->target = oldTarget;
 	mods->returnValueRedirector = oldRed;
 
-	func->properties = properties;
 	func->_resolved = _resolved;
 	func->_argsResolved = _argsResolved;
 	func->_hasReturnInside = _hasReturnInside;
@@ -752,26 +803,6 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	return func;
 }
 
-
-//Constraint
-ConstraintFunction::ConstraintFunction(SymbolID name, Location& location,Scope* scope) : Function(name,location,scope) {
-}
-bool ConstraintFunction::resolve(Evaluator* evaluator){
-	if(Function::resolve(evaluator)){
-		//Report an error if constraint can't be resolved at compile time!
-		if(arguments.size() == 1){
-			auto t = intrinsics::types::Void;
-			InterpreterInvocation i;
-			if(!i.interpret(evaluator->interpreter(),this,t,true)){
-				Node* position;
-				const char* error;
-				getFailureInfo(evaluator->interpreter(),&position,&error);
-				error(position->location,"Constraint %s isn't evaluatable at compile time:\n  Can't evaluate \"%s\" at compile time!",id,position);
-			}
-		}
-		return true;
-	}else return false;
-}
 
 //Imported scope
 ImportedScope::ImportedScope(SymbolID name,Location& location) : PrefixDefinition(name,location),scope(nullptr),_reference(this) {

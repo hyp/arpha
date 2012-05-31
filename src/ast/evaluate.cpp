@@ -85,7 +85,7 @@ struct AstExpander: NodeVisitor {
 				node->object = new FunctionReference(func);
 				node->_resolved = true;
 				if(auto f = func->constInterpreter){
-					if(func->getProperty(Function::INTERPRET_ONLY_INSIDE)==0 && node->arg->isConst()) return f(node->arg);
+					if(!func->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && node->arg->isConst()) return f(node->arg);
 				}
 				return node;
 			}else{
@@ -94,7 +94,7 @@ struct AstExpander: NodeVisitor {
 		}
 		else if(auto callingFunc = node->object->asFunctionReference()){
 			if(auto f = callingFunc->function->constInterpreter){
-				if(callingFunc->function->getProperty(Function::INTERPRET_ONLY_INSIDE)==0 && node->arg->isConst()) return f(node->arg);
+				if(!callingFunc->function->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && node->arg->isConst()) return f(node->arg);
 			}
 			return node;	//TODO eval?
 		}

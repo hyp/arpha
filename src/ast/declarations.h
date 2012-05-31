@@ -15,6 +15,8 @@ struct Evaluator;
 #include "../base/bigint.h"
 #include "node.h"
 
+struct Argument;
+
 struct Variable : PrefixDefinition  {
 	Variable(SymbolID name,Location& location,bool isLocal = false);
 
@@ -29,6 +31,8 @@ struct Variable : PrefixDefinition  {
 
 	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 
+	virtual Argument* asArgument();
+
 	InferredUnresolvedTypeExpression type;
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
 	bool isMutable; // = true
@@ -38,6 +42,8 @@ struct Variable : PrefixDefinition  {
 
 struct Argument : Variable {
 	Argument(SymbolID name,Location& location);
+
+	Argument* asArgument();	
 
 	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 
@@ -186,6 +192,7 @@ struct Overloadset: public PrefixDefinition {
 	Overloadset* asOverloadset();
 	
 	std::vector<Function*> functions;
+private: 
 	bool _resolved;
 };
 
@@ -194,11 +201,14 @@ struct Overloadset: public PrefixDefinition {
 // Return type is infered by default
 
 struct Function: public PrefixDefinition {
+	//Flags
 	enum {
 		//Indicates whether some function, which can be evaluated at compile time,
 		//is allowed to be interpreted only when it's owner function is being interpreted
 		INTERPRET_ONLY_INSIDE = 0x1,
 
+		//Allows it to act as a type when declaring arguments for other functions
+		CONSTRAINT_FUNCTION = 0x2,
 	};
 
 	Function(SymbolID name,Location& location,Scope* bodyScope);
@@ -238,20 +248,10 @@ struct Function: public PrefixDefinition {
 	bool _mixinOnCall;
 	bool _resolved;
 
-	int setProperty(int id);
-	int getProperty(int id);
-
 private:
-	int properties;
 	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
 	
 	
-};
-
-struct ConstraintFunction : Function {
-	ConstraintFunction(SymbolID name, Location& location,Scope* scope);
-
-	bool resolve(Evaluator* evaluator);
 };
 
 // A single node in an import symbol tree

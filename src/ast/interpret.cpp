@@ -137,9 +137,12 @@ struct Interpreter : NodeVisitor {
 		else return fail(node);
 	}
 	Node* visit(BlockExpression* node){
+		//The topmost scope of a function
+		bool topmost = node->scope->functionOwner() != node->scope->parent->functionOwner();
+
 		for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
 			if(auto v = dynamic_cast<Variable*>((*i).second)){
-				if(!dynamic_cast<Argument*>((*i).second)) oldValues->push_back(v->value);
+				if(!topmost || !v->asArgument()) oldValues->push_back(v->value);
 			}
 		}
 
@@ -151,8 +154,7 @@ struct Interpreter : NodeVisitor {
 			if(status != WALKING) break;
 		}
 		if(status == RETURN) result = lastResult;
-		//The topmost scope of a function
-		bool topmost = node->scope->functionOwner() != node->scope->parent->functionOwner();
+
 		if(topmost){
 			if(status == RETURN) status = WALKING;//reset return status
 			else if(status == WALKING) result = new UnitExpression();//return void when no return expressions are present

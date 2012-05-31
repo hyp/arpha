@@ -8,25 +8,6 @@
 #include "evaluate.h"
 #include "../intrinsics/types.h"
 
-PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){
-	this->id = name;this->location = location;
-	visibilityMode = Visibility::Public;
-}
-PrefixDefinition* PrefixDefinition::copyProperties(PrefixDefinition* dest){
-	//Other stuff copied on creation
-	dest->visibilityMode = visibilityMode;
-	return dest;
-}
-InfixDefinition::InfixDefinition(SymbolID name,int stickiness,Location& location){
-	this->id = name;this->stickiness = stickiness;this->location = location;
-	visibilityMode = Visibility::Public;
-}
-InfixDefinition* InfixDefinition::copyProperties(InfixDefinition* dest){
-	//Other stuff copied on creation
-	dest->visibilityMode = visibilityMode;
-	return dest;
-}
-
 Scope::Scope(Scope* parent) : _functionOwner(parent ? parent->_functionOwner : nullptr) {
 	this->parent = parent;
 	_resolved = false;//TODO The 2nd round of resolving is not always necessary !
