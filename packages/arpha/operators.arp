@@ -15,7 +15,7 @@ macro - {
 	return [> minus(expr) <]
 }
 
-macro + {
+macro "+" {
 	return parser.parse(precedence.unary)
 }
 
@@ -34,6 +34,20 @@ macro (x) -- [precedence:precedence.increment] {
 }
 
 #Infix operators
+macro (x) and [precedence:precedence.logical] {
+	var y = parser.parse(precedence.logical,ignoreNewline:true)
+	return [> and(x,y) <]
+}
+macro (x) or [precedence:precedence.equality] {
+	var y = parser.parse(precedence.logical,ignoreNewline:true)
+	return [> or(x,y) <]
+}
+
+macro (x) == [precedence:precedence.equality] {
+	var y = parser.parse(precedence.equality,ignoreNewline:true)
+	return [> equals(x,y) <]
+}
+
 macro (x) + [precedence:precedence.term] {
 	var y = parser.parse(precedence.term,ignoreNewline:true)
 	return [> add(x,y) <]

@@ -572,6 +572,9 @@ int Function::findArgument(Variable* var) const{
 	}
 	return -1;
 }
+Node* Function::createReference(){
+	return new FunctionReference(this);
+}
 bool Function::resolve(Evaluator* evaluator){
 	assert(!_resolved);
 	_resolved = true;

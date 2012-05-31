@@ -58,9 +58,9 @@ macro f14 {
 f14 foo 1
 
 macro f15 {
-while(parser.match("a")) ()
-parser.expect("b")
-return [> "f15 success" <]
+	while(parser.match("a")) ()
+	parser.expect("b")
+	return [> "f15 success" <]
 }
 f15 b
 f15 a b

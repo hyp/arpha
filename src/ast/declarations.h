@@ -176,6 +176,7 @@ struct Overloadset: public PrefixDefinition {
 
 	Node* parse(Parser* parser);
 
+
 	bool isResolved();
 	bool resolve(Evaluator* evaluator);
 	PrefixDefinition* duplicate(DuplicationModifiers* mods);
@@ -203,6 +204,7 @@ struct Function: public PrefixDefinition {
 	Function(SymbolID name,Location& location,Scope* bodyScope);
 	
 	Node* parse(Parser* parser);
+	Node* createReference();
 
 	bool isResolved();
 	bool isPartiallyResolved();//It's when arguments and return type are resolved! The function's body doesn't have to be resolved yet.
