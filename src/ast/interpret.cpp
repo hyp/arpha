@@ -179,6 +179,18 @@ struct Interpreter : NodeVisitor {
 		}
 		return fail(node);
 	}
+	Node* visit(WhileExpression* node){
+		while(true){
+			auto cond = node->condition->accept(this);
+			if(status != WALKING) break;
+			if(auto i =cond->asIntegerLiteral()){
+				if(i->integer.isZero()) break;
+			}
+			node->body->accept(this);
+			if(status != WALKING) break;
+		}
+		return status == FAILURE ? nullptr : node;
+	}
 
 	//...
 	Node* visit(ErrorExpression* node){
