@@ -41,6 +41,10 @@ macro while {
 	return ast.newWhile(condition,parser.parse())
 }
 
+#TODO
+macro continue = [> () <]
+macro break = [> () <]
+
 # TODO
 macro for {
 	parser.expect("(")

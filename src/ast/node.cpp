@@ -203,6 +203,12 @@ Node* ReturnExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(r);
 }
 
+ControlFlowExpression::ControlFlowExpression(int type) : kind(type) {
+}
+Node* ControlFlowExpression::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new ControlFlowExpression(kind));
+}
+
 //Pointer operation
 PointerOperation::PointerOperation(Node* expression,int type){
 	this->expression = expression;
@@ -704,6 +710,10 @@ struct NodeToString: NodeVisitor {
 	}
 	Node* visit(ReturnExpression* node){
 		stream<<"return"<<' '<<node->value;
+		return node;
+	}
+	Node* visit(ControlFlowExpression* node){
+		stream<<node->isContinue() ? "continue" : (node->isBreak() ? "break" : "fallthrough");
 		return node;
 	}
 	Node* visit(PointerOperation* node){

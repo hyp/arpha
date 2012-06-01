@@ -340,6 +340,20 @@ struct ReturnExpression : Node {
 	DECLARE_NODE(ReturnExpression);
 };
 
+struct ControlFlowExpression: Node {
+	enum {
+		CONTINUE,BREAK,FALLTHROUGH
+	};
+	ControlFlowExpression(int type);
+
+	inline bool isContinue(){ return kind == CONTINUE; }
+	inline bool isBreak(){ return kind == BREAK; }
+	inline bool isFallthrough(){ return kind == FALLTHROUGH; }
+	int kind;
+	SymbolID labeledJump;//For future
+	DECLARE_NODE(ControlFlowExpression);
+};
+
 //A unary expression, which is either an adress or a dereference
 //: Pointer(expression.typeof)
 struct PointerOperation : Node {
