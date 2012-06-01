@@ -15,20 +15,20 @@ macro defineOperations {
 	var T = parser.parse()
 	return [>
 		# Arithmetics
-		def minus(x T) T
+		def minus(x $T) $T
 
-		def add(x T,y T) T
-		def subtract(x T,y T) T
-		def multiply(x T,y T) T
-		def divide(x T,y T) T
-		def mod(x T,y T) T
+		def add(x $T,y $T) $T
+		def subtract(x $T,y $T) $T
+		def multiply(x $T,y $T) $T
+		def divide(x $T,y $T) $T
+		def mod(x $T,y $T) $T
 		
 		# Comparison
-		def equals(x T,y T) bool
-		def less(x T,y T) bool
-		def greater(x T,y T) bool
-		def lessEquals(x T,y T) bool
-		def greaterEquals(x T,y T) bool
+		def equals(x $T,y $T) bool
+		def less(x $T,y $T) bool
+		def greater(x $T,y $T) bool
+		def lessEquals(x $T,y $T) bool
+		def greaterEquals(x $T,y $T) bool
 	<]
 }
 

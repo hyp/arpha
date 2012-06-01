@@ -13,6 +13,7 @@ def true bool = 1
 
 import export ast
 
+
 #TODO condition typecheck?
 macro while {
 	parser.expect("(")
@@ -31,9 +32,9 @@ macro if {
 		to(true)	parser.parse()
 		to(false)   [> () <]
 	}
-	return [> match condition { 
-		to(true) consequence
-		to(false) alternative
+	return [> match $condition { 
+		to(true)  $consequence
+		to(false) $alternative
 	} <]
 }
 
@@ -45,14 +46,14 @@ macro for {
 	var container = parser.parse()
 	parser.expect(")")
 	var body = parser.parse()
-	return [> while(false) body <]
+	return [> while(false) $body <]
 }
 
 #TODO
 macro [ {
 	var expr = parser.parse()
 	parser.expect("]")
-	return [> expr <]
+	return [> $expr <]
 }
 
 

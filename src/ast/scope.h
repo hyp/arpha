@@ -85,6 +85,7 @@ struct Scope: memory::ManagedDefinition {
 	PrefixDefinition* lookupImportedPrefix(SymbolID name);
 	PrefixDefinition* containsPrefix(SymbolID name);
 	void define(PrefixDefinition* definition);
+	void remove(PrefixDefinition* definition);
 
 	InfixDefinition* lookupInfix(SymbolID name);
 	InfixDefinition* lookupImportedInfix(SymbolID name);

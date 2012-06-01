@@ -143,6 +143,11 @@ void Scope::define(InfixDefinition* definition){
 	else infixDefinitions[definition->id] = definition;
 }
 
+void Scope::remove(PrefixDefinition* definition){
+	assert(containsPrefix(definition->id));
+	prefixDefinitions.erase(definition->id);
+}
+
 Function* errorOnMultipleMatches(std::vector<Function*>& results){
 	//TODO
 	error(Location(),"multiple matches possible!");

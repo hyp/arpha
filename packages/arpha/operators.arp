@@ -12,7 +12,7 @@ import qualified precedence
 # Prefix operators
 macro - {
 	var expr = parser.parse(precedence.unary)
-	return [> minus(expr) <]
+	return [> minus($expr) <]
 }
 
 macro "+" {
@@ -21,46 +21,46 @@ macro "+" {
 
 macro ! {
 	var expr = parser.parse(precedence.unary)
-	return [> not(expr) <]
+	return [> not($expr) <]
 }
 
 #Postfix operators
 macro (x) ++ [precedence:precedence.increment] {
-	return [> x = add(x,1) <]
+	return [> $x = add($x,1) <]
 }
 
 macro (x) -- [precedence:precedence.increment] {
-	return [> x = subtract(x,1) <]
+	return [> $x = subtract($x,1) <]
 }
 
 #Infix operators
 macro (x) and [precedence:precedence.logical] {
 	parser.matchNewline()
 	var y = parser.parse(precedence.logical)
-	return [> and(x,y) <]
+	return [> and($x,$y) <]
 }
 macro (x) or [precedence:precedence.equality] {
 	parser.matchNewline()
 	var y = parser.parse(precedence.logical)
-	return [> or(x,y) <]
+	return [> or($x,$y) <]
 }
 
 macro (x) == [precedence:precedence.equality] {
 	parser.matchNewline()
 	var y = parser.parse(precedence.equality)
-	return [> equals(x,y) <]
+	return [> equals($x,$y) <]
 }
 
 macro (x) + [precedence:precedence.term] {
 	parser.matchNewline()
 	var y = parser.parse(precedence.term)
-	return [> add(x,y) <]
+	return [> add($x,$y) <]
 }
 
 macro (x) - [precedence:precedence.term] {
 	parser.matchNewline()
 	var y = parser.parse(precedence.term)
-	return [> subtract(x,y) <]
+	return [> subtract($x,$y) <]
 }
 
 #

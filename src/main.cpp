@@ -781,14 +781,47 @@ namespace intrinsics {
 
 struct CaptureParser : PrefixDefinition {
 	BlockParser* blockParser;
+
+	struct QuasiParser : PrefixDefinition {
+		Scope* parentScope;
+		QuasiParser(Scope* scope) : PrefixDefinition("$",Location()),parentScope(scope) {}
+		Node* parse(Parser* parser){
+			//Give access to macroes variables
+			auto oldScope = parser->currentScope();
+			parser->currentScope(parentScope);
+			auto res = parser->parse(1000);
+			if(auto v = res->asVariableReference()){
+			}else error(v->location,"Expected a variable reference after $!");
+			parser->currentScope(oldScope);
+			return res;
+		}
+	};
+
 	CaptureParser(): PrefixDefinition("[>",Location()) {
 		blockParser = new BlockParser;
 		blockParser->closingBrace = "<]"; 
 	}
 
+	static Scope* prevScope(Scope* scope){
+		while(scope->functionOwner() == scope->parent->functionOwner()){
+			scope = scope->parent;
+		}
+		return scope->parent;
+	}
+
 	Node* parse(Parser* parser){
-		auto res = new ValueExpression(blockParser->parse(parser),intrinsics::ast::ExprPtr);
-		return res;
+		auto oldScope = parser->currentScope();
+		auto parentScope = oldScope->functionOwner() ?  prevScope(oldScope) : oldScope;
+		//parse block
+		BlockExpression* block = new BlockExpression(new Scope(parentScope));
+		QuasiParser quasi(oldScope);
+		block->scope->define(&quasi);
+		parser->currentScope(block->scope);
+		blockParser->body(parser,BlockParser::BlockChildParser(block));
+		block->scope->remove(&quasi);
+		parser->currentScope(oldScope);
+		//TODO block { 1 } -> 1?
+		return new ValueExpression(block,intrinsics::ast::ExprPtr);
 	}
 };
 

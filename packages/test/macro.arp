@@ -13,13 +13,13 @@ f2 1
 
 macro f3 {
 	var x = parser.parse()
-	return [> x <]
+	return [> $x <]
 }
 f3 2
 
 macro f4 {
 	var x = parser.parse()
-	return [> x,2 <]
+	return [> $x,2 <]
 }
 f4 1
 
@@ -40,7 +40,7 @@ macro f11 = parser.parse()
 macro f12 {
   var x = [> f11 2 <]
   var y = parser.parse()
-  return [> y,x <]
+  return [> $y,$x <]
 }
 
 f12 1
@@ -83,13 +83,13 @@ f21
 f21 Ha
 
 macro (x) ^ [precedence:40] {
-	return [> x <]
+	return [> $x <]
 }
 1 ^
 
 macro (x) ~ [precedence:50] {
 	var y = parser.parse(50)
-	return [> y,x <]
+	return [> $y,$x <]
 }
 
 1 ~ 2
@@ -102,14 +102,27 @@ macro f30 {
 f30 a
 
 macro f40 {
-	return parser.parse(ignoreNewline:true)
+	parser.matchNewline()
+	return parser.parse()
 }
 f40 1
 f40
 	2
 	
-macro f100(x int32) = [> 1,x <]
+macro f100(x int32) = [> 1,$x <]
 f100(2)
 
-
+macro quasi0 {
+	var x = parser.parse()
+	return [> x <]
+}
+macro quasi1 {
+	var x = parser.parse()
+	return [> $x <]
+}
+type x {
+	var z int32
+}
+quasi0 1 #type x
+quasi1 1 #1
 
