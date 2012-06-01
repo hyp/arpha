@@ -229,23 +229,24 @@ Node* PointerOperation::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new PointerOperation(expression->duplicate(mods),kind));
 }
 
-// Match expression
-MatchExpression::MatchExpression(Node* object){
-	this->object = object;
+IfExpression::IfExpression(Node* condition,Node* consequence,Node* alternative){
+	this->condition = condition;
+	this->consequence = consequence;
+	this->alternative = alternative;
+	_resolved = false;
 }
-TypeExpression* MatchExpression::_returnType() const {
-	return intrinsics::types::Void;//TODO
+TypeExpression* IfExpression::_returnType() const {
+	auto cr = consequence->_returnType();
+	if(cr->isSame(alternative->_returnType())) return cr;
+	return intrinsics::types::Void;
 }
-bool MatchExpression::isResolved() const {
-	return false;//Todo
+bool IfExpression::isResolved() {
+	return _resolved;
 }
-Node* MatchExpression::duplicate(DuplicationModifiers* mods) const{
-	auto dup = new MatchExpression(object->duplicate(mods));
-	dup->cases.reserve(cases.size());
-	for(auto i = cases.begin();i!=cases.end();i++){
-		dup->cases.push_back(Case((*i).pattern->duplicate(mods),(*i).consequence ? (*i).consequence->duplicate(mods) : nullptr,(*i).fallThrough));
-	}
-	return copyProperties(dup);
+Node* IfExpression::duplicate(DuplicationModifiers* mods) const{
+	auto x = new IfExpression(condition->duplicate(mods),consequence->duplicate(mods),alternative->duplicate(mods));
+	x->_resolved = _resolved;
+	return copyProperties(x);
 }
 
 // Function reference
@@ -709,13 +710,8 @@ struct NodeToString: NodeVisitor {
 		stream<<(node->kind==PointerOperation::ADDRESS?'&':'*')<<node->expression;
 		return node;
 	}
-	Node* visit(MatchExpression* node){
-		stream<<"match "<<node->object;
-		for(auto i=node->cases.begin();i!=node->cases.end();i++){
-			stream<<'|'<<(*i).pattern<<" => ";
-			if((*i).consequence) stream<<(*i).consequence<<' ';
-			if((*i).fallThrough) stream<<"fallthrough";
-		}
+	Node* visit(IfExpression* node){
+		stream<<"if("<<node->condition<<") "<<node->consequence<<" else "<<node->alternative;
 		return node;
 	}
 	Node* visit(TupleExpression* node){

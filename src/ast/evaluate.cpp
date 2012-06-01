@@ -399,38 +399,15 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
-	Node* evaluateIntegerMatch(IntegerLiteral* value,MatchExpression* node){
-		
-		//TODO
-		for(auto i =node->cases.begin();i!=node->cases.end();i++){
-			auto intLiteral = (*i).pattern->asIntegerLiteral();
-			assert(intLiteral);
-			if(value->integer == intLiteral->integer) return (*i).consequence;
+	Node* visit(IfExpression* node){
+		if(node->_resolved && !evaluator->forcedToEvaluate) return node;
+		node->condition = node->condition->accept(this);
+		node->consequence = node->consequence->accept(this);
+		node->alternative = node->alternative->accept(this);
+		if(node->condition->isResolved()){
+			node->condition = typecheck(node->condition->location,node->condition,intrinsics::types::boolean);
+			if(node->consequence->isResolved() && node->alternative->isResolved()) node->_resolved = true;
 		}
-		return node;
-	}
-
-	Node* visit(MatchExpression* node){
-		node->object = node->object->accept(this);
-		if(!node->object->isResolved()) return node;
-		//Resolve cases
-		bool allCasesResolved = true;
-		for(auto i =node->cases.begin();i!=node->cases.end();i++){
-			(*i).pattern = (*i).pattern->accept(this);
-			if(!(*i).pattern->isResolved()) allCasesResolved = false;
-			if((*i).consequence){
-				(*i).consequence = (*i).consequence->accept(this);
-				if(!(*i).consequence->isResolved()) allCasesResolved = false;
-			}
-		}
-
-		//Typecheck
-		
-		//Evaluate constant match
-		if(allCasesResolved){
-			if(auto intLiteral = node->object->asIntegerLiteral()) return evaluateIntegerMatch(intLiteral,node);
-		}
-
 		return node;
 	}
 
@@ -451,6 +428,15 @@ struct AstExpander: NodeVisitor {
 						bool found;
 						FlowControlFinder() : found(false) {}
 						//TODO more nodes..
+						Node* visit(IfExpression* node){
+							node->consequence->accept(this);
+							node->alternative->accept(this);
+							return node;
+						}
+						Node* visit(WhileExpression* node){
+							node->body->accept(this);
+							return node;
+						}
 						Node* visit(BlockExpression* node){
 							for(auto i = node->children.begin();i!= node->children.end();i++) (*i)->accept(this);
 							return node;

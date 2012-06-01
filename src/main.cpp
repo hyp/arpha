@@ -616,50 +616,6 @@ struct DereferenceParser: PrefixDefinition {
 	}
 };
 
-/// ::= match expr { to pattern: ... }
-struct MatchParser: PrefixDefinition {
-	MatchParser(): PrefixDefinition("match",Location()){}
-	
-	// pattern ::= '_'|expression
-	static Node* pattern(Parser* parser){
-		if(parser->match("_")) return new WildcardExpression;
-		else return parser->parse();
-	}
-	// body ::= '{' 'to' pattern ':' consequence... '}'
-	struct BodyParser {
-		MatchExpression* node;
-		BodyParser(MatchExpression* expr) : node(expr) {}
-		bool operator()(Parser* parser){
-			auto token = parser->consume();
-			if(token.isSymbol() && token.symbol == "to"){
-				parser->expect("(");
-				bool fallthrough = true;
-				Node* consq = nullptr;
-				auto pattern = MatchParser::pattern(parser);
-				parser->expect(")");
-				//if(parser->match("=>")){
-					fallthrough = false;
-					consq = parser->parse();
-				//}
-				node->cases.push_back(MatchExpression::Case(pattern,consq,fallthrough));
-				return true;
-			}
-			error(parser->previousLocation(),"Unexpected %s - to <pattern> : <consequence> is expected inside match's body!",token);
-			return false;
-		}
-	};
-	Node* parse(Parser* parser){
-		parser->expect("(");
-		auto expr = new MatchExpression(parser->parse());
-		parser->expect(")");
-		parser->expect("{");
-		blockParser->body(parser,BodyParser(expr));
-		return expr;
-	}
-};
-
-/// TODO ::= 'for' values 'in' sequence expression
-
 /// ::= 'import' <module>,...
 struct ImportParser: PrefixDefinition {
 	ImportParser(): PrefixDefinition("import",Location()) {}
@@ -887,10 +843,8 @@ void arpha::defineCoreSyntax(Scope* scope){
 	scope->define(new ConstraintParser);
 	scope->define(new TypeParser);
 	scope->define(new VarParser);
-	
 
 	scope->define(new ReturnParser);
-	scope->define(new MatchParser);
 
 	scope->define(new AddressParser);
 	scope->define(new DereferenceParser);

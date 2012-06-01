@@ -71,6 +71,7 @@ namespace intrinsics {
 		TypeExpression* WhilePtr = nullptr;
 		TypeExpression* ReturnPtr = nullptr;
 		TypeExpression* WildcardPtr = nullptr;
+		TypeExpression* IfPtr = nullptr;
 
 		Node* passedExpr(Node* arg){
 			if(auto v = arg->asValueExpression()){
@@ -112,6 +113,10 @@ namespace intrinsics {
 			static Node* newReturn(Node* arg){
 				return new ValueExpression(new ReturnExpression(passedExpr(arg)),ReturnPtr);
 			}
+			static Node* newIfElse(Node* arg){
+				auto t = arg->asTupleExpression();
+				return new ValueExpression(new IfExpression(passedExpr(t->children[0]),passedExpr(t->children[1]),passedExpr(t->children[2])),IfPtr);
+			}
 			void init() {
 
 				ScopePtr = defineType("Scope");
@@ -139,6 +144,13 @@ namespace intrinsics {
 
 				WildcardPtr = defineType("Wildcard");
 				parent = nullptr;
+
+				
+				{
+				IfPtr = defineType("IfElse");
+				ARG args[] = {{"condition",ExprPtr},{"consequence",ExprPtr},{"alternative",ExprPtr}};
+				defineConstructor(newIfElse,args,3);
+				}
 			}
 		};
 

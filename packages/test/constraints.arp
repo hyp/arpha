@@ -8,15 +8,14 @@ f(3) # ok
 
 constraint ErrorConstraint(T) = 3 # Error, needs to return bool!
 
-#
+
 constraint Foo(T){
 	if(T == int32) return true else return false
 }
 
-
 def f2(x Foo) = 2
 f2(5) # ok
-#
+
 
 constraint Fuse(T) = T == int32 or T == bool
 def f3(x Fuse) = 1

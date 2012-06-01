@@ -74,10 +74,7 @@ f20
 f20 ha
 
 macro f21 {
-	return match(parser.match("Ha")) {
-		to(true)  [> 1 <]
-		to(false) [> 2 <]
-	}
+	return if(parser.match("Ha")) [> "f21 Ha" <] else [> "f21" <]
 }
 f21
 f21 Ha

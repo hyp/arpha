@@ -21,6 +21,15 @@ struct ValueRestorer : NodeVisitor {
 
 	ValueRestorer(size_t o,std::vector<Node*>* v) : offset(o),oldValues(v) {}
 	//TODO more nodes
+	Node* visit(IfExpression* node){
+		node->consequence->accept(this);
+		node->alternative->accept(this);
+		return node;
+	}
+	Node* visit(WhileExpression* node){
+		node->body->accept(this);
+		return node;
+	}
 	Node* visit(BlockExpression* node){
 		for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
 			if(auto v = dynamic_cast<Variable*>((*i).second)){
@@ -161,25 +170,22 @@ struct Interpreter : NodeVisitor {
 		}
 		return result;	
 	}
-
-	Node* evaluateIntegerMatch(IntegerLiteral* value,MatchExpression* node){
-		
-		//TODO
-		for(auto i =node->cases.begin();i!=node->cases.end();i++){
-			auto intLiteral = (*i).pattern->asIntegerLiteral();
-			assert(intLiteral);
-			if(value->integer == intLiteral->integer) return (*i).consequence;
-		}
-		return node;
-	}
-	Node* visit(MatchExpression* node){
-		auto obj = node->object->accept(this);
+	Node* visit(IfExpression* node){
+		auto cond = node->condition->accept(this);
 		if(status == FAILURE) return nullptr;
-		if(auto intLiteral = obj->asIntegerLiteral()){
-			auto branch = evaluateIntegerMatch(intLiteral,node);
-			return branch->accept(this);//TODO check if all cases can be interpreted..
+		if(!cond->asIntegerLiteral()->integer.isZero()){
+			if(walkEverywhere){
+				node->alternative->accept(this);
+				if(status == FAILURE) return nullptr;
+			}
+			return node->consequence->accept(this);
+		}else {
+			if(walkEverywhere){
+				node->consequence->accept(this);
+				if(status == FAILURE) return nullptr;
+			}
+			return node->alternative->accept(this);
 		}
-		return fail(node);
 	}
 	Node* visit(WhileExpression* node){
 		while(true){

@@ -52,7 +52,7 @@ struct Evaluator;
 	X(AssignmentExpression)  \
 	X(ReturnExpression)      \
 	X(PointerOperation)      \
-	X(MatchExpression)      \
+	X(IfExpression)      \
 	X(BlockExpression)       \
 	X(WhileExpression)         \
 	\
@@ -356,22 +356,17 @@ struct PointerOperation : Node {
 	DECLARE_NODE(PointerOperation);
 };
 
-struct MatchExpression : Node {
-	MatchExpression(Node* object);
+struct IfExpression : Node {
+	IfExpression(Node* condition,Node* consequence,Node* alternative);
 
 	TypeExpression* _returnType() const;
-	bool isResolved() const;
+	bool isResolved();
 
-	Node* object;
-	struct Case {	
-		Node* pattern;
-		Node* consequence;
-		bool fallThrough; // = false
-
-		Case(Node* pat,Node* consq,bool fallthrough) : pattern(pat),consequence(consq),fallThrough(fallthrough) {}
-	};
-	std::vector<Case> cases;
-	DECLARE_NODE(MatchExpression);
+	Node* condition;
+	Node* consequence;
+	Node* alternative;
+	bool _resolved;
+	DECLARE_NODE(IfExpression);
 };
 
 // : intrinsics::types::Void
