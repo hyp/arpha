@@ -444,6 +444,7 @@ struct AstExpander: NodeVisitor {
 				//Remove useless code
 				if(condLiteral->integer.isZero()){
 					warning(node->location,"The following while loop will never be executed!");
+					return new UnitExpression();
 				}else{
 					//Make sure we've got a way out of this one..
 					struct FlowControlFinder : NodeVisitor {
@@ -461,10 +462,12 @@ struct AstExpander: NodeVisitor {
 					};
 					FlowControlFinder finder;
 					node->body->accept(&finder);
-					if(!finder.found) error(node->location,"Infinite loop - The following while loop has no way for it to stop(such as a return or break expression)!");
+					if(!finder.found){
+						error(node->location,"Infinite loop - The following while loop has no way for it to stop(such as a return or break expression)!");
+						return ErrorExpression::getInstance();
+					}
 				}
 			}
-			//M
 		}
 		return node;
 	}

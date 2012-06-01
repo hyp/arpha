@@ -18,7 +18,7 @@ macro while {
 	parser.expect("(")
 	var condition = parser.parse()
 	parser.expect(")")
-	return ast.newWhile(condition,parser.parse(ignoreNewline:true)) #TODO(syntax decision) should newLines be really ignored?
+	return ast.newWhile(condition,parser.parse())
 }
 
 # If macro TODO

@@ -150,18 +150,6 @@ namespace intrinsics {
 				auto sticky = arg->asIntegerLiteral();
 				return new ValueExpression(parser->parse((int)sticky->integer.u64),ExprPtr);
 			}
-			static Node* parseFull(Node* arg){
-				auto params = &arg->asTupleExpression()->children[0];
-				auto parser = compiler::currentUnit()->parser;
-				//ignoreNewline?
-				if(!params[1]->asIntegerLiteral()->integer.isZero()){
-					auto next = parser->peek();
-					if(next.isLine()) parser->consume();
-				}
-				
-				auto sticky = params[0]->asIntegerLiteral();
-				return new ValueExpression(parser->parse((int)sticky->integer.u64),ExprPtr);
-			}
 			static Node* expectString(Node* arg){
 				auto parser = compiler::currentUnit()->parser;
 				auto symbol = arg->asStringLiteral();
@@ -181,6 +169,14 @@ namespace intrinsics {
 				auto sym = parser->expectName();
 				return new StringLiteral(sym);
 			}
+			static Node* matchNewline(Node* arg){
+				auto parser = compiler::currentUnit()->parser;
+				bool res = parser->peek().isLine();
+				if(res) parser->consume();
+				auto x = new IntegerLiteral(BigInt((int64)res));
+				x->_type = intrinsics::types::boolean;
+				return x;
+			}
 
 			void init(){
 				defineFunction("symbol",intrinsics::types::StringLiteral->reference(),&consumeSymbol);
@@ -188,21 +184,13 @@ namespace intrinsics {
 				defineFunction("parse",ExprPtr,&parse);
 				ARG arg = {"precedence",(new IntegerType("int32",Location()))->reference()};
 				defineFunction("parse",arg,ExprPtr,&parse2);
-				//Full function in beacker scope for efficiency because it's not always used
-				ARG args[] = {{"precedence",(new IntegerType("int32",Location()))->reference()},{"ignoreNewline",(new IntegerType("bool",Location()))->reference()}};
-				auto old = scope;
-				scope = new Scope(nullptr);
-				auto f = defineFunction("parse",args,2,ExprPtr,&parseFull);
-				f->arguments[0]->defaultValue(new IntegerLiteral(BigInt((int64)0)),false,false);
-				f->arguments[1]->defaultValue(new IntegerLiteral(BigInt((int64)0)),false,false);
-				old->import(scope,"%",false,true);
-				scope = old;
 				
 				{
 				ARG arg = {"symbol",intrinsics::types::StringLiteral->reference()};
 				defineFunction("expect",arg,intrinsics::types::Void,&expectString);
 				defineFunction("match",arg,(new IntegerType("bool",Location()))->reference(),&matchString);//TODO bool
 				}
+				defineFunction("matchNewline",(new IntegerType("bool",Location()))->reference(),&matchNewline);
 			}
 		};
 

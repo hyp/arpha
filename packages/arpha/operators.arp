@@ -35,26 +35,31 @@ macro (x) -- [precedence:precedence.increment] {
 
 #Infix operators
 macro (x) and [precedence:precedence.logical] {
-	var y = parser.parse(precedence.logical,ignoreNewline:true)
+	parser.matchNewline()
+	var y = parser.parse(precedence.logical)
 	return [> and(x,y) <]
 }
 macro (x) or [precedence:precedence.equality] {
-	var y = parser.parse(precedence.logical,ignoreNewline:true)
+	parser.matchNewline()
+	var y = parser.parse(precedence.logical)
 	return [> or(x,y) <]
 }
 
 macro (x) == [precedence:precedence.equality] {
-	var y = parser.parse(precedence.equality,ignoreNewline:true)
+	parser.matchNewline()
+	var y = parser.parse(precedence.equality)
 	return [> equals(x,y) <]
 }
 
 macro (x) + [precedence:precedence.term] {
-	var y = parser.parse(precedence.term,ignoreNewline:true)
+	parser.matchNewline()
+	var y = parser.parse(precedence.term)
 	return [> add(x,y) <]
 }
 
 macro (x) - [precedence:precedence.term] {
-	var y = parser.parse(precedence.term,ignoreNewline:true)
+	parser.matchNewline()
+	var y = parser.parse(precedence.term)
 	return [> subtract(x,y) <]
 }
 
