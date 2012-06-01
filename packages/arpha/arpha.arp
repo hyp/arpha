@@ -28,11 +28,11 @@ macro if {
 	var condition = parser.parse()
 	parser.expect(")")
 	var consequence = parser.parse()
-	var alternative = match parser.match("else") {
+	var alternative = match(parser.match("else")) {
 		to(true)	parser.parse()
 		to(false)   [> () <]
 	}
-	return [> match $condition { 
+	return [> match($condition) { 
 		to(true)  $consequence
 		to(false) $alternative
 	} <]

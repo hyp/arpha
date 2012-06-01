@@ -359,7 +359,8 @@ struct DefParser: PrefixDefinition {
 		parser->currentScope(oldScope);
 
 		func->resolve(parser->evaluator());
-		return new UnitExpression();//new FunctionReference(func);//TODO return reference when func has no generic args
+		if(func->isResolved() && !func->_hasGenericArguments) return new FunctionReference(func);
+		else return new UnitExpression();//new FunctionReference(func);//TODO return reference when func has no generic args
 	}
 
 	Node* parse(Parser* parser){
@@ -648,7 +649,9 @@ struct MatchParser: PrefixDefinition {
 		}
 	};
 	Node* parse(Parser* parser){
+		parser->expect("(");
 		auto expr = new MatchExpression(parser->parse());
+		parser->expect(")");
 		parser->expect("{");
 		blockParser->body(parser,BodyParser(expr));
 		return expr;
@@ -770,11 +773,19 @@ namespace intrinsics {
 			e->_type = intrinsics::types::boolean;
 			return e;
 		}
+		Node* boolNot(Node* arg){
+			auto result = arg->asIntegerLiteral()->integer.isZero();
+			auto e = new IntegerLiteral(BigInt((uint64)(result?1:0)));
+			e->_type = intrinsics::types::boolean;
+			return e;
+		}
 		void init(Scope* moduleScope){
 			auto x = ensure( ensure(moduleScope->lookupPrefix("or"))->asOverloadset() )->functions[0];
 			x->constInterpreter = boolOr;
 			x = ensure( ensure(moduleScope->lookupPrefix("and"))->asOverloadset() )->functions[0];
 			x->constInterpreter = boolAnd;
+			x = ensure( ensure(moduleScope->lookupPrefix("not"))->asOverloadset() )->functions[0];
+			x->constInterpreter = boolNot;
 		};
 	}
 }
@@ -824,6 +835,34 @@ struct CaptureParser : PrefixDefinition {
 		return new ValueExpression(block,intrinsics::ast::ExprPtr);
 	}
 };
+Node* intrinsics::ast::loop(Node* arg){
+	return new UnitExpression();
+}
+Node* intrinsics::ast::loopFull(Node* arg){
+	auto params = &(arg->asTupleExpression()->children[0]);
+	auto symbol = params[0]->asStringLiteral();
+	auto end = SymbolID(symbol->block.ptr(),symbol->block.length());
+	symbol = params[1]->asStringLiteral();
+	auto separator = SymbolID(symbol->block.ptr(),symbol->block.length());
+	struct LoopBodyParser {
+		Function* handler;
+		LoopBodyParser(Function* _handler) : handler(_handler) {}
+		bool operator()(Parser* parser){
+			InterpreterInvocation i;
+			auto res = i.interpret(parser->evaluator()->interpreter(),handler,nullptr);
+			if(!res){
+				::compiler::onError(handler->location,"Failed to interpret loop handler!");
+				return false;
+			}
+			return true;
+		}
+	};
+	BlockParser parser;
+	parser.closingBrace = end;
+	parser.lineAlternative = separator;
+	parser.body(::compiler::currentUnit()->parser,LoopBodyParser(params[2]->asFunctionReference()->function));
+	return new UnitExpression();
+}
 
 void astInit(Scope* moduleScope){
 	moduleScope->define(new CaptureParser);

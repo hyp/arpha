@@ -50,7 +50,9 @@ StringLiteral::StringLiteral(memory::Block& block){
 }
 #include <cstring>
 StringLiteral::StringLiteral(SymbolID symbol){
-	block.construct(symbol.ptr(),strlen(symbol.ptr()));
+	if(!symbol.isNull())
+		block.construct(symbol.ptr(),strlen(symbol.ptr()));
+	else block.construct("",0);
 }
 TypeExpression* StringLiteral::_returnType() const{
 	return intrinsics::types::StringLiteral->reference();//TODO
@@ -256,6 +258,9 @@ TypeExpression* FunctionReference::_returnType() const {
 }
 bool FunctionReference::isResolved() const {
 	return function->isResolved();//TODO kinds pointless, since function refrences are only obtained from resolved functions?
+}
+bool FunctionReference::isConst() const {
+	return true;
 }
 Node* FunctionReference::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new FunctionReference(function));

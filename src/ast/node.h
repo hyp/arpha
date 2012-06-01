@@ -282,6 +282,7 @@ struct FunctionReference : Node {
 
 	TypeExpression* _returnType() const;
 	bool isResolved() const;
+	bool isConst() const;
 
 	Function* function;
 	DECLARE_NODE(FunctionReference);

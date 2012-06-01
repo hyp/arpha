@@ -39,6 +39,7 @@ macro (x) and [precedence:precedence.logical] {
 	var y = parser.parse(precedence.logical)
 	return [> and($x,$y) <]
 }
+
 macro (x) or [precedence:precedence.equality] {
 	parser.matchNewline()
 	var y = parser.parse(precedence.logical)

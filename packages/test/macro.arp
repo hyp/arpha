@@ -74,7 +74,7 @@ f20
 f20 ha
 
 macro f21 {
-	return match parser.match("Ha") {
+	return match(parser.match("Ha")) {
 		to(true)  [> 1 <]
 		to(false) [> 2 <]
 	}
@@ -125,4 +125,29 @@ type x {
 }
 quasi0 1 #type x
 quasi1 1 #1
+
+#loops
+macro loop0 {
+   parser.expect("{")
+   parser.loop("}",";",def f(){ parser.expect("a") })
+   return [> "loop0success!" <]
+}
+loop0 { a }
+loop0 { a; }
+loop0 { a;a;a }
+loop0 {
+	a
+	a
+}
+
+macro loop1 {
+   parser.loop("end",";",def f(){ parser.parse() })
+   return [> "loop1success!" <]
+}
+loop1 1 end
+loop1 1;2 end
+loop1
+	1
+	2
+end
 

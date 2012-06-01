@@ -70,6 +70,7 @@ namespace intrinsics {
 		TypeExpression* UnitPtr = nullptr;
 		TypeExpression* WhilePtr = nullptr;
 		TypeExpression* ReturnPtr = nullptr;
+		TypeExpression* WildcardPtr = nullptr;
 
 		Node* passedExpr(Node* arg){
 			if(auto v = arg->asValueExpression()){
@@ -135,6 +136,8 @@ namespace intrinsics {
 				ARG args[] = {{"value",ExprPtr}};
 				defineConstructor(newReturn,args,1);
 				}
+
+				WildcardPtr = defineType("Wildcard");
 				parent = nullptr;
 			}
 		};
@@ -178,6 +181,7 @@ namespace intrinsics {
 				return x;
 			}
 
+
 			void init(){
 				defineFunction("symbol",intrinsics::types::StringLiteral->reference(),&consumeSymbol);
 				//parsing
@@ -191,6 +195,15 @@ namespace intrinsics {
 				defineFunction("match",arg,(new IntegerType("bool",Location()))->reference(),&matchString);//TODO bool
 				}
 				defineFunction("matchNewline",(new IntegerType("bool",Location()))->reference(),&matchNewline);
+				{
+					ARG args[] ={{"until",intrinsics::types::StringLiteral->reference()},
+					{"separator",intrinsics::types::StringLiteral->reference()},
+					{"handler",new TypeExpression(intrinsics::types::Void,intrinsics::types::Void)}};
+					
+					auto f = defineFunction("loop",args,3,intrinsics::types::Void,&loopFull);
+					f->arguments[0]->defaultValue(new StringLiteral(SymbolID("}")),false,false);
+					f->arguments[1]->defaultValue(new StringLiteral(SymbolID(";")),false,false);
+				}
 			}
 		};
 

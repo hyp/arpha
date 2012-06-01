@@ -13,6 +13,10 @@ namespace intrinsics {
 		void onMacroScope(Scope* scope);
 
 		void init(Scope* moduleScope);
+
+		//parse.loop(until,separator,handler)
+		Node* loop(Node* arg);
+		Node* loopFull(Node* arg);
 	};
 };
 

@@ -58,6 +58,9 @@ namespace memory {
 		assert(!b.hasOwnership());
 		assert(a.ptr() == data && a.length() == 4);
 		assert(!a.hasOwnership());
+
+		auto x = Block::construct("",0);
+		assert(x.ptr()!=nullptr && x.length() == 0);
 	}
 
 	ManagedDefinition* definitionsRoot = nullptr;
