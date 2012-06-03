@@ -173,7 +173,7 @@ struct Interpreter : NodeVisitor {
 	Node* visit(IfExpression* node){
 		auto cond = node->condition->accept(this);
 		if(status == FAILURE) return nullptr;
-		if(!cond->asIntegerLiteral()->integer.isZero()){
+		if(cond->asBoolExpression()->value){
 			if(walkEverywhere){
 				node->alternative->accept(this);
 				if(status == FAILURE) return nullptr;
@@ -191,9 +191,7 @@ struct Interpreter : NodeVisitor {
 		while(true){
 			auto cond = node->condition->accept(this);
 			if(status != WALKING) break;
-			if(auto i =cond->asIntegerLiteral()){
-				if(i->integer.isZero()) break;
-			}
+			if(!cond->asBoolExpression()->value) break;
 			node->body->accept(this);
 			if(status != WALKING) break;
 		}

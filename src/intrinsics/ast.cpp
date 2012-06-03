@@ -26,7 +26,7 @@ struct IntrinsicModule {
 	}
 	virtual void init() =0 ;
 	static TypeExpression* pointerType(IntrinsicType* t){
-		return new TypeExpression((PointerType*)nullptr,t->reference());
+		return new TypeExpression(TypeExpression::POINTER,t->reference());
 	}
 	Function* defineFunction(const char* name,ARG arguments[],size_t count,TypeExpression* returnType,Node* (*e)(Node*)){
 		Function* func = new Function(name,Location(),nullptr);
@@ -53,7 +53,7 @@ struct IntrinsicModule {
 		return defineFunction(name,nullptr,0,returnType,e);
 	}
 	TypeExpression* defineType(const char* name){
-		last = new TypeExpression((PointerType*)nullptr,(new IntrinsicType(name,Location(),parent ? parent->argument->intrinsic : nullptr))->reference());
+		last = new TypeExpression(TypeExpression::POINTER,(new IntrinsicType(name,Location(),parent ? parent->argument->intrinsic : nullptr))->reference());
 		scope->define(last->argument->intrinsic);
 		return last;
 	}
@@ -70,8 +70,11 @@ namespace intrinsics {
 		TypeExpression* UnitPtr = nullptr;
 		TypeExpression* WhilePtr = nullptr;
 		TypeExpression* ReturnPtr = nullptr;
-		TypeExpression* WildcardPtr = nullptr;
 		TypeExpression* IfPtr = nullptr;
+		TypeExpression* ControlFlowPtr = nullptr;
+		TypeExpression* PointerOpPtr = nullptr;
+		TypeExpression* TypeExprPtr = nullptr;
+		TypeExpression* BoolPtr = nullptr;
 
 		Node* passedExpr(Node* arg){
 			if(auto v = arg->asValueExpression()){
@@ -98,9 +101,7 @@ namespace intrinsics {
 						if(block->children.size() == 1 && block->scope->numberOfDefinitions() == 0) result = block->children[0]->isConst();
 					}
 				}
-				auto x = new IntegerLiteral(BigInt((int64)result));
-				x->_type = intrinsics::types::boolean;
-				return x;
+				return new BoolExpression(result);
 			}
 			//
 			static Node* newUnit(Node* arg){
@@ -117,6 +118,19 @@ namespace intrinsics {
 				auto t = arg->asTupleExpression();
 				return new ValueExpression(new IfExpression(passedExpr(t->children[0]),passedExpr(t->children[1]),passedExpr(t->children[2])),IfPtr);
 			}
+			static Node* newControlFlow(Node* arg){
+				return new ValueExpression(new ControlFlowExpression((int)arg->asIntegerLiteral()->integer.u64),ControlFlowPtr);
+			}
+			static Node* newPointerOp(Node* arg){
+				auto t = arg->asTupleExpression();
+				return new ValueExpression(new PointerOperation(passedExpr(t->children[1]),(int)t->children[0]->asIntegerLiteral()->integer.u64),PointerOpPtr);
+			}
+			static Node* newTypeExpression(Node* arg){
+				return new ValueExpression(new TypeExpression((int)arg->asIntegerLiteral()->integer.u64),TypeExprPtr);
+			}
+			static Node* newBooleanExpression(Node* arg){
+				return new ValueExpression(new BoolExpression(arg->asIntegerLiteral()->integer.isZero() ? false : true),BoolPtr);
+			}
 			void init() {
 
 				ScopePtr = defineType("Scope");
@@ -125,7 +139,7 @@ namespace intrinsics {
 				ExprPtr = defineType("Expression");
 				{
 					ARG arg = {"expression",ExprPtr};
-					defineFunction("isConst",arg,(new IntegerType("bool",Location()))->reference(),&isConst);
+					defineFunction("isConst",arg,intrinsics::types::boolean,&isConst);
 				}
 				parent = ExprPtr;
 				UnitPtr = defineType("Unit");
@@ -142,8 +156,7 @@ namespace intrinsics {
 				defineConstructor(newReturn,args,1);
 				}
 
-				WildcardPtr = defineType("Wildcard");
-				parent = nullptr;
+			
 
 				
 				{
@@ -151,6 +164,31 @@ namespace intrinsics {
 				ARG args[] = {{"condition",ExprPtr},{"consequence",ExprPtr},{"alternative",ExprPtr}};
 				defineConstructor(newIfElse,args,3);
 				}
+
+				{
+				ControlFlowPtr = defineType("ControlFlow");
+				ARG args[] = {{"kind",new TypeExpression(new IntegerType("int32",Location()))}};
+				defineConstructor(newControlFlow,args,1);
+				}
+
+				{
+				PointerOpPtr = defineType("PointerOp");
+				ARG args[] = {{"kind",new TypeExpression(new IntegerType("int32",Location()))},{"expression",ExprPtr}};
+				defineConstructor(newPointerOp,args,2);
+				}
+
+				{
+					TypeExprPtr = defineType("TypeExpression");
+					ARG args[] = {{"kind",new TypeExpression(new IntegerType("int32",Location()))}};
+					defineConstructor(newTypeExpression,args,1);
+				}
+
+				{
+					BoolPtr = defineType("BooleanConstant");
+					ARG args[] = {{"kind",new TypeExpression(new IntegerType("int32",Location()))}};
+					defineConstructor(newBooleanExpression,args,1);
+				}
+			parent = nullptr;
 			}
 		};
 
@@ -174,10 +212,7 @@ namespace intrinsics {
 			static Node* matchString(Node* arg){
 				auto parser = compiler::currentUnit()->parser;
 				auto symbol = arg->asStringLiteral();;
-				auto res = parser->match(SymbolID(symbol->block.ptr(),symbol->block.length()));
-				auto x = new IntegerLiteral(BigInt((int64)res));
-				x->_type = intrinsics::types::boolean;
-				return x;
+				return new BoolExpression( parser->match(SymbolID(symbol->block.ptr(),symbol->block.length())) );
 			}
 			static Node* consumeSymbol(Node* arg){
 				auto parser = compiler::currentUnit()->parser;
@@ -188,9 +223,7 @@ namespace intrinsics {
 				auto parser = compiler::currentUnit()->parser;
 				bool res = parser->peek().isLine();
 				if(res) parser->consume();
-				auto x = new IntegerLiteral(BigInt((int64)res));
-				x->_type = intrinsics::types::boolean;
-				return x;
+				return new BoolExpression(res);
 			}
 
 
@@ -198,15 +231,15 @@ namespace intrinsics {
 				defineFunction("symbol",intrinsics::types::StringLiteral->reference(),&consumeSymbol);
 				//parsing
 				defineFunction("parse",ExprPtr,&parse);
-				ARG arg = {"precedence",(new IntegerType("int32",Location()))->reference()};
+				ARG arg = {"precedence",new TypeExpression(new IntegerType("int32",Location()))};
 				defineFunction("parse",arg,ExprPtr,&parse2);
 				
 				{
 				ARG arg = {"symbol",intrinsics::types::StringLiteral->reference()};
 				defineFunction("expect",arg,intrinsics::types::Void,&expectString);
-				defineFunction("match",arg,(new IntegerType("bool",Location()))->reference(),&matchString);//TODO bool
+				defineFunction("match",arg,intrinsics::types::boolean,&matchString);
 				}
-				defineFunction("matchNewline",(new IntegerType("bool",Location()))->reference(),&matchNewline);
+				defineFunction("matchNewline",intrinsics::types::boolean,&matchNewline);
 				{
 					ARG args[] ={{"until",intrinsics::types::StringLiteral->reference()},
 					{"separator",intrinsics::types::StringLiteral->reference()},
@@ -216,6 +249,7 @@ namespace intrinsics {
 					f->arguments[0]->defaultValue(new StringLiteral(SymbolID("}")),false,false);
 					f->arguments[1]->defaultValue(new StringLiteral(SymbolID(";")),false,false);
 				}
+
 			}
 		};
 

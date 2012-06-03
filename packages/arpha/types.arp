@@ -6,7 +6,6 @@
 		max/min information in here.
 #
 
-type bool integer
 
 type int8 integer
 type int16 integer
@@ -20,4 +19,3 @@ type uint64 integer
 
 # utf32 char type char integer
 
-type Pointer pointer

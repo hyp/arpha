@@ -6,12 +6,27 @@
 
 import export types
 
+macro Nothing = ast.newTypeExpression(0)
+macro Type    = ast.newTypeExpression(1)
+macro bool    = ast.newTypeExpression(2)
+
+macro false = ast.newBooleanConstant(0)
+macro true  = ast.newBooleanConstant(1)
+
 import qualified precedence
 
-def false bool = 0
-def true bool = 1
-
 import export ast
+
+#
+macro ( {
+	if(parser.match(")")) return ast.newUnit()
+	else {
+		var expr = parser.parse() <-- TODO interpreter fix
+		parser.expect(")")
+		return expr
+	}
+}
+#
 
 #TODO condition typecheck?
 macro if {
@@ -41,9 +56,9 @@ macro while {
 	return ast.newWhile(condition,parser.parse())
 }
 
-#TODO
-macro continue = [> () <]
-macro break = [> () <]
+#TODO remove integer hack with a predefined constant
+macro continue = ast.newControlFlow(0)
+macro break = ast.newControlFlow(1)
 
 # TODO
 macro for {
@@ -63,13 +78,49 @@ macro [ {
 	return [> $expr <]
 }
 
+macro & {
+	var expr = parser.parse(precedence.unary)
+	return ast.newPointerOp(0,expr)
+}
+
+#
+TODO
+macro * {
+	var expr = parser.parse(precedence.unary)
+	return [> derefOrPtrType($expr) <]
+}
+
+
+macro derefOrPtrType(T Type) = Pointer(T)
+macro derefOrPtrType(expr)   = ast.newPointerOp(1,expr)
+#
 
 import export operators
 
 import export operations
 
+#
+macro new {
+	var type = parser.parse(precedence.call)
+	if(parser.match("(")){
+		if(!parser.match(")")){
+			var arg = parser.parse()
+			parser.expect(")")
+			return [> construct($type.allocator.alloc(sizeof($type)),$arg) <]
+		}
+	}
+	return [> construct($type.allocator.alloc(sizeof($type))) <]
+}
+
+macro delete {
+	var object = parser.parse() #type check is ptr..
+	return [> $object.finalize(); typeof($object).allocator.free($object) <]
+}
+#
+
 # Returns true if two given types are the same type. TOCONSIDER move to compiler
 def equals(x Type,y Type) bool
+
 
 # Returns the type of a given expression.
 #macro typeof(expression) Type

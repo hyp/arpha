@@ -239,14 +239,5 @@ void Scope::duplicate(DuplicationModifiers* mods){
 		}
 	}
 }
-
-void Scope::reach(){
-	memory::reach(parent);
-	for(auto i=imports.begin();i!=imports.end();++i) memory::reach(*i);
-	for(auto i=broadcastedImports.begin();i!=broadcastedImports.end();++i) memory::reach(*i);
-	for(auto i=prefixDefinitions.begin();i!=prefixDefinitions.end();++i) memory::reach(i->second);
-	for(auto i=infixDefinitions.begin();i!=infixDefinitions.end();++i) memory::reach(i->second);
-}
-
 	
 	

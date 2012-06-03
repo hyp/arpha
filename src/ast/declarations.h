@@ -98,22 +98,9 @@ struct IntegerType: public TypeBase {
 
 	Node* parse(Parser* parser);
 	BigInt max,min;
-	//A single reference expression
-	TypeExpression _reference;
-	inline TypeExpression* reference(){ return &_reference; }
-
 private:
 	
 	size_t _size;
-};
-
-//A pointer type
-struct PointerType: public TypeBase {
-	PointerType(SymbolID name,Location& location);
-
-	Node* parse(Parser* parser);
-
-	size_t size() const;
 };
 
 //A record type
@@ -192,8 +179,6 @@ struct Overloadset: public PrefixDefinition {
 	Overloadset* asOverloadset();
 	
 	std::vector<Function*> functions;
-private: 
-	bool _resolved;
 };
 
 // A function
@@ -205,12 +190,12 @@ struct Function: public PrefixDefinition {
 	enum {
 		//Indicates whether some function, which can be evaluated at compile time,
 		//is allowed to be interpreted only when it's owner function is being interpreted
-		INTERPRET_ONLY_INSIDE = 0x1,
+		INTERPRET_ONLY_INSIDE = 0x2,
 
 		//Allows it to act as a type when declaring arguments for other functions
-		CONSTRAINT_FUNCTION = 0x2,
+		CONSTRAINT_FUNCTION = 0x4,
 
-		MACRO_FUNCTION = 0x4,
+		MACRO_FUNCTION = 0x8,
 
 		CONTAINS_RETURN = 0x10
 	};

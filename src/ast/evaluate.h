@@ -19,6 +19,7 @@ private:
 public:
 	bool isRHS; // = false
 	bool forcedToEvaluate; // = false
+	bool insideWhile; // = false
 
 	// Sometimes we know that we want an expression of certain type at a given place e.g. var x Foo <- we expect Foo to be TypeExpression
 	// This knowledge can be used to resolve certain ambiguties: 

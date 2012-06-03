@@ -23,8 +23,12 @@ namespace Visibility {
 	};
 }
 
+//is resolved flag
+enum {
+	IS_RESOLVED = 0x1
+};
 
-struct PrefixDefinition : memory::ManagedDefinition {
+struct PrefixDefinition {
 	SymbolID id;
 	Location location;
 	uint8 visibilityMode;
@@ -48,7 +52,7 @@ struct PrefixDefinition : memory::ManagedDefinition {
 	bool isFlagSet(uint16 id);
 };
 
-struct InfixDefinition : memory::ManagedDefinition {
+struct InfixDefinition {
 	SymbolID id;
 	int stickiness;
 	Location location;
@@ -65,10 +69,8 @@ struct InfixDefinition : memory::ManagedDefinition {
 	bool isFlagSet(uint16 id);
 };
 
-
-
 //Scope resolves symbols to corresponding definitions, which tells parser how to parse the encountered symbol
-struct Scope: memory::ManagedDefinition {
+struct Scope {
 
 	Scope(Scope* parent);
 
@@ -118,7 +120,6 @@ private:
 	std::vector<std::pair<Scope*,std::pair<SymbolID,bool> > > exportedImports;
 	std::vector<ImportedScope*> broadcastedImports;
 
-	void reach();
 };
 
 

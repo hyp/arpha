@@ -23,7 +23,7 @@ IntegerLiteral::IntegerLiteral(const BigInt& integer){
 	_type = nullptr;
 }
 TypeExpression* IntegerLiteral::_returnType() const{
-	if(_type) return _type;
+	if(_type) return new TypeExpression(_type);
 	//TODO integers overflowing int64 max/min
 	if(integer.isNegative()){
 		if(/* >= */!(integer < intrinsics::types::int32->integer->min)) return intrinsics::types::int32;
@@ -41,8 +41,13 @@ Node* IntegerLiteral::duplicate(DuplicationModifiers* mods) const {
 	dup->_type = _type;
 	return copyProperties(dup);
 };
-bool IntegerLiteral::isConst() const {
-	return true;
+
+BoolExpression::BoolExpression(const bool v) : value(v) {}
+TypeExpression* BoolExpression::_returnType() const {
+	return intrinsics::types::boolean;
+}
+Node* BoolExpression::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new BoolExpression(value));
 }
 
 StringLiteral::StringLiteral(memory::Block& block){
@@ -60,9 +65,7 @@ TypeExpression* StringLiteral::_returnType() const{
 Node* StringLiteral::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new StringLiteral(block.duplicate()));
 }
-bool StringLiteral::isConst() const {
-	return true;
-}
+
 
 
 // Unit expression
@@ -74,14 +77,6 @@ bool UnitExpression::isConst() const {
 }
 Node* UnitExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new UnitExpression);
-};
-
-// Wildcard expression
-TypeExpression* WildcardExpression::_returnType() const {
-	return intrinsics::types::Void;//TODO???
-}
-Node* WildcardExpression::duplicate(DuplicationModifiers* mods) const {
-	return copyProperties(new WildcardExpression);
 };
 
 //Scope reference
@@ -219,7 +214,7 @@ TypeExpression* PointerOperation::_returnType() const {
 	auto next = expression->_returnType();//TODO
 	assert(next->type != TypeExpression::INTRINSIC);
 	if(kind == ADDRESS){
-		auto x = new TypeExpression((PointerType*)nullptr,next);
+		auto x = new TypeExpression(TypeExpression::POINTER,next);
 		x->_localSemantics = expression->isLocal();
 		return x;
 	}
@@ -246,7 +241,7 @@ TypeExpression* IfExpression::_returnType() const {
 	if(cr->isSame(alternative->_returnType())) return cr;
 	return intrinsics::types::Void;
 }
-bool IfExpression::isResolved() {
+bool IfExpression::isResolved() const{
 	return _resolved;
 }
 Node* IfExpression::duplicate(DuplicationModifiers* mods) const{
@@ -389,6 +384,9 @@ void InferredUnresolvedTypeExpression::infer(TypeExpression* type){
 }
 
 // TypeExpression
+TypeExpression::TypeExpression(int kind) : type(kind),_localSemantics(false) {
+	assert(kind == VOID || kind == TYPE || kind == BOOL);
+}
 TypeExpression::TypeExpression(IntrinsicType* intrinsic) : type(INTRINSIC),_localSemantics(false) {
 	this->intrinsic = intrinsic;
 }
@@ -398,13 +396,22 @@ TypeExpression::TypeExpression(IntegerType* integer) : type(INTEGER),_localSeman
 TypeExpression::TypeExpression(Record* record): type(RECORD),_localSemantics(false) { 
 	this->record = record; 
 }
-TypeExpression::TypeExpression(PointerType* pointer,TypeExpression* next) : type(POINTER),_localSemantics(false) {
+TypeExpression::TypeExpression(int kind,TypeExpression* next) : type(POINTER),_localSemantics(false) {
+	assert(kind == POINTER);
 	this->argument = next;
 }
 TypeExpression::TypeExpression(TypeExpression* argument,TypeExpression* returns) : type(FUNCTION),_localSemantics(false) {
 	this->argument = argument;
 	this->returns = returns;
 }
+
+bool TypeExpression::isValidTypeForVariable(){
+	return true;
+}
+bool TypeExpression::isValidTypeForArgument(){
+	return true;
+}
+
 bool TypeExpression::isConst() const{
 	return true;
 }
@@ -427,6 +434,10 @@ Node* TypeExpression::duplicate(DuplicationModifiers* mods) const {
 	TypeExpression* x;
 	
 	switch(type){
+		case VOID:
+		case TYPE:
+		case BOOL:
+			return copyProperties(new TypeExpression(type));
 		case RECORD: 
 			{
 			auto red = mods->redirectors.find(record);
@@ -434,16 +445,16 @@ Node* TypeExpression::duplicate(DuplicationModifiers* mods) const {
 				return copyProperties(new TypeExpression(reinterpret_cast<Record*>((*red).second.first)));
 			return copyProperties(new TypeExpression(record));
 			}
-		case INTEGER: return integer->reference();
+		case INTEGER: return copyProperties(new TypeExpression(integer));
 		case INTRINSIC: return intrinsic->reference();
 		case POINTER:
-			x = new TypeExpression((PointerType*)nullptr,argument->duplicate(mods)->asTypeExpression());
+			x = new TypeExpression(TypeExpression::POINTER,argument->duplicate(mods)->asTypeExpression());
 			x->_localSemantics = _localSemantics;
-			return x;
+			return copyProperties(x);
 		case FUNCTION:
 			x = new TypeExpression(argument->duplicate(mods)->asTypeExpression(),returns->duplicate(mods)->asTypeExpression());
 			x->_localSemantics = _localSemantics;
-			return x;
+			return copyProperties(x);
 		default:
 			throw std::runtime_error("TypeExpression type invariant failed");
 			return nullptr;
@@ -453,6 +464,8 @@ Node* TypeExpression::duplicate(DuplicationModifiers* mods) const {
 //TODO non references
 size_t TypeExpression::size() const {
 	switch(type){
+		case VOID: case TYPE: return 0;
+		case BOOL: return 1;
 		case RECORD: return record->size();
 		case INTEGER: return integer->size();
 		case INTRINSIC: return intrinsic->size();
@@ -466,6 +479,7 @@ bool TypeExpression::isSame(TypeExpression* other){
 	if(this->type != other->type) return false;
 	if(this->_localSemantics != other->_localSemantics) return false;
 	switch(type){
+		case VOID: case TYPE: case BOOL: return type == other->type;
 		case RECORD: return record == other->record;
 		case INTEGER: return integer == other->integer;
 		case POINTER: return argument->isSame(other->argument);
@@ -528,7 +542,10 @@ Node* TypeExpression::assignableFrom(Node* expression,TypeExpression* type) {
 	else if(this->type == INTEGER && type->type == INTEGER){
 		//literal integer constants.. check to see if the type can accept it's value
 		if(auto intConst = expression->asIntegerLiteral()){
-			if(!intConst->_type && this->integer->isValid(intConst->integer)) return expression;
+			if(!intConst->_type && this->integer->isValid(intConst->integer)){
+				intConst->_type = this->integer;
+				return expression;
+			}
 		}
 		if(type->integer->isSubset(this->integer)) return expression;
 	}else if(type->type == RECORD){
@@ -565,6 +582,9 @@ std::ostream& operator<< (std::ostream& stream,TypeExpression* node){
 	if(node->hasLocalSemantics()) stream<<"local ";
 	if(node->hasConstSemantics()) stream<<"const ";
 	switch(node->type){
+		case TypeExpression::VOID: stream<<"void"; break;
+		case TypeExpression::TYPE: stream<<"type"; break;
+		case TypeExpression::BOOL: stream<<"bool"; break;
 		case TypeExpression::RECORD: stream<<node->record; break;
 		case TypeExpression::INTEGER: stream<<node->integer->id; break;
 		case TypeExpression::INTRINSIC: stream<<node->intrinsic->id; break;
@@ -662,6 +682,10 @@ struct NodeToString: NodeVisitor {
 		stream<<node->integer;
 		return node;
 	}
+	Node* visit(BoolExpression* node){
+		stream<<(node->value?"true":"false");
+		return node;
+	}
 	Node* visit(ErrorExpression* node){
 		stream<<"error";
 		return node;
@@ -676,10 +700,6 @@ struct NodeToString: NodeVisitor {
 	}
 	Node* visit(UnitExpression* node){
 		stream<<"()";
-		return node;
-	}
-	Node* visit(WildcardExpression* node){
-		stream<<"_";
 		return node;
 	}
 	Node* visit(ImportedScopeReference* node){
@@ -713,7 +733,7 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(ControlFlowExpression* node){
-		stream<<node->isContinue() ? "continue" : (node->isBreak() ? "break" : "fallthrough");
+		stream<<(node->isContinue() ? "continue" : (node->isBreak() ? "break" : "fallthrough"));
 		return node;
 	}
 	Node* visit(PointerOperation* node){

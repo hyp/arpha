@@ -15,7 +15,6 @@
 struct Variable;
 struct IntegerType;
 struct IntrinsicType;
-struct PointerType;
 struct Record;
 struct Overloadset;
 struct Function;
@@ -37,10 +36,10 @@ struct Evaluator;
 //This is a list of node types. TODO refactor into NODETYPE_LIST
 #define NODE_LIST(X) \
 	X(IntegerLiteral)    \
+	X(BoolExpression) \
 	X(StringLiteral) \
 	X(UnitExpression)    \
 	X(ErrorExpression)       \
-	X(WildcardExpression)       \
 	X(TypeExpression)         \
 	X(ImportedScopeReference)   \
 	X(VariableReference) \
@@ -51,6 +50,7 @@ struct Evaluator;
 	X(AccessExpression)      \
 	X(AssignmentExpression)  \
 	X(ReturnExpression)      \
+	X(ControlFlowExpression)      \
 	X(PointerOperation)      \
 	X(IfExpression)      \
 	X(BlockExpression)       \
@@ -110,24 +110,34 @@ struct Node {
 //Node to string
 std::ostream& operator<< (std::ostream& stream,Node* node);
 
+
+struct ConstantNode: Node {
+	bool isConst() const { return true; }
+};
+
 //(0..9)+ : integer
-struct IntegerLiteral : Node {
+struct IntegerLiteral : ConstantNode {
 	IntegerLiteral(const BigInt& integer);
-	TypeExpression* _returnType() const;
-	bool isConst() const;
-	
+	TypeExpression* _returnType() const;	
 	
 	BigInt integer;
-	TypeExpression* _type;//optional
+	IntegerType* _type;//optional
 	DECLARE_NODE(IntegerLiteral);
 };
 
-struct StringLiteral : Node {
+//true | false
+struct BoolExpression: ConstantNode {
+	BoolExpression(const bool v);
+	TypeExpression* _returnType() const;
+
+	bool value;
+	DECLARE_NODE(BoolExpression);
+};
+
+struct StringLiteral : ConstantNode {
 	StringLiteral(memory::Block& block);
 	StringLiteral(SymbolID symbol);//<-- reuses the string, no duplication
 	TypeExpression* _returnType() const;
-	bool isConst() const;
-	
 	
 	memory::Block block;
 	DECLARE_NODE(StringLiteral);
@@ -145,15 +155,6 @@ private:
 	UnitExpression(const UnitExpression& other){}
 };
 
-//_:void
-struct WildcardExpression : Node {
-	WildcardExpression(){}
-	TypeExpression* _returnType() const;
-
-	DECLARE_NODE(WildcardExpression);
-private:
-	WildcardExpression(const WildcardExpression& other){}
-};
 
 //: intrinsics::types::Scope
 struct ImportedScopeReference : Node {
@@ -164,6 +165,18 @@ struct ImportedScopeReference : Node {
 	ImportedScope* scope;
 	DECLARE_NODE(ImportedScopeReference);
 };
+
+struct ValueExpression : Node {
+	ValueExpression(void* d,TypeExpression* type); //..
+	
+	bool isConst() const;
+	TypeExpression* _returnType() const;
+
+	TypeExpression* type;
+	void* data;
+	DECLARE_NODE(ValueExpression);
+};
+
 
 // Inferred [i.e. no type expression given] | Unresolved expression | valid type expression | wildcard type with possible constraint
 struct InferredUnresolvedTypeExpression {
@@ -198,6 +211,9 @@ struct InferredUnresolvedTypeExpression {
 struct TypeExpression : Node {
 
 	enum {
+		VOID,
+		TYPE,//typeof(int32)
+		BOOL,
 		RECORD,
 		INTEGER,
 		INTRINSIC,
@@ -205,12 +221,18 @@ struct TypeExpression : Node {
 		POINTER,
 	};
 
+	TypeExpression(int kind);
 	TypeExpression(IntrinsicType* intrinsic);
 	TypeExpression(IntegerType* integer);
 	TypeExpression(Record* record);
-	TypeExpression(PointerType* pointer,TypeExpression* next);
+	TypeExpression(int kind,TypeExpression* next);//ptr
 	TypeExpression(TypeExpression* argument,TypeExpression* returns);//function
 
+	//self explanatory
+	bool isValidTypeForVariable();
+	bool isValidTypeForArgument();
+
+	//..
 	bool isResolved() const;
 	bool isConst() const;//NB: this is very different to hasConstSematics
 	bool matchRecord(Record* record) const;
@@ -349,8 +371,8 @@ struct ControlFlowExpression: Node {
 	inline bool isContinue(){ return kind == CONTINUE; }
 	inline bool isBreak(){ return kind == BREAK; }
 	inline bool isFallthrough(){ return kind == FALLTHROUGH; }
-	int kind;
 	SymbolID labeledJump;//For future
+	int kind;
 	DECLARE_NODE(ControlFlowExpression);
 };
 
@@ -374,7 +396,7 @@ struct IfExpression : Node {
 	IfExpression(Node* condition,Node* consequence,Node* alternative);
 
 	TypeExpression* _returnType() const;
-	bool isResolved();
+	bool isResolved() const;
 
 	Node* condition;
 	Node* consequence;
@@ -460,17 +482,5 @@ private:
 	ErrorExpression(){}
 	ErrorExpression(const ErrorExpression& other){}
 };
-
-struct ValueExpression : Node {
-	ValueExpression(void* d,TypeExpression* type); //..
-	
-	bool isConst() const;
-	TypeExpression* _returnType() const;
-
-	TypeExpression* type;
-	void* data;
-	DECLARE_TEMPNODE(ValueExpression);
-};
-
 
 #endif

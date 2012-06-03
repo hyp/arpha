@@ -24,7 +24,7 @@ Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
 	}
 }
 
-Evaluator::Evaluator(Interpreter* interpreter) : _interpreter(interpreter),forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {
+Evaluator::Evaluator(Interpreter* interpreter) : _interpreter(interpreter),insideWhile(false),forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {
 }
 
 
@@ -76,6 +76,9 @@ struct AstExpander: NodeVisitor {
 		if(!node->arg->isResolved()) return node;
 		if(auto callingOverloadSet = node->object->asUnresolvedSymbol()){
 			auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : evaluator->currentScope());
+			if(callingOverloadSet->symbol == "equals"){
+				debug("foo");
+			}
 			auto func =  scope->resolveFunction(evaluator,callingOverloadSet->symbol,node->arg);
 			if(func){
 				node->arg = evaluator->constructFittingArgument(&func,node->arg)->accept(this);
@@ -132,7 +135,7 @@ struct AstExpander: NodeVisitor {
 			if(auto typeExpr = node->expression->asTypeExpression()){
 				node->expression = nullptr;
 				delete node;
-				return new TypeExpression((PointerType*)nullptr,typeExpr);
+				return new TypeExpression(TypeExpression::POINTER,typeExpr);
 			}
 		}
 		return node;
@@ -182,6 +185,7 @@ struct AstExpander: NodeVisitor {
 			if(auto var = object->asVariableReference()){
 				if(var->variable->type.isInferred()){
 					var->variable->type.infer(valuesType);
+					var->variable->resolve(evaluator);
 					debug("Inferred type %s for variable %s",valuesType,var->variable->id);
 					if(var->variable->isMutable) return value;
 				}
@@ -329,10 +333,10 @@ struct AstExpander: NodeVisitor {
 
 		if(resolved){
 			//int32,int32 :: Type,Type -> anon-record(int32,int32) :: Type
-			if(evaluator->expectedTypeForEvaluatedExpression == intrinsics::types::Type){
+			if(evaluator->expectedTypeForEvaluatedExpression && evaluator->expectedTypeForEvaluatedExpression->isSame(intrinsics::types::Type)){
 				bool allTypes = true;
 				for(auto i=fields.begin();i!=fields.end();i++){
-					if((*i).type.type() != intrinsics::types::Type) allTypes = false;
+					if(!(*i).type.type()->isSame(intrinsics::types::Type)) allTypes = false;
 				}
 				if(allTypes){
 					//int32,int32
@@ -399,6 +403,15 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
+	Node* visit(ControlFlowExpression* node){
+		//TODO first eval..
+		if(!evaluator->insideWhile){
+			error(node->location,"The following control flow statement must be inside the while loop!");
+			return ErrorExpression::getInstance();
+		}
+		return node;
+	}
+
 	Node* visit(IfExpression* node){
 		if(node->_resolved && !evaluator->forcedToEvaluate) return node;
 		node->condition = node->condition->accept(this);
@@ -413,13 +426,16 @@ struct AstExpander: NodeVisitor {
 
 	Node* visit(WhileExpression* node){
 		node->condition = node->condition->accept(this);
+		auto oldInside = evaluator->insideWhile;
+		evaluator->insideWhile = true;
 		node->body = node->body->accept(this);
+		evaluator->insideWhile = oldInside;
 
 		if(node->condition->isResolved()) node->condition = typecheck(node->location,node->condition,intrinsics::types::boolean);
 		if(node->body->isResolved()){
-			if(auto condLiteral = node->condition->asIntegerLiteral()){
+			if(auto condLiteral = node->condition->asBoolExpression()){
 				//Remove useless code
-				if(condLiteral->integer.isZero()){
+				if(!condLiteral->value){
 					warning(node->location,"The following while loop will never be executed!");
 					return new UnitExpression();
 				}else{
@@ -669,14 +685,28 @@ Node* Evaluator::mixin(DuplicationModifiers* mods,Node* node){
 }
 
 //Evaluates the verifier to see if an expression satisfies a constraint
-int satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* verifier){
-	auto args = verifier->arguments.size() == 1 ? static_cast<Node*>(arg->_returnType()) : new TupleExpression(arg->_returnType(),arg);
+int satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* constraint){
+	Node* args;
+	Function* verifier;
+	if(constraint->arguments.size() == 1){
+		args = static_cast<Node*>(arg->_returnType());
+		verifier = constraint;
+	}else{
+		assert(constraint->arguments.size() == 2);
+		auto a0 = arg->_returnType();
+		args = new TupleExpression(a0,arg);
+		DuplicationModifiers mods;
+		mods.target = constraint->owner();
+		verifier = constraint->duplicate(&mods);
+		verifier->arguments[1]->type.kind = InferredUnresolvedTypeExpression::Type;
+		verifier->arguments[1]->type._type = a0;
+		verifier->resolve(evaluator);
+	}
 	InterpreterInvocation i;
 	auto result = i.interpret(evaluator->interpreter(),verifier,args);
 	if(result){
-		if(auto resolved = result->asIntegerLiteral()){
-			assert(result->_returnType()->isSame(intrinsics::types::boolean));
-			return resolved->integer.isZero() ? -1 : (verifier->arguments.size() == 1 ? 0 : 1);
+		if(auto resolved = result->asBoolExpression()){
+			return resolved->value;
 		}
 	}
 	error(arg->location,"Can't evaluate constraint %s with argument %s at compile time!",verifier,arg);

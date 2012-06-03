@@ -5,11 +5,13 @@
 #define ARPHA_BIGINT_H
 
 struct BigInt {
-	int wordCount;
-	bool negative;
+//TODO protected:
 	union {
 		uint64 u64;
+		void*  data;
 	};
+	int wordCount;
+	bool negative;
 	
 public:
 	BigInt();
@@ -28,7 +30,9 @@ public:
 	inline bool isZero() const { return wordCount == 1 && u64 == 0; }
 
 	void changeSign(){ negative = !negative; }
-};
+
+	friend std::ostream& operator<< (std::ostream& stream,const BigInt& integer);
+}; 
 
 std::ostream& operator<< (std::ostream& stream,const BigInt& integer);
 

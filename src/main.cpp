@@ -246,7 +246,10 @@ struct VarParser: PrefixDefinition {
 		//parse optional type
 		InferredUnresolvedTypeExpression type;
 		if(!isEndExpressionEquals(parser->peek())) type.parse(parser,arpha::Precedence::Assignment);
-		for(auto i=vars.begin();i!=vars.end();i++) (*i)->type = type;
+		for(auto i=vars.begin();i!=vars.end();i++){
+			(*i)->type = type;
+			(*i)->resolve(parser->evaluator());
+		}
 		
 		Node* result;
 		if(vars.size() == 1) result = new VariableReference(vars[0]);
@@ -359,7 +362,7 @@ struct DefParser: PrefixDefinition {
 		parser->currentScope(oldScope);
 
 		func->resolve(parser->evaluator());
-		if(func->isResolved() && !func->_hasGenericArguments) return new FunctionReference(func);
+		if(func->isResolved() && !func->_hasGenericArguments && !func->_hasExpandableArguments) return new FunctionReference(func);
 		else return new UnitExpression();//new FunctionReference(func);//TODO return reference when func has no generic args
 	}
 
@@ -503,7 +506,7 @@ struct ConstraintParser: PrefixDefinition {
 			bodyScope->define(param);
 		}
 		parser->expect(")");
-		constraint->_returnType = intrinsics::types::boolean->duplicate()->asTypeExpression();
+		constraint->_returnType = intrinsics::types::boolean;
 
 		DefParser::functionBody(constraint,parser,false);
 		parser->currentScope(oldScope);
@@ -569,11 +572,6 @@ struct TypeParser: PrefixDefinition {
 			auto type = new IntrinsicType(name,location);
 			parser->currentScope()->define(type);
 			return new TypeExpression(type);
-		}else if(parser->match("pointer")){
-			debug("Defined pointer type %s",name);
-			auto type = new PointerType(name,location);
-			parser->currentScope()->define(type);
-			return new UnitExpression;//TODO
 		}
 		auto record = new Record(name,location);
 		parser->currentScope()->define(record);
@@ -680,9 +678,7 @@ struct CommandParser: PrefixDefinition {
 //TODO refactor
 Node* equals(Node* parameters){
 	auto t = parameters->asTupleExpression();
-	auto e = new IntegerLiteral(BigInt((int64) t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()) ));
-	e->_type = intrinsics::types::boolean;
-	return e;
+	return new BoolExpression(t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()));
 }
 Node* _typeof(CallExpression* node,Evaluator* evaluator){
 	return node->arg->_returnType();
@@ -692,7 +688,7 @@ Node* _sizeof(CallExpression* node,Evaluator* evaluator){
 	if(auto t = node->arg->asTypeExpression()) size = t->size();
 	else size = node->arg->_returnType()->size();
 	auto e = new IntegerLiteral(BigInt((uint64) size));
-	e->_type = intrinsics::types::int32;//TODO natural
+	e->_type = intrinsics::types::int32->integer;//TODO natural
 	return e;
 }
 
@@ -717,23 +713,14 @@ namespace intrinsics {
 	namespace operations {
 		Node* boolOr(Node* parameters){
 			auto t = parameters->asTupleExpression();
-			auto result = (!t->children[0]->asIntegerLiteral()->integer.isZero()) || (!t->children[1]->asIntegerLiteral()->integer.isZero());
-			auto e = new IntegerLiteral(BigInt((uint64)(result?1:0)));
-			e->_type = intrinsics::types::boolean;
-			return e;
+			return new BoolExpression( t->children[0]->asBoolExpression()->value || t->children[1]->asBoolExpression()->value );
 		}
 		Node* boolAnd(Node* parameters){
 			auto t = parameters->asTupleExpression();
-			auto result = (!t->children[0]->asIntegerLiteral()->integer.isZero()) && (!t->children[1]->asIntegerLiteral()->integer.isZero());
-			auto e = new IntegerLiteral(BigInt((uint64)(result?1:0)));
-			e->_type = intrinsics::types::boolean;
-			return e;
+			return new BoolExpression( t->children[0]->asBoolExpression()->value && t->children[1]->asBoolExpression()->value );
 		}
 		Node* boolNot(Node* arg){
-			auto result = arg->asIntegerLiteral()->integer.isZero();
-			auto e = new IntegerLiteral(BigInt((uint64)(result?1:0)));
-			e->_type = intrinsics::types::boolean;
-			return e;
+			return new BoolExpression( !(arg->asBoolExpression()->value) );
 		}
 		void init(Scope* moduleScope){
 			auto x = ensure( ensure(moduleScope->lookupPrefix("or"))->asOverloadset() )->functions[0];
@@ -846,7 +833,6 @@ void arpha::defineCoreSyntax(Scope* scope){
 
 	scope->define(new ReturnParser);
 
-	scope->define(new AddressParser);
 	scope->define(new DereferenceParser);
 
 	scope->define(new CommandParser);

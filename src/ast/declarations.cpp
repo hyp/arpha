@@ -7,6 +7,7 @@
 #include "evaluate.h"
 #include "interpret.h"
 #include "../intrinsics/types.h"
+#include "../intrinsics/ast.h"
 
 PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){
 	this->id = name;this->location = location;
@@ -57,13 +58,24 @@ bool Variable::isLocal(){
 	return _local;
 }
 bool Variable::isResolved(){
-	return type.isResolved();
+	return isFlagSet(IS_RESOLVED);//type.isResolved();
 }
 bool Variable::resolve(Evaluator* evaluator){
 	auto _resolved = true;
-	if(type.isInferred()) _resolved = false;
+	if(type.isResolved()) _resolved = true;
+	else if(type.isInferred()) _resolved = false;
 	else _resolved = type.resolve(evaluator);
-	if(!_resolved) evaluator->markUnresolved(this);
+
+	if(!_resolved){
+		evaluator->markUnresolved(this);
+	}
+	else {
+		setFlag(IS_RESOLVED);
+		if(asArgument()){
+			if(!type.type()->isValidTypeForArgument()) error(location,"An argument %s can't have a type %s",id,type.type());
+		}
+		else if(!type.type()->isValidTypeForVariable()) error(location,"A variable %s can't have a type %s",id,type.type());
+	}
 	return _resolved;
 }
 void Variable::setImmutableValue(Node* value){
@@ -72,7 +84,10 @@ void Variable::setImmutableValue(Node* value){
 	this->value = value;
 	debug("Setting value %s to variable %s",value,id);
 	if(value->isConst()){
-		if(value->asIntegerLiteral()) this->value->asIntegerLiteral()->_type = type.type(); //def a bool = 1 -> make the 1 explicitly boolean
+		if(value->asIntegerLiteral()){
+			assert(type.type()->type == TypeExpression::INTEGER);
+			this->value->asIntegerLiteral()->_type = type.type()->integer; //def a int8 = 1 -> make the 1 explicitly int8
+		}
 		expandMe = true;
 	}
 }
@@ -137,14 +152,9 @@ size_t IntrinsicType::size() const { return 0; }
 
 //integer type
 
-IntegerType::IntegerType(SymbolID name,Location& location) : TypeBase(name,location),_reference(this){
+IntegerType::IntegerType(SymbolID name,Location& location) : TypeBase(name,location){
 	//temporary TODO move to arpha package source files
-	if(name == "bool"){
-		min = 0;
-		max = 1;
-		_size = 1;
-	}
-	else if(name == "int32"){
+	if(name == "int32"){
 		min = std::numeric_limits<int>::min();
 		max = std::numeric_limits<int>::max();
 		_size = 4;
@@ -198,11 +208,6 @@ bool IntegerType::isSubset(IntegerType* other) const {
 	return (!(min<other->min)) && max<=other->max;
 }
 
-// Pointer type
-PointerType::PointerType(SymbolID name,Location& location) : TypeBase(name,location) {
-}
-size_t PointerType::size() const { return 0; } //implemented in typeExpression
-
 //type
 
 Record::Record(SymbolID name,Location& location) : TypeBase(name,location) {
@@ -218,7 +223,7 @@ int Record::lookupField(const SymbolID fieldName){
 	return -1;
 }
 void Record::add(const Field& var){
-	assert(!_resolved);
+	assert(!isResolved());
 	fields.push_back(var);
 }
 
@@ -271,6 +276,9 @@ static void collectUnresolvedRecord(Node* unresolvedExpression,Record* initialRe
 		if(typeExpr->type == TypeExpression::RECORD){
 			if(typeExpr->record!=initialRecord) //NB dont mark itself //unresolved record is implied here
 				records.push_back(typeExpr->record);
+		}
+		else if(typeExpr->type == TypeExpression::POINTER){
+			collectUnresolvedRecord(typeExpr->argument,initialRecord,records,foundNotRecords);
 		}
 		else foundNotRecords++;
 	}
@@ -510,7 +518,6 @@ Record* Record::findAnonymousRecord(std::vector<Field>& record){
 Overloadset::Overloadset(Function* firstFunction) : PrefixDefinition(firstFunction->id,firstFunction->location) {
 	visibilityMode = Visibility::Public;//!important // TODO fix import module a type foo, module b private def foo() //<-- conflict
 	functions.push_back(firstFunction);
-	_resolved = false;
 }
 Overloadset* Overloadset::asOverloadset(){
 	 return this;
@@ -519,15 +526,16 @@ void Overloadset::push_back(Function* function){
 	functions.push_back(function);//TODO check against same functions
 }
 bool Overloadset::isResolved(){ 
-	return _resolved;
+	return isFlagSet(IS_RESOLVED);
 }
 bool Overloadset::resolve(Evaluator* evaluator){
-	_resolved = true;
+	auto _resolved = true;
 	for(auto i = functions.begin();i!= functions.end();i++){
 		if(!(*i)->isResolved()){
 			if(!(*i)->resolve(evaluator)) _resolved = false;
 		}
 	}
+	if(_resolved) setFlag(IS_RESOLVED);
 	return _resolved;
 }
 PrefixDefinition* Overloadset::duplicate(DuplicationModifiers* mods){
@@ -542,6 +550,7 @@ PrefixDefinition* Overloadset::mergedDuplicate(DuplicationModifiers* mods,Overlo
 	for(auto i = functions.begin();i!=functions.end();i++){
 		dest->push_back((*i)->duplicate(mods));
 	}
+	if(!isResolved()) dest->flags &= (~IS_RESOLVED);
 	return dest;
 }
 
@@ -605,6 +614,7 @@ int Function::findArgument(Variable* var) const{
 Node* Function::createReference(){
 	return new FunctionReference(this);
 }
+
 bool Function::resolve(Evaluator* evaluator){
 	assert(!_resolved);
 	_resolved = true;
@@ -612,7 +622,9 @@ bool Function::resolve(Evaluator* evaluator){
 	_hasGenericArguments = false;
 	_hasExpandableArguments = false;
 	for(auto i = arguments.begin();i!=arguments.end();++i){
-		if((*i)->type.isWildcard()) _hasGenericArguments = true;
+		if((*i)->type.isWildcard()){
+			_hasGenericArguments = true;
+		}
 		else if(!(*i)->isResolved()){
 			if(!(*i)->resolve(evaluator)){
 				
