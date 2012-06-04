@@ -17,17 +17,6 @@ import qualified precedence
 
 import export ast
 
-#
-macro ( {
-	if(parser.match(")")) return ast.newUnit()
-	else {
-		var expr = parser.parse() <-- TODO interpreter fix
-		parser.expect(")")
-		return expr
-	}
-}
-#
-
 #TODO condition typecheck?
 macro if {
 	#must have if and else
@@ -44,6 +33,7 @@ macro if {
 	var condition = parser.parse()
 	parser.expect(")")
 	var consequence = parser.parse()
+	parser.matchNewline()
 	var alternative = ifElse(parser.match("else")) parser.parse() else [> () <]
 	return ast.newIfElse(condition,consequence,alternative)
 }
@@ -83,17 +73,12 @@ macro & {
 	return ast.newPointerOp(0,expr)
 }
 
-#
-TODO
-macro * {
+macro ^ {
 	var expr = parser.parse(precedence.unary)
 	return [> derefOrPtrType($expr) <]
 }
-
-
-macro derefOrPtrType(T Type) = Pointer(T)
-macro derefOrPtrType(expr)   = ast.newPointerOp(1,expr)
-#
+macro derefOrPtrType(T Type) = ast.newTypeExpression(7,T)
+macro derefOrPtrType(expr)   = ast.newPointerOp(1,[> () <] )
 
 import export operators
 

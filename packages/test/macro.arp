@@ -109,6 +109,12 @@ f40
 macro f100(x int32) = [> 1,$x <]
 f100(2)
 
+constraint FooC(T) = T == bool
+macro f101(x FooC) = [> "Function like" <]
+macro f101(x) = [> "macroes!" <]
+f101(true)
+f101(1)
+
 macro quasi0 {
 	var x = parser.parse()
 	return [> x <]

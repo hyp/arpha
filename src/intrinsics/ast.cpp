@@ -128,6 +128,10 @@ namespace intrinsics {
 			static Node* newTypeExpression(Node* arg){
 				return new ValueExpression(new TypeExpression((int)arg->asIntegerLiteral()->integer.u64),TypeExprPtr);
 			}
+			static Node* newPtrTypeExpression(Node* arg){
+				auto t = arg->asTupleExpression();
+				return new ValueExpression(new TypeExpression(TypeExpression::POINTER,t->children[1]->asTypeExpression()),TypeExprPtr);
+			}
 			static Node* newBooleanExpression(Node* arg){
 				return new ValueExpression(new BoolExpression(arg->asIntegerLiteral()->integer.isZero() ? false : true),BoolPtr);
 			}
@@ -179,8 +183,9 @@ namespace intrinsics {
 
 				{
 					TypeExprPtr = defineType("TypeExpression");
-					ARG args[] = {{"kind",new TypeExpression(new IntegerType("int32",Location()))}};
+					ARG args[] = {{"kind",new TypeExpression(new IntegerType("int32",Location()))},{"next",intrinsics::types::Type}};
 					defineConstructor(newTypeExpression,args,1);
+					defineConstructor(newPtrTypeExpression,args,2);
 				}
 
 				{

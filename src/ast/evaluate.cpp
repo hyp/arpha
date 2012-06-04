@@ -76,9 +76,6 @@ struct AstExpander: NodeVisitor {
 		if(!node->arg->isResolved()) return node;
 		if(auto callingOverloadSet = node->object->asUnresolvedSymbol()){
 			auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : evaluator->currentScope());
-			if(callingOverloadSet->symbol == "equals"){
-				debug("foo");
-			}
 			auto func =  scope->resolveFunction(evaluator,callingOverloadSet->symbol,node->arg);
 			if(func){
 				node->arg = evaluator->constructFittingArgument(&func,node->arg)->accept(this);
@@ -703,7 +700,7 @@ int satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* constraint){
 	InterpreterInvocation i(evaluator->interpreter(),verifier,args);
 	if(i.succeded()){
 		if(auto resolved = i.result()->asBoolExpression()){
-			return resolved->value;
+			return resolved->value?0:-1;
 		}
 	}
 	error(arg->location,"Can't evaluate constraint %s with argument %s at compile time!",verifier,arg);
@@ -784,6 +781,9 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 				determinedArguments.resize(argsCount,nullptr);
 			}
 			determinedArguments[currentArg] = result[currentArg]->_returnType();
+		}
+		else if(func->isFlagSet(Function::MACRO_FUNCTION) && func->arguments[currentArg]->type.type()->isSame(intrinsics::ast::ExprPtr)){
+			result[currentArg] = new ValueExpression(exprBegin[currentExpr],intrinsics::ast::ExprPtr);
 		}
 		else {
 			auto ret = exprBegin[currentExpr]->_returnType();
@@ -980,7 +980,7 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 		if( func->arguments[currentArg]->isDependent() ){
 			hasDependentArg = true;
 		}
-		else if( func->arguments[currentArg]->type.isWildcard()){
+		else if( func->arguments[currentArg]->type.isWildcard() || func->arguments[currentArg]->type.type()->isSame(intrinsics::ast::ExprPtr) ){
 			if(func->arguments[currentArg]->_constraint){
 				int c;//TODO constraint type and value lower weight than direct type match fix?
 				if((c = satisfiesConstraint(evaluator,exprBegin[currentExpr],func->arguments[currentArg]->_constraint))==-1) return false;

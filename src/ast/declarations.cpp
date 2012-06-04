@@ -625,7 +625,12 @@ bool Function::resolve(Evaluator* evaluator){
 	_hasExpandableArguments = false;
 	for(auto i = arguments.begin();i!=arguments.end();++i){
 		if((*i)->type.isWildcard()){
-			_hasGenericArguments = true;
+			if(isFlagSet(MACRO_FUNCTION)){
+				(*i)->type.kind = InferredUnresolvedTypeExpression::Type;
+				(*i)->type._type = intrinsics::ast::ExprPtr;
+				(*i)->resolve(evaluator);
+			}
+			else _hasGenericArguments = true;
 		}
 		else if(!(*i)->isResolved()){
 			if(!(*i)->resolve(evaluator)){
@@ -636,9 +641,15 @@ bool Function::resolve(Evaluator* evaluator){
 					if(!(func->isResolved() && func->isFlagSet(CONSTRAINT_FUNCTION))) _resolved = false;
 					else {
 						debug("Constrained argument :: %s!",func->id);
-						(*i)->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+						if(isFlagSet(MACRO_FUNCTION)){
+							(*i)->type.kind = InferredUnresolvedTypeExpression::Type;
+							(*i)->type._type = intrinsics::ast::ExprPtr;
+							(*i)->resolve(evaluator);
+						}else {
+							(*i)->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+							_hasGenericArguments = true;
+						}
 						(*i)->_constraint = func;
-						_hasGenericArguments = true;
 					}
 				}
 				//depenent argument
