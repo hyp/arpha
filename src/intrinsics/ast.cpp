@@ -31,7 +31,7 @@ struct IntrinsicModule {
 	Function* defineFunction(const char* name,ARG arguments[],size_t count,TypeExpression* returnType,Node* (*e)(Node*)){
 		Function* func = new Function(name,Location(),nullptr);
 		for(size_t i = 0; i < count; i++){
-			auto a = new Argument(arguments[i].name,Location());
+			auto a = new Argument(arguments[i].name,Location(),func);
 			a->type.infer(arguments[i].type);
 			func->arguments.push_back(a);
 		}

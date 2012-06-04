@@ -18,7 +18,7 @@ struct Evaluator;
 struct Argument;
 
 struct Variable : PrefixDefinition  {
-	Variable(SymbolID name,Location& location,bool isLocal = false);
+	Variable(SymbolID name,Location& location,Function* owner);
 
 	Node* parse(Parser* parser);
 
@@ -27,7 +27,8 @@ struct Variable : PrefixDefinition  {
 	bool isResolved();
 	bool resolve(Evaluator* evaluator);
 
-	bool isLocal();
+	bool isLocal() const;
+	Function* functionOwner() const;
 
 	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 
@@ -37,11 +38,12 @@ struct Variable : PrefixDefinition  {
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
 	bool isMutable; // = true
 	bool expandMe;  // = false // assume value != nullptr
-	bool _local;
+	Function* _functionOwner;
+	uint16 registerID;
 };
 
 struct Argument : Variable {
-	Argument(SymbolID name,Location& location);
+	Argument(SymbolID name,Location& location,Function* owner);
 
 	Argument* asArgument();	
 

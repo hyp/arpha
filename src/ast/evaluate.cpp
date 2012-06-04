@@ -83,13 +83,11 @@ struct AstExpander: NodeVisitor {
 			if(func){
 				node->arg = evaluator->constructFittingArgument(&func,node->arg)->accept(this);
 				if(func->isFlagSet(Function::MACRO_FUNCTION)){
-					InterpreterInvocation i;
-					auto res = i.interpret(evaluator->interpreter(),func,node->arg);
-					if(res){
+					InterpreterInvocation i(evaluator->interpreter(),func,node->arg);
+					if(i.succeded()){
 						DuplicationModifiers mods;
-						mods.isMacroMixin = true;
-						auto v = res->asValueExpression();
-						return evaluator->mixin(&mods,reinterpret_cast<Node*>(v->data));
+						mods.expandedMacroOptimization = &i;
+						return evaluator->mixin(&mods,reinterpret_cast<Node*>(i.result()->asValueExpression()->data));
 					}else {
 						error(node->location,"Failed to interpret a macro %s at compile time!",func->id);
 						return ErrorExpression::getInstance();
@@ -636,7 +634,7 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	//inline body
 	if(!func->_returnType.isResolved() || !func->returnType()->isSame(intrinsics::types::Void)){
 		auto varName = std::string(inlined ? "_inlined_" : "_mixined_") + std::string(func->id.ptr());
-		auto v = new Variable(SymbolID(varName.begin()._Ptr,varName.length()),location,currentScope()->functionOwner() ? true : false);
+		auto v = new Variable(SymbolID(varName.begin()._Ptr,varName.length()),location,currentScope()->functionOwner());
 		v->isMutable = false;
 		//v->type.infer(func->returnType());
 		currentScope()->define(v);
@@ -702,10 +700,9 @@ int satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* constraint){
 		verifier->arguments[1]->type._type = a0;
 		verifier->resolve(evaluator);
 	}
-	InterpreterInvocation i;
-	auto result = i.interpret(evaluator->interpreter(),verifier,args);
-	if(result){
-		if(auto resolved = result->asBoolExpression()){
+	InterpreterInvocation i(evaluator->interpreter(),verifier,args);
+	if(i.succeded()){
+		if(auto resolved = i.result()->asBoolExpression()){
 			return resolved->value;
 		}
 	}

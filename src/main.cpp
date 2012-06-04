@@ -222,21 +222,21 @@ struct VarParser: PrefixDefinition {
 	VarParser(): PrefixDefinition("var",Location()) {}
 	static Node* parseVar(Parser* parser,SymbolID first,bool isMutable){
 		std::vector<Variable*> vars;
-		bool isLocal = parser->currentScope()->functionOwner() != nullptr;
+		auto owner = parser->currentScope()->functionOwner();
 		if(!first.isNull()){
-			auto var = new Variable(first,parser->previousLocation(),isLocal);
+			auto var = new Variable(first,parser->previousLocation(),owner);
 			var->isMutable = isMutable;
 			parser->currentScope()->define(var);
 			vars.push_back(var);
 			while(parser->match(",")){
-				var = new Variable(parser->expectName(),parser->previousLocation(),isLocal);
+				var = new Variable(parser->expectName(),parser->previousLocation(),owner);
 				var->isMutable = isMutable;
 				parser->currentScope()->define(var);
 				vars.push_back(var);
 			}
 		}else{
 			do {
-				auto var = new Variable(parser->expectName(),parser->previousLocation(),isLocal);
+				auto var = new Variable(parser->expectName(),parser->previousLocation(),owner);
 				var->isMutable = isMutable;
 				parser->currentScope()->define(var);
 				vars.push_back(var);
@@ -287,7 +287,7 @@ void parseFunctionParameters(Parser* parser,Function* func){
 		while(1){
 			auto location = parser->currentLocation();
 			auto argName = parser->expectName();
-			auto param = new Argument(argName,location);
+			auto param = new Argument(argName,location,func);
 		
 			auto next = parser->peek();
 			bool inferOnDefault = false;
@@ -383,18 +383,17 @@ struct PrefixMacro2: PrefixDefinition {
 			error(parser->currentLocation(),"Can't parse macro %s - the macro isn't resolved at usage time!",id);
 			return ErrorExpression::getInstance();
 		}
-		InterpreterInvocation i;
-		auto res = i.interpret(parser->evaluator()->interpreter(),function,nullptr);
-		if(res){
+		InterpreterInvocation i(parser->evaluator()->interpreter(),function,nullptr);
+		if(i.succeded()){
 			DuplicationModifiers mods;
-			mods.isMacroMixin = true;
-			auto v = res->asValueExpression();
-			return parser->evaluator()->mixin(&mods,reinterpret_cast<Node*>(v->data));
+			mods.expandedMacroOptimization = &i;
+			return parser->evaluator()->mixin(&mods,reinterpret_cast<Node*>(i.result()->asValueExpression()->data));
 		}else {
 			error(parser->previousLocation(),"Failed to interpret a macro %s at compile time!",id);
 			return ErrorExpression::getInstance();
 		}
 	}
+
 
 	bool isResolved(){ return function->isResolved(); }
 	bool resolve(Evaluator* evaluator){ return function->resolve(evaluator); }
@@ -410,13 +409,11 @@ struct InfixMacro2: InfixDefinition{
 			return ErrorExpression::getInstance();
 		}
 		auto arg = new ValueExpression(node,intrinsics::ast::ExprPtr);
-		InterpreterInvocation i;
-		auto res = i.interpret(parser->evaluator()->interpreter(),function,arg);
-		if(res){
+		InterpreterInvocation i(parser->evaluator()->interpreter(),function,arg);
+		if(i.succeded()){
 			DuplicationModifiers mods;
-			mods.isMacroMixin = true;
-			auto v = res->asValueExpression();
-			return parser->evaluator()->mixin(&mods,reinterpret_cast<Node*>(v->data));
+			mods.expandedMacroOptimization = &i;
+			return parser->evaluator()->mixin(&mods,reinterpret_cast<Node*>(i.result()->asValueExpression()->data));
 		}else {
 			error(parser->previousLocation(),"Failed to interpret an infix macro %s at compile time!",id);
 			return ErrorExpression::getInstance();
@@ -438,9 +435,10 @@ struct Macro2Parser: PrefixDefinition {
 
 		//infix?
 		if(parser->match("(")){
-			infix = new Argument(parser->expectName(),parser->currentLocation());
+			auto argName = parser->expectName();
 			parser->expect(")");
 			func = new Function(parser->expectName(),location,bodyScope);
+			infix = new Argument(argName,parser->currentLocation(),func);
 			parser->expect("[");
 			parser->expect("precedence");
 			parser->expect(":");
@@ -494,13 +492,13 @@ struct ConstraintParser: PrefixDefinition {
 		parser->currentScope(bodyScope);
 
 		parser->expect("(");
-		auto param = new Argument(parser->expectName(),parser->previousLocation());
+		auto param = new Argument(parser->expectName(),parser->previousLocation(),constraint);
 		param->type.infer(intrinsics::types::Type->duplicate()->asTypeExpression());
 		constraint->arguments.push_back(param);
 		bodyScope->define(param);
 
 		if(parser->match(",")){
-			auto param = new Argument(parser->expectName(),parser->previousLocation());
+			auto param = new Argument(parser->expectName(),parser->previousLocation(),constraint);
 			param->type.kind = InferredUnresolvedTypeExpression::Wildcard;
 			constraint->arguments.push_back(param);
 			bodyScope->define(param);
@@ -745,6 +743,7 @@ struct CaptureParser : PrefixDefinition {
 			parser->currentScope(parentScope);
 			auto res = parser->parse(1000);
 			if(auto v = res->asVariableReference()){
+				if(v->variable->functionOwner() != parentScope->functionOwner()) error(v->location,"Can't $ a variable that is outside the current function!");
 			}else error(v->location,"Expected a variable reference after $!");
 			parser->currentScope(oldScope);
 			return res;
@@ -791,10 +790,9 @@ Node* intrinsics::ast::loopFull(Node* arg){
 		Function* handler;
 		LoopBodyParser(Function* _handler) : handler(_handler) {}
 		bool operator()(Parser* parser){
-			InterpreterInvocation i;
-			auto res = i.interpret(parser->evaluator()->interpreter(),handler,nullptr);
-			if(!res){
-				::compiler::onError(handler->location,"Failed to interpret loop handler!");
+			InterpreterInvocation i(parser->evaluator()->interpreter(),handler,nullptr);
+			if(!i.succeded()){
+				::compiler::onError(handler->location,"Failed to interpret loop handler at compile time!");
 				return false;
 			}
 			return true;

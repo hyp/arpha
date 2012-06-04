@@ -17,13 +17,17 @@ struct Interpreter;
 
 struct InterpreterInvocation {
 
-	InterpreterInvocation();
-	Node* interpret(Interpreter* interpreter,Function* f,Node* parameter,bool visitAllBranches = false);
+	InterpreterInvocation(Interpreter* interpreter,Function* f,Node* parameter,bool visitAllBranches = false);
 	~InterpreterInvocation();
-	Node* getValue(const Variable* variable);
+
+	Node* getValue(const Variable* variable); //returns null, if this variable isn't expanded
+	inline bool succeded(){ return _succeded; }
+	inline Node* result(){ return _result; }
 private:
-	std::vector<Node*> oldValues;
+	Node* _result;
+	std::vector<Node*> registers;
 	Function* func;
+	bool  _succeded;
 };
 
 //

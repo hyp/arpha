@@ -5,6 +5,7 @@
 #include "node.h"
 #include "declarations.h"
 #include "visitor.h"
+#include "interpret.h"
 #include "../intrinsics/ast.h"
 #include "../intrinsics/types.h"
 
@@ -104,18 +105,20 @@ TypeExpression* VariableReference::_returnType() const {
 	return variable->type.type();
 }
 Node* VariableReference::duplicate(DuplicationModifiers* mods) const {
-	if(mods->isMacroMixin && variable->value){
-		if(auto v = variable->value->asValueExpression()){
-			if(v->type->isSame(intrinsics::ast::ExprPtr)){
-				//Simplify blocks
-				auto node = reinterpret_cast<Node*>(v->data);
-				if(auto block = node->asBlockExpression()){
-					if(block->scope->numberOfDefinitions() == 0 && block->children.size() == 1) node = block->children[0];
+	if(mods->expandedMacroOptimization){
+		if(auto value = mods->expandedMacroOptimization->getValue(variable)){
+			if(auto v = value->asValueExpression()){
+				if(v->type->isSame(intrinsics::ast::ExprPtr)){
+					//Simplify blocks
+					auto node = reinterpret_cast<Node*>(v->data);
+					if(auto block = node->asBlockExpression()){
+						if(block->scope->numberOfDefinitions() == 0 && block->children.size() == 1) node = block->children[0];
+					}
+					return node->duplicate(mods);
 				}
-				return node->duplicate(mods);
 			}
+			return value->duplicate(mods);
 		}
-		return variable->value->duplicate(mods);
 	}
 	auto red = mods->redirectors.find(variable);
 	if(red != mods->redirectors.end()){
@@ -156,7 +159,7 @@ Node* TupleExpression::duplicate(DuplicationModifiers* mods) const {
 	for(auto i = children.begin();i!=children.end();i++){
 		dup->children.push_back((*i)->duplicate(mods));
 	}
-	if(mods->isMacroMixin) dup->type = nullptr;
+	if(mods->expandedMacroOptimization) dup->type = nullptr;
 	else dup->type = type ? type->duplicate(mods)->asTypeExpression() : nullptr;
 	return copyProperties(dup);
 };
@@ -651,7 +654,8 @@ ValueExpression::ValueExpression(void* d,TypeExpression* type){
 bool ValueExpression::isConst() const { return true; }
 TypeExpression* ValueExpression::_returnType() const { return type; }
 Node* ValueExpression::duplicate(DuplicationModifiers* mods) const {
-	return copyProperties(new ValueExpression(reinterpret_cast<Node*>(data)->duplicate(mods),type->duplicate(mods)->asTypeExpression()));
+	auto result = copyProperties(new ValueExpression(reinterpret_cast<Node*>(data)->duplicate(mods),type->duplicate(mods)->asTypeExpression()));
+	return result;
 }
 /**
 * Node tracer

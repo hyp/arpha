@@ -50,12 +50,14 @@ bool InfixDefinition::setFlag(uint16 id){
 
 
 //variable
-Variable::Variable(SymbolID name,Location& location,bool isLocal) : PrefixDefinition(name,location),value(nullptr),isMutable(true),expandMe(false) {
-	_local = isLocal;
+Variable::Variable(SymbolID name,Location& location,Function* owner) : PrefixDefinition(name,location),value(nullptr),isMutable(true),expandMe(false) {
+	_functionOwner = owner;
 }
-
-bool Variable::isLocal(){
-	return _local;
+Function* Variable::functionOwner() const{
+	return _functionOwner;
+}
+bool Variable::isLocal() const{
+	return _functionOwner != nullptr;
 }
 bool Variable::isResolved(){
 	return isFlagSet(IS_RESOLVED);//type.isResolved();
@@ -93,7 +95,7 @@ void Variable::setImmutableValue(Node* value){
 }
 
 PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
-	auto duplicatedReplacement = new Variable(id,location,mods->target->functionOwner() ? true : false);
+	auto duplicatedReplacement = new Variable(id,location,mods->target->functionOwner());
 	duplicatedReplacement->type = type.duplicate(mods);
 	duplicatedReplacement->isMutable = isMutable;
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(duplicatedReplacement),false);
@@ -104,17 +106,17 @@ Argument* Variable::asArgument(){ return nullptr; }
 
 Argument* Argument::asArgument(){ return this; }
 
-Argument::Argument(SymbolID name,Location& location) : Variable(name,location,true),	_defaultValue(nullptr),_dependent(false),_constraint(nullptr) {
+Argument::Argument(SymbolID name,Location& location,Function* owner) : Variable(name,location,owner),	_defaultValue(nullptr),_dependent(false),_constraint(nullptr) {
 }
 bool Argument::expandAtCompileTime() {
 	assert(isResolved());
 	return type.type()->isSame(intrinsics::types::Type);
 }
 PrefixDefinition* Argument::duplicate(DuplicationModifiers* mods){
-	return nullptr; //Arguments are duplicates inside function resolve
+	return nullptr; //Arguments are duplicates inside function duplicate
 }
 Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* newType){
-	Argument* dup = new Argument(id,location);
+	Argument* dup = new Argument(id,location,mods->target->functionOwner());
 	if(newType && type.isWildcard()){
 		dup->type._type = newType;//TODO dup?
 		dup->type._type->_localSemantics = false;//Use non-local type
@@ -677,8 +679,8 @@ bool Function::resolve(Evaluator* evaluator){
 			//Report an error if constraint can't be resolved at compile time!
 			if(arguments.size() == 1){
 				auto t = intrinsics::types::Void;
-				InterpreterInvocation i;
-				if(!i.interpret(evaluator->interpreter(),this,t,true)){
+				InterpreterInvocation i(evaluator->interpreter(),this,t,true);
+				if(!i.succeded()){
 					Node* position;
 					const char* error;
 					getFailureInfo(evaluator->interpreter(),&position,&error);
@@ -745,6 +747,10 @@ bool Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& 
 	auto func = new Function(sym,location,new Scope(mods->target));
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);//NB before body duplication to account for recursion
 
+	func->body.scope->_functionOwner = func;
+	auto oldTarget = mods->target;
+	mods->target = func->body.scope;
+
 	//args
 	size_t erased = 0;
 	for(size_t i = 0;i!=arguments.size();++i){
@@ -762,6 +768,7 @@ bool Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& 
 	}
 
 	duplicateReturnBody(mods,func);
+	mods->target = oldTarget;
 	func->_resolved = false;
 	*dest = func;
 	return true;
@@ -770,12 +777,17 @@ Function* Function::specializedDuplicate(DuplicationModifiers* mods,std::vector<
 	debug("Need to duplicate determined function %s!",id);
 	auto func = new Function(id,location,new Scope(mods->target));
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);//NB before body duplication to account for recursion
+	
+	func->body.scope->_functionOwner = func;
+	auto oldTarget = mods->target;
+	mods->target = func->body.scope;
 	//args
 	for(size_t i = 0;i!=arguments.size();++i){
 		func->arguments.push_back(arguments[i]->reallyDuplicate(mods,specializedArgTypes[i]));
 	}
 
 	duplicateReturnBody(mods,func);
+	mods->target = oldTarget;
 	func->_resolved = false;
 	return func;
 }
@@ -783,25 +795,26 @@ Function* Function::duplicate(DuplicationModifiers* mods){
 	debug("Duplicating function %s",id);
 	auto func = new Function(id,location,new Scope(mods->target));
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(func),false);//NB before body duplication to account for recursion
-	//args
-	for(auto i = arguments.begin();i!=arguments.end();++i){
-		
-		func->arguments.push_back((*i)->reallyDuplicate(mods,nullptr));
-		debug("Duplicating arg %s,%s,%s",(*i)->id,(*i)->type.kind,func->arguments.back()->type.kind);
-	}
-	return duplicateReturnBody(mods,func);
-}
-Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* func){
-	func->_returnType = _returnType.duplicate(mods);
 	
 	func->body.scope->_functionOwner = func;
 	auto oldTarget = mods->target;
 	mods->target = func->body.scope;
+	//args
+	for(auto i = arguments.begin();i!=arguments.end();++i){
+		func->arguments.push_back((*i)->reallyDuplicate(mods,nullptr));
+		debug("Duplicating arg %s,%s,%s",(*i)->id,(*i)->type.kind,func->arguments.back()->type.kind);
+	}
+	duplicateReturnBody(mods,func);
+	mods->target = oldTarget;
+	return func;
+}
+Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* func){
+	func->_returnType = _returnType.duplicate(mods);
+	
 	auto oldRed = mods->returnValueRedirector;
 	mods->returnValueRedirector = nullptr;
 	body.scope->duplicate(mods);
 	body._duplicate(&func->body,mods);
-	mods->target = oldTarget;
 	mods->returnValueRedirector = oldRed;
 
 	func->_resolved = _resolved;

@@ -66,18 +66,20 @@ struct Node;
 	NODE_LIST(NODE_FORWARD_DECLARATION)
 #undef NODE_FORWARD_DECLARATION
 
+struct InterpreterInvocation;
+
 //TODO
 struct DuplicationModifiers {
 	Location location;
 	Scope* target;
-	bool isMacroMixin;
+	InterpreterInvocation* expandedMacroOptimization;//when a macro returns [> $x <] we replace x with a value during mixining into the caller's body
 
 	//The bool indicates whether the redirector is expression(true) or a definition(false)
 	std::map<void*,std::pair<void*,bool> > redirectors;//Used to redirect references for duplicated definitions
 	
 	Variable* returnValueRedirector;//The variable to which the return value is assigned in inlined and mixined functions
 
-	DuplicationModifiers() : returnValueRedirector(nullptr),isMacroMixin(false) {}
+	DuplicationModifiers() : returnValueRedirector(nullptr),expandedMacroOptimization(nullptr) {}
 };
 
 //An AST node

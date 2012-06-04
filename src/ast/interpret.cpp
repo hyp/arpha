@@ -15,11 +15,10 @@
 * Walk the body of a function and assign a stack offset for each variable
 * e.g for f(a) { var b ; { var c } } = {a:0,b:1,c:2}
 */
-struct ValueRestorer : NodeVisitor {
+struct VariableMapper : NodeVisitor {
 	size_t offset;
-	std::vector<Node*>* oldValues;
 
-	ValueRestorer(size_t o,std::vector<Node*>* v) : offset(o),oldValues(v) {}
+	VariableMapper() : offset(0) {}
 	//TODO more nodes
 	Node* visit(IfExpression* node){
 		node->consequence->accept(this);
@@ -33,9 +32,9 @@ struct ValueRestorer : NodeVisitor {
 	Node* visit(BlockExpression* node){
 		for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
 			if(auto v = dynamic_cast<Variable*>((*i).second)){
-				if(!dynamic_cast<Argument*>((*i).second)){
-					v->value = (*oldValues)[offset];offset++;
-				}
+				if(offset >= std::numeric_limits<uint16>::max()) assert(false);
+				v->registerID = (uint16)offset;
+				offset++;
 			}
 		}
 		for(auto i = node->children.begin();i!=node->children.end();i++){
@@ -44,16 +43,24 @@ struct ValueRestorer : NodeVisitor {
 		return node;
 	}
 
+	static size_t mapToRegisters(Function* func){
+		VariableMapper mapper;
+		func->body.accept(&mapper);
+		return mapper.offset;
+	}
+
 
 };
+
 
 /**
 * Walks the AST node and checks if the node can be interpreted at compile-time.
 * This checks all expressions in the AST node and doesn't account for branches that won't be reached when interpreting
 */
 struct Interpreter : NodeVisitor {
-	std::vector<Node*>* oldValues;
-
+	Node* returnValueRegister;
+	Node** registers;
+	Function* currentFunction;
 
 	Interpreter() {
 		status = WALKING;
@@ -80,14 +87,15 @@ struct Interpreter : NodeVisitor {
 	//Interpreting expressions
 	Node* visit(ReturnExpression* node){
 		auto result = node->value->accept(this);
-		if(!walkEverywhere) status = RETURN;
+		if(!walkEverywhere){
+			returnValueRegister = result;
+			status = RETURN;
+		}
 		return result;
 	}
 	Node* visit(VariableReference* node){
-		if(auto v =node->variable->value){
-			return v;
-		}
-		else return fail(node);
+		if(node->variable->functionOwner() == currentFunction) return registers[node->variable->registerID];
+		else return fail(node,"This variable is outside the function's scope!");
 	}
 	Node* visit(AssignmentExpression* node){
 		auto obj = node->object;//NB: Don't interpret the object!
@@ -95,8 +103,11 @@ struct Interpreter : NodeVisitor {
 		if(status == FAILURE) return nullptr;
 		if(val->isConst()){
 			if(auto var = obj->asVariableReference()){
-				var->variable->value = val;
-				return val;
+				if(var->variable->functionOwner() == currentFunction){
+					registers[var->variable->registerID] = val;
+					return val;
+				}
+				else return fail(node,"This variable is outside the function's scope!");
 			}
 		}
 		return fail(node);
@@ -126,8 +137,7 @@ struct Interpreter : NodeVisitor {
 		if(parameter){	
 			auto argsBegin = parameter->asTupleExpression() && f->arguments.size()>1 ? parameter->asTupleExpression()->children.begin()._Ptr : &(parameter);
 			for(size_t i = 0;i<f->arguments.size();i++){
-				oldValues->push_back(f->arguments[i]->value);
-				f->arguments[i]->value = argsBegin[i];
+				registers[f->arguments[i]->registerID] = argsBegin[i];
 			}
 		}
 		//intepret body
@@ -146,29 +156,12 @@ struct Interpreter : NodeVisitor {
 		else return fail(node);
 	}
 	Node* visit(BlockExpression* node){
-		//The topmost scope of a function
-		bool topmost = node->scope->functionOwner() != node->scope->parent->functionOwner();
-
-		for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
-			if(auto v = dynamic_cast<Variable*>((*i).second)){
-				if(!topmost || !v->asArgument()) oldValues->push_back(v->value);
-			}
-		}
-
-		Node* result = nullptr;
-		Node* lastResult;
 		auto i = node->children.begin();
 		for(i;i!=node->children.end();i++){
-			lastResult = (*i)->accept(this);
+			(*i)->accept(this);
 			if(status != WALKING) break;
 		}
-		if(status == RETURN) result = lastResult;
-
-		if(topmost){
-			if(status == RETURN) status = WALKING;//reset return status
-			else if(status == WALKING) result = new UnitExpression();//return void when no return expressions are present
-		}
-		return result;	
+		return nullptr;	
 	}
 	Node* visit(IfExpression* node){
 		auto cond = node->condition->accept(this);
@@ -204,25 +197,28 @@ struct Interpreter : NodeVisitor {
 	}
 };
 
-InterpreterInvocation::InterpreterInvocation() {}
-Node* InterpreterInvocation::interpret(Interpreter* interpreter,Function* f,Node* parameter,bool visitAllBranches){
-	func = f;
-	interpreter->oldValues = &oldValues;
+InterpreterInvocation::InterpreterInvocation(Interpreter* interpreter,Function* f,Node* parameter,bool visitAllBranches) : func(f) {
+	auto oldFunc = interpreter->currentFunction;
+	auto oldRegisters = interpreter->registers;
+	size_t numRegs = VariableMapper::mapToRegisters(f);
+	if(numRegs > 0){
+		registers.resize(numRegs);
+		interpreter->registers = &registers[0];
+	}
+	interpreter->currentFunction = f;
 	interpreter->walkEverywhere = visitAllBranches;
-	auto result = interpreter->interpretCall(f,parameter);
+	interpreter->interpretCall(f,parameter);
+	_succeded = interpreter->status != Interpreter::FAILURE;
+	_result = interpreter->returnValueRegister;
+
+	interpreter->registers = oldRegisters;
+	interpreter->currentFunction = oldFunc;
 	interpreter->status = Interpreter::WALKING;
-	return result;
 }
 InterpreterInvocation::~InterpreterInvocation(){
-	size_t i;
-	for(i = 0;i<func->arguments.size();i++){
-		func->arguments[i]->value = oldValues[i];
-	}
-	ValueRestorer restorer(i,&oldValues);
-	func->body.accept(&restorer);
 }
 Node* InterpreterInvocation::getValue(const Variable* variable){
-	return variable->value;
+	return variable->functionOwner() == func ? registers[variable->registerID] : nullptr;
 }
 
 Interpreter* constructInterpreter(InterpreterSettings* settings){
