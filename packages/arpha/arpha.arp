@@ -73,12 +73,12 @@ macro & {
 	return ast.newPointerOp(0,expr)
 }
 
-macro ^ {
+macro * {
 	var expr = parser.parse(precedence.unary)
 	return [> derefOrPtrType($expr) <]
 }
 macro derefOrPtrType(T Type) = ast.newTypeExpression(7,T)
-macro derefOrPtrType(expr)   = ast.newPointerOp(1,[> () <] )
+macro derefOrPtrType(expr) = ast.newPointerOp(1,expr) 
 
 import export operators
 

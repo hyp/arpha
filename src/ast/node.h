@@ -391,6 +391,7 @@ struct PointerOperation : Node {
 	};	
 	Node* expression;
 	int kind; // = ADDRESS
+	bool _resolved;
 	DECLARE_NODE(PointerOperation);
 };
 

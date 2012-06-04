@@ -84,7 +84,10 @@ struct AstExpander: NodeVisitor {
 					if(i.succeded()){
 						DuplicationModifiers mods;
 						mods.expandedMacroOptimization = &i;
-						return evaluator->mixin(&mods,reinterpret_cast<Node*>(i.result()->asValueExpression()->data));
+						auto result = evaluator->mixin(&mods,reinterpret_cast<Node*>(i.result()->asValueExpression()->data));
+						result->location = node->location;
+						result->_label = node->_label;
+						return result;
 					}else {
 						error(node->location,"Failed to interpret a macro %s at compile time!",func->id);
 						return ErrorExpression::getInstance();
@@ -126,12 +129,13 @@ struct AstExpander: NodeVisitor {
 	Node* visit(PointerOperation* node){
 		node->expression = node->expression->accept(this);
 		if(node->expression->isResolved()){
-			// *int32 => Pointer(int32)
-			if(auto typeExpr = node->expression->asTypeExpression()){
-				node->expression = nullptr;
-				delete node;
-				return new TypeExpression(TypeExpression::POINTER,typeExpr);
+			node->_resolved = true;
+			if(node->kind == PointerOperation::DEREFERENCE && node->expression->_returnType()->type != TypeExpression::POINTER){
+				error(node->location,"Can't dereference a non-pointer expression!");
+				return ErrorExpression::getInstance();
 			}
+		}else{
+			evaluator->markUnresolved(node);
 		}
 		return node;
 	}
@@ -554,7 +558,6 @@ Node* Evaluator::eval(Node* node){
 //TODO ignore unresolved functions which cant be resolved
 void Evaluator::evaluateModule(BlockExpression* module){
 	
-	if(unresolvedExpressions == 0) return;
 	size_t prevUnresolvedExpressions;
 	int pass = 1;
 	do{

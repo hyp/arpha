@@ -211,26 +211,27 @@ Node* ControlFlowExpression::duplicate(DuplicationModifiers* mods) const {
 PointerOperation::PointerOperation(Node* expression,int type){
 	this->expression = expression;
 	kind = type;
+	_resolved = false;
 }
 TypeExpression* PointerOperation::_returnType() const {
-	assert(expression->isResolved());
-	auto next = expression->_returnType();//TODO
+	assert(_resolved);
+	auto next = expression->_returnType();
 	assert(next->type != TypeExpression::INTRINSIC);
 	if(kind == ADDRESS){
 		auto x = new TypeExpression(TypeExpression::POINTER,next);
 		x->_localSemantics = expression->isLocal();
 		return x;
 	}
-	else if(kind == DEREFERENCE && next->type == TypeExpression::POINTER){
-		return next->argument;
-	}
-	return intrinsics::types::Void;
+	assert(next->type == TypeExpression::POINTER);
+	return next->argument;
 }
 bool PointerOperation::isResolved() const {
-	return expression->isResolved();
+	return _resolved;
 }
 Node* PointerOperation::duplicate(DuplicationModifiers* mods) const {
-	return copyProperties(new PointerOperation(expression->duplicate(mods),kind));
+	auto result = new PointerOperation(expression->duplicate(mods),kind);
+	result->_resolved = _resolved;
+	return result;
 }
 
 IfExpression::IfExpression(Node* condition,Node* consequence,Node* alternative){

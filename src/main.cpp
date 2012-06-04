@@ -387,7 +387,9 @@ struct PrefixMacro2: PrefixDefinition {
 		if(i.succeded()){
 			DuplicationModifiers mods;
 			mods.expandedMacroOptimization = &i;
-			return parser->evaluator()->mixin(&mods,reinterpret_cast<Node*>(i.result()->asValueExpression()->data));
+			auto result = parser->evaluator()->mixin(&mods,reinterpret_cast<Node*>(i.result()->asValueExpression()->data));
+			result->location = parser->previousLocation();
+			return result;
 		}else {
 			error(parser->previousLocation(),"Failed to interpret a macro %s at compile time!",id);
 			return ErrorExpression::getInstance();
@@ -413,7 +415,9 @@ struct InfixMacro2: InfixDefinition{
 		if(i.succeded()){
 			DuplicationModifiers mods;
 			mods.expandedMacroOptimization = &i;
-			return parser->evaluator()->mixin(&mods,reinterpret_cast<Node*>(i.result()->asValueExpression()->data));
+			auto result = parser->evaluator()->mixin(&mods,reinterpret_cast<Node*>(i.result()->asValueExpression()->data));
+			result->location = parser->previousLocation();
+			return result;
 		}else {
 			error(parser->previousLocation(),"Failed to interpret an infix macro %s at compile time!",id);
 			return ErrorExpression::getInstance();
@@ -593,22 +597,6 @@ struct ReturnParser: PrefixDefinition {
 	Node* parse(Parser* parser){
 		if(isEndExpression(parser->peek())) return new ReturnExpression(new UnitExpression());
 		else return new ReturnExpression(parser->parse());
-	}
-};
-
-/// ::= '&' expression
-struct AddressParser: PrefixDefinition {
-	AddressParser(): PrefixDefinition("&",Location()) {}
-	Node* parse(Parser* parser){
-		return new PointerOperation(parser->parse(arpha::Precedence::Unary),PointerOperation::ADDRESS);
-	}
-};
-
-/// ::= '*' expression
-struct DereferenceParser: PrefixDefinition {
-	DereferenceParser(): PrefixDefinition("*",Location()) {}
-	Node* parse(Parser* parser){
-		return new PointerOperation(parser->parse(arpha::Precedence::Unary),PointerOperation::DEREFERENCE);
 	}
 };
 
@@ -830,8 +818,6 @@ void arpha::defineCoreSyntax(Scope* scope){
 	scope->define(new VarParser);
 
 	scope->define(new ReturnParser);
-
-	scope->define(new DereferenceParser);
 
 	scope->define(new CommandParser);
 
