@@ -6,13 +6,6 @@
 
 import export types
 
-macro Nothing = ast.newTypeExpression(0)
-macro Type    = ast.newTypeExpression(1)
-macro bool    = ast.newTypeExpression(2)
-
-macro false = ast.newBooleanConstant(0)
-macro true  = ast.newBooleanConstant(1)
-
 import qualified precedence
 
 import export ast
@@ -33,7 +26,6 @@ macro if {
 	var condition = parser.parse()
 	parser.expect(")")
 	var consequence = parser.parse()
-	parser.matchNewline()
 	var alternative = ifElse(parser.match("else")) parser.parse() else [> () <]
 	return ast.newIfElse(condition,consequence,alternative)
 }
@@ -46,9 +38,8 @@ macro while {
 	return ast.newWhile(condition,parser.parse())
 }
 
-#TODO remove integer hack with a predefined constant
-macro continue = ast.newControlFlow(0)
-macro break = ast.newControlFlow(1)
+macro continue = ast.newControlFlow(continue:true)
+macro break = ast.newControlFlow(break:true)
 
 # TODO
 macro for {
@@ -70,48 +61,46 @@ macro [ {
 
 macro & {
 	var expr = parser.parse(precedence.unary)
-	return ast.newPointerOp(0,expr)
+	return ast.newPointerOp(expr,addressof:true)
 }
 
 macro * {
 	var expr = parser.parse(precedence.unary)
 	return [> derefOrPtrType($expr) <]
 }
-macro derefOrPtrType(T Type) = ast.newTypeExpression(7,T)
-macro derefOrPtrType(expr) = ast.newPointerOp(1,expr) 
+macro derefOrPtrType(T Type) = [> Pointer($T) <]
+macro derefOrPtrType(expr)   = ast.newPointerOp(expr,dereference:true) 
+
+macro [] {
+	var expr = parser.parse(precedence.unary)
+	return [> Range($expr) <]
+}
 
 import export operators
 
 import export operations
 
-#
+
 macro new {
 	var type = parser.parse(precedence.call)
 	if(parser.match("(")){
 		if(!parser.match(")")){
 			var arg = parser.parse()
 			parser.expect(")")
-			return [> construct($type.allocator.alloc(sizeof($type)),$arg) <]
+			return [> $type.allocator.alloc(sizeof($type)).construct($arg) <]
 		}
 	}
-	return [> construct($type.allocator.alloc(sizeof($type))) <]
+	return [> $type.allocator.alloc(sizeof($type)).construct() <]
 }
 
 macro delete {
 	var object = parser.parse() #type check is ptr..
 	return [> $object.finalize(); typeof($object).allocator.free($object) <]
 }
-#
 
 # Returns true if two given types are the same type. TOCONSIDER move to compiler
 def equals(x Type,y Type) bool
 
-
-# Returns the type of a given expression.
-#macro typeof(expression) Type
-
-# Returns the size(in bytes) of a given type. If an expression was given instead, returns the size of that expression's type.
-#macro sizeof(expression) uint32
 
 
 # An unsigned integer representing CPU's word.

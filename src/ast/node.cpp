@@ -159,8 +159,7 @@ Node* TupleExpression::duplicate(DuplicationModifiers* mods) const {
 	for(auto i = children.begin();i!=children.end();i++){
 		dup->children.push_back((*i)->duplicate(mods));
 	}
-	if(mods->expandedMacroOptimization) dup->type = nullptr;
-	else dup->type = type ? type->duplicate(mods)->asTypeExpression() : nullptr;
+	dup->type = type ? type->duplicate(mods)->asTypeExpression() : nullptr;
 	return copyProperties(dup);
 };
 
@@ -256,7 +255,7 @@ Node* IfExpression::duplicate(DuplicationModifiers* mods) const{
 
 // Function reference
 FunctionReference::FunctionReference(Function* func) : function(func) {
-	if(!func->intrinsicEvaluator) assert(!func->_hasGenericArguments );
+	if(!func->constInterpreter) assert(!func->_hasGenericArguments );
 }
 TypeExpression* FunctionReference::_returnType() const {
 	assert(isResolved());

@@ -118,22 +118,19 @@ namespace intrinsics {
 				auto t = arg->asTupleExpression();
 				return new ValueExpression(new IfExpression(passedExpr(t->children[0]),passedExpr(t->children[1]),passedExpr(t->children[2])),IfPtr);
 			}
-			static Node* newControlFlow(Node* arg){
-				return new ValueExpression(new ControlFlowExpression((int)arg->asIntegerLiteral()->integer.u64),ControlFlowPtr);
+			static Node* newControlFlowContinue(Node* arg){
+				return new ValueExpression(new ControlFlowExpression(ControlFlowExpression::CONTINUE),ControlFlowPtr);
 			}
-			static Node* newPointerOp(Node* arg){
+			static Node* newControlFlowBreak(Node* arg){
+				return new ValueExpression(new ControlFlowExpression(ControlFlowExpression::BREAK),ControlFlowPtr);
+			}
+			static Node* newPointerOpAddress(Node* arg){
 				auto t = arg->asTupleExpression();
-				return new ValueExpression(new PointerOperation(passedExpr(t->children[1]),(int)t->children[0]->asIntegerLiteral()->integer.u64),PointerOpPtr);
+				return new ValueExpression(new PointerOperation(passedExpr(t->children[0]),PointerOperation::ADDRESS),PointerOpPtr);
 			}
-			static Node* newTypeExpression(Node* arg){
-				return new ValueExpression(new TypeExpression((int)arg->asIntegerLiteral()->integer.u64),TypeExprPtr);
-			}
-			static Node* newPtrTypeExpression(Node* arg){
+			static Node* newPointerOpDeref(Node* arg){
 				auto t = arg->asTupleExpression();
-				return new ValueExpression(new TypeExpression(TypeExpression::POINTER,t->children[1]->asTypeExpression()),TypeExprPtr);
-			}
-			static Node* newBooleanExpression(Node* arg){
-				return new ValueExpression(new BoolExpression(arg->asIntegerLiteral()->integer.isZero() ? false : true),BoolPtr);
+				return new ValueExpression(new PointerOperation(passedExpr(t->children[0]),PointerOperation::DEREFERENCE),PointerOpPtr);
 			}
 			void init() {
 
@@ -171,28 +168,20 @@ namespace intrinsics {
 
 				{
 				ControlFlowPtr = defineType("ControlFlow");
-				ARG args[] = {{"kind",new TypeExpression(new IntegerType("int32",Location()))}};
-				defineConstructor(newControlFlow,args,1);
+				ARG args[] = {{"continue",intrinsics::types::boolean}};
+				defineConstructor(newControlFlowContinue,args,1);
+				args[0].name = "break";
+				defineConstructor(newControlFlowBreak,args,1);
 				}
 
 				{
 				PointerOpPtr = defineType("PointerOp");
-				ARG args[] = {{"kind",new TypeExpression(new IntegerType("int32",Location()))},{"expression",ExprPtr}};
-				defineConstructor(newPointerOp,args,2);
+				ARG args[] = {{"expression",ExprPtr},{"addressof",intrinsics::types::boolean}};
+				defineConstructor(newPointerOpAddress,args,2);
+				ARG args2[] = {{"expression",ExprPtr},{"dereference",intrinsics::types::boolean}};
+				defineConstructor(newPointerOpDeref,args2,2);
 				}
 
-				{
-					TypeExprPtr = defineType("TypeExpression");
-					ARG args[] = {{"kind",new TypeExpression(new IntegerType("int32",Location()))},{"next",intrinsics::types::Type}};
-					defineConstructor(newTypeExpression,args,1);
-					defineConstructor(newPtrTypeExpression,args,2);
-				}
-
-				{
-					BoolPtr = defineType("BooleanConstant");
-					ARG args[] = {{"kind",new TypeExpression(new IntegerType("int32",Location()))}};
-					defineConstructor(newBooleanExpression,args,1);
-				}
 			parent = nullptr;
 			}
 		};
@@ -216,7 +205,7 @@ namespace intrinsics {
 			}
 			static Node* matchString(Node* arg){
 				auto parser = compiler::currentUnit()->parser;
-				auto symbol = arg->asStringLiteral();;
+				auto symbol = arg->asStringLiteral();
 				return new BoolExpression( parser->match(SymbolID(symbol->block.ptr(),symbol->block.length())) );
 			}
 			static Node* consumeSymbol(Node* arg){

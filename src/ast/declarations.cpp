@@ -588,7 +588,6 @@ static bool isUnresolvedArgumentDependent(Variable* argument,const Function* fun
 //1. Find if unresolved arguments have a reference to arg
 //2. When resolving the overload set do...
 Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDefinition(name,location), body(bodyScope) {
-	intrinsicEvaluator = nullptr;
 	_resolved = false;
 	constInterpreter = nullptr;
 

@@ -24,7 +24,7 @@ Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
 	}
 }
 
-Evaluator::Evaluator(Interpreter* interpreter) : _interpreter(interpreter),insideWhile(false),forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {
+Evaluator::Evaluator(Interpreter* interpreter) : _interpreter(interpreter),dontEvaluate(false),insideWhile(false),forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {
 }
 
 
@@ -80,6 +80,7 @@ struct AstExpander: NodeVisitor {
 			if(func){
 				node->arg = evaluator->constructFittingArgument(&func,node->arg)->accept(this);
 				if(func->isFlagSet(Function::MACRO_FUNCTION)){
+					if(auto f = func->constInterpreter) return f(node->arg);
 					InterpreterInvocation i(evaluator->interpreter(),func,node->arg);
 					if(i.succeded()){
 						DuplicationModifiers mods;
@@ -552,6 +553,7 @@ bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
 
 Node* Evaluator::eval(Node* node){
 	AstExpander expander(this);
+	if(dontEvaluate) return node;
 	return node->accept(&expander);
 }
 
@@ -846,7 +848,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 	if(!func->isFlagSet(Function::MACRO_FUNCTION)){//Macro optimization, so that we dont duplicate unnecessary
 		//Determine the function?
 		//TODO redirect the function to it's definition scope when expanding
-		if(determinedFunction && !func->intrinsicEvaluator && !func->constInterpreter){
+		if(determinedFunction && !func->constInterpreter){
 			DuplicationModifiers mods;
 			mods.target = func->owner();
 			mods.location = arg->location;
@@ -859,7 +861,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			*function = f;
 		}
 
-		if((*function)->canExpandAtCompileTime() && !(*function)->intrinsicEvaluator && !func->constInterpreter){
+		if((*function)->canExpandAtCompileTime() && !(*function)->constInterpreter){
 			DuplicationModifiers mods;
 			mods.target = (*function)->owner();
 			mods.location = arg->location;

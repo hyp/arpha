@@ -666,15 +666,16 @@ Node* equals(Node* parameters){
 	auto t = parameters->asTupleExpression();
 	return new BoolExpression(t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()));
 }
-Node* _typeof(CallExpression* node,Evaluator* evaluator){
-	return node->arg->_returnType();
+Node* _typeof(Node* parameter){
+	return reinterpret_cast<Node*>(parameter->asValueExpression()->data)->_returnType();
 }
-Node* _sizeof(CallExpression* node,Evaluator* evaluator){
+Node* _sizeof(Node* parameter){
 	size_t size;
-	if(auto t = node->arg->asTypeExpression()) size = t->size();
-	else size = node->arg->_returnType()->size();
+	auto arg = reinterpret_cast<Node*>(parameter->asValueExpression()->data);
+	if(auto t = arg->asTypeExpression()) size = t->size();
+	else size = arg->_returnType()->size();
 	auto e = new IntegerLiteral(BigInt((uint64) size));
-	e->_type = intrinsics::types::int32->integer;//TODO natural
+	e->_type = intrinsics::types::uint32->integer;//TODO natural
 	return e;
 }
 
@@ -683,14 +684,6 @@ Node* _sizeof(CallExpression* node,Evaluator* evaluator){
 void arphaPostInit(Scope* moduleScope){
 	auto x = ensure( ensure(moduleScope->lookupPrefix("equals"))->asOverloadset() )->functions[0];
 	x->constInterpreter = equals;
-	/*x = ensure( ensure(moduleScope->lookupPrefix("typeof"))->asOverloadset() )->functions[0];
-	x->intrinsicEvaluator = _typeof;
-	x = ensure( ensure(moduleScope->lookupPrefix("sizeof"))->asOverloadset() )->functions[0];
-	x->intrinsicEvaluator = _sizeof;
-
-	auto macro = ensure( dynamic_cast<PrefixMacro*>( ensure(moduleScope->containsPrefix("while")) ) );
-	macro->syntax->intrinsicEvaluator = createWhile;*/
-	//ensure( dynamic_cast<InfixMacro*>( ensure(moduleScope->containsInfix("(")) ) )->syntax->intrinsicEvaluator = createCall;
 }
 void coreSyntaxPostInit(Scope* moduleScope){
 
@@ -753,6 +746,8 @@ struct CaptureParser : PrefixDefinition {
 	Node* parse(Parser* parser){
 		auto oldScope = parser->currentScope();
 		auto parentScope = oldScope->functionOwner() ?  prevScope(oldScope) : oldScope;
+		auto oldEv = parser->evaluator()->dontEvaluate;
+		parser->evaluator()->dontEvaluate = true;
 		//parse block
 		BlockExpression* block = new BlockExpression(new Scope(parentScope));
 		QuasiParser quasi(oldScope);
@@ -761,6 +756,7 @@ struct CaptureParser : PrefixDefinition {
 		blockParser->body(parser,BlockParser::BlockChildParser(block));
 		block->scope->remove(&quasi);
 		parser->currentScope(oldScope);
+		parser->evaluator()->dontEvaluate = oldEv;
 		//TODO block { 1 } -> 1?
 		return new ValueExpression(block,intrinsics::ast::ExprPtr);
 	}
@@ -820,6 +816,23 @@ void arpha::defineCoreSyntax(Scope* scope){
 	scope->define(new ReturnParser);
 
 	scope->define(new CommandParser);
+	{
+	Function* func = new Function("typeof",location,new Scope(scope));
+	func->body.scope->_functionOwner = func;
+	func->arguments.push_back(new Argument("expression",location,func));
+	func->arguments[0]->type.infer(intrinsics::ast::ExprPtr);
+	func->setFlag(Function::MACRO_FUNCTION);
+	func->constInterpreter = _typeof;
+	scope->defineFunction(func);
+	}{
+	Function* func = new Function("sizeof",location,new Scope(scope));
+	func->body.scope->_functionOwner = func;
+	func->arguments.push_back(new Argument("expression",location,func));
+	func->arguments[0]->type.infer(intrinsics::ast::ExprPtr);
+	func->setFlag(Function::MACRO_FUNCTION);
+	func->constInterpreter = _sizeof;
+	scope->defineFunction(func);
+	}
 
 	compiler::registerResolvedIntrinsicModuleCallback("arpha/arpha",arphaPostInit);
 

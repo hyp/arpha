@@ -6,9 +6,6 @@
 #include "types.h"
 
 #define INTRINSIC_INTTYPE(x) x = new TypeExpression(ensure( dynamic_cast<IntegerType*>(moduleScope->lookupPrefix(#x)) ))
-#define INTRINSIC_FUNC(x)  \
-	auto x = ensure( ensure(moduleScope->lookupPrefix(#x))->asOverloadset() )->functions[0]; \
-	x->intrinsicEvaluator = &::x;
 
 namespace intrinsics {
 	namespace types {
@@ -33,7 +30,62 @@ namespace intrinsics {
 
 			boolean = new TypeExpression(TypeExpression::BOOL);
 		};
+		void typeFunc(SymbolID name,Scope* moduleScope,Node* (*eval)(Node*)){
+			Function* func = new Function(name,Location(),new Scope(moduleScope));
+			func->body.scope->_functionOwner = func;
+			func->arguments.push_back(new Argument("type",Location(),func));
+			func->arguments[0]->type.infer(Type);
+			func->setFlag(Function::MACRO_FUNCTION);
+			func->constInterpreter = eval;
+			func->_returnType.infer(Type);
+			func->_resolved = func->_argsResolved = true;
+			moduleScope->defineFunction(func);
+		}
 		void init(Scope* moduleScope){
+			struct Substitute : PrefixDefinition {
+				Substitute(SymbolID name,Node* expr) : PrefixDefinition(name,Location()),expression(expr) {}
+				Node* parse(Parser* parser){
+					DuplicationModifiers mods;
+					return expression->duplicate(&mods);
+				}
+				Node* expression;
+			};
+			moduleScope->define(new Substitute("Nothing",Void));
+			moduleScope->define(new Substitute("Type",Type));
+			moduleScope->define(new Substitute("bool",boolean));
+			moduleScope->define(new Substitute("true" ,new BoolExpression(true)));
+			moduleScope->define(new Substitute("false",new BoolExpression(false)));
+
+			struct TypeFunc {
+				TypeFunc(SymbolID name,Scope* moduleScope,Node* (*eval)(Node*),int args = 1){
+					Function* func = new Function(name,Location(),new Scope(moduleScope));
+					func->body.scope->_functionOwner = func;
+					if(args == 1){
+						func->arguments.push_back(new Argument("type",Location(),func));
+						func->arguments[0]->type.infer(Type);
+					}else{
+						func->arguments.push_back(new Argument("parameter",Location(),func));
+						func->arguments[0]->type.infer(Type);
+						func->arguments.push_back(new Argument("return",Location(),func));
+						func->arguments[1]->type.infer(Type);
+					}
+					func->constInterpreter = eval;
+					func->_returnType.infer(Type);
+					func->_resolved = func->_argsResolved = true;
+					moduleScope->defineFunction(func);
+				}
+
+				static Node* Pointer(Node* arg){
+					return new TypeExpression(TypeExpression::POINTER,arg->asTypeExpression());
+				}
+				static Node* FunctionType(Node* arg){
+					auto t = arg->asTupleExpression();
+					return new TypeExpression(t->children[0]->asTypeExpression(),t->children[1]->asTypeExpression());
+				}
+			};
+			TypeFunc("Pointer",moduleScope,&TypeFunc::Pointer);
+			TypeFunc("Range",moduleScope,&TypeFunc::Pointer);
+			TypeFunc("Function",moduleScope,&TypeFunc::FunctionType,2);
 			
 			INTRINSIC_INTTYPE(int8);
 			INTRINSIC_INTTYPE(int16);
