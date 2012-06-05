@@ -99,6 +99,7 @@ PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
 	auto duplicatedReplacement = new Variable(id,location,mods->target->functionOwner());
 	duplicatedReplacement->type = type.duplicate(mods);
 	duplicatedReplacement->isMutable = isMutable;
+	duplicatedReplacement->registerID = registerID;
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(duplicatedReplacement),false);
 	return copyProperties(duplicatedReplacement);
 }
@@ -125,6 +126,7 @@ Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* n
 	}
 	else dup->type = type.duplicate(mods);
 	dup->isMutable = isMutable;
+	dup->registerID = registerID;
 	dup->_defaultValue = _defaultValue ? _defaultValue->duplicate() : nullptr;
 	mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(this))] = std::make_pair(reinterpret_cast<void*>(static_cast<Variable*>(dup)),false);
 	copyProperties(dup);
@@ -150,12 +152,14 @@ bool Argument::isDependent() const {
 
 //intrinsic type
 IntrinsicType::IntrinsicType(SymbolID name,Location& location,IntrinsicType* base) : TypeBase(name,location),_reference(this),_base(base),construct(nullptr) {
+	setFlag(IS_RESOLVED);
 }
 size_t IntrinsicType::size() const { return 0; }
 
 //integer type
 
 IntegerType::IntegerType(SymbolID name,Location& location) : TypeBase(name,location){
+	setFlag(IS_RESOLVED);
 	//temporary TODO move to arpha package source files
 	if(name == "int32"){
 		min = std::numeric_limits<int>::min();
@@ -686,20 +690,6 @@ bool Function::resolve(Evaluator* evaluator){
 	if(_resolved){
 		debug("Function %s is fully resolved!\n E : %s G : %s Ret : %s Body: %s",id,_hasExpandableArguments,_hasGenericArguments,_returnType.type(),&body);
 		analyze(&body,this);
-		//TODO implement onResolved callbacks
-		if(isFlagSet(CONSTRAINT_FUNCTION)){
-			//Report an error if constraint can't be resolved at compile time!
-			if(arguments.size() == 1){
-				auto t = intrinsics::types::Void;
-				InterpreterInvocation i(evaluator->interpreter(),this,t,true);
-				if(!i.succeded()){
-					Node* position;
-					const char* error;
-					getFailureInfo(evaluator->interpreter(),&position,&error);
-					error(position->location,"Constraint %s isn't evaluatable at compile time:\n  Can't evaluate \"%s\" at compile time!",id,position);
-				}
-			}
-		}
 	}
 	else {
 		debug("Function %s isn't resolved!\n Body: %s,%s,%s,%s",id,&body,_argsResolved,body.isResolved(),_returnType.kind);
@@ -833,6 +823,8 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	func->_argsResolved = _argsResolved;
 	func->_hasGenericArguments = _hasGenericArguments;
 	func->_hasExpandableArguments = _hasExpandableArguments;
+	func->ctfeRegisterCount = ctfeRegisterCount;
+	func->inliningWeight = inliningWeight;
 	copyProperties(func);
 	return func;
 }

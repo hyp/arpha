@@ -30,7 +30,9 @@ namespace compiler {
 
 	/// Reports a compilation error
 	void onWarning(Location& location,const std::string& message);
-	void onError(Location& location,const std::string& message);
+	void onError(Location& location,const std::string& message);//a standalone error message
+	void headError(Location& location,const std::string& message);
+	void subError(Location& location,const std::string& message);
 	void onDebug(const std::string& message);
 
 	enum {

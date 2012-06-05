@@ -199,7 +199,10 @@ struct Function: public PrefixDefinition {
 
 		MACRO_FUNCTION = 0x8,
 
-		CONTAINS_RETURN = 0x10
+		CONTAINS_RETURN = 0x10,
+
+		CANT_CTFE = 0x20,
+		PURE = 0x40,
 	};
 
 	Function(SymbolID name,Location& location,Scope* bodyScope);
@@ -234,6 +237,7 @@ struct Function: public PrefixDefinition {
 	bool _argsResolved;
 	bool _resolved;
 	uint16 ctfeRegisterCount;
+	uint16 inliningWeight;
 private:
 	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
 	

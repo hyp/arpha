@@ -149,13 +149,13 @@ struct Interpreter : NodeVisitor {
 		return status == FAILURE ? nullptr : node;
 	}
 
-	//...
-	Node* visit(ErrorExpression* node){
-		return fail(node);
-	}
 };
 
 InterpreterInvocation::InterpreterInvocation(Interpreter* interpreter,Function* f,Node* parameter,bool visitAllBranches) : func(f) {
+	if(f->isFlagSet(Function::CANT_CTFE)){
+		_succeded = false;
+		return;
+	}
 	auto oldFunc = interpreter->currentFunction;
 	auto oldRegisters = interpreter->registers;
 	size_t numRegs = f->ctfeRegisterCount;

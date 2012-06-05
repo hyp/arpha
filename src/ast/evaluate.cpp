@@ -474,15 +474,16 @@ struct AstExpander: NodeVisitor {
 
 void Evaluator::markUnresolved(Node* node){
 	unresolvedExpressions++;
+	if(reportUnevaluated){
+		compiler::subError(node->location,format("Can't resoved expression %s",node));
+	}
 }
 
 void Evaluator::markUnresolved(PrefixDefinition* node){
 	unresolvedExpressions++;
 	if(reportUnevaluated){
 		//TODO more progressive error message
-		compiler::reportLevel = compiler::ReportErrors;
-		error(node->location,"Can't resolve definition %s!",node->id);
-		compiler::reportLevel = compiler::Silent;
+		compiler::subError(node->location,format("Can't resolve definition %s!",node->id));
 	}
 }
 
@@ -524,7 +525,7 @@ void Evaluator::evaluateModule(BlockExpression* module){
 	}
 	while(prevUnresolvedExpressions > unresolvedExpressions && unresolvedExpressions != 0);
 	if(unresolvedExpressions > 0){
-		error(module->location,"Can't resolve %s expressions and definitions:",unresolvedExpressions);
+		compiler::headError(module->location,format("Can't resolve %s expressions and definitions:",unresolvedExpressions));
 		//Do an extra pass gathering unresolved definitions
 		reportUnevaluated = true;
 		auto reportLevel = compiler::reportLevel;

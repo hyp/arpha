@@ -856,6 +856,7 @@ namespace compiler {
 		Scope* scope;
 		Node*  body;
 		bool compile;
+		const char* src;
 	};
 
 	typedef std::map<std::string,Module>::iterator ModulePtr;
@@ -892,6 +893,7 @@ namespace compiler {
 		currentModule = insertionResult.first;
 
 		currentModule->second.directory = System::path::directory(moduleName);
+		currentModule->second.src = source;
 
 		Scope* scope;
 		//Special case for 'packages/arpha/arp.arp'
@@ -924,6 +926,7 @@ namespace compiler {
 
 		parser.evaluator()->evaluateModule(currentModule->second.body->asBlockExpression());
 
+		currentModule->second.src = nullptr;
 		//restore old module ptr
 		currentModule = prevModule;
 		_currentUnit = prevUnit;
@@ -991,9 +994,32 @@ namespace compiler {
 	void onDebug(const std::string& message){
 		if(reportLevel >= ReportDebug) System::debugPrint(message);
 	}
+	void showSourceLine(Location& location,size_t offset = 0){
+		size_t i;
+		for(i = 0;i<offset;i++) std::cout<<' ';
+		const char* src = currentModule->second.src;
+		for(i = 0;i<location.line();src++){
+			if(*src == '\0') break;
+			else if(*src == '\n') i++;
+		}
+		for(;*src!='\n' && *src!='\r' && *src!='\0';src++) std::cout<<*src;
+		std::cout<< std::endl;
+		for(i = 0;i<offset;i++) std::cout<<' ';
+		for(i = 0;i<location.column;i++) std::cout<<'~';
+		std::cout<<"^";
+		std::cout<< std::endl;
+	}
 	void onError(Location& location,const std::string& message){
 		if(reportLevel >= ReportErrors)
 			std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
+	}
+	void headError(Location& location,const std::string& message){
+		std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
+	}
+	void subError(Location& location,const std::string& message){
+		for(size_t i = 0;i<currentModule->first.size();i++) std::cout<<' ';
+		std::cout<< '(' << location.line() << ':' << location.column << ')' <<": " << message << std::endl;
+		showSourceLine(location,currentModule->first.size());
 	}
 	void onWarning(Location& location,const std::string& message){
 		std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Warning: " << message << std::endl;
