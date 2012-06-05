@@ -68,7 +68,7 @@ namespace intrinsics {
 
 		TypeExpression* ExprPtr = nullptr;
 		TypeExpression* UnitPtr = nullptr;
-		TypeExpression* WhilePtr = nullptr;
+		TypeExpression* LoopPtr = nullptr;
 		TypeExpression* ReturnPtr = nullptr;
 		TypeExpression* IfPtr = nullptr;
 		TypeExpression* ControlFlowPtr = nullptr;
@@ -107,9 +107,9 @@ namespace intrinsics {
 			static Node* newUnit(Node* arg){
 				return new ValueExpression(new UnitExpression,UnitPtr);
 			}
-			static Node* newWhile(Node* arg){
+			static Node* newLoop(Node* arg){
 				auto t = arg->asTupleExpression();
-				return new ValueExpression(new WhileExpression(passedExpr(t->children[0]),passedExpr(t->children[1])),WhilePtr);
+				return new ValueExpression(new LoopExpression(passedExpr(arg)),LoopPtr);
 			}
 			static Node* newReturn(Node* arg){
 				return new ValueExpression(new ReturnExpression(passedExpr(arg)),ReturnPtr);
@@ -148,9 +148,9 @@ namespace intrinsics {
 				auto TuplePtr = defineType("Tuple");
 				auto UnresolvedPtr = defineType("Unresolved");
 
-				WhilePtr = defineType("While");
-				ARG args[] = {{"condition",ExprPtr},{"body",ExprPtr}};
-				defineConstructor(newWhile,args,2);
+				LoopPtr = defineType("Loop");
+				ARG args[] = {{"body",ExprPtr}};
+				defineConstructor(newLoop,args,1);
 				{
 				ReturnPtr = defineType("Return");
 				ARG args[] = {{"value",ExprPtr}};
@@ -197,16 +197,47 @@ namespace intrinsics {
 				auto sticky = arg->asIntegerLiteral();
 				return new ValueExpression(parser->parse((int)sticky->integer.u64),ExprPtr);
 			}
-			static Node* expectString(Node* arg){
+			struct NewlineIgnorer {
+				bool ignore;
+				Parser::State state;
+				Parser* parser;
+				NewlineIgnorer(bool doIgnore,Parser* parser) : ignore(doIgnore) {				
+					if(ignore){
+						parser->saveState(&state);
+						for(auto next = parser->peek();next.isLine();next = parser->peek()) parser->consume();
+						this->parser = parser;
+					}
+				}
+				void rollback(){
+					if(ignore) parser->restoreState(&state);
+				}
+			};
+			static Node* expectSymbol(Node* arg){
+				auto t = arg->asTupleExpression();
 				auto parser = compiler::currentUnit()->parser;
-				auto symbol = arg->asStringLiteral();
+				auto symbol = t->children[0]->asStringLiteral();
+				NewlineIgnorer i(t->children[1]->asBoolExpression()->value,parser);
 				parser->expect(SymbolID(symbol->block.ptr(),symbol->block.length()));
 				return new UnitExpression();
 			}
-			static Node* matchString(Node* arg){
+			static Node* matchSymbol(Node* arg){
+				auto t = arg->asTupleExpression();
 				auto parser = compiler::currentUnit()->parser;
-				auto symbol = arg->asStringLiteral();
-				return new BoolExpression( parser->match(SymbolID(symbol->block.ptr(),symbol->block.length())) );
+				auto symbol = t->children[0]->asStringLiteral();
+				NewlineIgnorer i(t->children[1]->asBoolExpression()->value,parser);
+				auto result = parser->match(SymbolID(symbol->block.ptr(),symbol->block.length()));
+				if(!result) i.rollback();
+				return new BoolExpression(result);
+			}
+			static Node* isNextSymbol(Node* arg){
+				auto t = arg->asTupleExpression();
+				auto parser = compiler::currentUnit()->parser;
+				auto symbol = t->children[0]->asStringLiteral();
+				NewlineIgnorer i(t->children[1]->asBoolExpression()->value,parser);
+				auto next = parser->peek();
+				auto result = next.isSymbol() && next.symbol == SymbolID(symbol->block.ptr(),symbol->block.length());
+				i.rollback();
+				return new BoolExpression(result);
 			}
 			static Node* consumeSymbol(Node* arg){
 				auto parser = compiler::currentUnit()->parser;
@@ -229,9 +260,13 @@ namespace intrinsics {
 				defineFunction("parse",arg,ExprPtr,&parse2);
 				
 				{
-				ARG arg = {"symbol",intrinsics::types::StringLiteral->reference()};
-				defineFunction("expect",arg,intrinsics::types::Void,&expectString);
-				defineFunction("match",arg,intrinsics::types::boolean,&matchString);
+				ARG args[] = {{"symbol",intrinsics::types::StringLiteral->reference()},{"ignoreNewlines",intrinsics::types::boolean}};
+				auto f = defineFunction("expect",args,2,intrinsics::types::Void,&expectSymbol);
+				f->arguments[1]->defaultValue(new BoolExpression(false),false,false);
+				f = defineFunction("match",args,2,intrinsics::types::boolean,&matchSymbol);
+				f->arguments[1]->defaultValue(new BoolExpression(false),false,false);
+				f = defineFunction("isNext",args,2,intrinsics::types::boolean,&isNextSymbol);
+				f->arguments[1]->defaultValue(new BoolExpression(false),false,false);
 				}
 				defineFunction("matchNewline",intrinsics::types::boolean,&matchNewline);
 				{

@@ -54,7 +54,7 @@ struct Evaluator;
 	X(PointerOperation)      \
 	X(IfExpression)      \
 	X(BlockExpression)       \
-	X(WhileExpression)         \
+	X(LoopExpression)         \
 	\
 	X(ExpressionVerifier) \
 	X(UnresolvedSymbol) \
@@ -370,9 +370,9 @@ struct ControlFlowExpression: Node {
 	};
 	ControlFlowExpression(int type);
 
-	inline bool isContinue(){ return kind == CONTINUE; }
-	inline bool isBreak(){ return kind == BREAK; }
-	inline bool isFallthrough(){ return kind == FALLTHROUGH; }
+	inline bool isContinue() const { return kind == CONTINUE; }
+	inline bool isBreak() const { return kind == BREAK; }
+	inline bool isFallthrough() const { return kind == FALLTHROUGH; }
 	SymbolID labeledJump;//For future
 	int kind;
 	DECLARE_NODE(ControlFlowExpression);
@@ -422,15 +422,15 @@ struct BlockExpression : Node {
 	DECLARE_NODE(BlockExpression);
 };
 
+// A while or a do while expression
 // : intrinsics::types::Void
-struct WhileExpression : Node {
-	WhileExpression(Node* condition,Node* body);
+struct LoopExpression : Node {
+	LoopExpression(Node* body);
 
 	bool isResolved() const;
 
-	Node* condition;//expectedType = intrinsics::types::boolean
 	Node* body;
-	DECLARE_NODE(WhileExpression);
+	DECLARE_NODE(LoopExpression);
 };
 
 /*****

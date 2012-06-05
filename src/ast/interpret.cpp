@@ -27,6 +27,8 @@ struct Interpreter : NodeVisitor {
 	enum {
 		WALKING,
 		RETURN, //unroll the stack till the function epilogue
+		BREAK,
+		CONTINUE,
 		FAILURE //unroll the stack to base
 	};
 	int status;
@@ -138,14 +140,21 @@ struct Interpreter : NodeVisitor {
 			return node->alternative->accept(this);
 		}
 	}
-	Node* visit(WhileExpression* node){
+	Node* visit(ControlFlowExpression* node){
+		if(node->isBreak()) status = BREAK;
+		else if(node->isContinue()) status = CONTINUE;
+		return node;
+	}
+	Node* visit(LoopExpression* node){
 		while(true){
-			auto cond = node->condition->accept(this);
-			if(status != WALKING) break;
-			if(!cond->asBoolExpression()->value) break;
 			node->body->accept(this);
+			if(status == CONTINUE){
+				status = WALKING;
+				continue;
+			}
 			if(status != WALKING) break;
 		}
+		if(status == BREAK) status = WALKING;
 		return status == FAILURE ? nullptr : node;
 	}
 

@@ -13,7 +13,14 @@ struct Scope;
 
 struct Parser : Lexer {
 
+	struct State {
+		const char* src;
+		Location location;
+	};
+
 	Parser(const char* src,Evaluator* evaluator);
+	void saveState(State *state);
+	void restoreState(State *state);
 
 	void expect(SymbolID token);
 	SymbolID expectName();

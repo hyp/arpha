@@ -65,8 +65,12 @@ struct Analyzer : NodeVisitor {
 			reportedCtfeHeadError = true;
 		}
 		const char* str = "";
-		if(node->asVariableReference()) str = "Access to a global variable isn't allowed!";
+		if(auto v = node->asVariableReference()){
+			if(!v->variable->functionOwner()) str = "Access to a global variable isn't allowed!";
+			else str = "Access to a variable captured from the outer function isn't allowed!";
+		}
 		else if(node->asBlockExpression()) str = "The function has too many locals!";
+		else if(node->asPointerOperation()) str = "Pointer operations aren't allowed!";
 		else str = "The call to this function can't be evaluated at compile time!";
 		compiler::subError(node->location,str);
 	}
@@ -93,6 +97,11 @@ struct Analyzer : NodeVisitor {
 #undef error	
 #define error(loc,...) { compiler::onError(loc,format(__VA_ARGS__)); cantCtfe = true; }
 
+	Node* visit(IntegerLiteral* node){
+		addInliningWeight(1);
+		return node;
+	}
+
 	Node* visit(VariableReference* node){
 		if(node->variable->location.line() > node->location.line() && node->variable->location.column > node->location.column){
 			error(node->location,"Variable usage before declaration!");
@@ -101,6 +110,7 @@ struct Analyzer : NodeVisitor {
 			if(node->variable->functionOwner() != nullptr){
 				//TODO closures
 				error(node->location,"Closures aren't supported yet!");
+				markAsNotInterpretable(node);
 			}
 			else markAsNotInterpretable(node);
 			markImpure(node);
@@ -114,6 +124,19 @@ struct Analyzer : NodeVisitor {
 		node->object->accept(this);
 		node->value->accept(this);
 		addInliningWeight(5);
+		return node;
+	}
+
+	Node* visit(FieldAccessExpression* node){
+		node->object->accept(this);
+		addInliningWeight(2);
+		return node;
+	}
+
+	Node* visit(PointerOperation* node){
+		node->expression->accept(this);
+		markAsNotInterpretable(node);
+		addInliningWeight(2);
 		return node;
 	}
 
@@ -141,7 +164,7 @@ struct Analyzer : NodeVisitor {
 			lastWhileExpression->setFlagForAll(insideUnreachableCode() ? 0x8 : 0x4); //while hierarchy has return
 		}
 		returnFlags |= (insideUnreachableCode() ? 0x2 : 0x1);
-		addInliningWeight(1);
+		addInliningWeight(2);
 		return node;
 	}
 
@@ -156,7 +179,7 @@ struct Analyzer : NodeVisitor {
 		else if(node->isFallthrough()){
 			//TODO
 		}
-		addInliningWeight(1);
+		addInliningWeight(2);
 		return node;
 	}
 
@@ -172,26 +195,15 @@ struct Analyzer : NodeVisitor {
 		return node;
 	}
 
-	Node* visit(WhileExpression* node){
+	Node* visit(LoopExpression* node){
 		FlaggedNode self(&lastWhileExpression,node);
-		node->condition->accept(this);
 		
-		auto constantCondition = constantBooleanExpression(node->condition);
-		auto _ = isDeadCode;
-		isDeadCode = constantCondition == 0;
 		node->body->accept(this);
-		isDeadCode = _;
 
-		if(constantCondition == 1) {
-			if(self.flags==0){
-				error(node->location,"This is an infinite loop - please provide a return or break statement so that the loop will be stopped!");
-				
-			}else if((self.flags & (0x1 | 0x4)) == 0){
-				error(node->location,"This is an infinite loop - The return or break statement(s) contained in this loop are unreachable!");
-			}
-		}
-		else if(constantCondition == 0) {
-			warning(node->location,"The body of this loop will never be executed!");
+		if(self.flags==0){
+			error(node->location,"This is an infinite loop - please provide a return or break statement so that the loop will be stopped!");	
+		}else if((self.flags & (0x1 | 0x4)) == 0){
+			error(node->location,"This is an infinite loop - The return or break statement(s) contained in this loop are unreachable!");
 		}
 
 		addInliningWeight(40);

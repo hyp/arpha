@@ -106,6 +106,29 @@ f40 1
 f40
 	2
 	
+macro f50 {
+	parser.expect("a",ignoreNewlines:true)
+	return [> "f50 success!" <]
+}
+f50 a
+f50
+a
+f50
+
+a
+macro f51 {
+	parser.match("b",ignoreNewlines:true)
+	return [> "f51 sucess" <]
+}
+f51
+f51 b
+f51
+b
+f51
+
+b
+
+	
 macro f100(x int32) = [> 1,$x <]
 f100(2)
 
@@ -114,6 +137,10 @@ macro f101(x FooC) = [> "Function like" <]
 macro f101(x) = [> "macroes!" <]
 f101(true)
 f101(1)
+
+macro f102(x) = x
+macro f102_5 = [> f102( [> "f102 success" <] ) <]
+f102_5
 
 macro quasi0 {
 	var x = parser.parse()

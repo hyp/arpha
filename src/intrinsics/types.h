@@ -26,6 +26,7 @@ namespace intrinsics {
 
 
 		//
+		void preinit(Scope* moduleScope);
 		void init(Scope* moduleScope);
 	};
 };

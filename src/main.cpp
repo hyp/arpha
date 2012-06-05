@@ -668,10 +668,7 @@ struct CommandParser: PrefixDefinition {
 };
 
 //TODO refactor
-Node* equals(Node* parameters){
-	auto t = parameters->asTupleExpression();
-	return new BoolExpression(t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()));
-}
+
 Node* _typeof(Node* parameter){
 	return reinterpret_cast<Node*>(parameter->asValueExpression()->data)->_returnType();
 }
@@ -688,8 +685,7 @@ Node* _sizeof(Node* parameter){
 
 
 void arphaPostInit(Scope* moduleScope){
-	auto x = ensure( ensure(moduleScope->lookupPrefix("equals"))->asOverloadset() )->functions[0];
-	x->constInterpreter = equals;
+
 }
 void coreSyntaxPostInit(Scope* moduleScope){
 
@@ -903,7 +899,9 @@ namespace compiler {
 			arpha::defineCoreSyntax(scope);
 		}
 		else {
+			
 			scope = new Scope(nullptr);
+			if((packageDir + "/arpha/types.arp") == moduleName) intrinsics::types::preinit(scope);
 			//import 'arpha' by default
 			scope->import(findModule("arpha"),"arpha");
 		}

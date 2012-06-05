@@ -167,6 +167,9 @@ std::ostream& operator<< (std::ostream& stream,Record* type);
 
 //An overload set consists of function with the same name, whcih are defined in the same scope
 struct Overloadset: public PrefixDefinition {
+	enum {
+		TYPE_GENERATOR_SET = 0x80,//Overload set for functions which generate types e.g. Pointer(T) can't be combined with other sets
+	};
 	Overloadset(Function* firstFunction);
 
 	Node* parse(Parser* parser);
@@ -203,6 +206,8 @@ struct Function: public PrefixDefinition {
 
 		CANT_CTFE = 0x20,
 		PURE = 0x40,
+
+		TYPE_GENERATOR_FUNCTION = 0x80,
 	};
 
 	Function(SymbolID name,Location& location,Scope* bodyScope);

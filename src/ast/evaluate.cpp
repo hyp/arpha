@@ -25,7 +25,7 @@ Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
 	}
 }
 
-Evaluator::Evaluator(Interpreter* interpreter) : _interpreter(interpreter),dontEvaluate(false),insideWhile(false),forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {
+Evaluator::Evaluator(Interpreter* interpreter) : _interpreter(interpreter),dontEvaluate(false),forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {
 }
 
 
@@ -416,14 +416,8 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
-	Node* visit(WhileExpression* node){
-		node->condition = node->condition->accept(this);
-		auto oldInside = evaluator->insideWhile;
-		evaluator->insideWhile = true;
+	Node* visit(LoopExpression* node){
 		node->body = node->body->accept(this);
-		evaluator->insideWhile = oldInside;
-
-		if(node->condition->isResolved()) node->condition = typecheck(node->location,node->condition,intrinsics::types::boolean);
 		return node;
 	}
 
@@ -700,18 +694,29 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 	}
 
 	if(argsCount < expressionCount){
-		if(argsCount > 0 && func->arguments[argsCount-1]->type.isWildcard()){
-			argsCount--;
-			auto tuple = new TupleExpression();
-			for(auto i = argsCount;i<expressionCount;i++)
-				tuple->children.push_back(exprBegin[i]);
-			result[argsCount] = eval(tuple);
-			assert(result[argsCount]->isResolved());
-			expressionCount = argsCount;
+		if(argsCount > 0){
+			if(func->arguments[argsCount-1]->type.isWildcard()){
+				argsCount--;
+				auto tuple = new TupleExpression();
+				for(auto i = argsCount;i<expressionCount;i++)
+					tuple->children.push_back(exprBegin[i]);
+				result[argsCount] = eval(tuple);
+				assert(result[argsCount]->isResolved());
+				expressionCount = argsCount;
 
-			determinedFunction = true;
-			determinedArguments.resize(argsCount+1,nullptr);
-			determinedArguments[argsCount] = result[argsCount]->_returnType();
+				determinedFunction = true;
+				determinedArguments.resize(argsCount+1,nullptr);
+				determinedArguments[argsCount] = result[argsCount]->_returnType();
+			}
+			else{
+				//*Expression
+				argsCount--;
+				auto tuple = new TupleExpression();
+				for(auto i = argsCount;i<expressionCount;i++)
+					tuple->children.push_back(exprBegin[i]);
+				result[argsCount] = new ValueExpression(eval(tuple),intrinsics::ast::ExprPtr);
+				expressionCount = argsCount;
+			}
 		}
 		else assert(false);
 	}
@@ -743,7 +748,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			determinedArguments[currentArg] = result[currentArg]->_returnType();
 		}
 		else if(func->isFlagSet(Function::MACRO_FUNCTION) && func->arguments[currentArg]->type.type()->isSame(intrinsics::ast::ExprPtr)){
-			result[currentArg] = new ValueExpression(exprBegin[currentExpr],intrinsics::ast::ExprPtr);
+			result[currentArg] = exprBegin[currentExpr]->asValueExpression() ? exprBegin[currentExpr] : new ValueExpression(exprBegin[currentExpr],intrinsics::ast::ExprPtr);
 		}
 		else {
 			auto ret = exprBegin[currentExpr]->_returnType();
@@ -906,7 +911,7 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 	}
 
 	if(argsCount < expressionCount){
-		if(argsCount > 0 && func->arguments[argsCount-1]->type.isWildcard()){
+		if(argsCount > 0 && (func->arguments[argsCount-1]->type.isWildcard() || func->arguments[argsCount-1]->type.type()->isSame(intrinsics::ast::ExprPtr))){
 			argsCount--;
 			checked[argsCount] = true;
 			expressionCount = argsCount;

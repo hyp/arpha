@@ -11,6 +11,15 @@
 Parser::Parser(const char* src,Evaluator* evaluator) : Lexer(src),_evaluator(evaluator) {  
 }
 
+void Parser::saveState(State *state){
+	state->src= ptr;
+	state->location = location;
+}
+void Parser::restoreState(State *state){
+	ptr = state->src;
+	location = state->location;
+}
+
 void Parser::currentScope(Scope* scope){
 	_currentScope=scope;
 	_evaluator->currentScope(scope);

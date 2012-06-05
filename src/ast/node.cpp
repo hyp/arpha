@@ -317,16 +317,15 @@ Node* CallExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(e);
 }
 
-//While expression
-WhileExpression::WhileExpression(Node* condition,Node* body){
-	this->condition = condition;
+//Loop expression
+LoopExpression::LoopExpression(Node* body){
 	this->body = body;
 }
-bool WhileExpression::isResolved() const {
-	return condition->isResolved() && body->isResolved();
+bool LoopExpression::isResolved() const {
+	return body->isResolved();
 }
-Node* WhileExpression::duplicate(DuplicationModifiers* mods) const{
-	return copyProperties(new WhileExpression(condition->duplicate(mods),body->duplicate(mods)));
+Node* LoopExpression::duplicate(DuplicationModifiers* mods) const{
+	return copyProperties(new LoopExpression(body->duplicate(mods)));
 }
 
 // Block expression
@@ -765,8 +764,8 @@ struct NodeToString: NodeVisitor {
 		stream<<"}";
 		return node;
 	}
-	Node* visit(WhileExpression* node){
-		stream<<"while "<<node->condition<<" do "<<node->body;
+	Node* visit(LoopExpression* node){
+		stream<<"loop "<<node->body;
 		return node;
 	}
 	Node* visit(TypeExpression* node){

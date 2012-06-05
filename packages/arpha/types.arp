@@ -6,10 +6,18 @@
 		max/min information in here.
 #
 
-# The types Nothing, Type and bool are defined by the implementation.
-# The types Pointer(_), Range(_) and Function(_,_) are defined by the implementation.
-# The values true and false are also defined by the implementation.
+#
+	Core types such as:
+		Nothing, Type and bool,
+		Pointer(_), Range(_) and Function(_,_) 
+	are defined by the implementation.
+	The constant values true and false are also defined by the implementation.
+#
 
+# Type functions
+def equals(x Type,y Type) bool
+
+# Standart integer types
 type int8 integer
 type int16 integer
 type int32 integer
@@ -21,4 +29,3 @@ type uint32 integer
 type uint64 integer
 
 # utf32 char type char integer
-

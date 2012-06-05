@@ -26,20 +26,48 @@ macro if {
 	var condition = parser.parse()
 	parser.expect(")")
 	var consequence = parser.parse()
-	var alternative = ifElse(parser.match("else")) parser.parse() else [> () <]
+	var alternative = ifElse(parser.match("else",ignoreNewlines:true)) parser.parse() else [> () <]
 	return ast.newIfElse(condition,consequence,alternative)
 }
 
 #TODO condition typecheck?
+macro continue = ast.newControlFlow(continue:true)
+macro break = ast.newControlFlow(break:true)
+
 macro while {
 	parser.expect("(")
 	var condition = parser.parse()
 	parser.expect(")")
-	return ast.newWhile(condition,parser.parse())
+	var body = parser.parse()
+	return ast.newLoop([> if(not($condition)) break else $body <] )
 }
 
-macro continue = ast.newControlFlow(continue:true)
-macro break = ast.newControlFlow(break:true)
+macro until {
+	parser.expect("(")
+	var condition = parser.parse()
+	parser.expect(")")
+	var body = parser.parse()
+	return ast.newLoop([> if($condition) break else $body <] )
+}
+
+macro loop {
+	var body = parser.parse()
+	var condition
+	if(parser.match("while",ignoreNewlines:true)){
+		parser.expect("(")
+		condition = parser.parse()
+		parser.expect(")")
+	} 
+	else if(parser.match("until",ignoreNewlines:true)){
+		parser.expect("(")
+		var cond = parser.parse()
+		condition = [> not($cond) <]
+		parser.expect(")")
+	} 
+	else condition = [> true <]
+	return ast.newLoop([> $body ; if(not($condition)) break <] )
+}
+
 
 # TODO
 macro for {
@@ -58,6 +86,7 @@ macro for {
 		}
 	<]
 }
+
 
 #TODO
 macro [ {
@@ -88,7 +117,8 @@ import export operators
 import export operations
 
 # A default heap allocator used to allocate objects with new
-macro allocator(ObjectType) = [> <]
+constraint anyType(T) = T == Type
+macro allocator(T anyType) = [> <]
 
 #
 	New is used to create a new instance of an object not on the stack
@@ -118,9 +148,6 @@ macro delete {
 	var object = parser.parse() #TODO type check is ptr..
 	return [> $object.finalize(); typeof($object).allocator.free($object) <]
 }
-
-# Returns true if two given types are the same type. TOCONSIDER move to compiler
-def equals(x Type,y Type) bool
 
 
 

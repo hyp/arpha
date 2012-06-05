@@ -523,13 +523,19 @@ Record* Record::findAnonymousRecord(std::vector<Field>& record){
 //Overload set
 
 Overloadset::Overloadset(Function* firstFunction) : PrefixDefinition(firstFunction->id,firstFunction->location) {
-	visibilityMode = Visibility::Public;//!important // TODO fix import module a type foo, module b private def foo() //<-- conflict
+	visibilityMode = firstFunction->visibilityMode;
 	functions.push_back(firstFunction);
+	if(firstFunction->isFlagSet(Function::TYPE_GENERATOR_FUNCTION)) setFlag(TYPE_GENERATOR_SET);
 }
 Overloadset* Overloadset::asOverloadset(){
 	 return this;
 }
 void Overloadset::push_back(Function* function){
+	if(isFlagSet(TYPE_GENERATOR_SET) && !function->isFlagSet(Function::TYPE_GENERATOR_FUNCTION)){
+		error(function->location,"Can't add the function %s to type overload set",function->id);
+		return;
+	}
+	if(visibilityMode == Visibility::Private && function->visibilityMode == Visibility::Public) visibilityMode = Visibility::Public;
 	functions.push_back(function);//TODO check against same functions
 }
 bool Overloadset::isResolved(){ 
@@ -554,6 +560,7 @@ PrefixDefinition* Overloadset::duplicate(DuplicationModifiers* mods){
 	return copyProperties(os);
 }
 PrefixDefinition* Overloadset::mergedDuplicate(DuplicationModifiers* mods,Overloadset* dest){
+	assert(!dest->isFlagSet(TYPE_GENERATOR_SET));//TODO lates
 	for(auto i = functions.begin();i!=functions.end();i++){
 		dest->push_back((*i)->duplicate(mods));
 	}

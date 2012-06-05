@@ -23,6 +23,7 @@ namespace intrinsics {
 		TypeExpression* uint32 = nullptr;
 		TypeExpression* uint64 = nullptr;
 
+		//Boots up arpha's type system.
 		void startup() {
 			Void = new TypeExpression(TypeExpression::VOID);
 			Type = new TypeExpression(TypeExpression::TYPE);
@@ -30,18 +31,9 @@ namespace intrinsics {
 
 			boolean = new TypeExpression(TypeExpression::BOOL);
 		};
-		void typeFunc(SymbolID name,Scope* moduleScope,Node* (*eval)(Node*)){
-			Function* func = new Function(name,Location(),new Scope(moduleScope));
-			func->body.scope->_functionOwner = func;
-			func->arguments.push_back(new Argument("type",Location(),func));
-			func->arguments[0]->type.infer(Type);
-			func->setFlag(Function::MACRO_FUNCTION);
-			func->constInterpreter = eval;
-			func->_returnType.infer(Type);
-			func->_resolved = func->_argsResolved = true;
-			moduleScope->defineFunction(func);
-		}
-		void init(Scope* moduleScope){
+
+		//Define some types before arpha/types is loaded so that we can use them in the module already.
+		void preinit(Scope* moduleScope){
 			struct Substitute : PrefixDefinition {
 				Substitute(SymbolID name,Node* expr) : PrefixDefinition(name,Location()),expression(expr) {}
 				Node* parse(Parser* parser){
@@ -70,6 +62,7 @@ namespace intrinsics {
 						func->arguments[1]->type.infer(Type);
 					}
 					func->constInterpreter = eval;
+					func->setFlag(Function::TYPE_GENERATOR_FUNCTION);
 					func->_returnType.infer(Type);
 					func->_resolved = func->_argsResolved = true;
 					moduleScope->defineFunction(func);
@@ -86,6 +79,16 @@ namespace intrinsics {
 			TypeFunc("Pointer",moduleScope,&TypeFunc::Pointer);
 			TypeFunc("Range",moduleScope,&TypeFunc::Pointer);
 			TypeFunc("Function",moduleScope,&TypeFunc::FunctionType,2);
+		}
+		//Performs a comparison between 2 types
+		Node* equals(Node* parameters){
+			auto t = parameters->asTupleExpression();
+			return new BoolExpression(t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()));
+		}
+		//Perform additional typesystem bindings after arpha/types is loaded
+		void init(Scope* moduleScope){
+			auto x = ensure( ensure(moduleScope->lookupPrefix("equals"))->asOverloadset() )->functions[0];
+			x->constInterpreter = equals;
 			
 			INTRINSIC_INTTYPE(int8);
 			INTRINSIC_INTTYPE(int16);

@@ -177,7 +177,13 @@ Function* Scope::resolveFunction(Evaluator* evaluator,SymbolID name,Node* argume
 		std::vector<Function*> overloads;
 		for(auto i = imports.begin();i!=imports.end();++i){ 
 			if(auto hasDef = (*i)->containsPrefix(name)){
-				if(auto os = hasDef->asOverloadset()) overloads.insert(overloads.end(),os->functions.begin(),os->functions.end()); 
+				if(auto os = hasDef->asOverloadset()){
+					if(overloads.size()>0 && os->isFlagSet(Overloadset::TYPE_GENERATOR_SET)){
+						error(argument->location,"Function '%s' overloading abmiguity - it is either a type generation or a normal function!",name);
+						return nullptr;//TODO better error message
+					}
+					else overloads.insert(overloads.end(),os->functions.begin(),os->functions.end());
+				}
 			}
 		}
 		evaluator->findMatchingFunctions(overloads,results,argument,true);
