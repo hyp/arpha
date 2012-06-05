@@ -12,48 +12,6 @@
 #include "../intrinsics/types.h"
 
 /**
-* Walk the body of a function and assign a stack offset for each variable
-* e.g for f(a) { var b ; { var c } } = {a:0,b:1,c:2}
-*/
-struct VariableMapper : NodeVisitor {
-	size_t offset;
-
-	VariableMapper() : offset(0) {}
-	//TODO more nodes
-	Node* visit(IfExpression* node){
-		node->consequence->accept(this);
-		node->alternative->accept(this);
-		return node;
-	}
-	Node* visit(WhileExpression* node){
-		node->body->accept(this);
-		return node;
-	}
-	Node* visit(BlockExpression* node){
-		for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
-			if(auto v = dynamic_cast<Variable*>((*i).second)){
-				if(offset >= std::numeric_limits<uint16>::max()) assert(false);
-				v->registerID = (uint16)offset;
-				offset++;
-			}
-		}
-		for(auto i = node->children.begin();i!=node->children.end();i++){
-			(*i)->accept(this);
-		}
-		return node;
-	}
-
-	static size_t mapToRegisters(Function* func){
-		VariableMapper mapper;
-		func->body.accept(&mapper);
-		return mapper.offset;
-	}
-
-
-};
-
-
-/**
 * Walks the AST node and checks if the node can be interpreted at compile-time.
 * This checks all expressions in the AST node and doesn't account for branches that won't be reached when interpreting
 */
@@ -200,7 +158,7 @@ struct Interpreter : NodeVisitor {
 InterpreterInvocation::InterpreterInvocation(Interpreter* interpreter,Function* f,Node* parameter,bool visitAllBranches) : func(f) {
 	auto oldFunc = interpreter->currentFunction;
 	auto oldRegisters = interpreter->registers;
-	size_t numRegs = VariableMapper::mapToRegisters(f);
+	size_t numRegs = f->ctfeRegisterCount;
 	if(numRegs > 0){
 		registers.resize(numRegs);
 		interpreter->registers = &registers[0];

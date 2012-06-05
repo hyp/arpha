@@ -233,7 +233,7 @@ struct Function: public PrefixDefinition {
 	bool _hasExpandableArguments;
 	bool _argsResolved;
 	bool _resolved;
-
+	uint16 ctfeRegisterCount;
 private:
 	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
 	

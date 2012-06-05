@@ -49,7 +49,14 @@ macro for {
 	var container = parser.parse()
 	parser.expect(")")
 	var body = parser.parse()
-	return [> while(false) $body <]
+	return [>
+		def sequence = $container
+		while(sequence.isEmpty){
+			def i = sequence.front
+			$body
+			sequence.popFront()
+		}
+	<]
 }
 
 #TODO
@@ -80,7 +87,15 @@ import export operators
 
 import export operations
 
+# A default heap allocator used to allocate objects with new
+macro allocator(ObjectType) = [> <]
 
+#
+	New is used to create a new instance of an object not on the stack
+	Note:
+		In order to use custom memory allocator, you will have to implement
+		a property "allocator" for your type. 
+#
 macro new {
 	var type = parser.parse(precedence.call)
 	if(parser.match("(")){
@@ -93,8 +108,14 @@ macro new {
 	return [> $type.allocator.alloc(sizeof($type)).construct() <]
 }
 
+#
+	Delete is used to delete an instance of an object which resides not on the stack
+	Note:
+		In order to use custom memory allocator, you will have to implement
+		a property "allocator" for your type. 
+#
 macro delete {
-	var object = parser.parse() #type check is ptr..
+	var object = parser.parse() #TODO type check is ptr..
 	return [> $object.finalize(); typeof($object).allocator.free($object) <]
 }
 

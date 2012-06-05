@@ -6,6 +6,7 @@
 #include "declarations.h"
 #include "evaluate.h"
 #include "interpret.h"
+#include "analyze.h"
 #include "../intrinsics/types.h"
 #include "../intrinsics/ast.h"
 
@@ -684,6 +685,7 @@ bool Function::resolve(Evaluator* evaluator){
 
 	if(_resolved){
 		debug("Function %s is fully resolved!\n E : %s G : %s Ret : %s Body: %s",id,_hasExpandableArguments,_hasGenericArguments,_returnType.type(),&body);
+		analyze(&body,this);
 		//TODO implement onResolved callbacks
 		if(isFlagSet(CONSTRAINT_FUNCTION)){
 			//Report an error if constraint can't be resolved at compile time!

@@ -252,10 +252,16 @@ struct VarParser: PrefixDefinition {
 		}
 		
 		Node* result;
-		if(vars.size() == 1) result = new VariableReference(vars[0]);
+		if(vars.size() == 1){
+			result = new VariableReference(vars[0]);
+			result->location = vars[0]->location;
+		}
 		else{
 			auto tuple = new TupleExpression;
-			for(auto i=vars.begin();i!=vars.end();i++) tuple->children.push_back(new VariableReference((*i)));
+			for(auto i=vars.begin();i!=vars.end();i++){
+				tuple->children.push_back(new VariableReference((*i)));
+				tuple->children.back()->location = (*i)->location;
+			}
 			result = tuple;
 		}
 

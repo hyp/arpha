@@ -7,6 +7,7 @@
 #include "visitor.h"
 #include "evaluate.h"
 #include "interpret.h"
+#include "analyze.h"
 #include "../intrinsics/ast.h"
 #include "../intrinsics/types.h"
 
@@ -379,8 +380,7 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 	Node* visit(ReturnExpression* node){
-		auto func = evaluator->currentScope()->functionOwner();
-		if(func){
+		if(auto func = evaluator->currentScope()->functionOwner()){
 			func->setFlag(Function::CONTAINS_RETURN);
 			node->value = node->value->accept(this);
 			if(node->value->isResolved()){
@@ -399,18 +399,10 @@ struct AstExpander: NodeVisitor {
 					node->value = typecheck(node->value->location,node->value,func->_returnType.type());
 				}
 			}
-		}else error(node->location,"Return statement is allowed only inside function's body!");
-		return node;
-	}
-
-	Node* visit(ControlFlowExpression* node){
-		//TODO first eval..
-		if(!evaluator->insideWhile){
-			error(node->location,"The following control flow statement must be inside the while loop!");
-			return ErrorExpression::getInstance();
 		}
 		return node;
 	}
+
 
 	Node* visit(IfExpression* node){
 		if(node->_resolved && !evaluator->forcedToEvaluate) return node;
@@ -432,45 +424,6 @@ struct AstExpander: NodeVisitor {
 		evaluator->insideWhile = oldInside;
 
 		if(node->condition->isResolved()) node->condition = typecheck(node->location,node->condition,intrinsics::types::boolean);
-		if(node->body->isResolved()){
-			if(auto condLiteral = node->condition->asBoolExpression()){
-				//Remove useless code
-				if(!condLiteral->value){
-					warning(node->location,"The following while loop will never be executed!");
-					return new UnitExpression();
-				}else{
-					//Make sure we've got a way out of this one..
-					struct FlowControlFinder : NodeVisitor {
-						bool found;
-						FlowControlFinder() : found(false) {}
-						//TODO more nodes..
-						Node* visit(IfExpression* node){
-							node->consequence->accept(this);
-							node->alternative->accept(this);
-							return node;
-						}
-						Node* visit(WhileExpression* node){
-							node->body->accept(this);
-							return node;
-						}
-						Node* visit(BlockExpression* node){
-							for(auto i = node->children.begin();i!= node->children.end();i++) (*i)->accept(this);
-							return node;
-						}
-						Node* visit(ReturnExpression* node){
-							found = true;
-							return node;
-						}
-					};
-					FlowControlFinder finder;
-					node->body->accept(&finder);
-					if(!finder.found){
-						error(node->location,"Infinite loop - The following while loop has no way for it to stop(such as a return or break expression)!");
-						return ErrorExpression::getInstance();
-					}
-				}
-			}
-		}
 		return node;
 	}
 
@@ -579,6 +532,7 @@ void Evaluator::evaluateModule(BlockExpression* module){
 		eval(module);
 		compiler::reportLevel = reportLevel;
 	}
+	analyze(module,nullptr);
 }
 
 /**
