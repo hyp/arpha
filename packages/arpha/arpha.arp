@@ -52,20 +52,19 @@ macro until {
 
 macro loop {
 	var body = parser.parse()
-	var condition
 	if(parser.match("while",ignoreNewlines:true)){
 		parser.expect("(")
-		condition = parser.parse()
+		var condition = parser.parse()
 		parser.expect(")")
+		return ast.newLoop([> $body ; if(not($condition)) break <] )
 	} 
 	else if(parser.match("until",ignoreNewlines:true)){
 		parser.expect("(")
-		var cond = parser.parse()
-		condition = [> not($cond) <]
+		var condition = parser.parse()
 		parser.expect(")")
+		return ast.newLoop([> $body ; if($condition) break <] )
 	} 
-	else condition = [> true <]
-	return ast.newLoop([> $body ; if(not($condition)) break <] )
+	else return ast.newLoop([> $body <] )
 }
 
 
