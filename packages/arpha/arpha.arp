@@ -67,7 +67,6 @@ macro loop {
 	else return ast.newLoop([> $body <] )
 }
 
-
 # TODO
 macro for {
 	parser.expect("(")

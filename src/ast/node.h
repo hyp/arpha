@@ -58,6 +58,7 @@ struct Evaluator;
 	\
 	X(ExpressionVerifier) \
 	X(UnresolvedSymbol) \
+	X(MatchResolver) \
 	X(ValueExpression)
 
 //Forward declaration of node types
@@ -159,7 +160,7 @@ private:
 
 
 //: intrinsics::types::Scope
-struct ImportedScopeReference : Node {
+struct ImportedScopeReference : ConstantNode {
 	ImportedScopeReference(ImportedScope* scope);
 
 	TypeExpression* _returnType() const;
@@ -168,17 +169,15 @@ struct ImportedScopeReference : Node {
 	DECLARE_NODE(ImportedScopeReference);
 };
 
-struct ValueExpression : Node {
+struct ValueExpression : ConstantNode {
 	ValueExpression(void* d,TypeExpression* type); //..
 	
-	bool isConst() const;
 	TypeExpression* _returnType() const;
 
 	TypeExpression* type;
 	void* data;
 	DECLARE_NODE(ValueExpression);
 };
-
 
 // Inferred [i.e. no type expression given] | Unresolved expression | valid type expression | wildcard type with possible constraint
 struct InferredUnresolvedTypeExpression {
@@ -246,6 +245,11 @@ struct TypeExpression : Node {
 	bool hasLocalSemantics() const { return _localSemantics; }
 	//const int32
 	bool hasConstSemantics() const { return false; }
+
+
+	bool wasGenerated() const; //Is this a parametrized type?
+	bool wasGeneratedBy(Function* function) const;  //Returns the function which generated this type
+	Node* generatedArgument(size_t i) const; //Returns the parameter i which was the argument to the function which generated this type
 
 	/**
 	* This is the one of the key functions of the type system.
@@ -473,6 +477,16 @@ struct AccessExpression : AlwaysUnresolved {
 	SymbolID symbol;
 	bool passedFirstEval; //On first evaluation don't touch this node!!
 	DECLARE_TEMPNODE(AccessExpression);
+};
+
+// An expression representing pattern matching of a certain object
+// A temporary match placeholder must be used before if-else tree so that the pattern for certain object like Types or records will be produced correctly!
+struct MatchResolver : AlwaysUnresolved {
+	MatchResolver(Node* object);
+
+	Node* object;
+	std::vector<Node*> children; // 0: pattern 1: consequence ...
+	DECLARE_TEMPNODE(MatchResolver);
 };
 
 // A dummy expression representing an error and never resolving

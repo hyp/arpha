@@ -442,8 +442,9 @@ struct AstExpander: NodeVisitor {
 		auto def = (node->explicitLookupScope ? node->explicitLookupScope : evaluator->currentScope())->lookupPrefix(node->symbol);
 		if(def){
 			if(auto ref = def->createReference()){
-				delete node;
-				return ref;
+				ref->location = node->location;
+				ref->_label = node->label();
+				return ref->accept(this);
 			};
 		}
 		evaluator->markUnresolved(node);
@@ -461,6 +462,100 @@ struct AstExpander: NodeVisitor {
 		}
 		else node->passedFirstEval = true;
 		evaluator->markUnresolved(node);
+		return node;
+	}
+
+	bool isWildcard(Node* expression){
+		auto e = expression->asUnresolvedSymbol();
+		return e && e->symbol == "_";
+	}
+	
+	void introducePatternVariable(Evaluator* evaluator,Location& location,SymbolID name,TypeExpression* type,Node* replacement,BlockExpression* dest,std::vector<Variable*>& introducedDefinitions){
+		auto var = new Variable(name,location,dest->scope->functionOwner());
+		var->type.infer(type);
+		var->isMutable = false;
+		var->resolve(evaluator);
+		var->setImmutableValue(replacement);
+		dest->scope->define(var);
+		introducedDefinitions.push_back(var);
+		debug("Introduced a variable %s from a pattern!",name);
+	}
+	//generates a condition for the else expression which evaluates if a type matches to a pattern
+	bool evaluateTypeMatch(Evaluator* evaluator,TypeExpression* object,Node* pattern,BlockExpression* consequence,std::vector<Variable*>& introducedDefinitions){
+		Node* result = nullptr;
+		//match(int32) { | int32
+		if(auto type2 = pattern->asTypeExpression()){
+			return object->isSame(type2);
+		}
+		//match(*int32) { | Pointer(...)
+		else if(auto call = pattern->asCallExpression()){
+			result = nullptr;
+			if(auto obj = call->object->asUnresolvedSymbol()){
+				auto def = consequence->scope->lookupPrefix(obj->symbol);
+				Overloadset* os = def ? def->asOverloadset() : nullptr;
+				if(os && os->isFlagSet(Overloadset::TYPE_GENERATOR_SET)){
+					if(object->wasGenerated()){
+						bool foundMatch = false;
+						//TODO more progressive search
+						for(auto i = os->functions.begin();i!=os->functions.end();i++){
+							if(object->wasGeneratedBy(*i)) foundMatch = true;
+						}
+						debug("Type generator pattern! - %s",foundMatch);
+						if(!foundMatch) return false;
+						if(auto tuple = call->arg->asTupleExpression()){
+							size_t j =0;
+							for(auto i = tuple->children.begin();i!=tuple->children.end();i++,j++){
+								if(!evaluateTypeMatch(evaluator,object->generatedArgument(j)->asTypeExpression(),*i,consequence,introducedDefinitions)) return false;
+							}
+							return true;
+						}else {
+							return evaluateTypeMatch(evaluator,object->generatedArgument(0)->asTypeExpression(),call->arg,consequence,introducedDefinitions);
+						}
+					}
+				}
+			}
+		}
+		//match(int32) { | _ | T:_
+		else if(auto name = pattern->asUnresolvedSymbol()){
+			if(isWildcard(pattern)){
+				//T:_ syntax
+				if(!pattern->label().isNull()) introducePatternVariable(evaluator,pattern->location,pattern->label(),intrinsics::types::Type,object,consequence,introducedDefinitions);
+				return true;
+			}
+			else {
+				//already was introduced?
+				for(auto i = introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
+					if((*i)->id == name->symbol) return object->isSame((*i)->value->asTypeExpression());
+				}
+				//T syntax
+				//introducePatternVariable(evaluator,pattern->location,name->symbol,intrinsics::types::Type,object,consequence);
+				//return true;
+			}
+		}
+		else {
+			error(pattern->location,"This type matching pattern is incorrect!");
+		}
+		return false;
+	}
+
+	Node* visit(MatchResolver* node){
+		node->object = node->object->accept(this);
+		if(node->object->isResolved()){
+			//yes!
+			if(auto type = node->object->asTypeExpression()){
+				for(auto i = node->children.begin();i!=node->children.end();i+=2){
+					auto olde = evaluator->expectedTypeForEvaluatedExpression;
+					evaluator->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
+					*i = (*i)->accept(this);
+					evaluator->expectedTypeForEvaluatedExpression = olde;
+					std::vector<Variable*> introducedDefinitions;
+					if(evaluateTypeMatch(evaluator,type,*i,(*(i+1))->asBlockExpression(),introducedDefinitions)){
+						return (*(i+1));
+					}
+				}
+			}
+			else error(node->location,"Can only resolve type matches yet!");
+		}
 		return node;
 	}
 

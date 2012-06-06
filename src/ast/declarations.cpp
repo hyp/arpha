@@ -85,7 +85,7 @@ void Variable::setImmutableValue(Node* value){
 	assert(isMutable == false);
 	assert(value->isResolved());
 	this->value = value;
-	debug("Setting value %s to variable %s",value,id);
+	
 	if(value->isConst()){
 		if(value->asIntegerLiteral()){
 			assert(type.type()->type == TypeExpression::INTEGER);
@@ -93,6 +93,7 @@ void Variable::setImmutableValue(Node* value){
 		}
 		expandMe = true;
 	}
+	debug("Setting value %s to variable %s - %s",value,id,expandMe);
 }
 
 PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
@@ -102,6 +103,9 @@ PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
 	duplicatedReplacement->registerID = registerID;
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(duplicatedReplacement),false);
 	return copyProperties(duplicatedReplacement);
+}
+Node* Variable::createReference(){
+	return new VariableReference(this);
 }
 
 Argument* Variable::asArgument(){ return nullptr; }

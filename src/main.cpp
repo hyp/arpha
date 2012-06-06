@@ -606,6 +606,30 @@ struct ReturnParser: PrefixDefinition {
 	}
 };
 
+struct MatchParser : PrefixDefinition {
+	MatchParser(): PrefixDefinition("match",Location()) {}
+	Node* parse(Parser* parser){
+
+		parser->expect("(");
+		auto matchResolver = new MatchResolver(parser->parse());
+		parser->expect(")");
+		parser->expect("{");
+		parser->expect("|");
+		do {
+			matchResolver->children.push_back(parser->parse());
+			parser->expect("=>");
+			auto body = new BlockExpression(new Scope(parser->currentScope()));
+			body->location = parser->currentLocation();
+			parser->currentScope(body->scope);
+			body->children.push_back(parser->parse());
+			parser->currentScope(body->scope->parent);
+			matchResolver->children.push_back(body);
+			if(parser->match("|")) continue;
+			else if(parser->match("}")) break;
+		} while(true);
+		return matchResolver;
+	}
+};
 /// ::= 'import' <module>,...
 struct ImportParser: PrefixDefinition {
 	ImportParser(): PrefixDefinition("import",Location()) {}
@@ -814,6 +838,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 	scope->define(new ConstraintParser);
 	scope->define(new TypeParser);
 	scope->define(new VarParser);
+	scope->define(new MatchParser);
 
 	scope->define(new ReturnParser);
 

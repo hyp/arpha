@@ -3,7 +3,9 @@
 #include "../ast/scope.h"
 #include "../ast/declarations.h"
 #include "../ast/evaluate.h"
+#include "../compiler.h"
 #include "types.h"
+#include "ast.h"
 
 #define INTRINSIC_INTTYPE(x) x = new TypeExpression(ensure( dynamic_cast<IntegerType*>(moduleScope->lookupPrefix(#x)) ))
 
@@ -12,6 +14,7 @@ namespace intrinsics {
 		TypeExpression *Void,*Type;
 		IntrinsicType  *StringLiteral;
 
+		Function* PointerTypeGenerator,*FunctionTypeGenerator,*RangeTypeGenerator;
 
 		TypeExpression* boolean = nullptr;
 		TypeExpression* int8 = nullptr;
@@ -22,6 +25,12 @@ namespace intrinsics {
 		TypeExpression* uint16 = nullptr;
 		TypeExpression* uint32 = nullptr;
 		TypeExpression* uint64 = nullptr;
+		
+		//Performs a comparison between 2 types
+		Node* equals(Node* parameters){
+			auto t = parameters->asTupleExpression();
+			return new BoolExpression(t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()));
+		}
 
 		//Boots up arpha's type system.
 		void startup() {
@@ -49,8 +58,9 @@ namespace intrinsics {
 			moduleScope->define(new Substitute("false",new BoolExpression(false)));
 
 			struct TypeFunc {
-				TypeFunc(SymbolID name,Scope* moduleScope,Node* (*eval)(Node*),int args = 1){
+				TypeFunc(SymbolID name,Scope* moduleScope,Function** dest,Node* (*eval)(Node*),int args = 1){
 					Function* func = new Function(name,Location(),new Scope(moduleScope));
+					*dest = func;
 					func->body.scope->_functionOwner = func;
 					if(args == 1){
 						func->arguments.push_back(new Argument("type",Location(),func));
@@ -76,19 +86,16 @@ namespace intrinsics {
 					return new TypeExpression(t->children[0]->asTypeExpression(),t->children[1]->asTypeExpression());
 				}
 			};
-			TypeFunc("Pointer",moduleScope,&TypeFunc::Pointer);
-			TypeFunc("Range",moduleScope,&TypeFunc::Pointer);
-			TypeFunc("Function",moduleScope,&TypeFunc::FunctionType,2);
+			TypeFunc("Pointer",moduleScope,&PointerTypeGenerator,&TypeFunc::Pointer);
+			TypeFunc("Range",moduleScope,&RangeTypeGenerator,&TypeFunc::Pointer);
+			TypeFunc("Function",moduleScope,&FunctionTypeGenerator,&TypeFunc::FunctionType,2);
 		}
-		//Performs a comparison between 2 types
-		Node* equals(Node* parameters){
-			auto t = parameters->asTupleExpression();
-			return new BoolExpression(t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()));
-		}
+
 		//Perform additional typesystem bindings after arpha/types is loaded
 		void init(Scope* moduleScope){
-			auto x = ensure( ensure(moduleScope->lookupPrefix("equals"))->asOverloadset() )->functions[0];
-			x->constInterpreter = equals;
+			auto f = ensure( ensure(moduleScope->lookupPrefix("equals"))->asOverloadset() )->functions[0];
+			f->constInterpreter = equals;
+			f->setFlag(Function::PURE);
 			
 			INTRINSIC_INTTYPE(int8);
 			INTRINSIC_INTTYPE(int16);

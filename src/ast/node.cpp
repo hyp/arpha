@@ -492,6 +492,31 @@ bool TypeExpression::isSame(TypeExpression* other){
 			return false;
 	}
 }
+bool TypeExpression::wasGenerated() const {
+	switch(type){
+	case POINTER: return true;
+	case FUNCTION: return true;
+	default: return false;
+	}
+}
+bool TypeExpression::wasGeneratedBy(Function* function) const {
+	switch(type){
+	case POINTER: return function == intrinsics::types::PointerTypeGenerator;
+	case FUNCTION: return function == intrinsics::types::FunctionTypeGenerator;
+	default:
+		return false;
+	}
+}
+Node* TypeExpression::generatedArgument(size_t i) const {
+	switch(type){
+	case POINTER: return argument;
+	case FUNCTION: return i == 0 ? argument : returns;
+	default:
+		throw std::runtime_error("TypeExpression generatedArgument failed");	
+		return nullptr;
+	}
+}
+
 enum {
 	LITERAL_CONVERSION = 4,
 	RECORD_SUBTYPE,
@@ -650,12 +675,19 @@ ValueExpression::ValueExpression(void* d,TypeExpression* type){
 	data = d;
 	this->type = type;
 }
-bool ValueExpression::isConst() const { return true; }
 TypeExpression* ValueExpression::_returnType() const { return type; }
 Node* ValueExpression::duplicate(DuplicationModifiers* mods) const {
 	auto result = copyProperties(new ValueExpression(reinterpret_cast<Node*>(data)->duplicate(mods),type->duplicate(mods)->asTypeExpression()));
 	return result;
 }
+
+MatchResolver::MatchResolver(Node* object){ this->object = object; }
+Node* MatchResolver::duplicate(DuplicationModifiers* mods) const {
+	auto dup = new MatchResolver(object->duplicate(mods));
+	for(auto i = children.begin();i!=children.end();i++) dup->children.push_back((*i)->duplicate(mods));
+	return copyProperties(dup);
+}
+
 /**
 * Node tracer
 */

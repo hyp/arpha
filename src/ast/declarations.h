@@ -21,6 +21,7 @@ struct Variable : PrefixDefinition  {
 	Variable(SymbolID name,Location& location,Function* owner);
 
 	Node* parse(Parser* parser);
+	Node* createReference();
 
 	void setImmutableValue(Node* value);
 
