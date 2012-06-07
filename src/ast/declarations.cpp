@@ -135,7 +135,7 @@ PrefixDefinition* Argument::duplicate(DuplicationModifiers* mods){
 }
 Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* newType){
 	Argument* dup = new Argument(id,location,mods->target->functionOwner());
-	if(newType && type.isWildcard()){
+	if(newType && type.isPattern()){
 		dup->type._type = newType;//TODO dup?
 		dup->type._type->_localSemantics = false;//Use non-local type
 		dup->type.kind = TypePatternUnresolvedExpression::Type;
@@ -588,7 +588,7 @@ PrefixDefinition* Overloadset::mergedDuplicate(DuplicationModifiers* mods,Overlo
 static bool isUnresolvedArgumentDependent(Variable* argument,const Function* func,Node* unresolvedExpression){
 	if(auto varRef = unresolvedExpression->asVariableReference()){
 		auto arg = func->findArgument(varRef -> variable);
-		if(arg != -1 && (func->arguments[arg]->type.isWildcard() || 
+		if(arg != -1 && (func->arguments[arg]->type.isPattern() || 
 			(func->arguments[arg]->type.isResolved() && func->arguments[arg]->type.type()->isSame(intrinsics::types::Type)) )
 		){
 				if(argument == func->arguments[arg]){
@@ -650,7 +650,7 @@ bool Function::resolve(Evaluator* evaluator){
 	_hasGenericArguments = false;
 	_hasExpandableArguments = false;
 	for(auto i = arguments.begin();i!=arguments.end();++i){
-		if((*i)->type.isWildcard()){
+		if((*i)->type.isPattern()){
 			if(isFlagSet(MACRO_FUNCTION)){
 				(*i)->type.kind = TypePatternUnresolvedExpression::Type;
 				(*i)->type._type = intrinsics::ast::ExprPtr;
@@ -661,27 +661,10 @@ bool Function::resolve(Evaluator* evaluator){
 		else if(!(*i)->isResolved()){
 			if(!(*i)->resolve(evaluator)){
 				
-				if((*i)->type.kind == TypePatternUnresolvedExpression::Unresolved && (*i)->type.unresolvedExpression->asFunctionReference()){
-					//Constrained argument
-					Function* func = (*i)->type.unresolvedExpression->asFunctionReference()->function;
-					if(!(func->isResolved() && func->isFlagSet(CONSTRAINT_FUNCTION))) _resolved = false;
-					else {
-						debug("Constrained argument :: %s!",func->id);
-						if(isFlagSet(MACRO_FUNCTION)){
-							(*i)->type.kind = TypePatternUnresolvedExpression::Type;
-							(*i)->type._type = intrinsics::ast::ExprPtr;
-							(*i)->resolve(evaluator);
-						}else {
-							(*i)->type.kind = TypePatternUnresolvedExpression::Wildcard;
-							_hasGenericArguments = true;
-						}
-						(*i)->_constraint = func;
-					}
-				}
 				//depenent argument
 				//NB pretend that the arg is resolved with
 				//TODO unresolved dependent argument!
-				else if((*i)->type.kind == TypePatternUnresolvedExpression::Unresolved && isUnresolvedArgumentDependent(*i,this,(*i)->type.unresolvedExpression)){
+				if((*i)->type.kind == TypePatternUnresolvedExpression::Unresolved && isUnresolvedArgumentDependent(*i,this,(*i)->type.unresolvedExpression)){
 					debug("Argument %s is dependent!",(*i)->id);
 					(*i)->_dependent = true;
 				}

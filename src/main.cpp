@@ -298,7 +298,6 @@ void parseFunctionParameters(Parser* parser,Function* func){
 			auto next = parser->peek();
 			bool inferOnDefault = false;
 			if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")" || next.symbol == "=")){
-				param->type.kind = TypePatternUnresolvedExpression::Wildcard;
 				inferOnDefault = true;
 			}else{
 				param->type.parse(parser,arpha::Precedence::Tuple);
@@ -509,7 +508,6 @@ struct ConstraintParser: PrefixDefinition {
 
 		if(parser->match(",")){
 			auto param = new Argument(parser->expectName(),parser->previousLocation(),constraint);
-			param->type.kind = TypePatternUnresolvedExpression::Wildcard;
 			constraint->arguments.push_back(param);
 			bodyScope->define(param);
 		}

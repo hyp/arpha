@@ -374,7 +374,7 @@ TypePatternUnresolvedExpression TypePatternUnresolvedExpression::duplicate(Dupli
 	TypePatternUnresolvedExpression result;
 	if(kind == Type) result._type = _type->duplicate(mods)->asTypeExpression();
 	else if(kind == Unresolved) result.unresolvedExpression = unresolvedExpression->duplicate(mods);
-	else if(kind == Pattern) result.unresolvedExpression = unresolvedExpression ? unresolvedExpression->duplicate(mods) : nullptr;
+	else if(kind == Pattern) result.pattern = pattern ? pattern->duplicate(mods) : nullptr;
 	result.kind = kind;
 	return result;
 }

@@ -1,10 +1,10 @@
 
 var x = 1 #ok
-var y = 2 # ok
+var y _ = 2 # ok
 var z Pointer(_) = 1 # error
 var w Pointer(_) = &x #ok
 
-match (int32) { | int32 => true | _ => false } #true
+match (int32)  { | int32 => true | _ => false } #true
 match (*int32) { | Pointer(_) => true | _ => false } # true
 match (*int32) { | Pointer(_) => true | Pointer(int32) => false | _ => false } # true
 match (*int32) { | Pointer(T:_) => T } # int32

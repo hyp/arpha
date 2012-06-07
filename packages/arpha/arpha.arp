@@ -115,8 +115,8 @@ import export operators
 import export operations
 
 # A default heap allocator used to allocate objects with new
-constraint anyType(T) = T == Type
-macro allocator(T anyType) = [> <]
+#constraint anyType(T) = T == Type
+#macro allocator(T anyType) = [> <]
 
 #
 	New is used to create a new instance of an object not on the stack

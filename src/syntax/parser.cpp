@@ -138,11 +138,20 @@ void TypePatternUnresolvedExpression::parse(Parser* parser,int stickiness){
 	auto node = parser->parse(stickiness);
 	parser->evaluator()->expectedTypeForEvaluatedExpression = oldSetting;
 
-	auto isTypeExpr = node->asTypeExpression();
-	if(isTypeExpr && isTypeExpr->isResolved()){
-		kind = Type;
-		_type = isTypeExpr;
-		return;
+	if( auto isTypeExpr = node->asTypeExpression()){
+		if(isTypeExpr->isResolved()){
+			kind = Type;
+			_type = isTypeExpr;
+			return;
+		}
+	} else {
+		//pattern type?
+		PatternMatcher matcher(parser->currentScope());
+		if(matcher.check(node)){
+			kind = Pattern;
+			pattern = node;
+			return;
+		}
 	}
 	kind = Unresolved;
 	unresolvedExpression = node;

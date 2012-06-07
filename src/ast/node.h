@@ -186,7 +186,6 @@ struct TypePatternUnresolvedExpression {
 		Pattern,//_,Pointer(_) etc
 		Unresolved,
 		Type,
-		Wildcard
 	};
 	int kind;
 	union {
@@ -198,7 +197,6 @@ struct TypePatternUnresolvedExpression {
 	inline TypePatternUnresolvedExpression() : kind(Pattern),pattern(nullptr) {}
 	inline TypePatternUnresolvedExpression(TypeExpression* expr) : kind(Type),_type(expr) {}
 	inline bool isResolved() const { return kind == Type;     }
-	inline bool isWildcard() const { return kind == Wildcard; }
 	inline bool isPattern() const  { return kind == Pattern;  }
 	TypeExpression* type() const;
 

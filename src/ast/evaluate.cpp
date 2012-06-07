@@ -533,7 +533,6 @@ bool TypePatternUnresolvedExpression::resolve(Evaluator* evaluator){
 		if(matcher.check(unresolvedExpression)){
 			kind = Pattern;
 			pattern = unresolvedExpression;//NB: this is redundant because unresolvedExpression and pattern are unioned together
-			debug("Type pattern - %s",pattern);
 		}
 	}
 	
@@ -736,7 +735,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 
 	if(argsCount < expressionCount){
 		if(argsCount > 0){
-			if(func->arguments[argsCount-1]->type.isWildcard()){
+			if(func->arguments[argsCount-1]->type.isPattern()){
 				argsCount--;
 				auto tuple = new TupleExpression();
 				for(auto i = argsCount;i<expressionCount;i++)
@@ -780,7 +779,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 		if( func->arguments[currentArg]->isDependent() ){
 			result[currentArg] = exprBegin[currentExpr];
 		}
-		else if(func->arguments[currentArg]->type.isWildcard()){
+		else if( func->arguments[currentArg]->type.isPattern() ){
 			result[currentArg] = exprBegin[currentExpr];
 			if(!determinedFunction){
 				determinedFunction = true;
@@ -952,8 +951,21 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 		expressionCount = 1;
 	}
 
+	//Accounts for the case of - def f(x _) = 1 ; f(1,2,3) #ok
 	if(argsCount < expressionCount){
-		if(argsCount > 0 && (func->arguments[argsCount-1]->type.isWildcard() || func->arguments[argsCount-1]->type.type()->isSame(intrinsics::ast::ExprPtr))){
+		if(argsCount > 0){
+			bool matches = false;
+			if(func->arguments[argsCount-1]->type.isPattern()){
+				if(auto pattern = func->arguments[currentArg]->type.pattern){
+					TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);
+					//construct a record from the tailed parameters
+					std::vector<Record::Field> fields;
+					for(auto i = argsCount - 1;i < expressionCount;i++) fields.push_back(Record::Field(exprBegin[i]->label(),exprBegin[i]->_returnType()));
+					TypeExpression record(Record::findAnonymousRecord(fields));
+					if(!matcher.match(&record,pattern)) return false;
+				}
+			}
+			else if(!func->arguments[argsCount-1]->type.type()->isSame(intrinsics::ast::ExprPtr)) return false;
 			argsCount--;
 			checked[argsCount] = true;
 			expressionCount = argsCount;
@@ -987,13 +999,12 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 		if( func->arguments[currentArg]->isDependent() ){
 			hasDependentArg = true;
 		}
-		else if( func->arguments[currentArg]->type.isWildcard() || func->arguments[currentArg]->type.type()->isSame(intrinsics::ast::ExprPtr) ){
-			if(func->arguments[currentArg]->_constraint){
-				int c;//TODO constraint type and value lower weight than direct type match fix?
-				if((c = satisfiesConstraint(evaluator,exprBegin[currentExpr],func->arguments[currentArg]->_constraint))==-1) return false;
-				weight += CONSTRAINED_WILDCARD+c;
+		else if( func->arguments[currentArg]->type.isPattern() ){
+			if(auto pattern = func->arguments[currentArg]->type.pattern){
+				TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);
+				if(!matcher.match(exprBegin[currentExpr]->_returnType(),pattern)) return false;
 			}
-			else weight += WILDCARD;
+			weight += WILDCARD;
 		}
 		else {
 			auto ret = exprBegin[currentExpr]->_returnType();
