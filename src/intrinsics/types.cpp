@@ -64,16 +64,16 @@ namespace intrinsics {
 					func->body.scope->_functionOwner = func;
 					if(args == 1){
 						func->arguments.push_back(new Argument("type",Location(),func));
-						func->arguments[0]->type.infer(Type);
+						func->arguments[0]->specifyType(Type);
 					}else{
 						func->arguments.push_back(new Argument("parameter",Location(),func));
-						func->arguments[0]->type.infer(Type);
+						func->arguments[0]->specifyType(Type);
 						func->arguments.push_back(new Argument("return",Location(),func));
-						func->arguments[1]->type.infer(Type);
+						func->arguments[1]->specifyType(Type);
 					}
 					func->constInterpreter = eval;
 					func->setFlag(Function::TYPE_GENERATOR_FUNCTION);
-					func->_returnType.infer(Type);
+					func->_returnType.specify(Type);
 					func->_resolved = func->_argsResolved = true;
 					moduleScope->defineFunction(func);
 				}

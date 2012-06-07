@@ -32,13 +32,13 @@ struct IntrinsicModule {
 		Function* func = new Function(name,Location(),nullptr);
 		for(size_t i = 0; i < count; i++){
 			auto a = new Argument(arguments[i].name,Location(),func);
-			a->type.infer(arguments[i].type);
+			a->specifyType(arguments[i].type);
 			func->arguments.push_back(a);
 		}
 		if(returnType)
-			func->_returnType.infer(returnType);
+			func->_returnType.specify(returnType);
 		else 
-			func->_returnType.infer(intrinsics::types::Void);
+			func->_returnType.specify(intrinsics::types::Void);
 		if(scope) scope->defineFunction(func);
 		func->_resolved = true;
 		func->_argsResolved = true;

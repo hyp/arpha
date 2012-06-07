@@ -27,6 +27,10 @@ struct Variable : PrefixDefinition  {
 
 	bool isResolved();
 	bool resolve(Evaluator* evaluator);
+	//Use at variable's definition when a type is specified
+	void specifyType(TypeExpression* givenType);
+	//Matches a type to a patterned type and resolves the patterned type. Returns an error if match fails.
+	bool deduceType(TypeExpression* givenType,Scope* container); 
 
 	bool isLocal() const;
 	Function* functionOwner() const;
@@ -35,7 +39,7 @@ struct Variable : PrefixDefinition  {
 
 	virtual Argument* asArgument();
 
-	InferredUnresolvedTypeExpression type;
+	TypePatternUnresolvedExpression type;
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
 	bool isMutable; // = true
 	bool expandMe;  // = false // assume value != nullptr
@@ -117,7 +121,7 @@ public:
 
 	struct Field {
 		SymbolID name;
-		InferredUnresolvedTypeExpression type;
+		TypePatternUnresolvedExpression type;
 		bool isExtending; //a field aliased as this
 
 		Field(SymbolID id,TypeExpression* typ) : name(id),type(typ),isExtending(false) {}
@@ -234,7 +238,7 @@ struct Function: public PrefixDefinition {
 	//Returns -1 when an argument isn't found
 	int findArgument(Variable* var) const;
 
-	InferredUnresolvedTypeExpression _returnType;
+	TypePatternUnresolvedExpression _returnType;
 	BlockExpression body;
 	Node* (*constInterpreter)(Node* parameters); //Can be null. Used to interpret the function with const parameters.
 	std::vector<Argument*> arguments;

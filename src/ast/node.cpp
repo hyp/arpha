@@ -366,23 +366,144 @@ NODE_LIST(DECLARE_NODE_IMPLEMENTATION)
 
 //
 
-TypeExpression* InferredUnresolvedTypeExpression::type(){
+TypeExpression* TypePatternUnresolvedExpression::type() const {
 	assert(kind == Type);
 	return  _type;
 }
-InferredUnresolvedTypeExpression InferredUnresolvedTypeExpression::duplicate(DuplicationModifiers* mods){
-	InferredUnresolvedTypeExpression result;
+TypePatternUnresolvedExpression TypePatternUnresolvedExpression::duplicate(DuplicationModifiers* mods) const {
+	TypePatternUnresolvedExpression result;
 	if(kind == Type) result._type = _type->duplicate(mods)->asTypeExpression();
 	else if(kind == Unresolved) result.unresolvedExpression = unresolvedExpression->duplicate(mods);
+	else if(kind == Pattern) result.unresolvedExpression = unresolvedExpression ? unresolvedExpression->duplicate(mods) : nullptr;
 	result.kind = kind;
 	return result;
 }
-void InferredUnresolvedTypeExpression::infer(TypeExpression* type){
-	assert(kind == Inferred);
-	assert(type->isResolved());
+void TypePatternUnresolvedExpression::specify(TypeExpression* givenType){
+	assert(kind == Pattern && pattern == nullptr);
+	assert(givenType->isResolved());
 	kind = Type;
+	_type = givenType;
+}
+bool TypePatternUnresolvedExpression::deduce(TypeExpression* givenType,Scope* container){
+	assert(isPattern());
+	assert(givenType->isResolved());
+
+	if(pattern){
+		PatternMatcher matcher(container);
+		if(!matcher.match(givenType,pattern)) return false;
+	}
+	kind  = Type;
 	DuplicationModifiers mods;
-	_type = type->duplicate(&mods)->asTypeExpression();
+	_type = givenType->duplicate(&mods)->asTypeExpression();//NB: type expresssion is duplicated
+	return true;
+}
+
+void TypePatternUnresolvedExpression::PatternMatcher::introduceDefinition(SymbolID name,Location location,Node* value){
+	for(auto i = introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
+		if(name == (*i).name) error(location,"Multiple type labels with same name %s exist in this type pattern",name);
+	}
+	introducedDefinitions.push_back(IntroducedDefinition(name,location,value));
+}
+bool TypePatternUnresolvedExpression::PatternMatcher::check(Node* expression){
+	if(expression->asTypeExpression()){ //| int32
+		return true;
+	}else if(auto unresolved = expression->asUnresolvedSymbol()){
+		auto symbol = unresolved->symbol;
+		if(symbol == "_"){
+			if(!unresolved->label().isNull()) introduceDefinition(unresolved->label(),unresolved->location);
+			return true; //|_ | T:_
+		}
+		//T
+		else {
+			for(auto i = introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
+				if(symbol == (*i).name) return true;
+			}
+		}
+		//
+	} else if(auto call = expression->asCallExpression()){
+		if(!call->label().isNull()) introduceDefinition(call->label(),call->location);
+		//| Pointer(_)
+		if(auto callingUnresolvedFunction = call->object->asUnresolvedSymbol()){
+			auto def = container->lookupPrefix(callingUnresolvedFunction->symbol);
+			Overloadset* os = def ? def->asOverloadset() : nullptr;
+			if(os && os->isFlagSet(Overloadset::TYPE_GENERATOR_SET)){//TODO better search?
+				if(auto argTuple = call->arg->asTupleExpression()){
+					for(auto i = argTuple->children.begin();i!=argTuple->children.end();i++){ if(!check(*i)) return false; }
+					return true;
+				}
+				else return check(call->arg);
+			}
+		}
+	}
+	return false;
+}
+bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* pattern){
+	TypeExpression* type = object->asTypeExpression();
+	//Match(non-type) TODO
+	if(!type){
+		//match non type
+		assert(false);
+		return false;
+	}
+	//Match(type)
+	if(auto type2 = pattern->asTypeExpression()) return type->isSame(type2); //| int32
+	else if(auto unresolved = pattern->asUnresolvedSymbol()){
+		auto symbol = unresolved->symbol;
+		if(symbol == "_"){
+			if(!unresolved->label().isNull()) introduceDefinition(unresolved->label(),unresolved->location,type);
+			return true; //|_ | T:_
+		}
+		//T
+		else {
+			for(auto i = introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
+				if(symbol == (*i).name) {
+					if(auto vt = (*i).value->asTypeExpression())
+						return type->isSame(vt);
+					else return false;
+				}
+			}
+		}
+		//
+	} else if(auto call = pattern->asCallExpression()){
+		if(!type->wasGenerated()) return false;
+		if(!call->label().isNull()) introduceDefinition(call->label(),call->location,type);
+		//| Pointer(_)
+		if(auto callingUnresolvedFunction = call->object->asUnresolvedSymbol()){
+			auto def = container->lookupPrefix(callingUnresolvedFunction->symbol);
+			Overloadset* os = def ? def->asOverloadset() : nullptr;
+			if(os && os->isFlagSet(Overloadset::TYPE_GENERATOR_SET)){//TODO better search?
+				bool foundMatch = false;
+				//TODO more progressive search
+				for(auto i = os->functions.begin();i!=os->functions.end();i++){
+					if(type->wasGeneratedBy(*i)) foundMatch = true;
+				}
+				debug("Type generator pattern! - %s",foundMatch);
+				if(!foundMatch) return false;
+				//match arguments
+				if(auto argTuple = call->arg->asTupleExpression()){
+					size_t j = 0;
+					for(auto i = argTuple->children.begin();i!=argTuple->children.end();i++,j++){ if(!match(type->generatedArgument(j),*i)) return false; }
+					return true;
+				}
+				else return match(type->generatedArgument(0),call->arg);
+			}
+		}
+	}
+	return false;
+}
+void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinitions(){
+	//TODO check if the scope already contains them..
+	for(auto i= introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
+		auto var = new Variable((*i).name,(*i).location,container->functionOwner());
+		var->isMutable = false;
+		if((*i).value){
+			var->specifyType((*i).value->_returnType());
+			var->setImmutableValue((*i).value);
+		}else{
+			//TODO def f(x T:_) = T define T with no value
+		}
+		container->define(var);
+	}
 }
 
 // TypeExpression
@@ -406,7 +527,6 @@ TypeExpression::TypeExpression(TypeExpression* argument,TypeExpression* returns)
 	this->argument = argument;
 	this->returns = returns;
 }
-
 bool TypeExpression::isValidTypeForVariable(){
 	return true;
 }

@@ -61,12 +61,12 @@ bool Variable::isLocal() const{
 	return _functionOwner != nullptr;
 }
 bool Variable::isResolved(){
-	return isFlagSet(IS_RESOLVED);//type.isResolved();
+	return isFlagSet(IS_RESOLVED);
 }
 bool Variable::resolve(Evaluator* evaluator){
 	auto _resolved = true;
 	if(type.isResolved()) _resolved = true;
-	else if(type.isInferred()) _resolved = false;
+	else if(type.isPattern()) _resolved = false;
 	else _resolved = type.resolve(evaluator);
 
 	if(!_resolved){
@@ -80,6 +80,18 @@ bool Variable::resolve(Evaluator* evaluator){
 		else if(!type.type()->isValidTypeForVariable()) error(location,"A variable %s can't have a type %s",id,type.type());
 	}
 	return _resolved;
+}
+void Variable::specifyType(TypeExpression* givenType){
+	type.specify(givenType);
+	setFlag(IS_RESOLVED);
+}
+//Matches a type to a patterned type and resolves the patterned type.
+bool Variable::deduceType(TypeExpression* givenType,Scope* container){
+	if(type.deduce(givenType,container)){ //TODO should container be the scope in which the variable was declared??
+		setFlag(IS_RESOLVED);//TODO check if valid type..
+		return true;
+	}
+	return false;
 }
 void Variable::setImmutableValue(Node* value){
 	assert(isMutable == false);
@@ -126,7 +138,7 @@ Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* n
 	if(newType && type.isWildcard()){
 		dup->type._type = newType;//TODO dup?
 		dup->type._type->_localSemantics = false;//Use non-local type
-		dup->type.kind = InferredUnresolvedTypeExpression::Type;
+		dup->type.kind = TypePatternUnresolvedExpression::Type;
 	}
 	else dup->type = type.duplicate(mods);
 	dup->isMutable = isMutable;
@@ -139,7 +151,7 @@ Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* n
 void Argument::defaultValue(Node* expression,bool inferType,bool typecheck){
 	assert(expression->isResolved());
 	if(inferType){
-		type.kind = InferredUnresolvedTypeExpression::Type;
+		type.kind = TypePatternUnresolvedExpression::Type;
 		type._type = expression->_returnType();
 	}
 	else if(typecheck) {
@@ -640,7 +652,7 @@ bool Function::resolve(Evaluator* evaluator){
 	for(auto i = arguments.begin();i!=arguments.end();++i){
 		if((*i)->type.isWildcard()){
 			if(isFlagSet(MACRO_FUNCTION)){
-				(*i)->type.kind = InferredUnresolvedTypeExpression::Type;
+				(*i)->type.kind = TypePatternUnresolvedExpression::Type;
 				(*i)->type._type = intrinsics::ast::ExprPtr;
 				(*i)->resolve(evaluator);
 			}
@@ -649,18 +661,18 @@ bool Function::resolve(Evaluator* evaluator){
 		else if(!(*i)->isResolved()){
 			if(!(*i)->resolve(evaluator)){
 				
-				if((*i)->type.kind == InferredUnresolvedTypeExpression::Unresolved && (*i)->type.unresolvedExpression->asFunctionReference()){
+				if((*i)->type.kind == TypePatternUnresolvedExpression::Unresolved && (*i)->type.unresolvedExpression->asFunctionReference()){
 					//Constrained argument
 					Function* func = (*i)->type.unresolvedExpression->asFunctionReference()->function;
 					if(!(func->isResolved() && func->isFlagSet(CONSTRAINT_FUNCTION))) _resolved = false;
 					else {
 						debug("Constrained argument :: %s!",func->id);
 						if(isFlagSet(MACRO_FUNCTION)){
-							(*i)->type.kind = InferredUnresolvedTypeExpression::Type;
+							(*i)->type.kind = TypePatternUnresolvedExpression::Type;
 							(*i)->type._type = intrinsics::ast::ExprPtr;
 							(*i)->resolve(evaluator);
 						}else {
-							(*i)->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+							(*i)->type.kind = TypePatternUnresolvedExpression::Wildcard;
 							_hasGenericArguments = true;
 						}
 						(*i)->_constraint = func;
@@ -669,7 +681,7 @@ bool Function::resolve(Evaluator* evaluator){
 				//depenent argument
 				//NB pretend that the arg is resolved with
 				//TODO unresolved dependent argument!
-				else if((*i)->type.kind == InferredUnresolvedTypeExpression::Unresolved && isUnresolvedArgumentDependent(*i,this,(*i)->type.unresolvedExpression)){
+				else if((*i)->type.kind == TypePatternUnresolvedExpression::Unresolved && isUnresolvedArgumentDependent(*i,this,(*i)->type.unresolvedExpression)){
 					debug("Argument %s is dependent!",(*i)->id);
 					(*i)->_dependent = true;
 				}
@@ -689,12 +701,12 @@ bool Function::resolve(Evaluator* evaluator){
 	//resolve return type
 	//Body has no return expression => return void
 	if(!isFlagSet(CONTAINS_RETURN)){
-		if(_returnType.isInferred()) _returnType.infer(intrinsics::types::Void);
-		else if(body.isResolved() && body.children.size() != 0 && _returnType.isResolved()) 
-			error(location,"The function %s is expected to return a value of type %s, but it contains no return statement!",id,_returnType.type());
+		if(_returnType.isPattern() && _returnType.pattern == nullptr) _returnType.specify(intrinsics::types::Void);
+		else if(body.isResolved() && body.children.size() != 0 && _returnType.kind != TypePatternUnresolvedExpression::Unresolved) //TODO
+			error(location,"The function %s is expected to return a value of type %s, but it contains no return statement!",id,_returnType.isPattern()?_returnType.pattern:_returnType.type());
 	}
 	if(!_returnType.isResolved()){
-		if(_returnType.isInferred() || !_returnType.resolve(evaluator)) _resolved = false;
+		if(_returnType.isPattern() || !_returnType.resolve(evaluator)) _resolved = false;
 	}
 
 	if(_resolved){

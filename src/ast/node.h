@@ -179,10 +179,11 @@ struct ValueExpression : ConstantNode {
 	DECLARE_NODE(ValueExpression);
 };
 
-// Inferred [i.e. no type expression given] | Unresolved expression | valid type expression | wildcard type with possible constraint
-struct InferredUnresolvedTypeExpression {
+// This is either a type expression or a type pattern. 
+// It can also be an unresolved expression which is expected to resolve into a type or type pattern at a later stage.
+struct TypePatternUnresolvedExpression {
 	enum {
-		Inferred,
+		Pattern,//_,Pointer(_) etc
 		Unresolved,
 		Type,
 		Wildcard
@@ -191,21 +192,39 @@ struct InferredUnresolvedTypeExpression {
 	union {
 		TypeExpression* _type;
 		Node* unresolvedExpression;
+		Node* pattern; //it can be null to indicate that the pattern is "_"
 	};
 
-	inline InferredUnresolvedTypeExpression() : kind(Inferred) {}
-	inline InferredUnresolvedTypeExpression(TypeExpression* expr) : kind(Type),_type(expr) {}
-	inline bool isResolved() const { return kind == Type; }
-	TypeExpression* type();
+	inline TypePatternUnresolvedExpression() : kind(Pattern),pattern(nullptr) {}
+	inline TypePatternUnresolvedExpression(TypeExpression* expr) : kind(Type),_type(expr) {}
+	inline bool isResolved() const { return kind == Type;     }
+	inline bool isWildcard() const { return kind == Wildcard; }
+	inline bool isPattern() const  { return kind == Pattern;  }
+	TypeExpression* type() const;
 
-	InferredUnresolvedTypeExpression duplicate(DuplicationModifiers* mods);
-
-	void infer(TypeExpression* type);
+	TypePatternUnresolvedExpression duplicate(DuplicationModifiers* mods) const;
+	
 	bool resolve(Evaluator* evaluator);
 	void parse(Parser* parser,int stickiness);
 
-	inline bool isInferred(){ return kind == Inferred; }
-	inline bool isWildcard(){ return kind == Wildcard; }
+	void specify(TypeExpression* givenType);
+	bool deduce(TypeExpression* givenType,Scope* container);
+
+	struct PatternMatcher {
+		struct IntroducedDefinition {
+			SymbolID name;Location location;Node* value;
+
+			inline IntroducedDefinition(SymbolID n,Location l,Node* v) : name(n),location(l),value(v) {}
+		};
+		std::vector<IntroducedDefinition> introducedDefinitions;
+		Scope* container;
+
+		PatternMatcher(Scope* scope) : container(scope) {}
+		void introduceDefinition(SymbolID name,Location location,Node* value = nullptr);
+		bool check(Node* expression); //Returns true if a certain expression is a type pattern e.g. _
+		bool match(Node* object,Node* pattern);
+		void defineIntroducedDefinitions();
+	};
 };
 
 //(type ...): intrinsics::types::Type
@@ -269,6 +288,7 @@ public:
 		Record* record;
 		IntegerType* integer;
 		TypeExpression* argument;
+		Node* pattern;
 	};
 	TypeExpression* returns;
 	friend std::ostream& operator<< (std::ostream& stream,TypeExpression* node);

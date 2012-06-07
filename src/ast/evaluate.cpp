@@ -184,9 +184,10 @@ struct AstExpander: NodeVisitor {
 			auto valuesType = value->_returnType();
 			//Assigning values to variables
 			if(auto var = object->asVariableReference()){
-				if(var->variable->type.isInferred()){
-					var->variable->type.infer(valuesType);
-					var->variable->resolve(evaluator);
+				if(!var->variable->asArgument() && var->variable->type.isPattern()){
+					if(!var->variable->deduceType(valuesType,evaluator->currentScope()))
+						error(assignment->location,"Failed to deduce variable's type -\n\tA variable %s is expected to have a type matching a pattern %s, which the type %s derived from the expression %s doesn't match!",
+							var->variable->id,var->variable->type.pattern,valuesType,value);
 					debug("Inferred type %s for variable %s",valuesType,var->variable->id);
 					if(var->variable->isMutable) return value;
 				}
@@ -384,13 +385,16 @@ struct AstExpander: NodeVisitor {
 			func->setFlag(Function::CONTAINS_RETURN);
 			node->value = node->value->accept(this);
 			if(node->value->isResolved()){
-				node->_resolved = true;
-				if(func->_returnType.isInferred()){
+				node->_resolved = func->_returnType.isResolved();
+				if(func->_returnType.isPattern()){
 					//TODO Don't allow to return local types
 					auto valRet = node->value->_returnType();
 					if(!valRet->hasLocalSemantics()){
-						debug("Inferring return type %s for function %s",valRet,func->id);
-						func->_returnType.infer(valRet);
+						if(!func->_returnType.deduce(valRet,func->body.scope)){
+							error(node->location,"Failed to deduce function's return type -\n\tA function %s is expected to return a type matching a pattern %s, which the type %s derived from the expression %s doesn't match!",
+							func->id,func->_returnType.pattern,valRet,node->value);
+						}
+						debug("Inferred return type %s for function %s",valRet,func->id);
 					}
 					else
 						error(node->location,"Can't return %s because of local semantics!",node->value);
@@ -465,93 +469,26 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
-	bool isWildcard(Node* expression){
-		auto e = expression->asUnresolvedSymbol();
-		return e && e->symbol == "_";
-	}
-	
-	void introducePatternVariable(Evaluator* evaluator,Location& location,SymbolID name,TypeExpression* type,Node* replacement,BlockExpression* dest,std::vector<Variable*>& introducedDefinitions){
-		auto var = new Variable(name,location,dest->scope->functionOwner());
-		var->type.infer(type);
-		var->isMutable = false;
-		var->resolve(evaluator);
-		var->setImmutableValue(replacement);
-		dest->scope->define(var);
-		introducedDefinitions.push_back(var);
-		debug("Introduced a variable %s from a pattern!",name);
-	}
-	//generates a condition for the else expression which evaluates if a type matches to a pattern
-	bool evaluateTypeMatch(Evaluator* evaluator,TypeExpression* object,Node* pattern,BlockExpression* consequence,std::vector<Variable*>& introducedDefinitions){
-		Node* result = nullptr;
-		//match(int32) { | int32
-		if(auto type2 = pattern->asTypeExpression()){
-			return object->isSame(type2);
-		}
-		//match(*int32) { | Pointer(...)
-		else if(auto call = pattern->asCallExpression()){
-			result = nullptr;
-			if(auto obj = call->object->asUnresolvedSymbol()){
-				auto def = consequence->scope->lookupPrefix(obj->symbol);
-				Overloadset* os = def ? def->asOverloadset() : nullptr;
-				if(os && os->isFlagSet(Overloadset::TYPE_GENERATOR_SET)){
-					if(object->wasGenerated()){
-						bool foundMatch = false;
-						//TODO more progressive search
-						for(auto i = os->functions.begin();i!=os->functions.end();i++){
-							if(object->wasGeneratedBy(*i)) foundMatch = true;
-						}
-						debug("Type generator pattern! - %s",foundMatch);
-						if(!foundMatch) return false;
-						if(auto tuple = call->arg->asTupleExpression()){
-							size_t j =0;
-							for(auto i = tuple->children.begin();i!=tuple->children.end();i++,j++){
-								if(!evaluateTypeMatch(evaluator,object->generatedArgument(j)->asTypeExpression(),*i,consequence,introducedDefinitions)) return false;
-							}
-							return true;
-						}else {
-							return evaluateTypeMatch(evaluator,object->generatedArgument(0)->asTypeExpression(),call->arg,consequence,introducedDefinitions);
-						}
-					}
-				}
-			}
-		}
-		//match(int32) { | _ | T:_
-		else if(auto name = pattern->asUnresolvedSymbol()){
-			if(isWildcard(pattern)){
-				//T:_ syntax
-				if(!pattern->label().isNull()) introducePatternVariable(evaluator,pattern->location,pattern->label(),intrinsics::types::Type,object,consequence,introducedDefinitions);
-				return true;
-			}
-			else {
-				//already was introduced?
-				for(auto i = introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
-					if((*i)->id == name->symbol) return object->isSame((*i)->value->asTypeExpression());
-				}
-				//T syntax
-				//introducePatternVariable(evaluator,pattern->location,name->symbol,intrinsics::types::Type,object,consequence);
-				//return true;
-			}
-		}
-		else {
-			error(pattern->location,"This type matching pattern is incorrect!");
-		}
-		return false;
-	}
-
 	Node* visit(MatchResolver* node){
 		node->object = node->object->accept(this);
 		if(node->object->isResolved()){
 			//yes!
 			if(auto type = node->object->asTypeExpression()){
 				for(auto i = node->children.begin();i!=node->children.end();i+=2){
-					auto olde = evaluator->expectedTypeForEvaluatedExpression;
-					evaluator->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
-					*i = (*i)->accept(this);
-					evaluator->expectedTypeForEvaluatedExpression = olde;
-					std::vector<Variable*> introducedDefinitions;
-					if(evaluateTypeMatch(evaluator,type,*i,(*(i+1))->asBlockExpression(),introducedDefinitions)){
-						return (*(i+1));
+					TypePatternUnresolvedExpression pattern;
+					pattern.kind = TypePatternUnresolvedExpression::Unresolved;
+					pattern.unresolvedExpression = *i;
+					pattern.resolve(evaluator);
+					bool matches = pattern.isResolved() ? pattern.type()->isSame(type) : false;
+					if(pattern.isPattern()){
+						auto scope = (*(i+1))->asBlockExpression()->scope;
+						TypePatternUnresolvedExpression::PatternMatcher matcher(scope);
+						if(matcher.match(type,pattern.pattern)){
+							matches = true;
+							matcher.defineIntroducedDefinitions();
+						}
 					}
+					if(matches) return (*(i+1));
 				}
 			}
 			else error(node->location,"Can only resolve type matches yet!");
@@ -574,20 +511,29 @@ void Evaluator::markUnresolved(PrefixDefinition* node){
 		//TODO more progressive error message
 		compiler::subError(node->location,format("Can't resolve definition %s!",node->id));
 	}
-}
+} 
 
-bool InferredUnresolvedTypeExpression::resolve(Evaluator* evaluator){
+bool TypePatternUnresolvedExpression::resolve(Evaluator* evaluator){
 	assert(kind == Unresolved);
 	auto oldSetting = evaluator->expectedTypeForEvaluatedExpression;
 	evaluator->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
 	unresolvedExpression = evaluator->eval(unresolvedExpression);
 	evaluator->expectedTypeForEvaluatedExpression = oldSetting;
-
+	
+	
 	if(auto isTypeExpr = unresolvedExpression->asTypeExpression()){
-		if(isTypeExpr && isTypeExpr->isResolved()){
+		if(isTypeExpr->isResolved()){
 			kind = Type;
 			_type = isTypeExpr;
 			return true;
+		}
+	} else {
+		//pattern type?
+		PatternMatcher matcher(evaluator->currentScope());
+		if(matcher.check(unresolvedExpression)){
+			kind = Pattern;
+			pattern = unresolvedExpression;//NB: this is redundant because unresolvedExpression and pattern are unioned together
+			debug("Type pattern - %s",pattern);
 		}
 	}
 	
@@ -742,7 +688,7 @@ int satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* constraint){
 		DuplicationModifiers mods;
 		mods.target = constraint->owner();
 		verifier = constraint->duplicate(&mods);
-		verifier->arguments[1]->type.kind = InferredUnresolvedTypeExpression::Type;
+		verifier->arguments[1]->type.kind = TypePatternUnresolvedExpression::Type;
 		verifier->arguments[1]->type._type = a0;
 		verifier->resolve(evaluator);
 	}

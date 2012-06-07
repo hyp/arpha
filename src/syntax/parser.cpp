@@ -132,7 +132,7 @@ Node* ImportedScope::parse(Parser* parser) {
 	return reference();
 }
 
-void InferredUnresolvedTypeExpression::parse(Parser* parser,int stickiness){
+void TypePatternUnresolvedExpression::parse(Parser* parser,int stickiness){
 	auto oldSetting = parser->evaluator()->expectedTypeForEvaluatedExpression;
 	parser->evaluator()->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
 	auto node = parser->parse(stickiness);

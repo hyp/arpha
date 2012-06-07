@@ -244,7 +244,7 @@ struct VarParser: PrefixDefinition {
 			while(parser->match(","));
 		}
 		//parse optional type
-		InferredUnresolvedTypeExpression type;
+		TypePatternUnresolvedExpression type;
 		if(!isEndExpressionEquals(parser->peek())) type.parse(parser,arpha::Precedence::Assignment);
 		for(auto i=vars.begin();i!=vars.end();i++){
 			(*i)->type = type;
@@ -298,7 +298,7 @@ void parseFunctionParameters(Parser* parser,Function* func){
 			auto next = parser->peek();
 			bool inferOnDefault = false;
 			if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")" || next.symbol == "=")){
-				param->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+				param->type.kind = TypePatternUnresolvedExpression::Wildcard;
 				inferOnDefault = true;
 			}else{
 				param->type.parse(parser,arpha::Precedence::Tuple);
@@ -357,7 +357,7 @@ struct DefParser: PrefixDefinition {
 		//return type & body
 		auto token = parser->peek();
 		if(token.isLine() || token.isEOF() || (token.isSymbol() && token.symbol == blockParser->lineAlternative)){
-			func->_returnType.infer(intrinsics::types::Void);
+			func->_returnType.specify(intrinsics::types::Void);
 		}
 		else {
 			if(!(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
@@ -455,7 +455,7 @@ struct Macro2Parser: PrefixDefinition {
 			precedence = expectInteger(parser,0);
 			parser->expect("]");
 
-			infix->type.infer(intrinsics::ast::ExprPtr);
+			infix->specifyType(intrinsics::ast::ExprPtr);
 			func->arguments.push_back(infix);
 			bodyScope->define(infix);
 		}
@@ -463,7 +463,7 @@ struct Macro2Parser: PrefixDefinition {
 		func->setFlag(Function::MACRO_FUNCTION);
 
 		bodyScope->_functionOwner = func;
-		func->_returnType.infer(intrinsics::ast::ExprPtr);	
+		func->_returnType.specify(intrinsics::ast::ExprPtr);	
 		if(!infix){
 			if(parser->match("(")){
 				//Function on the outside, but macro lays within!
@@ -503,18 +503,18 @@ struct ConstraintParser: PrefixDefinition {
 
 		parser->expect("(");
 		auto param = new Argument(parser->expectName(),parser->previousLocation(),constraint);
-		param->type.infer(intrinsics::types::Type->duplicate()->asTypeExpression());
+		param->specifyType(intrinsics::types::Type);
 		constraint->arguments.push_back(param);
 		bodyScope->define(param);
 
 		if(parser->match(",")){
 			auto param = new Argument(parser->expectName(),parser->previousLocation(),constraint);
-			param->type.kind = InferredUnresolvedTypeExpression::Wildcard;
+			param->type.kind = TypePatternUnresolvedExpression::Wildcard;
 			constraint->arguments.push_back(param);
 			bodyScope->define(param);
 		}
 		parser->expect(")");
-		constraint->_returnType = intrinsics::types::boolean;
+		constraint->_returnType.specify(intrinsics::types::boolean);
 
 		DefParser::functionBody(constraint,parser,false);
 		parser->currentScope(oldScope);
@@ -536,7 +536,7 @@ struct TypeParser: PrefixDefinition {
 			record->add(field);
 		}
 		while(parser->match(","));
-		InferredUnresolvedTypeExpression type;
+		TypePatternUnresolvedExpression type;
 		type.parse(parser,arpha::Precedence::Assignment);
 		for(;i<record->fields.size();i++) record->fields[i].type = type;
 	}
@@ -673,7 +673,7 @@ struct CommandParser: PrefixDefinition {
 	Node* parse(Parser* parser){
 		int state = None;
 		SymbolID param;
-		InferredUnresolvedTypeExpression type;
+		TypePatternUnresolvedExpression type;
 		while( !isEndExpression(parser->peek()) ){
 			auto tok = parser->expectName();
 			if(tok == "functions" && state == None) state = Functions;
@@ -848,7 +848,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 	Function* func = new Function("typeof",location,new Scope(scope));
 	func->body.scope->_functionOwner = func;
 	func->arguments.push_back(new Argument("expression",location,func));
-	func->arguments[0]->type.infer(intrinsics::ast::ExprPtr);
+	func->arguments[0]->specifyType(intrinsics::ast::ExprPtr);
 	func->setFlag(Function::MACRO_FUNCTION);
 	func->constInterpreter = _typeof;
 	scope->defineFunction(func);
@@ -856,7 +856,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 	Function* func = new Function("sizeof",location,new Scope(scope));
 	func->body.scope->_functionOwner = func;
 	func->arguments.push_back(new Argument("expression",location,func));
-	func->arguments[0]->type.infer(intrinsics::ast::ExprPtr);
+	func->arguments[0]->specifyType(intrinsics::ast::ExprPtr);
 	func->setFlag(Function::MACRO_FUNCTION);
 	func->constInterpreter = _sizeof;
 	scope->defineFunction(func);
