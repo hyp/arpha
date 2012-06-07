@@ -185,7 +185,7 @@ struct AstExpander: NodeVisitor {
 			//Assigning values to variables
 			if(auto var = object->asVariableReference()){
 				if(!var->variable->asArgument() && var->variable->type.isPattern()){
-					if(!var->variable->deduceType(valuesType,evaluator->currentScope()))
+					if(!var->variable->deduceType(valuesType))
 						error(assignment->location,"Failed to deduce variable's type -\n\tA variable %s is expected to have a type matching a pattern %s, which the type %s derived from the expression %s doesn't match!",
 							var->variable->id,var->variable->type.pattern,valuesType,value);
 					debug("Inferred type %s for variable %s",valuesType,var->variable->id);
@@ -625,7 +625,7 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	//inline body
 	if(!func->_returnType.isResolved() || !func->returnType()->isSame(intrinsics::types::Void)){
 		auto varName = std::string(inlined ? "_inlined_" : "_mixined_") + std::string(func->id.ptr());
-		auto v = new Variable(SymbolID(varName.begin()._Ptr,varName.length()),location,currentScope()->functionOwner());
+		auto v = new Variable(SymbolID(varName.begin()._Ptr,varName.length()),location,currentScope());
 		v->isMutable = false;
 		//v->type.infer(func->returnType());
 		currentScope()->define(v);

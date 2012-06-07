@@ -222,7 +222,7 @@ struct VarParser: PrefixDefinition {
 	VarParser(): PrefixDefinition("var",Location()) {}
 	static Node* parseVar(Parser* parser,SymbolID first,bool isMutable){
 		std::vector<Variable*> vars;
-		auto owner = parser->currentScope()->functionOwner();
+		auto owner = parser->currentScope();
 		if(!first.isNull()){
 			auto var = new Variable(first,parser->previousLocation(),owner);
 			var->isMutable = isMutable;
@@ -293,7 +293,7 @@ void parseFunctionParameters(Parser* parser,Function* func){
 		while(1){
 			auto location = parser->currentLocation();
 			auto argName = parser->expectName();
-			auto param = new Argument(argName,location,func);
+			auto param = new Argument(argName,location,func->body.scope);
 		
 			auto next = parser->peek();
 			bool inferOnDefault = false;
@@ -447,7 +447,7 @@ struct Macro2Parser: PrefixDefinition {
 			auto argName = parser->expectName();
 			parser->expect(")");
 			func = new Function(parser->expectName(),location,bodyScope);
-			infix = new Argument(argName,parser->currentLocation(),func);
+			infix = new Argument(argName,parser->currentLocation(),bodyScope);
 			parser->expect("[");
 			parser->expect("precedence");
 			parser->expect(":");
@@ -501,13 +501,13 @@ struct ConstraintParser: PrefixDefinition {
 		parser->currentScope(bodyScope);
 
 		parser->expect("(");
-		auto param = new Argument(parser->expectName(),parser->previousLocation(),constraint);
+		auto param = new Argument(parser->expectName(),parser->previousLocation(),bodyScope);
 		param->specifyType(intrinsics::types::Type);
 		constraint->arguments.push_back(param);
 		bodyScope->define(param);
 
 		if(parser->match(",")){
-			auto param = new Argument(parser->expectName(),parser->previousLocation(),constraint);
+			auto param = new Argument(parser->expectName(),parser->previousLocation(),bodyScope);
 			constraint->arguments.push_back(param);
 			bodyScope->define(param);
 		}
@@ -845,7 +845,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 	{
 	Function* func = new Function("typeof",location,new Scope(scope));
 	func->body.scope->_functionOwner = func;
-	func->arguments.push_back(new Argument("expression",location,func));
+	func->arguments.push_back(new Argument("expression",location,func->body.scope));
 	func->arguments[0]->specifyType(intrinsics::ast::ExprPtr);
 	func->setFlag(Function::MACRO_FUNCTION);
 	func->constInterpreter = _typeof;
@@ -853,7 +853,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 	}{
 	Function* func = new Function("sizeof",location,new Scope(scope));
 	func->body.scope->_functionOwner = func;
-	func->arguments.push_back(new Argument("expression",location,func));
+	func->arguments.push_back(new Argument("expression",location,func->body.scope));
 	func->arguments[0]->specifyType(intrinsics::ast::ExprPtr);
 	func->setFlag(Function::MACRO_FUNCTION);
 	func->constInterpreter = _sizeof;

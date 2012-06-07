@@ -63,12 +63,12 @@ namespace intrinsics {
 					*dest = func;
 					func->body.scope->_functionOwner = func;
 					if(args == 1){
-						func->arguments.push_back(new Argument("type",Location(),func));
+						func->arguments.push_back(new Argument("type",Location(),func->body.scope));
 						func->arguments[0]->specifyType(Type);
 					}else{
-						func->arguments.push_back(new Argument("parameter",Location(),func));
+						func->arguments.push_back(new Argument("parameter",Location(),func->body.scope));
 						func->arguments[0]->specifyType(Type);
-						func->arguments.push_back(new Argument("return",Location(),func));
+						func->arguments.push_back(new Argument("return",Location(),func->body.scope));
 						func->arguments[1]->specifyType(Type);
 					}
 					func->constInterpreter = eval;

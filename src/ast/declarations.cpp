@@ -51,14 +51,14 @@ bool InfixDefinition::setFlag(uint16 id){
 
 
 //variable
-Variable::Variable(SymbolID name,Location& location,Function* owner) : PrefixDefinition(name,location),value(nullptr),isMutable(true),expandMe(false) {
-	_functionOwner = owner;
+Variable::Variable(SymbolID name,Location& location,Scope* owner) : PrefixDefinition(name,location),value(nullptr),isMutable(true),expandMe(false) {
+	_owner = owner;
 }
 Function* Variable::functionOwner() const{
-	return _functionOwner;
+	return _owner->functionOwner();
 }
-bool Variable::isLocal() const{
-	return _functionOwner != nullptr;
+bool Variable::isLocal() const {
+	return _owner->functionOwner() != nullptr;
 }
 bool Variable::isResolved(){
 	return isFlagSet(IS_RESOLVED);
@@ -86,8 +86,8 @@ void Variable::specifyType(TypeExpression* givenType){
 	setFlag(IS_RESOLVED);
 }
 //Matches a type to a patterned type and resolves the patterned type.
-bool Variable::deduceType(TypeExpression* givenType,Scope* container){
-	if(type.deduce(givenType,container)){ //TODO should container be the scope in which the variable was declared??
+bool Variable::deduceType(TypeExpression* givenType){
+	if(type.deduce(givenType,_owner)){ 
 		setFlag(IS_RESOLVED);//TODO check if valid type..
 		return true;
 	}
@@ -109,7 +109,7 @@ void Variable::setImmutableValue(Node* value){
 }
 
 PrefixDefinition* Variable::duplicate(DuplicationModifiers* mods){
-	auto duplicatedReplacement = new Variable(id,location,mods->target->functionOwner());
+	auto duplicatedReplacement = new Variable(id,location,mods->target);
 	duplicatedReplacement->type = type.duplicate(mods);
 	duplicatedReplacement->isMutable = isMutable;
 	duplicatedReplacement->registerID = registerID;
@@ -124,7 +124,7 @@ Argument* Variable::asArgument(){ return nullptr; }
 
 Argument* Argument::asArgument(){ return this; }
 
-Argument::Argument(SymbolID name,Location& location,Function* owner) : Variable(name,location,owner),	_defaultValue(nullptr),_dependent(false),_constraint(nullptr) {
+Argument::Argument(SymbolID name,Location& location,Scope* owner) : Variable(name,location,owner),	_defaultValue(nullptr),_dependent(false),_constraint(nullptr) {
 }
 bool Argument::expandAtCompileTime() {
 	assert(isResolved());
@@ -134,7 +134,7 @@ PrefixDefinition* Argument::duplicate(DuplicationModifiers* mods){
 	return nullptr; //Arguments are duplicates inside function duplicate
 }
 Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* newType){
-	Argument* dup = new Argument(id,location,mods->target->functionOwner());
+	Argument* dup = new Argument(id,location,mods->target);
 	if(newType && type.isPattern()){
 		dup->type._type = newType;//TODO dup?
 		dup->type._type->_localSemantics = false;//Use non-local type

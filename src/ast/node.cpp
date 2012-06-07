@@ -494,7 +494,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinitions(){
 	//TODO check if the scope already contains them..
 	for(auto i= introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
-		auto var = new Variable((*i).name,(*i).location,container->functionOwner());
+		auto var = new Variable((*i).name,(*i).location,container);
 		var->isMutable = false;
 		if((*i).value){
 			var->specifyType((*i).value->_returnType());

@@ -18,7 +18,7 @@ struct Evaluator;
 struct Argument;
 
 struct Variable : PrefixDefinition  {
-	Variable(SymbolID name,Location& location,Function* owner);
+	Variable(SymbolID name,Location& location,Scope* owner);
 
 	Node* parse(Parser* parser);
 	Node* createReference();
@@ -30,7 +30,7 @@ struct Variable : PrefixDefinition  {
 	//Use at variable's definition when a type is specified
 	void specifyType(TypeExpression* givenType);
 	//Matches a type to a patterned type and resolves the patterned type. Returns an error if match fails.
-	bool deduceType(TypeExpression* givenType,Scope* container); 
+	bool deduceType(TypeExpression* givenType); 
 
 	bool isLocal() const;
 	Function* functionOwner() const;
@@ -43,12 +43,12 @@ struct Variable : PrefixDefinition  {
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
 	bool isMutable; // = true
 	bool expandMe;  // = false // assume value != nullptr
-	Function* _functionOwner;
+	Scope* _owner;
 	uint16 registerID;
 };
 
 struct Argument : Variable {
-	Argument(SymbolID name,Location& location,Function* owner);
+	Argument(SymbolID name,Location& location,Scope* owner);
 
 	Argument* asArgument();	
 
