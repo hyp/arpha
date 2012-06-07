@@ -694,7 +694,8 @@ struct CommandParser: PrefixDefinition {
 //TODO refactor
 
 Node* _typeof(Node* parameter){
-	return reinterpret_cast<Node*>(parameter->asValueExpression()->data)->_returnType();
+	auto node= reinterpret_cast<Node*>(parameter->asValueExpression()->data);
+	return node->_returnType();
 }
 Node* _sizeof(Node* parameter){
 	size_t size;

@@ -417,7 +417,7 @@ struct AstExpander: NodeVisitor {
 	}
 
 	Node* visit(LoopExpression* node){
-		node->body = node->body->accept(this);
+		if(!node->body->isResolved() || evaluator->forcedToEvaluate) node->body = node->body->accept(this);
 		return node;
 	}
 
@@ -872,6 +872,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 		bool resolved = true;
 		for(size_t i = 0;i< result.size();i++){
 			if(func->arguments[i]->isDependent()){
+				mods.target = func->body.scope;
 				auto dup = func->arguments[i]->reallyDuplicate(&mods,nullptr);
 				//TODO resolve in scope of function
 				if(dup->resolve(this)){ //TODO how about allowing this to be a constraint? >_>

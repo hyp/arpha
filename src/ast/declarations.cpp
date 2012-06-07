@@ -293,9 +293,8 @@ static void collectUnresolvedRecord(Node* unresolvedExpression,Record* initialRe
 		}
 		else foundNotRecords++;
 	}
-	//TODO hackz
-	else if(auto ptr = unresolvedExpression->asPointerOperation()){
-		if(ptr->kind == PointerOperation::DEREFERENCE) collectUnresolvedRecord(ptr->expression,initialRecord,records,foundNotRecords);
+	else if(auto call = unresolvedExpression->asCallExpression()){
+		collectUnresolvedRecord(call->arg,initialRecord,records,foundNotRecords);
 	}
 	else if(auto tuple = unresolvedExpression->asTupleExpression()){
 		for(auto i = tuple->children.begin();i!=tuple->children.end();i++){
