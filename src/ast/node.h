@@ -201,9 +201,6 @@ struct TypePatternUnresolvedExpression {
 	TypeExpression* type() const;
 
 	TypePatternUnresolvedExpression duplicate(DuplicationModifiers* mods) const;
-	
-	bool resolve(Evaluator* evaluator);
-	void parse(Parser* parser,int stickiness);
 
 	void specify(TypeExpression* givenType);
 	bool deduce(TypeExpression* givenType,Scope* container);
@@ -224,6 +221,9 @@ struct TypePatternUnresolvedExpression {
 		bool match(Node* object,Node* pattern);
 		void defineIntroducedDefinitions();
 	};
+
+	bool resolve(Evaluator* evaluator,PatternMatcher* patternMatcher = nullptr);
+	void parse(Parser* parser,int stickiness,PatternMatcher* patternMatcher = nullptr);
 };
 
 //(type ...): intrinsics::types::Type

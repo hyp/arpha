@@ -300,7 +300,7 @@ void parseFunctionParameters(Parser* parser,Function* func){
 			if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")" || next.symbol == "=")){
 				inferOnDefault = true;
 			}else{
-				param->type.parse(parser,arpha::Precedence::Tuple);
+				param->type.parse(parser,arpha::Precedence::Tuple,&func->allArgMatcher);
 				next = parser->peek();
 			}
 

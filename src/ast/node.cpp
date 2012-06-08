@@ -244,7 +244,7 @@ TypeExpression* IfExpression::_returnType() const {
 	if(cr->isSame(alternative->_returnType())) return cr;
 	return intrinsics::types::Void;
 }
-bool IfExpression::isResolved() const{
+bool IfExpression::isResolved() const {
 	return _resolved;
 }
 Node* IfExpression::duplicate(DuplicationModifiers* mods) const{

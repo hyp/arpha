@@ -242,6 +242,7 @@ struct Function: public PrefixDefinition {
 	BlockExpression body;
 	Node* (*constInterpreter)(Node* parameters); //Can be null. Used to interpret the function with const parameters.
 	std::vector<Argument*> arguments;
+	TypePatternUnresolvedExpression::PatternMatcher allArgMatcher; //a fused matcher is used so that a patterned argument will be able to acess introduced definitons from other patterns
 	bool _hasGenericArguments;
 	bool _hasExpandableArguments;
 	bool _argsResolved;

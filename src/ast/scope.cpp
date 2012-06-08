@@ -218,7 +218,7 @@ bool Scope::isResolved(){
 bool Scope::resolve(Evaluator* evaluator){
 	_resolved = true;
 	for(auto i = prefixDefinitions.begin();i!=prefixDefinitions.end();i++){
-		if((!dynamic_cast<Argument*>((*i).second)) && !(*i).second->isResolved()){
+		if((!dynamic_cast<Argument*>((*i).second)) && ( !(*i).second->isResolved() || evaluator->forcedToEvaluate) ){
 			if(!(*i).second->resolve(evaluator)) _resolved = false;
 		}
 	}

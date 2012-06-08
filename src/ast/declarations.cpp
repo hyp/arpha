@@ -559,7 +559,7 @@ bool Overloadset::isResolved(){
 bool Overloadset::resolve(Evaluator* evaluator){
 	auto _resolved = true;
 	for(auto i = functions.begin();i!= functions.end();i++){
-		if(!(*i)->isResolved()){
+		if(!(*i)->isResolved() || evaluator->forcedToEvaluate){
 			if(!(*i)->resolve(evaluator)) _resolved = false;
 		}
 	}
@@ -614,7 +614,7 @@ static bool isUnresolvedArgumentDependent(Variable* argument,const Function* fun
 //TODO arguments depending on other arguments i.e. def f(t,v typeof(t)) = ..
 //1. Find if unresolved arguments have a reference to arg
 //2. When resolving the overload set do...
-Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDefinition(name,location), body(bodyScope) {
+Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDefinition(name,location), body(bodyScope), allArgMatcher(bodyScope) {
 	_resolved = false;
 	constInterpreter = nullptr;
 
@@ -658,8 +658,8 @@ bool Function::resolve(Evaluator* evaluator){
 			}
 			else _hasGenericArguments = true;
 		}
-		else if(!(*i)->isResolved()){
-			if(!(*i)->resolve(evaluator)){
+		else if(!(*i)->isResolved() || evaluator->forcedToEvaluate){
+			if( !(*i)->type.resolve(evaluator,&allArgMatcher) ){
 				
 				//depenent argument
 				//NB pretend that the arg is resolved with
@@ -669,14 +669,15 @@ bool Function::resolve(Evaluator* evaluator){
 					(*i)->_dependent = true;
 				}
 				else _resolved = false;
-			}
+
+			} else (*i)->resolve(evaluator);
 		}
 		if((*i)->isResolved() && (*i)->expandAtCompileTime()) _hasExpandableArguments = true;
 	}
 	_argsResolved = _resolved;
 
 	//resolve body
-	if(!body.isResolved()){
+	if(!body.isResolved() || evaluator->forcedToEvaluate ){
 		evaluator->eval(&body);
 		if(!body.isResolved()) _resolved = false;
 	}
@@ -685,8 +686,10 @@ bool Function::resolve(Evaluator* evaluator){
 	//Body has no return expression => return void
 	if(!isFlagSet(CONTAINS_RETURN)){
 		if(_returnType.isPattern() && _returnType.pattern == nullptr) _returnType.specify(intrinsics::types::Void);
-		else if(body.isResolved() && body.children.size() != 0 && _returnType.kind != TypePatternUnresolvedExpression::Unresolved) //TODO
+		else if(body.isResolved() && body.children.size() != 0 && ( 
+			(_returnType.isResolved() && !_returnType.type()->isSame(intrinsics::types::Void)) || _returnType.isPattern() ) ){ //TODO
 			error(location,"The function %s is expected to return a value of type %s, but it contains no return statement!",id,_returnType.isPattern()?_returnType.pattern:_returnType.type());
+		}
 	}
 	if(!_returnType.isResolved()){
 		if(_returnType.isPattern() || !_returnType.resolve(evaluator)) _resolved = false;

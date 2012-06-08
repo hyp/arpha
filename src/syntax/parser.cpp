@@ -132,7 +132,7 @@ Node* ImportedScope::parse(Parser* parser) {
 	return reference();
 }
 
-void TypePatternUnresolvedExpression::parse(Parser* parser,int stickiness){
+void TypePatternUnresolvedExpression::parse(Parser* parser,int stickiness,PatternMatcher* patternMatcher){
 	auto oldSetting = parser->evaluator()->expectedTypeForEvaluatedExpression;
 	parser->evaluator()->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
 	auto node = parser->parse(stickiness);
@@ -146,11 +146,21 @@ void TypePatternUnresolvedExpression::parse(Parser* parser,int stickiness){
 		}
 	} else {
 		//pattern type?
-		PatternMatcher matcher(parser->currentScope());
-		if(matcher.check(node)){
-			kind = Pattern;
-			pattern = node;
-			return;
+		if(patternMatcher){
+			auto oldSize = patternMatcher->introducedDefinitions.size();
+			if(patternMatcher->check(node)){
+				kind = Pattern;
+				pattern = node;
+				return;
+			} else if(oldSize != patternMatcher->introducedDefinitions.size()) 
+				patternMatcher->introducedDefinitions.erase(patternMatcher->introducedDefinitions.begin() + oldSize,patternMatcher->introducedDefinitions.end());
+		} else {
+			PatternMatcher matcher(parser->currentScope());
+			if(matcher.check(node)){
+				kind = Pattern;
+				pattern = node;
+				return;
+			}
 		}
 	}
 	kind = Unresolved;

@@ -357,11 +357,11 @@ struct AstExpander: NodeVisitor {
 	Node* visit(BlockExpression* node){
 		if(!evaluator->forcedToEvaluate) assert(!node->isResolved());
 		auto scp = evaluator->currentScope();
+		evaluator->currentScope(node->scope);
 		node->_resolved = true;
 		if(!node->scope->isResolved() || evaluator->forcedToEvaluate){
 			if(!node->scope->resolve(evaluator)) node->_resolved = false;//Resolve unresolved definitions
 		}
-		evaluator->currentScope(node->scope);
 		auto e = evaluator->mixinedExpression;
 		evaluator->mixinedExpression = nullptr;
 		for(size_t i =0;i<node->children.size();i++){
@@ -513,7 +513,7 @@ void Evaluator::markUnresolved(PrefixDefinition* node){
 	}
 } 
 
-bool TypePatternUnresolvedExpression::resolve(Evaluator* evaluator){
+bool TypePatternUnresolvedExpression::resolve(Evaluator* evaluator,PatternMatcher* patternMatcher){
 	assert(kind == Unresolved);
 	auto oldSetting = evaluator->expectedTypeForEvaluatedExpression;
 	evaluator->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
@@ -529,10 +529,21 @@ bool TypePatternUnresolvedExpression::resolve(Evaluator* evaluator){
 		}
 	} else {
 		//pattern type?
-		PatternMatcher matcher(evaluator->currentScope());
-		if(matcher.check(unresolvedExpression)){
-			kind = Pattern;
-			pattern = unresolvedExpression;//NB: this is redundant because unresolvedExpression and pattern are unioned together
+		if(patternMatcher){
+			auto oldSize = patternMatcher->introducedDefinitions.size();
+			if(patternMatcher->check(unresolvedExpression)){
+				kind = Pattern;
+				pattern = unresolvedExpression;
+				return true;
+			} else if(oldSize != patternMatcher->introducedDefinitions.size()) 
+				patternMatcher->introducedDefinitions.erase(patternMatcher->introducedDefinitions.begin() + oldSize,patternMatcher->introducedDefinitions.end());
+		} else {
+			PatternMatcher matcher(evaluator->currentScope());
+			if(matcher.check(unresolvedExpression)){
+				kind = Pattern;
+				pattern = unresolvedExpression; //NB: not really necessary because they are in one union together
+				return true;
+			}
 		}
 	}
 	
@@ -685,6 +696,8 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 	bool determinedFunction = false;
 	std::vector<TypeExpression* > determinedArguments;//Boolean to indicate whether the argument was expanded at compile time and is no longer needed
 
+	TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);//need to match the second time round to inject introduced definitions..
+
 	//..
 	size_t currentArg = 0;
 	size_t currentExpr = 0;
@@ -753,6 +766,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 		}
 		else if( func->arguments[currentArg]->type.isPattern() ){
 			result[currentArg] = exprBegin[currentExpr];
+			if(auto pattern = func->arguments[currentArg]->type.pattern) matcher.match(exprBegin[currentExpr]->_returnType(),pattern);
 			if(!determinedFunction){
 				determinedFunction = true;
 				determinedArguments.resize(argsCount,nullptr);
@@ -820,7 +834,6 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 
 	if(!func->isFlagSet(Function::MACRO_FUNCTION)){//Macro optimization, so that we dont duplicate unnecessary
 		//Determine the function?
-		//TODO redirect the function to it's definition scope when expanding
 		if(determinedFunction && !func->constInterpreter){
 			DuplicationModifiers mods;
 			mods.target = func->owner();
@@ -828,6 +841,8 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			auto oldForcedToEvaluate = forcedToEvaluate;
 			forcedToEvaluate = true;
 			auto f = func->specializedDuplicate(&mods,determinedArguments);
+			matcher.container = f->body.scope;
+			matcher.defineIntroducedDefinitions();
 			f->resolve(this);
 			forcedToEvaluate = oldForcedToEvaluate;			
 			if(!f->canExpandAtCompileTime()) func->owner()->defineFunction(f);
@@ -900,6 +915,7 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 
 	//dependent args
 	bool hasDependentArg = false;
+	TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);
 
 	//
 	std::vector<bool> checked;
@@ -973,10 +989,10 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 		}
 		else if( func->arguments[currentArg]->type.isPattern() ){
 			if(auto pattern = func->arguments[currentArg]->type.pattern){
-				TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);
 				if(!matcher.match(exprBegin[currentExpr]->_returnType(),pattern)) return false;
+				weight += WILDCARD + 1;
 			}
-			weight += WILDCARD;
+			else weight += WILDCARD;
 		}
 		else {
 			auto ret = exprBegin[currentExpr]->_returnType();

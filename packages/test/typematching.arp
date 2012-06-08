@@ -28,3 +28,17 @@ match(*bool)  { | C2(T:_) => T  | _ => false } # bool
 	#TODO T injection
 }
 
+def foo0(x) = 1
+def foo1(x _) = 2
+foo0(1) # ok
+foo1(2) #ok
+
+def foo2(x T:_,y T) = 1
+foo2(1,2) # ok
+foo2(1,false) # error
+
+def foo3(x T:_) {
+	var z T
+}
+foo3(1) # ok
+
