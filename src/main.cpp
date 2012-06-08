@@ -505,12 +505,6 @@ struct ConstraintParser: PrefixDefinition {
 		param->specifyType(intrinsics::types::Type);
 		constraint->arguments.push_back(param);
 		bodyScope->define(param);
-
-		if(parser->match(",")){
-			auto param = new Argument(parser->expectName(),parser->previousLocation(),bodyScope);
-			constraint->arguments.push_back(param);
-			bodyScope->define(param);
-		}
 		parser->expect(")");
 		constraint->_returnType.specify(intrinsics::types::boolean);
 

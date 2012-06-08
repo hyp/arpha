@@ -673,34 +673,6 @@ Node* Evaluator::mixin(DuplicationModifiers* mods,Node* node){
 	return resultingExpression;
 }
 
-//Evaluates the verifier to see if an expression satisfies a constraint
-int satisfiesConstraint(Evaluator* evaluator,Node* arg,Function* constraint){
-	Node* args;
-	Function* verifier;
-	if(constraint->arguments.size() == 1){
-		args = static_cast<Node*>(arg->_returnType());
-		verifier = constraint;
-	}else{
-		assert(constraint->arguments.size() == 2);
-		auto a0 = arg->_returnType();
-		args = new TupleExpression(a0,arg);
-		DuplicationModifiers mods;
-		mods.target = constraint->owner();
-		verifier = constraint->duplicate(&mods);
-		verifier->arguments[1]->type.kind = TypePatternUnresolvedExpression::Type;
-		verifier->arguments[1]->type._type = a0;
-		verifier->resolve(evaluator);
-	}
-	InterpreterInvocation i(evaluator->interpreter(),verifier,args);
-	if(i.succeded()){
-		if(auto resolved = i.result()->asBoolExpression()){
-			return resolved->value?0:-1;
-		}
-	}
-	error(arg->location,"Can't evaluate constraint %s with argument %s at compile time!",verifier,arg);
-	return -1;
-}
-
 //Analyze the function's code to check if the parameter is
 bool Function::canAcceptLocalParameter(size_t argument){
 	return true;//TODO

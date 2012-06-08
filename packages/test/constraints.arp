@@ -22,14 +22,6 @@ def f3(x Fuse) = 1
 f3(true) # ok
 f3(1) # ok
 
-#
-TODO get working again
-constraint Man(T,v) = T == Type and v == int32
-def f4(yes Man) = 1
-f4(int32) # ok
-f4(bool) # error, won't be resolved
-#
-
 def f4(x Lates) = 2
 constraint Lates(T) = T == bool
 f4(false)

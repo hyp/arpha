@@ -11,3 +11,13 @@ match (*int32) { | Pointer(T:_) => T } # int32
 
 match (Function(int32,int32))   { | Function(T:_,T) => true | _ => false } # true
 match (Function(int32,Nothing)) { | Function(T:_,T) => true | _ => false } # false
+
+constraint C(T) = T == int32 or T == bool
+match(int32) { | C => true | _ => false } #true
+match(bool)  { | C => true | _ => false } #true
+match(int16) { | C => true | _ => false } #false
+
+constraint C2(T) = true
+match(*int32) { | C2(_) => true | _ => false } # true
+match(*bool)  { | C2(T:_) => T  | _ => false } # bool
+
