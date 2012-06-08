@@ -397,7 +397,12 @@ bool TypePatternUnresolvedExpression::deduce(TypeExpression* givenType,Scope* co
 	_type = givenType->duplicate(&mods)->asTypeExpression();//NB: type expresssion is duplicated
 	return true;
 }
-
+TypePatternUnresolvedExpression::PatternMatcher::IntroducedDefinition* TypePatternUnresolvedExpression::PatternMatcher::lookupDefinition(SymbolID name){
+		for(auto i = introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
+			if(name == (*i).name) return &(*i);
+		}
+		return nullptr;
+}
 void TypePatternUnresolvedExpression::PatternMatcher::introduceDefinition(SymbolID name,Location location,Node* value){
 	for(auto i = introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
 		if(name == (*i).name) error(location,"Multiple type labels with same name %s exist in this type pattern",name);
@@ -414,9 +419,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::check(Node* expression){
 			return true; //|_ | T:_
 		}
 		//T
-		for(auto i = introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
-			if(symbol == (*i).name) return true;
-		}
+		if(lookupDefinition(symbol)) return true;
 	} else if(auto ref = expression->asFunctionReference()){
 		//Constraint
 		if(ref->function->isFlagSet(Function::CONSTRAINT_FUNCTION) && ref->function->isResolved()) return true;
@@ -440,6 +443,8 @@ bool TypePatternUnresolvedExpression::PatternMatcher::check(Node* expression){
 			}
 			else return check(call->arg);
 		}
+	} else if(auto var = expression->asVariableReference()){
+		if(lookupDefinition(var->variable->id)) return true;
 	}
 	return false;
 }
@@ -472,13 +477,11 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 			if(!unresolved->label().isNull()) introduceDefinition(unresolved->label(),unresolved->location,type);
 			return true; //|_ | T:_
 		}
-		//
-		for(auto i = introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
-			if(symbol == (*i).name) {
-				if(auto vt = (*i).value->asTypeExpression())
-					return type->isSame(vt);
-				else return false;
-			}
+		//T
+		if(auto def = lookupDefinition(symbol)){
+			if(auto vt = def->value->asTypeExpression())
+				return type->isSame(vt);
+			else return false;
 		}
 	} else if(auto ref = pattern->asFunctionReference()){
 		//Constraint (We can safely assume this is a constraint if check passed)
@@ -511,6 +514,12 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 				return true;
 			}
 			else return match(type->generatedArgument(0),call->arg);
+		}
+	} else if(auto var = pattern->asVariableReference()){
+		if(auto def = lookupDefinition(var->variable->id)){
+			if(auto vt = def->value->asTypeExpression())
+					return type->isSame(vt);
+				else return false;
 		}
 	}
 	return false;

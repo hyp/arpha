@@ -218,6 +218,7 @@ struct TypePatternUnresolvedExpression {
 		Scope* container;
 
 		PatternMatcher(Scope* scope) : container(scope) {}
+		IntroducedDefinition* lookupDefinition(SymbolID name);
 		void introduceDefinition(SymbolID name,Location location,Node* value = nullptr);
 		bool check(Node* expression); //Returns true if a certain expression is a type pattern e.g. _
 		bool match(Node* object,Node* pattern);

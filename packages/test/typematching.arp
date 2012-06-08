@@ -21,3 +21,10 @@ constraint C2(T) = true
 match(*int32) { | C2(_) => true | _ => false } # true
 match(*bool)  { | C2(T:_) => T  | _ => false } # bool
 
+{
+	#Must handle the shadowing of outer variables correctly!
+	var T = 1
+	match(Function(int32,int32)) { | Function(T:_,T) => true | _ => false }
+	#TODO T injection
+}
+
