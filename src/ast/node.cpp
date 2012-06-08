@@ -649,6 +649,7 @@ bool TypeExpression::wasGenerated() const {
 	switch(type){
 	case POINTER: return true;
 	case FUNCTION: return true;
+	case RECORD: return record->isFlagSet(Record::GENERATED);
 	default: return false;
 	}
 }
@@ -656,6 +657,7 @@ bool TypeExpression::wasGeneratedBy(Function* function) const {
 	switch(type){
 	case POINTER: return function == intrinsics::types::PointerTypeGenerator;
 	case FUNCTION: return function == intrinsics::types::FunctionTypeGenerator;
+	case RECORD: return record->wasGeneratedBy(function);
 	default:
 		return false;
 	}
@@ -664,6 +666,7 @@ Node* TypeExpression::generatedArgument(size_t i) const {
 	switch(type){
 	case POINTER: return argument;
 	case FUNCTION: return i == 0 ? argument : returns;
+	case RECORD: return record->generatedArgument(i);
 	default:
 		throw std::runtime_error("TypeExpression generatedArgument failed");	
 		return nullptr;

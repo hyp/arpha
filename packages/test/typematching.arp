@@ -42,3 +42,8 @@ def foo3(x T:_) {
 }
 foo3(1) # ok
 
+#generated types and type matching
+
+type Pair(T) { var first,second T }
+match(Pair(int32)) { | Pair(T:_) => T } # int32
+

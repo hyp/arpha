@@ -94,6 +94,10 @@ struct AstExpander: NodeVisitor {
 						error(node->location,"Failed to interpret a macro %s at compile time!",func->id);
 						return ErrorExpression::getInstance();
 					}
+				}  
+				else if(func->isFlagSet(Function::TYPE_GENERATOR_FUNCTION) && !func->constInterpreter){
+					debug("Type generation functions booyah!");
+					return func->body.scope->prefixDefinitions.begin()->second->createReference();
 				}
 				node->object = new FunctionReference(func);
 				node->_resolved = true;
@@ -527,7 +531,7 @@ bool TypePatternUnresolvedExpression::resolve(Evaluator* evaluator,PatternMatche
 			_type = isTypeExpr;
 			return true;
 		}
-	} else {
+	} else { 
 		//pattern type?
 		if(patternMatcher){
 			auto oldSize = patternMatcher->introducedDefinitions.size();
@@ -832,9 +836,9 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 
 	}
 
-	if(!func->isFlagSet(Function::MACRO_FUNCTION)){//Macro optimization, so that we dont duplicate unnecessary
+	if(!func->isFlagSet(Function::MACRO_FUNCTION) && !func->constInterpreter){//Macro optimization, so that we dont duplicate unnecessary
 		//Determine the function?
-		if(determinedFunction && !func->constInterpreter){
+		if(determinedFunction){
 			DuplicationModifiers mods;
 			mods.target = func->owner();
 			mods.location = arg->location;
@@ -849,7 +853,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			*function = f;
 		}
 
-		if((*function)->canExpandAtCompileTime() && !(*function)->constInterpreter){
+		if((*function)->canExpandAtCompileTime()){
 			DuplicationModifiers mods;
 			mods.target = (*function)->owner();
 			mods.location = arg->location;

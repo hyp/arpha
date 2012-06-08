@@ -233,12 +233,21 @@ bool IntegerType::isSubset(IntegerType* other) const {
 
 //type
 
-Record::Record(SymbolID name,Location& location) : TypeBase(name,location) {
+Record::Record(SymbolID name,Location& location,Scope* owner) : TypeBase(name,location),_owner(owner) {
 	_size = 0;
 	headRecord = nullptr;
 	_resolved = false;
+	if(owner && owner->functionOwner()->isFlagSet(Function::TYPE_GENERATOR_FUNCTION)){
+		debug("Record %s is generated ",name);
+		setFlag(GENERATED);
+	}
 }
-
+bool Record::wasGeneratedBy(Function* func) const {
+	return func == _owner->functionOwner()->expandedParent;
+}
+Node* Record::generatedArgument(size_t i) const {
+	return _owner->functionOwner()->expandedArguments[i];
+}
 int Record::lookupField(const SymbolID fieldName){
 	for(size_t i = 0;i<fields.size();i++){
 		if( fields[i].name == fieldName ) return int(i);
@@ -429,7 +438,7 @@ PrefixDefinition* Record::duplicate(DuplicationModifiers* mods){
 		return this;
 	}
 
-	auto rec = new Record(id,location);
+	auto rec = new Record(id,location,mods->target);
 	mods->redirectors[reinterpret_cast<void*>(this)] = std::make_pair(reinterpret_cast<void*>(rec),false);
 	for(auto i = fields.begin();i!=fields.end();i++){
 		rec->fields.push_back((*i).duplicate(mods));
@@ -476,7 +485,7 @@ Record* Record::createRecordType(std::vector<Field>& record,Record* headRecord){
 	typeName+=')';
 	debug("Tuple created: %s",typeName);
 
-	auto type=new Record(typeName.c_str(),Location());
+	auto type=new Record(typeName.c_str(),Location(),nullptr);
 	type->headRecord = headRecord ? headRecord : type;
 	for(size_t i=0;i<record.size();i++){
 		type->add(Field(headRecord!=nullptr?(record[i].name):(SymbolID()),record[i].type.type() ));
@@ -621,6 +630,7 @@ Function::Function(SymbolID name,Location& location,Scope* bodyScope) : PrefixDe
 	_argsResolved = false;
 	_hasGenericArguments = false;
 	_hasExpandableArguments = false;
+	expandedParent = nullptr;
 }
 
 Scope* Function::owner() const {
@@ -628,7 +638,7 @@ Scope* Function::owner() const {
 }
 
 bool Function::isResolved(){
-	return  (_hasGenericArguments || _hasExpandableArguments) ? _argsResolved : _resolved;
+	return  (_hasGenericArguments || _hasExpandableArguments || (isFlagSet(TYPE_GENERATOR_FUNCTION) && expandedParent == nullptr) ) ? _argsResolved : _resolved;
 }
 bool Function::isPartiallyResolved(){
 	return true;//TODO
@@ -727,19 +737,20 @@ TypeExpression* Function::returnType() {
 }
 bool Function::canExpandAtCompileTime(){
 	assert(_argsResolved);
-	return _hasExpandableArguments;
+	return _hasExpandableArguments || isFlagSet(TYPE_GENERATOR_FUNCTION);
 }
 //TODO redefine arguments
 //Return true if a new function was generated or false if an already generated function was used.
 bool Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters,Function** dest){
-	
+	bool expandAll = isFlagSet(TYPE_GENERATOR_FUNCTION);
+
 	//get the new name and see if such function was already generated!
 	std::ostringstream name;
 	name<<id.ptr()<<"_";
 	auto oldD = compiler::currentUnit()->printingDecorationLevel;
 	compiler::currentUnit()->printingDecorationLevel = 0;
 	for(size_t i = 0;i!=arguments.size();++i){
-		if(!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime()){
+		if(expandAll || (!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime())){
 			if(auto t = parameters[i]->asTypeExpression()) t->_localSemantics = false;
 			name<<"_"<<arguments[i]->id<<"_"<<parameters[i];
 		}
@@ -764,8 +775,9 @@ bool Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& 
 	//args
 	size_t erased = 0;
 	for(size_t i = 0;i!=arguments.size();++i){
-		if(!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime()){
+		if(expandAll || (!arguments[i]->isDependent() && arguments[i]->expandAtCompileTime())){
 			debug("Exp");
+			func->expandedArguments.push_back(parameters[i - erased]);
 			//Pass non-local instead of local types
 			if(auto t = parameters[i - erased]->asTypeExpression()) t->_localSemantics = false;
 			mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(arguments[i]))] = 
@@ -780,6 +792,7 @@ bool Function::expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& 
 	duplicateReturnBody(mods,func);
 	mods->target = oldTarget;
 	func->_resolved = false;
+	func->expandedParent = this;
 	*dest = func;
 	return true;
 }
@@ -833,6 +846,10 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	func->_hasExpandableArguments = _hasExpandableArguments;
 	func->ctfeRegisterCount = ctfeRegisterCount;
 	func->inliningWeight = inliningWeight;
+	if(expandedParent) {
+		func->expandedParent = expandedParent;
+		func->expandedArguments = expandedArguments;
+	}
 	copyProperties(func);
 	return func;
 }

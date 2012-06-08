@@ -288,7 +288,7 @@ int expectInteger(Parser* parser,int stickiness){
 	return -1;
 }
 
-void parseFunctionParameters(Parser* parser,Function* func){
+void parseFunctionParameters(Parser* parser,Function* func,TypeExpression* defaultType = nullptr){
 	if(!parser->match(")")){
 		while(1){
 			auto location = parser->currentLocation();
@@ -298,7 +298,8 @@ void parseFunctionParameters(Parser* parser,Function* func){
 			auto next = parser->peek();
 			bool inferOnDefault = false;
 			if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")" || next.symbol == "=")){
-				inferOnDefault = true;
+				if(defaultType) param->type.specify(defaultType);
+				else inferOnDefault = true;
 			}else{
 				param->type.parse(parser,arpha::Precedence::Tuple,&func->allArgMatcher);
 				next = parser->peek();
@@ -559,8 +560,9 @@ struct TypeParser: PrefixDefinition {
 		
 
 	Node* parse(Parser* parser){
-		auto location  = parser->previousLocation();
+		auto location  = parser->currentLocation();
 		auto name = parser->expectName();
+		Function* typeGenerationFunction = nullptr;
 
 		if(parser->match("integer")){
 			debug("defined integer type");
@@ -572,8 +574,16 @@ struct TypeParser: PrefixDefinition {
 			auto type = new IntrinsicType(name,location);
 			parser->currentScope()->define(type);
 			return new TypeExpression(type);
+		} else if(parser->match("(")){
+			typeGenerationFunction = new Function(name,location,new Scope(parser->currentScope()));
+			typeGenerationFunction->body.scope->_functionOwner = typeGenerationFunction;
+			parser->currentScope(typeGenerationFunction->body.scope);
+			parseFunctionParameters(parser,typeGenerationFunction,intrinsics::types::Type);
+			typeGenerationFunction->setFlag(Function::TYPE_GENERATOR_FUNCTION);
+			//typeGenerationFunction->_returnType.specify(intrinsics::types::Type);
+			
 		}
-		auto record = new Record(name,location);
+		auto record = new Record(name,location,parser->currentScope());
 		parser->currentScope()->define(record);
 		
 		//fields
@@ -584,8 +594,16 @@ struct TypeParser: PrefixDefinition {
 			parser->expect("=");
 			auto typeExpre = parser->parse();//TODO aliased type?
 		}
-		record->resolve(parser->evaluator());
-		return new TypeExpression(record);
+		if(typeGenerationFunction){
+			typeGenerationFunction->resolve(parser->evaluator());
+			parser->currentScope(typeGenerationFunction->body.scope->parent);
+			parser->currentScope()->defineFunction(typeGenerationFunction);
+			return new UnitExpression();
+		}
+		else {
+			record->resolve(parser->evaluator());
+			return new TypeExpression(record);
+		}
 	}
 };
 
