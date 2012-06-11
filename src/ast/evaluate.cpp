@@ -723,29 +723,18 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 	}
 
 	if(argsCount < expressionCount){
-		if(argsCount > 0){
-			if(func->arguments[argsCount-1]->type.isPattern()){
-				argsCount--;
-				auto tuple = new TupleExpression();
-				for(auto i = argsCount;i<expressionCount;i++)
-					tuple->children.push_back(exprBegin[i]);
-				result[argsCount] = eval(tuple);
-				assert(result[argsCount]->isResolved());
-				expressionCount = argsCount;
+		if(argsCount > 0&& func->arguments[argsCount-1]->type.isPattern()){
+			argsCount--;
+			auto tuple = new TupleExpression();
+			for(auto i = argsCount;i<expressionCount;i++)
+				tuple->children.push_back(exprBegin[i]);
+			result[argsCount] = eval(tuple);
+			assert(result[argsCount]->isResolved());
+			expressionCount = argsCount;
 
-				determinedFunction = true;
-				determinedArguments.resize(argsCount+1,nullptr);
-				determinedArguments[argsCount] = result[argsCount]->_returnType();
-			}
-			else{
-				//*Expression
-				argsCount--;
-				auto tuple = new TupleExpression();
-				for(auto i = argsCount;i<expressionCount;i++)
-					tuple->children.push_back(exprBegin[i]);
-				result[argsCount] = new ValueExpression(eval(tuple),intrinsics::ast::ExprPtr);
-				expressionCount = argsCount;
-			}
+			determinedFunction = true;
+			determinedArguments.resize(argsCount+1,nullptr);
+			determinedArguments[argsCount] = result[argsCount]->_returnType();
 		}
 		else assert(false);
 	}
@@ -776,9 +765,6 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 				determinedArguments.resize(argsCount,nullptr);
 			}
 			determinedArguments[currentArg] = result[currentArg]->_returnType();
-		}
-		else if(func->isFlagSet(Function::MACRO_FUNCTION) && func->arguments[currentArg]->type.type()->isSame(intrinsics::ast::ExprPtr)){
-			result[currentArg] = exprBegin[currentExpr]->asValueExpression() ? exprBegin[currentExpr] : new ValueExpression(exprBegin[currentExpr],intrinsics::ast::ExprPtr);
 		}
 		else {
 			auto ret = exprBegin[currentExpr]->_returnType();
@@ -868,6 +854,13 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			forcedToEvaluate = oldForcedToEvaluate;		
 			*function = f;
 		}	
+	}
+
+	//Wrap all parameters in [> <] for macro functions
+	if(func->isFlagSet(Function::MACRO_FUNCTION)){
+		for(auto i = result.begin();i!=result.end();i++){
+			*i = (*i)->asValueExpression() ? *i : new ValueExpression(*i,intrinsics::ast::ExprPtr);
+		}
 	}
 
 	//Construct a proper argument

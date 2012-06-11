@@ -432,7 +432,6 @@ struct InfixMacro2: InfixDefinition{
 	}
 };
 
-//Todo function macroes
 struct Macro2Parser: PrefixDefinition {
 	Macro2Parser(): PrefixDefinition("macro",Location()) {  }
 	Node* parse(Parser* parser){
@@ -472,6 +471,9 @@ struct Macro2Parser: PrefixDefinition {
 				parseFunctionParameters(parser,func);
 				parser->currentScope(oldScope);
 				oldScope->defineFunction(func);
+				for(auto i = func->arguments.begin();i!=func->arguments.end();i++){
+					(*i)->hideType(intrinsics::ast::ExprPtr);
+				}
 			}
 			else parser->currentScope()->define(new PrefixMacro2(func));
 		}else parser->currentScope()->define(new InfixMacro2(func,precedence));

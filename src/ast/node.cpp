@@ -102,7 +102,7 @@ bool VariableReference::isLocal() const {
 	return variable->isLocal();
 }
 TypeExpression* VariableReference::_returnType() const {
-	return variable->type.type();
+	return !variable->isFlagSet(Variable::HIDDEN_TYPE) ? variable->type.type() : variable->hiddenType();
 }
 Node* VariableReference::duplicate(DuplicationModifiers* mods) const {
 	if(mods->expandedMacroOptimization){

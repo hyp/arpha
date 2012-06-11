@@ -124,11 +124,23 @@ Argument* Variable::asArgument(){ return nullptr; }
 
 Argument* Argument::asArgument(){ return this; }
 
-Argument::Argument(SymbolID name,Location& location,Scope* owner) : Variable(name,location,owner),	_defaultValue(nullptr),_dependent(false),_constraint(nullptr) {
+TypeExpression* Variable::hiddenType() const { return nullptr; }
+
+void Argument::hideType(TypeExpression* givenType){
+	setFlag(HIDDEN_TYPE);
+	setFlag(IS_RESOLVED);
+	_hiddenType = givenType;
+}
+
+TypeExpression* Argument::hiddenType() const {
+	return _hiddenType;
+}
+
+Argument::Argument(SymbolID name,Location& location,Scope* owner) : Variable(name,location,owner),	_defaultValue(nullptr),_dependent(false),_hiddenType(nullptr) {
 }
 bool Argument::expandAtCompileTime() {
 	assert(isResolved());
-	return type.type()->isSame(intrinsics::types::Type);
+	return isFlagSet(HIDDEN_TYPE) ? false : type.type()->isSame(intrinsics::types::Type);
 }
 PrefixDefinition* Argument::duplicate(DuplicationModifiers* mods){
 	return nullptr; //Arguments are duplicates inside function duplicate
@@ -144,6 +156,7 @@ Argument* Argument::reallyDuplicate(DuplicationModifiers* mods,TypeExpression* n
 	dup->isMutable = isMutable;
 	dup->registerID = registerID;
 	dup->_defaultValue = _defaultValue ? _defaultValue->duplicate() : nullptr;
+	dup->_hiddenType = _hiddenType;
 	mods->redirectors[reinterpret_cast<void*>(static_cast<Variable*>(this))] = std::make_pair(reinterpret_cast<void*>(static_cast<Variable*>(dup)),false);
 	copyProperties(dup);
 	return dup;
@@ -237,7 +250,7 @@ Record::Record(SymbolID name,Location& location,Scope* owner) : TypeBase(name,lo
 	_size = 0;
 	headRecord = nullptr;
 	_resolved = false;
-	if(owner && owner->functionOwner()->isFlagSet(Function::TYPE_GENERATOR_FUNCTION)){
+	if(owner && owner->functionOwner() && owner->functionOwner()->isFlagSet(Function::TYPE_GENERATOR_FUNCTION)){
 		debug("Record %s is generated ",name);
 		setFlag(GENERATED);
 	}
@@ -661,12 +674,7 @@ bool Function::resolve(Evaluator* evaluator){
 	_hasExpandableArguments = false;
 	for(auto i = arguments.begin();i!=arguments.end();++i){
 		if((*i)->type.isPattern()){
-			if(isFlagSet(MACRO_FUNCTION)){
-				(*i)->type.kind = TypePatternUnresolvedExpression::Type;
-				(*i)->type._type = intrinsics::ast::ExprPtr;
-				(*i)->resolve(evaluator);
-			}
-			else _hasGenericArguments = true;
+			if(!isFlagSet(MACRO_FUNCTION)) _hasGenericArguments = true;
 		}
 		else if(!(*i)->isResolved() || evaluator->forcedToEvaluate){
 			if( !(*i)->type.resolve(evaluator,&allArgMatcher) ){

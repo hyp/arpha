@@ -18,6 +18,11 @@ struct Evaluator;
 struct Argument;
 
 struct Variable : PrefixDefinition  {
+	enum {
+		//The type that the variable returns isn't equal to the type that the variable was defined with 
+		// e.g. macro foo(x) = x  , x will be _ pattern on declaration, but really it is a *ast.Expression
+		HIDDEN_TYPE = 0x2 ,
+	};
 	Variable(SymbolID name,Location& location,Scope* owner);
 
 	Node* parse(Parser* parser);
@@ -38,6 +43,7 @@ struct Variable : PrefixDefinition  {
 	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 
 	virtual Argument* asArgument();
+	virtual TypeExpression* hiddenType() const; //query the flag before using!
 
 	TypePatternUnresolvedExpression type;
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
@@ -51,6 +57,8 @@ struct Argument : Variable {
 	Argument(SymbolID name,Location& location,Scope* owner);
 
 	Argument* asArgument();	
+	void hideType(TypeExpression* givenType);
+	TypeExpression* hiddenType() const;
 
 	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 
@@ -63,8 +71,9 @@ struct Argument : Variable {
 	bool isDependent() const;
 	
 	bool _dependent;
-	Function* _constraint;//For wildcard eyes only!
+	
 private:
+	TypeExpression* _hiddenType;
 	Node* _defaultValue;
 };
 
