@@ -10,7 +10,7 @@ struct BlockExpression;
 struct CallExpression;
 struct Type;
 struct TypeExpression;
-struct Evaluator;
+struct Resolver;
 
 #include "../base/bigint.h"
 #include "node.h"
@@ -31,7 +31,7 @@ struct Variable : PrefixDefinition  {
 	void setImmutableValue(Node* value);
 
 	bool isResolved();
-	bool resolve(Evaluator* evaluator);
+	bool resolve(Resolver* evaluator);
 	//Use at variable's definition when a type is specified
 	void specifyType(TypeExpression* givenType);
 	//Matches a type to a patterned type and resolves the patterned type. Returns an error if match fails.
@@ -104,7 +104,7 @@ struct IntrinsicType : public TypeBase {
 
 //An integral type
 struct IntegerType: public TypeBase {
-	IntegerType(SymbolID name,Location& location);
+	
 
 	size_t size() const;
 	bool isValid(BigInt& value) const;
@@ -112,11 +112,15 @@ struct IntegerType: public TypeBase {
 
 	bool isSubset(IntegerType* other) const;
 
+	static IntegerType* make(BigInt& min,BigInt& max);
+
 	Node* parse(Parser* parser);
 	BigInt max,min;
-private:
-	
 	size_t _size;
+private:
+	IntegerType(SymbolID name,Location& location);
+	static std::vector<IntegerType* > expansions;
+	
 };
 
 //A record type
@@ -161,9 +165,11 @@ public:
 	
 	//Try to resolve the record.
 	//NB Not used by anonymous records!
-	bool resolve(Evaluator* evaluator);
+	bool resolve(Resolver* evaluator);
 
 	PrefixDefinition* duplicate(DuplicationModifiers* mods);
+
+	void generateDestructorBody(Node* self,BlockExpression* dest) const;
 
 	
 	//Unique anonymous record construction
@@ -180,7 +186,7 @@ private:
 	
 	//Calculates sizeof etc.
 	void calculateResolvedProperties();
-	bool resolveCircularReferences(Evaluator* evaluator);
+	bool resolveCircularReferences(Resolver* evaluator);
 };
 
 std::ostream& operator<< (std::ostream& stream,Record* type);
@@ -196,7 +202,7 @@ struct Overloadset: public PrefixDefinition {
 
 
 	bool isResolved();
-	bool resolve(Evaluator* evaluator);
+	bool resolve(Resolver* evaluator);
 	PrefixDefinition* duplicate(DuplicationModifiers* mods);
 	PrefixDefinition* mergedDuplicate(DuplicationModifiers* mods,Overloadset* dest);
 	void push_back(Function* function);
@@ -237,7 +243,7 @@ struct Function: public PrefixDefinition {
 
 	bool isResolved();
 	bool isPartiallyResolved();//It's when arguments and return type are resolved! The function's body doesn't have to be resolved yet.
-	bool resolve(Evaluator* evaluator);
+	bool resolve(Resolver* evaluator);
 	bool canExpandAtCompileTime();//i.e. f(T Type)
 	bool canAcceptLocalParameter(size_t argument); 
 

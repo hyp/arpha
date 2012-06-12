@@ -235,6 +235,11 @@ struct Analyzer : NodeVisitor {
 		for(auto i = node->children.begin();i!=node->children.end();i++) (*i)->accept(this);
 		return node;
 	}
+	Node* visit(CastExpression* node){
+		markAsNotInterpretable(node);
+		addInliningWeight(2);
+		return node;
+	}
 
 #undef error
 #define error(loc,...) compiler::onError(loc,format(__VA_ARGS__))

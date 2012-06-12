@@ -162,7 +162,7 @@ Function* Scope::resolve(const char* name,Type* argumentType){
 	//return resolveFunction(name,&argument);
 	return nullptr;
 }
-Function* Scope::resolveFunction(Evaluator* evaluator,SymbolID name,Node* argument){
+Function* Scope::resolveFunction(Resolver* evaluator,SymbolID name,Node* argument){
 	std::vector<Function*> results;
 	//step 1 - check current scope for matching function
 	if(auto hasDef = containsPrefix(name)){
@@ -215,7 +215,7 @@ bool Scope::isResolved(){
 	return _resolved;
 }
 
-bool Scope::resolve(Evaluator* evaluator){
+bool Scope::resolve(Resolver* evaluator){
 	_resolved = true;
 	for(auto i = prefixDefinitions.begin();i!=prefixDefinitions.end();i++){
 		if((!dynamic_cast<Argument*>((*i).second)) && ( !(*i).second->isResolved() || evaluator->forcedToEvaluate) ){

@@ -6,7 +6,7 @@
 #include "node.h"
 #include "declarations.h"
 #include "visitor.h"
-#include "evaluate.h"
+#include "resolve.h"
 #include "interpret.h"
 #include "../intrinsics/ast.h"
 #include "../intrinsics/types.h"

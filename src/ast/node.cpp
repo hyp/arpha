@@ -9,6 +9,8 @@
 #include "../intrinsics/ast.h"
 #include "../intrinsics/types.h"
 
+
+
 TypeExpression* Node::_returnType() const {
 	return intrinsics::types::Void;
 }
@@ -41,7 +43,7 @@ Node* IntegerLiteral::duplicate(DuplicationModifiers* mods) const {
 	auto dup = new IntegerLiteral(integer);
 	dup->_type = _type;
 	return copyProperties(dup);
-};
+}
 
 BoolExpression::BoolExpression(const bool v) : value(v) {}
 TypeExpression* BoolExpression::_returnType() const {
@@ -67,6 +69,21 @@ Node* StringLiteral::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new StringLiteral(block.duplicate()));
 }
 
+Node* NodeList::duplicateChildren(NodeList* dest,DuplicationModifiers* mods) const {
+	for(auto i = begin();i!=end();i++)
+		dest->addChild((*i)->duplicate(mods));
+	return dest;
+}
+
+
+ArrayLiteral::ArrayLiteral(){}
+TypeExpression* ArrayLiteral::_returnType() const {
+	return intrinsics::types::int32;//TODO
+}
+Node* ArrayLiteral::duplicate(DuplicationModifiers* mods) const {
+	auto dup = new ArrayLiteral;
+	return copyProperties(duplicateChildren(dup,mods));
+}
 
 
 // Unit expression
@@ -351,6 +368,22 @@ bool BlockExpression::isResolved() const {
 	return _resolved;
 }
 
+CastExpression::CastExpression(Node* object,TypeExpression* type) : _resolved(false) {
+	this->object = object;
+	this->type = type;
+}
+bool CastExpression::isResolved() const {
+	return _resolved;
+}
+Node* CastExpression::duplicate(DuplicationModifiers* mods) const {
+	auto dup = new CastExpression(object->duplicate(mods),type->duplicate(mods)->asTypeExpression());
+	dup->_resolved = _resolved;
+	return copyProperties(dup);
+}
+TypeExpression* CastExpression::_returnType() const {
+	return type;
+}
+
 //Injects visitor callback and dynamic cast function into a node structure
 //Note: only does the definitions, the appropriate implementations are done by traversing NODE_LIST
 #define DECLARE_NODE_IMPLEMENTATION(T) \
@@ -463,6 +496,27 @@ bool satisfiesConstraint(Node* arg,Function* constraint){
 }
 bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* pattern){
 	TypeExpression* type = object->asTypeExpression();
+	//_ | T
+	if(auto unresolved = pattern->asUnresolvedSymbol()){
+		auto symbol = unresolved->symbol;
+		if(symbol == "_"){
+			if(!unresolved->label().isNull()) introduceDefinition(unresolved->label(),unresolved->location,object);
+			return true; //|_ | T:_
+		}
+		//T
+		if(auto def = lookupDefinition(symbol)){
+			if(auto vt = def->value->asTypeExpression())
+				return type && type->isSame(vt);
+			else return false;
+		}
+	} else if(auto var = pattern->asVariableReference()){ //shadowed T
+		if(auto def = lookupDefinition(var->variable->id)){
+			if(auto vt = def->value->asTypeExpression())
+					return type && type->isSame(vt);
+				else return false;
+		}
+	}
+
 	//Match(non-type) TODO
 	if(!type){
 		//match non type
@@ -471,19 +525,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 	}
 	//Match(type)
 	if(auto type2 = pattern->asTypeExpression()) return type->isSame(type2); //| int32
-	else if(auto unresolved = pattern->asUnresolvedSymbol()){
-		auto symbol = unresolved->symbol;
-		if(symbol == "_"){
-			if(!unresolved->label().isNull()) introduceDefinition(unresolved->label(),unresolved->location,type);
-			return true; //|_ | T:_
-		}
-		//T
-		if(auto def = lookupDefinition(symbol)){
-			if(auto vt = def->value->asTypeExpression())
-				return type->isSame(vt);
-			else return false;
-		}
-	} else if(auto ref = pattern->asFunctionReference()){
+	else if(auto ref = pattern->asFunctionReference()){
 		//Constraint (We can safely assume this is a constraint if check passed)
 		if(satisfiesConstraint(type,ref->function)){
 			if(!ref->label().isNull()) introduceDefinition(ref->label(),ref->location,type);
@@ -515,13 +557,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 			}
 			else return match(type->generatedArgument(0),call->arg);
 		}
-	} else if(auto var = pattern->asVariableReference()){
-		if(auto def = lookupDefinition(var->variable->id)){
-			if(auto vt = def->value->asTypeExpression())
-					return type->isSame(vt);
-				else return false;
-		}
-	}
+	} 
 	return false;
 }
 void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinitions(){
@@ -559,6 +595,10 @@ TypeExpression::TypeExpression(int kind,TypeExpression* next) : type(POINTER),_l
 TypeExpression::TypeExpression(TypeExpression* argument,TypeExpression* returns) : type(FUNCTION),_localSemantics(false) {
 	this->argument = argument;
 	this->returns = returns;
+}
+TypeExpression::TypeExpression(TypeExpression* T,size_t N) : type(STATIC_ARRAY),_localSemantics(false) {
+	argument = T;
+	this->N  = N;
 }
 bool TypeExpression::isValidTypeForVariable(){
 	return true;
@@ -610,6 +650,10 @@ Node* TypeExpression::duplicate(DuplicationModifiers* mods) const {
 			x = new TypeExpression(argument->duplicate(mods)->asTypeExpression(),returns->duplicate(mods)->asTypeExpression());
 			x->_localSemantics = _localSemantics;
 			return copyProperties(x);
+		case STATIC_ARRAY:
+			x = new TypeExpression(argument->duplicate(mods)->asTypeExpression(),N);
+			x->_localSemantics = _localSemantics;
+			return copyProperties(x);
 		default:
 			throw std::runtime_error("TypeExpression type invariant failed");
 			return nullptr;
@@ -626,6 +670,7 @@ size_t TypeExpression::size() const {
 		case INTRINSIC: return intrinsic->size();
 		case POINTER: return compiler::pointerSize;
 		case FUNCTION: return compiler::pointerSize;
+		case STATIC_ARRAY: return argument->size() * N;
 		default:
 			throw std::runtime_error("TypeExpression type invariant failed");
 	}
@@ -640,6 +685,7 @@ bool TypeExpression::isSame(TypeExpression* other){
 		case POINTER: return argument->isSame(other->argument);
 		case INTRINSIC: return intrinsic == other->intrinsic;
 		case FUNCTION: return argument->isSame(other->argument) && returns->isSame(other->returns);
+		case STATIC_ARRAY: return argument->isSame(other->argument) && N == other->N;
 		default:
 			throw std::runtime_error("TypeExpression type invariant failed");	
 			return false;
@@ -650,6 +696,7 @@ bool TypeExpression::wasGenerated() const {
 	case POINTER: return true;
 	case FUNCTION: return true;
 	case RECORD: return record->isFlagSet(Record::GENERATED);
+	case STATIC_ARRAY: return true;
 	default: return false;
 	}
 }
@@ -658,6 +705,7 @@ bool TypeExpression::wasGeneratedBy(Function* function) const {
 	case POINTER: return function == intrinsics::types::PointerTypeGenerator;
 	case FUNCTION: return function == intrinsics::types::FunctionTypeGenerator;
 	case RECORD: return record->wasGeneratedBy(function);
+	case STATIC_ARRAY: return function == intrinsics::types::StaticArrayTypeGenerator;
 	default:
 		return false;
 	}
@@ -667,6 +715,7 @@ Node* TypeExpression::generatedArgument(size_t i) const {
 	case POINTER: return argument;
 	case FUNCTION: return i == 0 ? argument : returns;
 	case RECORD: return record->generatedArgument(i);
+	case STATIC_ARRAY: return i == 0 ? argument : (Node*) new IntegerLiteral((uint64)N);
 	default:
 		throw std::runtime_error("TypeExpression generatedArgument failed");	
 		return nullptr;
@@ -774,7 +823,9 @@ std::ostream& operator<< (std::ostream& stream,TypeExpression* node){
 		case TypeExpression::POINTER: 
 			stream<<"Pointer("<<node->argument<<')'; break;
 		case TypeExpression::FUNCTION: 
-			stream<<"FuncType("<<node->argument<<"->"<<node->returns<<')'; break;
+			stream<<"Function("<<node->argument<<"->"<<node->returns<<')'; break;
+		case TypeExpression::STATIC_ARRAY:
+			stream<<"StaticArray("<<node->argument<<","<<node->N<<')'; break;
 	}
 	return stream;
 }
@@ -877,6 +928,15 @@ struct NodeToString: NodeVisitor {
 		stream<<(node->value?"true":"false");
 		return node;
 	}
+	Node* visit(ArrayLiteral* node){
+		stream<<'[';
+		for(auto i = node->begin();i!=node->end();i++){
+			stream<<*i;
+			if(i+1 != node->end()) stream<<" , ";
+		}
+		stream<<']';
+		return node;
+	}
 	Node* visit(ErrorExpression* node){
 		stream<<"error";
 		return node;
@@ -958,6 +1018,10 @@ struct NodeToString: NodeVisitor {
 	}
 	Node* visit(TypeExpression* node){
 		stream<<node;
+		return node;
+	}
+	Node* visit(CastExpression* node){
+		stream<<node->object<<" as "<<node->type;
 		return node;
 	}
 };

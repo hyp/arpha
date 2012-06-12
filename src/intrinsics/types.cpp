@@ -7,14 +7,13 @@
 #include "types.h"
 #include "ast.h"
 
-#define INTRINSIC_INTTYPE(x) x = new TypeExpression(ensure( dynamic_cast<IntegerType*>(moduleScope->lookupPrefix(#x)) ))
 
 namespace intrinsics {
 	namespace types {
 		TypeExpression *Void,*Type;
 		IntrinsicType  *StringLiteral;
 
-		Function* PointerTypeGenerator,*FunctionTypeGenerator,*RangeTypeGenerator;
+		Function* PointerTypeGenerator,*FunctionTypeGenerator,*RangeTypeGenerator,*StaticArrayTypeGenerator;
 
 		TypeExpression* boolean = nullptr;
 		TypeExpression* int8 = nullptr;
@@ -25,6 +24,7 @@ namespace intrinsics {
 		TypeExpression* uint16 = nullptr;
 		TypeExpression* uint32 = nullptr;
 		TypeExpression* uint64 = nullptr;
+		TypeExpression* natural;
 		
 		//Performs a comparison between 2 types
 		Node* equals(Node* parameters){
@@ -39,6 +39,30 @@ namespace intrinsics {
 			StringLiteral = new IntrinsicType("StringLiteral",Location());
 
 			boolean = new TypeExpression(TypeExpression::BOOL);
+
+			BigInt min;
+			BigInt max;
+#define DEF_INT_TYPE(n,t,s) \
+			min = std::numeric_limits<t>::min(); \
+			max = (::uint64)(std::numeric_limits<t>::max()); \
+			n = new TypeExpression(IntegerType::make(min,max)); \
+			n->integer->id = #n; n->integer->_size = s;
+
+			DEF_INT_TYPE(int8,signed char,1)
+			DEF_INT_TYPE(int16,signed short,2)
+			DEF_INT_TYPE(int32,signed int,4)
+			DEF_INT_TYPE(int64,::int64,8)
+
+			DEF_INT_TYPE(uint8,unsigned char,1)
+			DEF_INT_TYPE(uint16,unsigned short,2)
+			min = 0;
+			max = (::uint64)(std::numeric_limits<unsigned int>::max());
+			uint32 = new TypeExpression(IntegerType::make(min,max));
+			uint32->integer->id = "uint32";uint32->integer->_size = 4;
+			DEF_INT_TYPE(uint64,::uint64,8)
+
+			natural = uint32;
+
 		};
 
 		//Define some types before arpha/types is loaded so that we can use them in the module already.
@@ -56,23 +80,48 @@ namespace intrinsics {
 			moduleScope->define(new Substitute("bool",boolean));
 			moduleScope->define(new Substitute("true" ,new BoolExpression(true)));
 			moduleScope->define(new Substitute("false",new BoolExpression(false)));
+			//temporary
+			moduleScope->define(new Substitute("int8",int8));
+			moduleScope->define(new Substitute("int16",int16));
+			moduleScope->define(new Substitute("int32",int32));
+			moduleScope->define(new Substitute("int64",int64));
+
+			moduleScope->define(new Substitute("uint8",uint8));
+			moduleScope->define(new Substitute("uint16",uint16));
+			moduleScope->define(new Substitute("uint32",uint32));
+			moduleScope->define(new Substitute("uint64",uint64));
+
+			moduleScope->define(new Substitute("natural",natural));
 
 			struct TypeFunc {
 				TypeFunc(SymbolID name,Scope* moduleScope,Function** dest,Node* (*eval)(Node*),int args = 1){
 					Function* func = new Function(name,Location(),new Scope(moduleScope));
-					*dest = func;
+					if(dest) *dest = func;
 					func->body.scope->_functionOwner = func;
 					if(args == 1){
 						func->arguments.push_back(new Argument("type",Location(),func->body.scope));
 						func->arguments[0]->specifyType(Type);
 					}else{
-						func->arguments.push_back(new Argument("parameter",Location(),func->body.scope));
-						func->arguments[0]->specifyType(Type);
-						func->arguments.push_back(new Argument("return",Location(),func->body.scope));
-						func->arguments[1]->specifyType(Type);
+						if(name == SymbolID("Integer")){//TODO
+							func->arguments.push_back(new Argument("min",Location(),func->body.scope));
+							func->arguments[0]->specifyType(Type);
+							func->arguments.push_back(new Argument("max",Location(),func->body.scope));
+							func->arguments[1]->specifyType(Type);
+						} else if(name == "Array"){
+							func->arguments.push_back(new Argument("T",Location(),func->body.scope));
+							func->arguments[0]->specifyType(Type);
+							func->arguments.push_back(new Argument("N",Location(),func->body.scope));
+							func->arguments[1]->specifyType(natural);
+						}
+						else{
+							func->arguments.push_back(new Argument("parameter",Location(),func->body.scope));
+							func->arguments[0]->specifyType(Type);
+							func->arguments.push_back(new Argument("return",Location(),func->body.scope));
+							func->arguments[1]->specifyType(Type);
+						}
 					}
 					func->constInterpreter = eval;
-					func->setFlag(Function::TYPE_GENERATOR_FUNCTION);
+					func->setFlag(Function::TYPE_GENERATOR_FUNCTION | Function::PURE);
 					func->_returnType.specify(Type);
 					func->_resolved = func->_argsResolved = true;
 					moduleScope->defineFunction(func);
@@ -85,10 +134,16 @@ namespace intrinsics {
 					auto t = arg->asTupleExpression();
 					return new TypeExpression(t->children[0]->asTypeExpression(),t->children[1]->asTypeExpression());
 				}
+				static Node* StaticArray(Node* arg){
+					auto t = arg->asTupleExpression();
+					return new TypeExpression(t->children[0]->asTypeExpression(),(size_t)t->children[1]->asIntegerLiteral()->integer.u64);
+				}
+
 			};
 			TypeFunc("Pointer",moduleScope,&PointerTypeGenerator,&TypeFunc::Pointer);
 			TypeFunc("Range",moduleScope,&RangeTypeGenerator,&TypeFunc::Pointer);
 			TypeFunc("Function",moduleScope,&FunctionTypeGenerator,&TypeFunc::FunctionType,2);
+			TypeFunc("Array",moduleScope,&StaticArrayTypeGenerator,&TypeFunc::StaticArray,2);
 		}
 
 		//Perform additional typesystem bindings after arpha/types is loaded
@@ -97,14 +152,6 @@ namespace intrinsics {
 			f->constInterpreter = equals;
 			f->setFlag(Function::PURE);
 			
-			INTRINSIC_INTTYPE(int8);
-			INTRINSIC_INTTYPE(int16);
-			INTRINSIC_INTTYPE(int32);
-			INTRINSIC_INTTYPE(int64);
-			INTRINSIC_INTTYPE(uint8);
-			INTRINSIC_INTTYPE(uint16);
-			INTRINSIC_INTTYPE(uint32);
-			INTRINSIC_INTTYPE(uint64);
 		};
 	}
 }

@@ -11,7 +11,7 @@ struct Scope;
 #include "syntax/location.h"
 
 struct Parser;
-struct Evaluator;
+struct Resolver;
 struct Interpreter;
 struct Function;
 
@@ -48,7 +48,7 @@ namespace compiler {
 	//This structure contains the state of the module which is currently being compiled
 	struct Unit {
 		Parser* parser;
-		Evaluator* evaluator;
+		Resolver* evaluator;
 		Interpreter* interpreter;
 
 		//Current settings

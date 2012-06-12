@@ -86,11 +86,13 @@ macro for {
 }
 
 
-#TODO
+#Array literal
 macro [ {
-	var expr = parser.parse()
+	loop {
+		parser.parse(precedence.tuple)
+	} while(parser.match(","))
 	parser.expect("]")
-	return [> $expr <]
+	return [> 1 <]
 }
 
 macro & {
@@ -103,7 +105,7 @@ macro * {
 	return [> derefOrPtrType($expr) <]
 }
 macro derefOrPtrType(T Type) = [> Pointer($T) <]
-macro derefOrPtrType(expr)   = ast.newPointerOp(expr,dereference:true) 
+macro derefOrPtrType(expr Pointer(_))   = ast.newPointerOp(expr,dereference:true) 
 
 macro [] {
 	var expr = parser.parse(precedence.unary)

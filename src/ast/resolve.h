@@ -10,7 +10,7 @@ struct Scope;
 
 struct Interpreter;
 
-struct Evaluator {
+struct Resolver {
 private:
 	Interpreter* _interpreter;
 	Scope* _currentScope;
@@ -28,9 +28,9 @@ public:
 
 	size_t unresolvedExpressions;
 
-	Evaluator(Interpreter* interpreter);
+	Resolver(Interpreter* interpreter);
 
-	Node* eval(Node* node);
+	Node* resolve(Node* node);
 	// Resolves expressions and definitions in a module using multiple passes
 	void evaluateModule(BlockExpression* module);
 	

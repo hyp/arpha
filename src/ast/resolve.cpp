@@ -5,7 +5,7 @@
 #include "node.h"
 #include "declarations.h"
 #include "visitor.h"
-#include "evaluate.h"
+#include "resolve.h"
 #include "interpret.h"
 #include "analyze.h"
 #include "../intrinsics/ast.h"
@@ -25,14 +25,38 @@ Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
 	}
 }
 
-Evaluator::Evaluator(Interpreter* interpreter) : _interpreter(interpreter),dontEvaluate(false),forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {
+Resolver::Resolver(Interpreter* interpreter) : _interpreter(interpreter),dontEvaluate(false),forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {
 }
 
+//new kind of resolving
+/*
+Node* CastExpression::resolve(Resolver* resolver){
+	object = resolver->resolve(object);
+	if(object->isResolved()){
+		_resolved = true;
+		auto returns = object->_returnType();
+		if(returns->isSame(type)) return object;
+	}
+	return this;
+}
+//Resolves children and returns true if all are resolved!
+static bool resolveChildren(NodeList* node,Resolver* resolver){
+	bool allResolved = true;
+	for(auto i = node->begin();i!=node->end();i++){
+		*i = resolver->resolve(*i);
+		if(!(*i)->isResolved()) allResolved = false;
+	}
+	return allResolved;
+}
 
+Node* ArrayLiteral::resolve(Resolver* resolver){
+	resolveChildren(this,resolver);
+	return this;
+}*/
 
 struct AstExpander: NodeVisitor {
-	Evaluator* evaluator;
-	AstExpander(Evaluator* ev) : evaluator(ev) {}
+	Resolver* evaluator;
+	AstExpander(Resolver* ev) : evaluator(ev) {}
 
 	//on a.foo(...)
 	static Node* transformCallOnAccess(CallExpression* node,AccessExpression* acessingObject){
@@ -45,7 +69,7 @@ struct AstExpander: NodeVisitor {
 		else{
 			if(auto isArgRecord = node->arg->asTupleExpression())
 				isArgRecord->children.insert(isArgRecord->children.begin(),acessingObject->object);
-			else
+			else 
 				node->arg = new TupleExpression(acessingObject->object,node->arg);
 		}
 		auto newCalleeObject = new UnresolvedSymbol(node->location,acessingObject->symbol);
@@ -65,14 +89,15 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
+
+	Node* visit(ArrayLiteral* node){
+		return node;
+	}
+
 	//TODO import qualified foo; var x foo.Foo ; foo.method() <-- FIX
 	Node* visit(CallExpression* node){
 		//evaluate argument
 		node->arg = node->arg->accept(this);
-		
-		if(auto callingType = node->object->asTypeExpression()){
-			return evalTypeCall(node,callingType);
-		}
 
 		if(!node->arg->isResolved()) return node;
 		if(auto callingOverloadSet = node->object->asUnresolvedSymbol()){
@@ -118,8 +143,13 @@ struct AstExpander: NodeVisitor {
 		else if(auto callingAccess = node->object->asAccessExpression()){
 			return transformCallOnAccess(node,callingAccess)->accept(this);
 		}
+		else if(auto type = node->object->asTypeExpression()){
+		}
+		else if(node->object->asVariableReference() && node->object->_returnType()->type == TypeExpression::FUNCTION){
+			return node; //Calling a function pointer
+		}
 		else
-			error(node->object->location,"Can't perform a call on %s!",node->object);
+			error(node->object->location,"Invalid function call expression - %s(%s)!",node->object,node->arg);
 		return node;
 	}
 
@@ -147,17 +177,18 @@ struct AstExpander: NodeVisitor {
 	}
 
 
+
 	Node* fieldAccessFromAccess(AccessExpression* node){
 		auto returns = node->object->_returnType();
 		if(returns->type == TypeExpression::POINTER) returns = returns->argument;
-		assert(returns->type == TypeExpression::RECORD);
-		auto field = returns->record->lookupField(node->symbol);
-		if(field != -1){
-			auto expr = new FieldAccessExpression(node->object,field);
-			delete node;
-			return expr;
+		if(returns->type == TypeExpression::RECORD){
+			auto field = returns->record->lookupField(node->symbol);
+			if(field != -1){
+				auto expr = new FieldAccessExpression(node->object,field);
+				return expr;
+			}
 		}
-		else return nullptr;
+		return nullptr;
 	}
 
 	//TODO def x = 1;x = 1 => 1=1 on not first use?
@@ -231,7 +262,18 @@ struct AstExpander: NodeVisitor {
 				else return nullptr; //Trying to assign to a variable with unresolved type.. that's a no no!
 			}
 			else if(auto access = object->asAccessExpression()){
+				if (auto fa = fieldAccessFromAccess(access)){
+					if(auto canBeAssigned = fa->_returnType()->assignableFrom(value,valuesType)){
+						return value;
+					} else {
+						error(value->location,"Can't assign %s to %s - the types don't match!",value,fa);
+						*error = true;
+						return nullptr;
+					}
+				}
+				//a.foo = 2 -> foo(a,2)
 				//TODO
+				return (new CallExpression(new UnresolvedSymbol(access->location,access->symbol),new TupleExpression(access->object,value)))->accept(this);
 			}
 			else{
 				error(object->location,"Can't perform an assignment to %s - only variables and fields are assignable!",object);
@@ -240,6 +282,7 @@ struct AstExpander: NodeVisitor {
 			return nullptr;
 		}		
 	}
+
 	Node* visit(AssignmentExpression* node){
 		if(node->_resolved && !evaluator->forcedToEvaluate) return node;//Don't evaluate it again
 
@@ -266,42 +309,6 @@ struct AstExpander: NodeVisitor {
 			return ErrorExpression::getInstance();
 		}
 		else return node;
-		
-		/*auto valueReturns = node->value->_returnType();
-		if(node->value->returnType() != compiler::Unresolved){
-			//Assigning to variables
-			if(auto var = node->object->asVariableReference()){
-				if(var->variable->_type == nullptr){ //inferred
-					var->variable->_type = node->value->_returnType();
-				}
-				else if(var->variable->_type->resolved()){
-					auto varType = var->variable->_type;
-					//if constant, assign only at place of declaration
-					if(varType->type == TypeExpression::CONSTANT){
-						if(var->isDefinedHere) varType = varType->next;//remove const
-						else {
-							error(node->location,"Can't assign to %s - constant variables can only be assigned at declaration!",node->value,node->object);
-							return ErrorExpression::getInstance();
-						}
-					}
-					if(auto canBeAssigned = varType->assignableFrom(node->value,valueReturns)) node->value = canBeAssigned;
-					else {
-						error(node->location,"Can't assign to %s - the types don't match!",node->value,node->object);
-						delete node;
-						return ErrorExpression::getInstance();
-					}
-				}
-			}
-			//Assigning to fields | properties
-			else if(auto access = node->object->asAccessExpression()){
-				//TODO a.foo = .. when foo is field
-				//a.foo = 2 -> foo(a,2)
-				auto args = new TupleExpression(access->object,node->value);
-				return CallExpression::create(OverloadSetExpression::create(access->symbol,access->scope),args)->accept(this);
-			}
-			else error(node->location,"Can't assign to %s!",node->object);
-		}
-		return node;*/
 	}
 
 
@@ -429,6 +436,17 @@ struct AstExpander: NodeVisitor {
 		return node;
 	}
 
+	Node* visit(CastExpression* node){
+		node->object = node->object->accept(this);
+		if(node->object->isResolved()){
+			node->_resolved = true;
+			auto returns = node->object->_returnType();
+			if(returns->isSame(node->type)) return node->object;
+
+		}
+		return node;
+	}
+
 	/**
 	* Resolving temporary nodes
 	*/
@@ -458,6 +476,10 @@ struct AstExpander: NodeVisitor {
 		evaluator->markUnresolved(node);
 		return node;
 	}
+
+
+
+
 
 	Node* visit(AccessExpression* node){
 		node->object = node->object->accept(this);
@@ -497,19 +519,20 @@ struct AstExpander: NodeVisitor {
 			}
 			else error(node->location,"Can only resolve type matches yet!");
 		}
+		evaluator->markUnresolved(node);
 		return node;
 	}
 
 };
 
-void Evaluator::markUnresolved(Node* node){
+void Resolver::markUnresolved(Node* node){
 	unresolvedExpressions++;
 	if(reportUnevaluated){
 		compiler::subError(node->location,format("Can't resoved expression %s",node));
 	}
 }
 
-void Evaluator::markUnresolved(PrefixDefinition* node){
+void Resolver::markUnresolved(PrefixDefinition* node){
 	unresolvedExpressions++;
 	if(reportUnevaluated){
 		//TODO more progressive error message
@@ -517,11 +540,11 @@ void Evaluator::markUnresolved(PrefixDefinition* node){
 	}
 } 
 
-bool TypePatternUnresolvedExpression::resolve(Evaluator* evaluator,PatternMatcher* patternMatcher){
+bool TypePatternUnresolvedExpression::resolve(Resolver* evaluator,PatternMatcher* patternMatcher){
 	assert(kind == Unresolved);
 	auto oldSetting = evaluator->expectedTypeForEvaluatedExpression;
 	evaluator->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
-	unresolvedExpression = evaluator->eval(unresolvedExpression);
+	unresolvedExpression = evaluator->resolve(unresolvedExpression);
 	evaluator->expectedTypeForEvaluatedExpression = oldSetting;
 	
 	
@@ -554,21 +577,21 @@ bool TypePatternUnresolvedExpression::resolve(Evaluator* evaluator,PatternMatche
 	return false;
 }
 
-Node* Evaluator::eval(Node* node){
+Node* Resolver::resolve(Node* node){
 	AstExpander expander(this);
 	if(dontEvaluate) return node;
 	return node->accept(&expander);
 }
 
 //TODO ignore unresolved functions which cant be resolved
-void Evaluator::evaluateModule(BlockExpression* module){
+void Resolver::evaluateModule(BlockExpression* module){
 	
 	size_t prevUnresolvedExpressions;
 	int pass = 1;
 	do{
 		prevUnresolvedExpressions = unresolvedExpressions;
 		unresolvedExpressions = 0;
-		eval(module);
+		resolve(module);
 		debug("After extra pass %d(%d,%d) the module is %s",pass,prevUnresolvedExpressions,unresolvedExpressions,module);
 		pass++;
 	}
@@ -579,7 +602,7 @@ void Evaluator::evaluateModule(BlockExpression* module){
 		reportUnevaluated = true;
 		auto reportLevel = compiler::reportLevel;
 		compiler::reportLevel = compiler::Silent;
-		eval(module);
+		resolve(module);
 		compiler::reportLevel = reportLevel;
 	}
 	analyze(module,nullptr);
@@ -604,7 +627,7 @@ void Evaluator::evaluateModule(BlockExpression* module){
 *	}
 *	r04903
 */
-Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool inlined){
+Node* Resolver::mixinFunction(Location &location,Function* func,Node* arg,bool inlined){
 	Node* result;
 	if(!func->body.children.size()){
 		error(location,"Can't mixin a function %s without body!",func->id);
@@ -630,7 +653,7 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	if(func->body.scope->numberOfDefinitions() <= func->arguments.size() && func->body.children.size() == 1){
 		if(auto ret = func->body.children[0]->asReturnExpression()){
 			debug("SimpleForm");
-			auto result = eval(ret->value->duplicate(&mods));
+			auto result = resolve(ret->value->duplicate(&mods));
 			forcedToEvaluate = oldForcedToEvaluate;
 			return result;
 		}
@@ -652,17 +675,17 @@ Node* Evaluator::mixinFunction(Location &location,Function* func,Node* arg,bool 
 	debug("M0: %s",&func->body);
 	func->body._duplicate(block,&mods);
 	debug("M1: %s",block);
-	mixinedExpression = eval(block);
+	mixinedExpression = resolve(block);
 	debug("M2: %s",mixinedExpression);
-	result = eval(result);
+	result = resolve(result);
 	forcedToEvaluate = oldForcedToEvaluate;
 	return result;
 }
-Node* Evaluator::mixinFunctionCall(CallExpression* node,bool inlined){
+Node* Resolver::mixinFunctionCall(CallExpression* node,bool inlined){
 	assert(node->isResolved());
 	return mixinFunction(node->location,node->object->asFunctionReference()->function,node->arg,inlined);
 }
-Node* Evaluator::mixin(DuplicationModifiers* mods,Node* node){
+Node* Resolver::mixin(DuplicationModifiers* mods,Node* node){
 	auto oldForcedToEvaluate = forcedToEvaluate;
 	forcedToEvaluate = true;
 	mods->target = currentScope();
@@ -693,7 +716,7 @@ bool Function::canAcceptLocalParameter(size_t argument){
 	return true;//TODO
 }
 //TODO function duplication with certain wildcard params - which scope to put in generated functions?
-Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dependentChecker,int* weight){
+Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool dependentChecker,int* weight){
 	Function* func = *function;
 	std::vector<Node*> result;
 	result.resize(func->arguments.size(),nullptr);
@@ -728,7 +751,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 			auto tuple = new TupleExpression();
 			for(auto i = argsCount;i<expressionCount;i++)
 				tuple->children.push_back(exprBegin[i]);
-			result[argsCount] = eval(tuple);
+			result[argsCount] = resolve(tuple);
 			assert(result[argsCount]->isResolved());
 			expressionCount = argsCount;
 
@@ -901,7 +924,7 @@ Node* Evaluator::constructFittingArgument(Function** function,Node *arg,bool dep
 *	f(1,2) matches f(x)
 *	f(1,2,3) matches f(x,y)
 */
-bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
+bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 	//Weights
 	enum {
 		WILDCARD = 1,
@@ -1025,7 +1048,7 @@ bool match(Evaluator* evaluator,Function* func,Node* arg,int& weight){
 	return result; 
 }
 
-void Evaluator::findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic){
+void Resolver::findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic){
 	int weight = 0;
 	int maxweight = -1;
 	for(auto i=overloads.begin();i!=overloads.end();++i){

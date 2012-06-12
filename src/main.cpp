@@ -404,7 +404,7 @@ struct PrefixMacro2: PrefixDefinition {
 
 
 	bool isResolved(){ return function->isResolved(); }
-	bool resolve(Evaluator* evaluator){ return function->resolve(evaluator); }
+	bool resolve(Resolver* evaluator){ return function->resolve(evaluator); }
 };
 
 struct InfixMacro2: InfixDefinition{
@@ -566,17 +566,7 @@ struct TypeParser: PrefixDefinition {
 		auto name = parser->expectName();
 		Function* typeGenerationFunction = nullptr;
 
-		if(parser->match("integer")){
-			debug("defined integer type");
-			auto type = new IntegerType(name,location);
-			parser->currentScope()->define(type);
-			return new TypeExpression(type);
-		}else if(parser->match("intrinsic")){
-			debug("Defined intrinsic type %s",name);
-			auto type = new IntrinsicType(name,location);
-			parser->currentScope()->define(type);
-			return new TypeExpression(type);
-		} else if(parser->match("(")){
+		if(parser->match("(")){
 			typeGenerationFunction = new Function(name,location,new Scope(parser->currentScope()));
 			typeGenerationFunction->body.scope->_functionOwner = typeGenerationFunction;
 			parser->currentScope(typeGenerationFunction->body.scope);
@@ -715,7 +705,7 @@ Node* _sizeof(Node* parameter){
 	if(auto t = arg->asTypeExpression()) size = t->size();
 	else size = arg->_returnType()->size();
 	auto e = new IntegerLiteral(BigInt((uint64) size));
-	e->_type = intrinsics::types::uint32->integer;//TODO natural
+	e->_type = intrinsics::types::natural->integer;
 	return e;
 }
 
@@ -860,7 +850,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 	Function* func = new Function("typeof",location,new Scope(scope));
 	func->body.scope->_functionOwner = func;
 	func->arguments.push_back(new Argument("expression",location,func->body.scope));
-	func->arguments[0]->specifyType(intrinsics::ast::ExprPtr);
+	func->arguments[0]->hideType(intrinsics::ast::ExprPtr);
 	func->setFlag(Function::MACRO_FUNCTION);
 	func->constInterpreter = _typeof;
 	scope->defineFunction(func);
@@ -868,7 +858,7 @@ void arpha::defineCoreSyntax(Scope* scope){
 	Function* func = new Function("sizeof",location,new Scope(scope));
 	func->body.scope->_functionOwner = func;
 	func->arguments.push_back(new Argument("expression",location,func->body.scope));
-	func->arguments[0]->specifyType(intrinsics::ast::ExprPtr);
+	func->arguments[0]->hideType(intrinsics::ast::ExprPtr);
 	func->setFlag(Function::MACRO_FUNCTION);
 	func->constInterpreter = _sizeof;
 	scope->defineFunction(func);
@@ -945,7 +935,7 @@ namespace compiler {
 		}
 		currentModule->second.scope = scope;
 
-		Evaluator evaluator(interpreter);
+		Resolver evaluator(interpreter);
 		Parser parser(source,&evaluator);
 		Unit prevUnit = _currentUnit;
 		_currentUnit.evaluator = &evaluator;

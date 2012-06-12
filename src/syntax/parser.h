@@ -6,7 +6,7 @@
 
 #include "token.h"
 #include "lexer.h"
-#include "../ast/evaluate.h"
+#include "../ast/resolve.h"
 
 struct Node;
 struct Scope;
@@ -18,7 +18,7 @@ struct Parser : Lexer {
 		Location location;
 	};
 
-	Parser(const char* src,Evaluator* evaluator);
+	Parser(const char* src,Resolver* evaluator);
 	void saveState(State *state);
 	void restoreState(State *state);
 
@@ -38,13 +38,13 @@ struct Parser : Lexer {
 	Token  lookedUpToken;
 private:
 	Scope* _currentScope;
-	Evaluator* _evaluator;
+	Resolver* _evaluator;
 	
 public:
 	SymbolID labelForNextNode;
 
 	inline Scope* currentScope() const { return _currentScope; }
-	inline Evaluator* evaluator() const { return _evaluator; }
+	inline Resolver* evaluator() const { return _evaluator; }
 	void currentScope(Scope* scope);
 };
 

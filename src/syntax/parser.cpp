@@ -8,7 +8,7 @@
 #include "../compiler.h"
 #include "../intrinsics/types.h"
 
-Parser::Parser(const char* src,Evaluator* evaluator) : Lexer(src),_evaluator(evaluator) {  
+Parser::Parser(const char* src,Resolver* evaluator) : Lexer(src),_evaluator(evaluator) {  
 }
 
 void Parser::saveState(State *state){
@@ -57,7 +57,7 @@ SymbolID Parser::expectName(){
 }
 
 Node* Parser::evaluate(Node* node){
-	return _evaluator->eval(node);
+	return _evaluator->resolve(node);
 }
 
 

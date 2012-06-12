@@ -8,7 +8,7 @@ namespace intrinsics {
 		extern TypeExpression *Void,*Type;
 		extern IntrinsicType *StringLiteral;
 
-		extern Function* PointerTypeGenerator,*FunctionTypeGenerator,*RangeTypeGenerator;
+		extern Function* PointerTypeGenerator,*FunctionTypeGenerator,*RangeTypeGenerator,*StaticArrayTypeGenerator;
 
 		//Boots up the type system by defining the void,type and literal types
 		void startup();
@@ -24,6 +24,7 @@ namespace intrinsics {
 		extern TypeExpression* uint16;
 		extern TypeExpression* uint32;
 		extern TypeExpression* uint64;
+		extern TypeExpression* natural;
 
 
 

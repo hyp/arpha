@@ -18,14 +18,7 @@
 def equals(x Type,y Type) bool
 
 # Standart integer types
-type int8 integer
-type int16 integer
-type int32 integer
-type int64 integer
 
-type uint8 integer
-type uint16 integer
-type uint32 integer
-type uint64 integer
+
 
 # utf32 char type char integer

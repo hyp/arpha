@@ -63,7 +63,7 @@ bool Variable::isLocal() const {
 bool Variable::isResolved(){
 	return isFlagSet(IS_RESOLVED);
 }
-bool Variable::resolve(Evaluator* evaluator){
+bool Variable::resolve(Resolver* evaluator){
 	auto _resolved = true;
 	if(type.isResolved()) _resolved = true;
 	else if(type.isPattern()) _resolved = false;
@@ -189,46 +189,6 @@ size_t IntrinsicType::size() const { return 0; }
 
 IntegerType::IntegerType(SymbolID name,Location& location) : TypeBase(name,location){
 	setFlag(IS_RESOLVED);
-	//temporary TODO move to arpha package source files
-	if(name == "int32"){
-		min = std::numeric_limits<int>::min();
-		max = std::numeric_limits<int>::max();
-		_size = 4;
-	}
-	else if(name == "int64"){
-		min = std::numeric_limits<int64>::min();
-		max = std::numeric_limits<int64>::max();
-		_size = 8;
-	}
-	else if(name == "int8"){
-		min = std::numeric_limits<signed char>::min();
-		max = std::numeric_limits<signed char>::max();
-		_size = 1;
-	}
-	else if(name == "int16"){
-		min = std::numeric_limits<signed short>::min();
-		max = std::numeric_limits<signed short>::max();
-		_size = 2;
-	}
-	else{
-		min = 0;
-		if(name == "uint32"){
-			max = (uint64)std::numeric_limits<uint32>::max();
-			_size = 4;
-		}
-		else if(name == "uint64"){
-			max = std::numeric_limits<uint64>::max();
-			_size = 8;
-		}
-		else if(name == "uint8"){
-			max = std::numeric_limits<uint8>::max();
-			_size = 1;
-		}
-		else if(name == "uint16"){
-			max = std::numeric_limits<unsigned short>::max();
-			_size = 2;
-		}
-	}
 }
 
 size_t IntegerType::size() const {
@@ -243,6 +203,20 @@ bool IntegerType::isUnsigned() const {
 bool IntegerType::isSubset(IntegerType* other) const {
 	return (!(min<other->min)) && max<=other->max;
 }
+
+IntegerType* IntegerType::make(BigInt& min,BigInt& max){
+	for(auto i = expansions.begin();i!=expansions.end();i++){
+		if((*i)->min == min && (*i)->max == max) return *i;
+	}
+	std::ostringstream name;
+	name<<"int("<<min<<","<<max<<")";
+	auto t = new IntegerType(name.str().c_str(),Location());
+	t->min = min;
+	t->max = max;
+	expansions.push_back(t);
+	return t;
+}
+std::vector<IntegerType* > IntegerType::expansions;
 
 //type
 
@@ -339,7 +313,7 @@ static void collectUnresolvedRecord(Node* unresolvedExpression,Record* initialRe
 }
 
 // This functions tries to resolve type definitions containing unresolved records which contain the records of the original type
-bool Record::resolveCircularReferences(Evaluator* evaluator){
+bool Record::resolveCircularReferences(Resolver* evaluator){
 	debug("Trying to resolve possible circular references for type %s",this);
 	std::vector<Record*> records;
 	size_t unresolvedCount = 0;
@@ -393,7 +367,7 @@ bool Record::resolveCircularReferences(Evaluator* evaluator){
 	return _resolved;
 }
 
-bool Record::resolve(Evaluator* evaluator){
+bool Record::resolve(Resolver* evaluator){
 	/*assert(!_resolved);*/
 	_resolved = true;
 	for(auto i = fields.begin();i!=fields.end();++i){
@@ -465,9 +439,19 @@ PrefixDefinition* Record::duplicate(DuplicationModifiers* mods){
 bool Record::isResolved(){
 	return _resolved;
 }
-size_t Record::size() const{
+size_t Record::size() const {
 	assert(_resolved);
 	return _size;
+}
+
+void Record::generateDestructorBody(Node* self,BlockExpression* dest) const {
+	assert(_resolved);
+	for(auto i = fields.size();i!=0;){
+		i = i - 1;
+		if(fields[i].type.type()->type == TypeExpression::RECORD){
+			dest->children.push_back(new CallExpression(new UnresolvedSymbol(dest->location,"destroy"),new FieldAccessExpression(self,i)));
+		}
+	}
 }
 
 std::ostream& operator<< (std::ostream& stream,Record* type){
@@ -578,7 +562,7 @@ void Overloadset::push_back(Function* function){
 bool Overloadset::isResolved(){ 
 	return isFlagSet(IS_RESOLVED);
 }
-bool Overloadset::resolve(Evaluator* evaluator){
+bool Overloadset::resolve(Resolver* evaluator){
 	auto _resolved = true;
 	for(auto i = functions.begin();i!= functions.end();i++){
 		if(!(*i)->isResolved() || evaluator->forcedToEvaluate){
@@ -666,7 +650,7 @@ Node* Function::createReference(){
 	return new FunctionReference(this);
 }
 
-bool Function::resolve(Evaluator* evaluator){
+bool Function::resolve(Resolver* evaluator){
 	assert(!_resolved);
 	_resolved = true;
 	_argsResolved = true;
@@ -696,7 +680,7 @@ bool Function::resolve(Evaluator* evaluator){
 
 	//resolve body
 	if(!body.isResolved() || evaluator->forcedToEvaluate ){
-		evaluator->eval(&body);
+		evaluator->resolve(&body);
 		if(!body.isResolved()) _resolved = false;
 	}
 

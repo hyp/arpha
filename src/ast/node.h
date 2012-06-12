@@ -21,44 +21,47 @@ struct Function;
 struct ImportedScope;
 
 struct NodeVisitor;
-struct Evaluator;
+struct Resolver;
+
 
 //Injects visitor callback and dynamic cast function into a node structure
 //Note: only does the definitions, the appropriate implementations are done by traversing NODE_LIST
 #define DECLARE_NODE(T) \
-	virtual Node* duplicate(DuplicationModifiers* mods = nullptr) const; \
-	virtual Node* accept(NodeVisitor* visitor);  \
+	Node* duplicate(DuplicationModifiers* mods = nullptr) const; \
+	Node* accept(NodeVisitor* visitor);    \
 	private:             \
-	virtual T* as##T();  \
+	T* as##T();  \
 
 #define DECLARE_TEMPNODE(T) DECLARE_NODE(T)
 
 //This is a list of node types. TODO refactor into NODETYPE_LIST
-#define NODE_LIST(X) \
-	X(IntegerLiteral)    \
+#define NODE_LIST(X)  \
+	X(IntegerLiteral) \
 	X(BoolExpression) \
-	X(StringLiteral) \
-	X(UnitExpression)    \
-	X(ErrorExpression)       \
+	X(StringLiteral)  \
+	X(ArrayLiteral)   \
+	X(UnitExpression) \
+	X(ErrorExpression)        \
 	X(TypeExpression)         \
-	X(ImportedScopeReference)   \
-	X(VariableReference) \
+	X(ImportedScopeReference) \
+	X(VariableReference)     \
 	X(FunctionReference)     \
 	X(TupleExpression)       \
 	X(CallExpression)        \
-	X(FieldAccessExpression)      \
+	X(FieldAccessExpression) \
 	X(AccessExpression)      \
 	X(AssignmentExpression)  \
 	X(ReturnExpression)      \
-	X(ControlFlowExpression)      \
-	X(PointerOperation)      \
+	X(ControlFlowExpression) \
+	X(PointerOperation)  \
 	X(IfExpression)      \
-	X(BlockExpression)       \
-	X(LoopExpression)         \
+	X(BlockExpression)   \
+	X(LoopExpression)    \
+	X(CastExpression)    \
 	\
 	X(ExpressionVerifier) \
-	X(UnresolvedSymbol) \
-	X(MatchResolver) \
+	X(UnresolvedSymbol)   \
+	X(MatchResolver)      \
 	X(ValueExpression)
 
 //Forward declaration of node types
@@ -98,11 +101,11 @@ struct Node {
 
 	virtual bool isResolved() const { return true; }
 
-	virtual bool isConst() const { return false; }
+	virtual bool isConst()    const { return false; }
 
-	virtual bool isLocal() const { return false; }
+	virtual bool isLocal()    const { return false; }
 
-	inline SymbolID label() const { return _label; }
+	inline SymbolID label()   const { return _label; }
 
 	//Dynamic casts
 #define CAST(T) virtual T* as##T() { return nullptr; }
@@ -145,6 +148,27 @@ struct StringLiteral : ConstantNode {
 	memory::Block block;
 	DECLARE_NODE(StringLiteral);
 };
+
+struct NodeList : Node {
+	std::vector<Node*> children;
+
+	inline std::vector<Node*>::iterator begin(){ return children.begin(); }
+	inline std::vector<Node*>::const_iterator begin() const { return children.begin(); }
+	inline std::vector<Node*>::iterator end(){ return children.end(); }
+	inline std::vector<Node*>::const_iterator end() const { return children.end(); }
+	inline size_t size() const  { return children.size(); }
+	inline Node** childrenPtr() { return &children[0];    }
+	inline void addChild(Node* child) { children.push_back(child); }
+	Node* duplicateChildren(NodeList* dest,DuplicationModifiers* mods) const ;
+};
+
+struct ArrayLiteral : NodeList {
+	ArrayLiteral();
+	TypeExpression* _returnType() const;
+
+	DECLARE_NODE(ArrayLiteral);
+};
+
 
 //():void
 struct UnitExpression : Node {
@@ -222,7 +246,7 @@ struct TypePatternUnresolvedExpression {
 		void defineIntroducedDefinitions();
 	};
 
-	bool resolve(Evaluator* evaluator,PatternMatcher* patternMatcher = nullptr);
+	bool resolve(Resolver* evaluator,PatternMatcher* patternMatcher = nullptr);
 	void parse(Parser* parser,int stickiness,PatternMatcher* patternMatcher = nullptr);
 };
 
@@ -238,6 +262,7 @@ struct TypeExpression : Node {
 		INTRINSIC,
 		FUNCTION,
 		POINTER,
+		STATIC_ARRAY,
 	};
 
 	TypeExpression(int kind);
@@ -246,6 +271,7 @@ struct TypeExpression : Node {
 	TypeExpression(Record* record);
 	TypeExpression(int kind,TypeExpression* next);//ptr
 	TypeExpression(TypeExpression* argument,TypeExpression* returns);//function
+	TypeExpression(TypeExpression* T,size_t N); //static array
 
 	//self explanatory
 	bool isValidTypeForVariable();
@@ -289,7 +315,10 @@ public:
 		TypeExpression* argument;
 		Node* pattern;
 	};
-	TypeExpression* returns;
+	union {
+		TypeExpression* returns;
+		size_t N;
+	};
 	friend std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
 };
 std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
@@ -454,6 +483,18 @@ struct LoopExpression : Node {
 
 	Node* body;
 	DECLARE_NODE(LoopExpression);
+};
+
+struct CastExpression : Node {
+	CastExpression(Node* object,TypeExpression* type);
+
+	bool isResolved() const;
+	TypeExpression* _returnType() const;
+
+	Node* object;
+	TypeExpression* type;
+	bool _resolved;
+	DECLARE_NODE(CastExpression);
 };
 
 /*****

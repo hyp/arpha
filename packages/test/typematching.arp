@@ -47,3 +47,6 @@ foo3(1) # ok
 type Pair(T) { var first,second T }
 match(Pair(int32)) { | Pair(T:_) => T } # int32
 
+# Non-type parameters
+
+match(Array(int32,10)) { | Array(int32,N:_) => N } # 10

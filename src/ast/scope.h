@@ -13,7 +13,7 @@ struct Variable;
 struct Overloadset;
 struct Function;
 struct ImportedScope;
-struct Evaluator;
+struct Resolver;
 struct DuplicationModifiers;
 
 namespace Visibility {
@@ -44,7 +44,7 @@ struct PrefixDefinition {
 	PrefixDefinition* copyProperties(PrefixDefinition* dest);
 
 	virtual bool isResolved(){ return true; }
-	virtual bool resolve(Evaluator* evaluator){ return true; }
+	virtual bool resolve(Resolver* evaluator){ return true; }
 
 	virtual Overloadset* asOverloadset(){ return nullptr; }
 
@@ -95,7 +95,7 @@ struct Scope {
 	void define(InfixDefinition* definition);
 
 	Function* resolve(const char* name,Type* argumentType);
-	Function* resolveFunction(Evaluator* evaluator,SymbolID name,Node* argument);
+	Function* resolveFunction(Resolver* evaluator,SymbolID name,Node* argument);
 	void defineFunction(Function* definition);
 
 	void duplicate(DuplicationModifiers* mods);
@@ -103,7 +103,7 @@ struct Scope {
 	Scope* parent;
 
 	bool isResolved();
-	bool resolve(Evaluator* evaluator);
+	bool resolve(Resolver* evaluator);
 
 	Function* functionOwner() const;
 

@@ -99,8 +99,7 @@ macro f30 {
 f30 a
 
 macro f40 {
-	parser.matchNewline()
-	return parser.parse()
+	return parser.parse(ignoreNewlines:true)
 }
 f40 1
 f40

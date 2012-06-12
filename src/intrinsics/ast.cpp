@@ -75,6 +75,7 @@ namespace intrinsics {
 		TypeExpression* PointerOpPtr = nullptr;
 		TypeExpression* TypeExprPtr = nullptr;
 		TypeExpression* BoolPtr = nullptr;
+		TypeExpression* CastPtr = nullptr;
 
 		Node* passedExpr(Node* arg){
 			if(auto v = arg->asValueExpression()){
@@ -132,6 +133,12 @@ namespace intrinsics {
 				auto t = arg->asTupleExpression();
 				return new ValueExpression(new PointerOperation(passedExpr(t->children[0]),PointerOperation::DEREFERENCE),PointerOpPtr);
 			}
+			static Node* newCast(Node* arg){
+				auto t = arg->asTupleExpression();
+				auto type = passedExpr(t->children[1])->asTypeExpression();
+				if(!type) return new ValueExpression(ErrorExpression::getInstance,ExprPtr);
+				return new ValueExpression(new CastExpression(passedExpr(t->children[0]),type),CastPtr);
+			}
 			void init() {
 
 				ScopePtr = defineType("Scope");
@@ -182,6 +189,12 @@ namespace intrinsics {
 				defineConstructor(newPointerOpDeref,args2,2);
 				}
 
+				{
+					CastPtr = defineType("Cast");
+					ARG args[] = {{"expression",ExprPtr},{"type",ExprPtr}};
+					defineConstructor(newCast,args,2);
+				}
+
 			parent = nullptr;
 			}
 		};
@@ -212,6 +225,14 @@ namespace intrinsics {
 					if(ignore) parser->restoreState(&state);
 				}
 			};
+			static Node* parseFull(Node* arg){
+				auto t = arg->asTupleExpression();
+				auto parser = compiler::currentUnit()->parser;
+				auto sticky = t->children[0]->asIntegerLiteral();
+				NewlineIgnorer i(t->children[1]->asBoolExpression()->value,parser);
+				return new ValueExpression(parser->parse((int)sticky->integer.u64),ExprPtr);
+			}
+
 			static Node* expectSymbol(Node* arg){
 				auto t = arg->asTupleExpression();
 				auto parser = compiler::currentUnit()->parser;
@@ -244,20 +265,20 @@ namespace intrinsics {
 				auto sym = parser->expectName();
 				return new StringLiteral(sym);
 			}
-			static Node* matchNewline(Node* arg){
-				auto parser = compiler::currentUnit()->parser;
-				bool res = parser->peek().isLine();
-				if(res) parser->consume();
-				return new BoolExpression(res);
-			}
 
 
 			void init(){
 				defineFunction("symbol",intrinsics::types::StringLiteral->reference(),&consumeSymbol);
 				//parsing
-				defineFunction("parse",ExprPtr,&parse);
-				ARG arg = {"precedence",new TypeExpression(new IntegerType("int32",Location()))};
-				defineFunction("parse",arg,ExprPtr,&parse2);
+				//defineFunction("parse",ExprPtr,&parse);
+				//ARG arg = {"precedence",new TypeExpression(new IntegerType("int32",Location()))};
+				//defineFunction("parse",arg,ExprPtr,&parse2);
+				{
+				ARG args[] = { {"precedence",intrinsics::types::int32}, {"ignoreNewlines",intrinsics::types::boolean} };
+				auto f = defineFunction("parse",args,2,ExprPtr,&parseFull);
+				f->arguments[0]->defaultValue(new IntegerLiteral((uint64)0),false,false);
+				f->arguments[1]->defaultValue(new BoolExpression(false),false,false);
+				}
 				
 				{
 				ARG args[] = {{"symbol",intrinsics::types::StringLiteral->reference()},{"ignoreNewlines",intrinsics::types::boolean}};
@@ -268,7 +289,7 @@ namespace intrinsics {
 				f = defineFunction("isNext",args,2,intrinsics::types::boolean,&isNextSymbol);
 				f->arguments[1]->defaultValue(new BoolExpression(false),false,false);
 				}
-				defineFunction("matchNewline",intrinsics::types::boolean,&matchNewline);
+				//defineFunction("matchNewline",intrinsics::types::boolean,&matchNewline);
 				{
 					ARG args[] ={{"until",intrinsics::types::StringLiteral->reference()},
 					{"separator",intrinsics::types::StringLiteral->reference()},
