@@ -42,6 +42,23 @@ namespace memory {
 		static Block construct(const char* begin,size_t length);
 	};
 
+
+	//TODO
+	struct StringLiteralConstructor {
+	private:
+		char  buffer[256];
+		const char* _start;
+		const char* _ptr;
+		const char* _limit;
+	public:
+		
+		StringLiteralConstructor();
+		void append(UnicodeChar c);
+		Block toString();
+	};
+
+
+
 	/**
 		Base class for prefix and infix definitions
 		Proper memory management to be implemented at a later stage.

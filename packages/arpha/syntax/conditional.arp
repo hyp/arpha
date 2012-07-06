@@ -1,0 +1,40 @@
+#
+	This module implements an if-else expression.
+#
+
+#
+	To use objects of your own types as a condition for the if expression
+	you can provide an implementation of isTrue(x YourType) which must return a bool.
+	Example:
+		type MyType {
+			var a,b int32
+		}
+		def isTrue(this MyType) = this.a != 0 && this.b != 0
+#
+macro isTrue(expression bool) = expression
+
+# TODO maybe look at ignoring newlines before consequence and alternative
+# TODO enter new scope inside condition, so that we can write if(var x = foo()){ }
+macro if {
+
+	# Must have if and else
+	# Needed to bootstrap the if macro
+	macro _if {
+		parser.expect("(")
+		var condition = parser.parse()
+		parser.expect(")")
+		var consequence = parser.parse()
+		parser.expect("else")
+		var alternative = parser.parse()
+		return ast.newIfElse(condition,consequence,alternative)		
+	}
+	
+	parser.expect("(")
+	var condition = parser.parse()
+	parser.expect(")")
+	var consequence = parser.parse()
+	var alternative = _if(parser.match("else",ignoreNewlines: true)) parser.parse() else [> () <]
+	return ast.newIfElse( [> $condition.isTrue <] ,consequence,alternative)
+}
+
+macro fallthrough = ast.newControlFlow(fallthrough: true)

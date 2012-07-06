@@ -1,0 +1,65 @@
+#
+	This module implements the integer bitwise operations.
+#
+
+use precedence: 0
+
+# Bitwise NOT operation
+macro ~ 
+{
+}
+
+# Bitwise AND operation
+macro (x) &  
+{
+}
+
+macro (x) &= 
+{
+	var y = parser.parse()
+	return [> $x = $x & $y <]
+}
+
+# Bitwise OR operation
+macro (x) |  
+{
+}
+
+macro (x) |= 
+{
+	var y = parser.parse()
+	return [> $x = $x | $y <]
+}
+
+# Bitwise XOR operation
+macro (x) ^  
+{
+}
+
+macro (x) ^= 
+{
+	var y = parser.parse()
+	return [> $x = $x ^ $y <]
+}
+
+# Unsigned right shift
+macro (x) <<  
+{
+}
+
+macro (x) <<= 
+{
+	var y = parser.parse()
+	return [> $x = $x << $y <]
+}
+
+# Left shift
+macro (x) >>  
+{
+}
+
+macro (x) >>= 
+{
+	var y = parser.parse()
+	return [> $x = $x >> $y <]
+}

@@ -14,12 +14,20 @@ struct Parser;
 struct Resolver;
 struct Interpreter;
 struct Function;
+struct Node;
+struct BlockExpression;
+
+//This structure contains the state of the module which is currently being compiled
+struct CompilationUnit {
+	Parser* parser;
+	Resolver* resolver;
+	Interpreter* interpreter;
+	BlockExpression* moduleBody;
+
+	int printingDecorationLevel;
+};
 
 namespace compiler {
-	//settings
-
-
-	void init();
 
 	Scope* findModule(const char* name);
 
@@ -31,8 +39,12 @@ namespace compiler {
 	/// Reports a compilation error
 	void onWarning(Location& location,const std::string& message);
 	void onError(Location& location,const std::string& message);//a standalone error message
+	void onError(Node* node,const std::string& message);
 	void headError(Location& location,const std::string& message);
 	void subError(Location& location,const std::string& message);
+	// Corrupt intrinsic API, causes compiler exit
+	void intrinsicFatalError(Location& location,const std::string& message);
+
 	void onDebug(const std::string& message);
 
 	enum {
@@ -41,36 +53,19 @@ namespace compiler {
 		ReportDebug
 	};
 	extern int reportLevel; // = ReportDebug
-	//Target specific settings
-	//4 or 8 bytes for 32 or 64 bits
-	extern size_t wordSize,pointerSize;   
 
-	//This structure contains the state of the module which is currently being compiled
-	struct Unit {
-		Parser* parser;
-		Resolver* evaluator;
-		Interpreter* interpreter;
+	CompilationUnit *currentUnit();
 
-		//Current settings
-		struct State {
-			State();
-			bool interpret; //Interpret constant function calls or not?
-			int reportLevel;
-		};
-		
-		void updateState(State& state);
-		const State& state() const;
+	void addGeneratedExpression(Node* expr);
 
-		int printingDecorationLevel; //no need to keep it as state
-	private:
-		State _state;
-	};
-
-	Unit *currentUnit();
+	extern BlockExpression* generatedFunctions;
 };
+
+
 
 #include "base/format.h"
 
+// NB: Macroes are a necessary evil
 #define warning(loc,...) compiler::onWarning(loc,format(__VA_ARGS__))
 #define error(loc,...) compiler::onError(loc,format(__VA_ARGS__))
 #define debug(...) compiler::onDebug(format(__VA_ARGS__))

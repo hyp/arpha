@@ -1,0 +1,55 @@
+#
+	This module implements arpha's comparison operators.
+	Author: Hyp
+	Version: 1
+#
+
+import qualified precedence
+
+constraint Comparable(T) = true #TODO...
+
+macro equals  (x T:Comparable,y T) = ast.newBinaryOperation(2,x,y)
+macro less    (x T:Comparable,y T) = ast.newBinaryOperation(3,x,y)
+macro greater (x T:Comparable,y T) = ast.newBinaryOperation(4,x,y)
+
+constraint ImplementsEquals(T)  = true
+constraint ImplementsGreater(T) = true
+constraint ImplementsLess(T)    = true
+
+macro notEquals     (x T:ImplementsEquals ,y T) = [> ! $x.equals ($y) <]
+macro lessEquals    (x T:ImplementsGreater,y T) = [> ! $x.greater($y) <]
+macro greaterEquals (x T:ImplementsLess   ,y T) = [> ! $x.less   ($y) <]
+
+use precedence: precedence.equality
+
+macro (x) ==  {
+	var y = parser.parse(precedence.equality,ignoreNewlines:true)
+	return [> $x.equals($y) <]
+}
+
+macro (x) !=  {
+	var y = parser.parse(precedence.equality,ignoreNewlines:true)
+	return [> $x.notEquals($y) <]
+}
+
+use precedence: precedence.comparison
+
+macro (x) <  {
+	var y = parser.parse(precedence.comparison,ignoreNewlines:true)
+	return [> $x.less($y) <]
+}
+
+macro (x) >  {
+	var y = parser.parse(precedence.comparison,ignoreNewlines:true)
+	return [> $x.greater($y) <]
+}
+
+macro (x) <= {
+	var y = parser.parse(precedence.comparison,ignoreNewlines:true)
+	return [> $x.lessEquals($y) <]
+}
+
+macro (x) >= {
+	var y = parser.parse(precedence.comparison,ignoreNewlines:true)
+	return [> $x.greaterEquals($y) <]
+}

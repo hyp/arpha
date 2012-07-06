@@ -1,0 +1,22 @@
+#
+	This is a package containing the descripition and tests of the arpha specification.
+	Author : Hyp
+	Version: 0.01
+	TODO: implementation
+#
+
+macro it {
+	var name  = parser.parse()
+	var block = parser.parse()
+	return [> $block <]
+}
+macro describe {
+	var name = parser.parse()
+	return parser.parse()
+}
+use precedence: 30
+macro (something) should {
+	parser.expect("be")
+	var value = parser.parse(30)
+	return [> $something.equals($value) <]
+}

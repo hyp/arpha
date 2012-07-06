@@ -22,7 +22,11 @@ namespace System {
 	//Filesystem
 	const char* currentDirectory();
     bool fileExists(const char* filename);
+	bool directoryExists(const char* filename);
 	const char* fileToString(const char* filename);
+
+	//exe
+	int execute(const char* file,const char* param,const char* dir = nullptr);
 
 	//path
 	namespace path {

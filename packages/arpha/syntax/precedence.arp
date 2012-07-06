@@ -7,13 +7,15 @@
 def assignment   = 10   # x = y
 def tuple        = 20   # ,
 def isas		 = 25   # is as
-def logical      = 30   # and or
+def logical_or   = 27   # or
+def logical_and  = 30   # and
+def logical_not  = 85   # TODO
 def equality     = 40   # == !=
 def comparison   = 50   # < > <= >=
 def term         = 60   # + -
 def product      = 70   # * / %
 def power        = 80   # **
-def unary        = 90   # - ! & *
+def unary        = 90   # - & *
 def increment	 = 95   # ++,--
 def index        = 100  # a[]
 def call         = 110  # f()

@@ -1,30 +1,25 @@
 #
-	This module contains the main compiler definitions.
+	This module contains the definitions for the Arpha Compiler API.
 	Author: Hyp
 	Version: 1
 #
 
-# These constants are modified by compiler upon loading
-def debug bool
-def version int32
+use intrinsic
 
+def version major: natural, minor: natural
+#def info    string
+#def info
+#def provider?
 
-# Reports a compilation error!
-#def error(string String)
+def print  ()
+def error  ()
+def warning()
 
-# Ensures that the given expression is a constant and returns it.
-# Raises an error if a given expression isn't constant.
-#def constexpr(expression Expression) Expression
+type Options {
+	optimizations natural
+	debug         bool	
+}
+def options Options
 
-#
-	dumpAST - Prints out the ast for the given expression.
-	dumpDEF - Prints out the information about the definiton which the given expression refers to.
-	Note: Use these for debugging.
-#
-#def dumpAST(expression Expression)
-#def dumpDEF(expression Expression)
+#def build
 
-#def currentLocation() int32,int32 
-
-#Resolves a overload set into a function based on the type of the function's argument
-#def resolve(overloadset String,argument Type)

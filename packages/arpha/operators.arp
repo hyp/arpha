@@ -26,6 +26,8 @@ macro ! {
 
 # Postfix operators
 # Note that you can only use them as statements - *(ptr++) is illegal!
+use precedence: precedence.increment
+
 macro (x) ++ [precedence:precedence.increment] {
 	return [> { $x = add($x,1)  } <]
 }
@@ -37,6 +39,7 @@ macro (x) -- [precedence:precedence.increment] {
 # Infix operators
 
 ## Cast
+use precedence: precedence.isas
 macro (expr) as [precedence:precedence.isas] {
 	var type = parser.parse(precedence.isas)
 	return ast.newCast(expr,type)
@@ -44,6 +47,7 @@ macro (expr) as [precedence:precedence.isas] {
 
 
 ## Logical group
+use precedence: precedence.logical
 macro (x) and [precedence:precedence.logical] {
 	var y = parser.parse(precedence.logical,ignoreNewlines:true)
 	return [> and($x,$y) <]
@@ -110,7 +114,7 @@ macro (x) / [precedence:precedence.product] {
 
 macro (x) % [precedence:precedence.product] {
 	var y = parser.parse(precedence.product,ignoreNewlines:true)
-	return [> mod($x,$y) <]
+	return [> remainder($x,$y) <]
 }
 
 ## Index operator

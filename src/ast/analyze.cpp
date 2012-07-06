@@ -5,7 +5,6 @@
 #include "node.h"
 #include "declarations.h"
 #include "visitor.h"
-#include "../intrinsics/ast.h"
 #include "../intrinsics/types.h"
 
 //Also map local variables to registers for interpreting
@@ -34,6 +33,7 @@ struct Analyzer : NodeVisitor {
 	};
 	Function* functionOwner;
 	FlaggedNode* lastWhileExpression;
+	IfExpression* lastIfExpression;
 	bool isDeadCode;
 	bool isPureFunction;
 	bool cantCtfe;
@@ -46,13 +46,21 @@ struct Analyzer : NodeVisitor {
 
 	Analyzer(Function* owner) : functionOwner(owner) {
 		lastWhileExpression = nullptr;
+		lastIfExpression = nullptr;
 		isDeadCode = false;
 		isPureFunction = true;
 		cantCtfe = false;
 		mustCtfe = owner && owner->isFlagSet(Function::MACRO_FUNCTION | Function::CONSTRAINT_FUNCTION);
 		reportedCtfeHeadError = false;
 		inliningWeight = 0;
+		returnFlags = 0;
 		mappingOffset = 0;
+		if(owner){
+			for(auto i = owner->arguments.begin();i!=owner->arguments.end();i++){
+				//map arguments
+				(*i)->accept(this);
+			}
+		}
 	}
 
 	void addInliningWeight(int w){
@@ -60,8 +68,8 @@ struct Analyzer : NodeVisitor {
 	}
 	void report(Node* node){
 		if(reportedCtfeHeadError ==  false){
-			compiler::headError(functionOwner->location,
-			format("The %s %s isn't evaluatable at compile time:",functionOwner->isFlagSet(Function::MACRO_FUNCTION) ? "macro" :"constraint",functionOwner->id));
+			compiler::headError(functionOwner->location(),
+			format("The %s %s isn't evaluatable at compile time:",functionOwner->isFlagSet(Function::MACRO_FUNCTION) ? "macro" :"constraint",functionOwner->label()));
 			reportedCtfeHeadError = true;
 		}
 		const char* str = "";
@@ -69,10 +77,10 @@ struct Analyzer : NodeVisitor {
 			if(!v->variable->functionOwner()) str = "Access to a global variable isn't allowed!";
 			else str = "Access to a variable captured from the outer function isn't allowed!";
 		}
-		else if(node->asBlockExpression()) str = "The function has too many locals!";
+		else if(node->asVariable()) str = "The function has too many locals!";
 		else if(node->asPointerOperation()) str = "Pointer operations aren't allowed!";
 		else str = "The call to this function can't be evaluated at compile time!";
-		compiler::subError(node->location,str);
+		compiler::subError(node->location(),str);
 	}
 	void markAsNotInterpretable(Node* node){
 		cantCtfe = true;
@@ -97,19 +105,60 @@ struct Analyzer : NodeVisitor {
 #undef error	
 #define error(loc,...) { compiler::onError(loc,format(__VA_ARGS__)); cantCtfe = true; }
 
+	bool isLocal(Node* node){
+		if(auto pop = node->asPointerOperation()){
+			if(pop->isAddress()){
+				auto expr = pop->expression;
+				if(auto fa = expr->asFieldAccessExpression()) expr = fa->object;
+				if(auto vref = expr->asVariableReference()){
+					 if(vref->variable->isLocal()) return true;
+				} else if(expr->asVariable()) return true; //&(var x)
+			}
+		}
+		return false;
+	}
+
 	Node* visit(IntegerLiteral* node){
 		addInliningWeight(1);
 		return node;
 	}
 
+	Node* visit(Variable* node){
+		//map local vars
+		if(functionOwner){
+			if(mappingOffset >= std::numeric_limits<uint16>::max()){
+				markAsNotInterpretable(node);
+			}
+			node->ctfeRegisterID = (uint16)mappingOffset;
+			mappingOffset++;
+		}
+		addInliningWeight(3);
+		return node;
+	}
+
+	Node* visit(UnaryOperation* node){
+		node->expression->accept(this);
+		if(!node->isValid()) markAsNotInterpretable(node);
+		addInliningWeight(4);
+		return node;
+	}
+
+	Node* visit(BinaryOperation* node){
+		node->a->accept(this);
+		node->b->accept(this);
+		if(!node->isValid()) markAsNotInterpretable(node);
+		addInliningWeight(5);
+		return node;
+	}
+
 	Node* visit(VariableReference* node){
-		if(node->variable->location.line() > node->location.line() && node->variable->location.column > node->location.column){
-			error(node->location,"Variable usage before declaration!");
+		if(node->variable->location().line() > node->location().line() && node->variable->location().column > node->location().column){
+			error(node,"Variable usage before declaration!");
 		}
 		if(node->variable->functionOwner() != functionOwner){
 			if(node->variable->functionOwner() != nullptr){
 				//TODO closures
-				error(node->location,"Closures aren't supported yet!");
+				error(node,"Closures aren't supported yet!");
 				markAsNotInterpretable(node);
 			}
 			else markAsNotInterpretable(node);
@@ -123,6 +172,9 @@ struct Analyzer : NodeVisitor {
 	Node* visit(AssignmentExpression* node){
 		node->object->accept(this);
 		node->value->accept(this);
+		if(isLocal(node->value)){
+			error(node,"Can't assign %s to %s - because of local semantics!",node->value,node->object);
+		}
 		addInliningWeight(5);
 		return node;
 	}
@@ -146,7 +198,10 @@ struct Analyzer : NodeVisitor {
 
 		auto _ = isDeadCode;
 		isDeadCode = constantCondition == 0;
+		auto prevIfExpression = lastIfExpression;
+		lastIfExpression = node;
 		node->consequence->accept(this);
+		lastIfExpression = prevIfExpression;
 		isDeadCode = constantCondition == 1;
 		node->alternative->accept(this);
 		isDeadCode = _;
@@ -156,9 +211,12 @@ struct Analyzer : NodeVisitor {
 	}
 
 	Node* visit(ReturnExpression* node){
-		node->value->accept(this);
+		node->expression->accept(this);
+		if(isLocal(node->expression)){
+			error(node,"Can't return expression %s - it has local semantics!",node->expression);
+		}
 		if(!functionOwner){
-			error(node->location,"Return statement can only be used inside a function's body!");
+			error(node,"Return statement can only be used inside a function's body!");
 		}
 		if(lastWhileExpression){
 			lastWhileExpression->setFlagForAll(insideUnreachableCode() ? 0x8 : 0x4); //while hierarchy has return
@@ -168,16 +226,27 @@ struct Analyzer : NodeVisitor {
 		return node;
 	}
 
+	static bool  isLastExpression(Node* instr,Node* owner){
+		BlockExpression* block;
+		while(block = owner->asBlockExpression()){
+			owner = block->childrenPtr()[block->size()-1];
+		}
+		return instr == owner;
+	}
+
 	Node* visit(ControlFlowExpression* node){
 		if(node->isBreak()){
 			if(lastWhileExpression) lastWhileExpression->setFlag(insideUnreachableCode() ? 0x2 : 0x1); //while has break
-			else error(node->location,"Break statement can only be used inside a while loop!");
+			else error(node,"Break statement can only be used inside a while loop!");
 		}
 		else if(node->isContinue()){
-			if(!lastWhileExpression) error(node->location,"Continue statement can only be used inside a while loop!");
+			if(!lastWhileExpression) error(node,"Continue statement can only be used inside a while loop!");
 		}
 		else if(node->isFallthrough()){
 			//TODO
+			if(!lastIfExpression) error(node,"Fallthrough statement can only be used inside the 'consequence' block of an if-else statement!");
+			//verify that this is the last instuction
+			if(!isLastExpression(node,lastIfExpression->consequence)) error(node,"Fallthrough statement has to be the last statement executed in the 'consequence' block of an if-else statement!");
 		}
 		addInliningWeight(2);
 		return node;
@@ -189,7 +258,7 @@ struct Analyzer : NodeVisitor {
 		if(auto f = node->object->asFunctionReference()){
 			if(f->function->isFlagSet(Function::CANT_CTFE)) markAsNotInterpretable(node);
 			if(!f->function->isFlagSet(Function::PURE)) markImpure(node);
-			addInliningWeight(f->function->constInterpreter ? 2 : 6);
+			addInliningWeight(f->function->isIntrinsic() ? 2 : 6);
 		}
 		else addInliningWeight(10000);
 		return node;
@@ -201,9 +270,9 @@ struct Analyzer : NodeVisitor {
 		node->body->accept(this);
 
 		if(self.flags==0){
-			error(node->location,"This is an infinite loop - please provide a return or break statement so that the loop will be stopped!");	
+			error(node,"This is an infinite loop - please provide a return or break statement so that the loop will be stopped!");	
 		}else if((self.flags & (0x1 | 0x4)) == 0){
-			error(node->location,"This is an infinite loop - The return or break statement(s) contained in this loop are unreachable!");
+			error(node,"This is an infinite loop - The return or break statement(s) contained in this loop are unreachable!");
 		}
 
 		addInliningWeight(40);
@@ -215,24 +284,14 @@ struct Analyzer : NodeVisitor {
 		return node;
 	}
 	Node* visit(BlockExpression* node){
-		//map local vars
-		if(functionOwner){
-			if(cantCtfe == false){
-				for(auto i = node->scope->prefixDefinitions.begin();i != node->scope->prefixDefinitions.end();i++){
-					if(auto v = dynamic_cast<Variable*>((*i).second)){
-						if(mappingOffset >= std::numeric_limits<uint16>::max()){
-							markAsNotInterpretable(node);
-							break;
-						}
-						v->registerID = (uint16)mappingOffset;
-						mappingOffset++;
-					}
-				}
+		for(auto i = node->children.begin();i!=node->children.end();i++){
+			(*i)->accept(this);
+			bool warn = (*i)->isConst() && !(*i)->asUnitExpression() ;
+			warn = warn ||( !(*i)->returnType()->isVoid() /*NB: GIVE WARNING FOR CALLS AS WELL! TO DISABLE USE: && !(*i)->asCallExpression()*/ );
+			if(warn){
+				warning((*i)->location(),"Ignored expression: The value from this expression is not used for anything!");
 			}
-			addInliningWeight((int)node->scope->numberOfDefinitions()*5);
 		}
-
-		for(auto i = node->children.begin();i!=node->children.end();i++) (*i)->accept(this);
 		return node;
 	}
 	Node* visit(CastExpression* node){
@@ -241,8 +300,15 @@ struct Analyzer : NodeVisitor {
 		return node;
 	}
 
+	Node* visit(ErrorExpression* node){
+		markAsNotInterpretable(node);
+		return node;
+	}
+
 #undef error
 #define error(loc,...) compiler::onError(loc,format(__VA_ARGS__))
+
+
 };
 
 void analyze(Node* node,Function* owner){
@@ -253,15 +319,17 @@ void analyze(Node* node,Function* owner){
 		if(visitor.cantCtfe) owner->setFlag(Function::CANT_CTFE);
 
 		owner->ctfeRegisterCount = (uint16)visitor.mappingOffset;
-		owner->inliningWeight = (uint16)std::min((int)(visitor.inliningWeight + owner->arguments.size()*2),(int)std::numeric_limits<uint16>::max());
-		if(visitor.returnFlags == 0){
-			error(owner->location,"The function %s is expected to return a %s value, but has no return statements inside!",owner->id,owner->returnType());
-			owner->setFlag(Function::CANT_CTFE);
+		owner->inliningWeight = (uint16)std::min((int)(visitor.inliningWeight),(int)std::numeric_limits<uint16>::max());
+		if(owner->body.size() && !owner->returns()->isVoid()){
+			if(visitor.returnFlags == 0 && !owner->returns()->isVoid()){
+				error(owner,"The function %s is expected to return a value of type %s, but has no return statements inside!",owner->label(),owner->returns());
+				owner->setFlag(Function::CANT_CTFE);
+			}
+			else if(visitor.returnFlags & 0x2){
+				error(owner,"The function %s only has return statement(s) which can't be reached!",owner->label());
+				owner->setFlag(Function::CANT_CTFE);
+			}
 		}
-		else if(visitor.returnFlags & 0x2){
-			error(owner->location,"The function %s only has return statement(s) which can't be reached!",owner->id);
-			owner->setFlag(Function::CANT_CTFE);
-		}
-		debug("Function %s analysis finished - isPure: %s, cant ctfe:%s, iw:%s, regs:%s",owner->id,visitor.isPureFunction,visitor.cantCtfe,owner->inliningWeight,owner->ctfeRegisterCount);
+		debug("Function %s analysis finished - isPure: %s, cant ctfe:%s, iw:%s, regs:%s",owner->label(),visitor.isPureFunction,visitor.cantCtfe,owner->inliningWeight,owner->ctfeRegisterCount);
 	}
 }

@@ -5,32 +5,33 @@
 namespace intrinsics {
 	namespace types {
 
-		extern TypeExpression *Void,*Type;
-		extern IntrinsicType *StringLiteral;
+		extern ::Type *Void,*Type;
+
+		extern ::Type *NodePointer;
 
 		extern Function* PointerTypeGenerator,*FunctionTypeGenerator,*RangeTypeGenerator,*StaticArrayTypeGenerator;
+		extern Function* BoundedPointerTypeGenerator,*BoundedConstantLengthPointerTypeGenerator;
 
 		//Boots up the type system by defining the void,type and literal types
 		void startup();
 
 
 		//integers
-		extern TypeExpression* boolean;
-		extern TypeExpression* int8;
-		extern TypeExpression* int16;
-		extern TypeExpression* int32;
-		extern TypeExpression* int64;
-		extern TypeExpression* uint8;
-		extern TypeExpression* uint16;
-		extern TypeExpression* uint32;
-		extern TypeExpression* uint64;
-		extern TypeExpression* natural;
+		extern ::Type* boolean;
+		extern ::Type* int8;
+		extern ::Type* int16;
+		extern ::Type* int32;
+		extern ::Type* int64;
+		extern ::Type* uint8;
+		extern ::Type* uint16;
+		extern ::Type* uint32;
+		extern ::Type* uint64;
+		extern ::Type* natural;
 
 
 
 		//
 		void preinit(Scope* moduleScope);
-		void init(Scope* moduleScope);
 	};
 };
 

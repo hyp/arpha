@@ -50,12 +50,34 @@ void System::debugPrint(const std::string& message){
 	#endif
 }
 
+const char* System::currentDirectory(){
+	return "";
+}
 bool System::fileExists(const char* filename){
 	assert(filename);
-	FILE* file = fopen(filename, "rb");
-	if(!file) return false;
-	fclose(file);
-	return true;
+	#ifdef  _WIN32
+		UTF16::StringBuffer wfile(filename);
+		DWORD dwAttrib = GetFileAttributesW(wfile);
+
+		return (dwAttrib != INVALID_FILE_ATTRIBUTES && !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
+	#else
+		FILE* file = fopen(filename, "rb");
+		if(!file) return false;
+		fclose(file);
+		return true;
+	#endif
+}
+bool System::directoryExists(const char* filename){
+	assert(filename);
+	#ifdef  _WIN32
+		UTF16::StringBuffer wfile(filename);
+		DWORD dwAttrib = GetFileAttributesW(wfile);
+
+		return (dwAttrib != INVALID_FILE_ATTRIBUTES && (dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
+	#else
+		//TODO
+		return false;
+	#endif
 }
 
 const char* System::fileToString(const char* filename){
@@ -71,6 +93,42 @@ const char* System::fileToString(const char* filename){
 	((char*)data)[size]='\0';
 	fclose(file);
 	return (const char*)data;
+}
+
+int System::execute(const char* file,const char* param,const char* dir){
+	#ifdef  _WIN32
+		UTF16::StringBuffer wfile(file);
+		UTF16::StringBuffer wparam(param);
+		UTF16::StringBuffer wdir(dir?dir:"");
+		//ShellExecuteW((HWND)0,L"open",wfile,wparam,dir?wdir:"",SW_SHOW);
+
+		STARTUPINFOW si;
+		ZeroMemory( &si, sizeof(si) );
+		si.cb = sizeof(STARTUPINFOW);
+		si.hStdError  = GetStdHandle(STD_OUTPUT_HANDLE);//g_hChildStd_OUT_Wr;
+		si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);//g_hChildStd_OUT_Wr;
+		si.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
+		si.dwFlags |= STARTF_USESTDHANDLES;
+		PROCESS_INFORMATION pi;
+		ZeroMemory( &pi, sizeof(pi) );
+		if(!CreateProcessW(wfile,(LPWSTR)(LPCWSTR)wparam,nullptr,nullptr,
+			false,0,nullptr,dir?wdir:nullptr,&si,&pi)){
+				print("Couldn't execute process!");
+		}
+
+		// Wait until child process exits.
+		WaitForSingleObject( pi.hProcess, INFINITE );
+
+		// Close process and thread handles. 
+		CloseHandle( pi.hProcess );
+		CloseHandle( pi.hThread );
+
+
+		return 0;
+	#else
+		//TODO
+		return system(command);
+	#endif
 }
 
 namespace System {

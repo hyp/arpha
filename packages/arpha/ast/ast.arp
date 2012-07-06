@@ -1,11 +1,59 @@
 #
-	This module contains the necessary definitions to perform compile-time AST manipulation.
+	This module contains the definitions for the Arpha AST API.
+	Arpha AST API allows to perform compile-time AST manipulation.
 	Author: Hyp
 	Version: 1
 #
 
+use intrinsic
+
+def Expression           Type
+
+def returnType(expression Pointer(Expression)) Type
+
+# Returns true if a given expression is constant.
+# Expression is constant if it is any Literal expression, a TypeReference or a Tuple containing the above expressions.
+def isConst   (expression Pointer(Expression)) bool
+
+# Returns the location of the expression in the source file.
+def location  (expression Pointer(Expression)) line: natural,column: natural 
+
+# The types below are derived from Expression
+def IntegerLiteral       Type
+def FloatingPointLiteral Type
+def BoolLiteral          Type
+def StringLiteral        Type
+def TypeReference        Type
+def Unit                 Type
+def Tuple                Type
+def VariableReference    Type
+def PointerOperation     Type
+def FieldAccess          Type
+def Call                 Type
+def UnaryOperation       Type
+def BinaryOperation      Type
+def Cast                 Type
+def Assignment           Type
+def IfElse               Type
+def ControlFlow          Type
+def Loop                 Type
+def Return               Type
+def Block                Type
+def UnresolvedSymbol     Type
+
+#def Variable             Type
 
 
-
-#IDEA for spec: when passed int32,2 into typecheck the result should be 2
-#expect when passed bool,2 into typecheck it shouldn't compile
+#def newVariable(name BoundedPointer(uint8)) Pointer(Variable)
+def newTypeReference(type Type) Pointer(TypeReference)
+def newLoop(body Pointer(Expression)) Pointer(Loop)
+def newReturn(expression Pointer(Expression)) Pointer(Return)
+def newIfElse(condition Pointer(Expression),consequence Pointer(Expression),alternative Pointer(Expression)) Pointer(IfElse)
+def newControlFlow(continue bool)    Pointer(ControlFlow)
+def newControlFlow(break bool)       Pointer(ControlFlow)
+def newControlFlow(fallthrough bool) Pointer(ControlFlow)
+def newPointerOperation(expression Pointer(Expression),addressof bool) Pointer(PointerOperation)
+def newPointerOperation(expression Pointer(Expression),dereference bool) Pointer(PointerOperation)
+def newUnaryOperation(kind uint32,expression Pointer(Expression)) Pointer(UnaryOperation)
+def newBinaryOperation(kind uint32,a Pointer(Expression),b Pointer(Expression)) Pointer(BinaryOperation)
+#def newCast(expression Pointer(Expression),type Pointer(Expression)) Pointer(Cast)

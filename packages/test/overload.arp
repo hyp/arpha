@@ -17,7 +17,7 @@ f(x:1,2)
 f(1,y:2)
 f(y:2,x:1)
 
-def grom(start int32,end int32,isTrue bool = true) = start + end
+def grom(start int32,end int32,isTrue bool = true) = start
 grom(1,2)
 grom(1,2,true)
 grom(1,2,isTrue:true)
@@ -47,7 +47,7 @@ break(1,y:(2,3))
 break(x:1,y:(2,3))
 break(y:(2,3),x:1)
 
-def brick(yes int32 = 8,no int32 = 4,maeby int32 = 9)
+def brick(yes int32 = 8,no int32 = 4,maeby int32 = 9) = 22
 brick()
 brick(yes:1)
 brick(no:9)

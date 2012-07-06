@@ -30,6 +30,9 @@ struct SymbolID {
 	inline const char* ptr() const {
 		return symbol->ptr;
 	}
+	inline const size_t length() const {
+		return symbol->length;
+	}
 	inline bool isNull() const{
 		return symbol == nullptr;
 	}

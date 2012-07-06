@@ -13,21 +13,54 @@ struct InterpreterSettings {
 	size_t instructionLimit;//Maximum number of instructions for a single interpreter invocation
 };
 
+struct CompilationUnit;
+struct Parser;
 struct Interpreter;
 
-struct InterpreterInvocation {
+struct CTFEinvocation {
 
-	InterpreterInvocation(Interpreter* interpreter,Function* f,Node* parameter,bool visitAllBranches = false);
-	~InterpreterInvocation();
+	CTFEinvocation(CompilationUnit* compilationUnit,Function* function);
+	~CTFEinvocation();
+
+	bool invoke(Node* parameter);
 
 	Node* getValue(const Variable* variable); //returns null, if this variable isn't expanded
-	inline bool succeded(){ return _succeded; }
-	inline Node* result(){ return _result; }
+	inline Node* result() { return _result; }
+
 private:
 	Node* _result;
 	std::vector<Node*> registers;
 	Function* func;
-	bool  _succeded;
+	CompilationUnit* _compilationUnit;
+};
+
+struct CTFEintrinsicInvocation {
+	CTFEintrinsicInvocation(CompilationUnit* compilationUnit);
+
+	bool  invoke(Function* function,Node* parameter);
+	Node* result() const;
+
+	//API For intrinsic bindings
+	bool     getBoolParameter(uint16 id) const;
+	Type*    getTypeParameter(uint16 id) const;
+	Node*    getNodeParameter(uint16 id) const;
+	SymbolID getStringParameterAsSymbol(uint16 id) const;
+	int      getInt32Parameter(uint16 id)  const;
+	uint32   getUint32Parameter(uint16 id) const;
+	
+	Parser* getParser() const; //for parser api
+
+	void ret();
+	void ret(bool value );
+	void ret(Type* value);
+	void ret(Node* node );
+	void ret(SymbolID symbolAsString);
+	void retNatural(size_t value);
+	void retNaturalNatural(size_t a,size_t b);
+private:
+	CompilationUnit* _compilationUnit;
+	Node** _params;
+	Node* _result;
 };
 
 //

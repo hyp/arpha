@@ -5,15 +5,21 @@
 #
 
 # Boolean operations
+
+use intrinsic functions
+
 def not(x bool) bool
 def and(x bool,y bool) bool
 def or(x bool,y bool) bool
 def equals(x bool,y bool) bool
+
 macro notEquals(x,y) = [> not(equals($x,$y)) <]
 
 macro defineOperations {
 	var T = parser.parse()
 	return [>
+		use intrinsic functions
+		
 		# Arithmetics
 		def minus(x $T) $T
 
@@ -21,7 +27,7 @@ macro defineOperations {
 		def subtract(x $T,y $T) $T
 		def multiply(x $T,y $T) $T
 		def divide(x $T,y $T) $T
-		def mod(x $T,y $T) $T
+		def remainder(x $T,y $T) $T
 		
 		# Comparison
 		def equals(x $T,y $T) bool
@@ -33,4 +39,14 @@ macro defineOperations {
 }
 
 defineOperations int32
+
+# Pointer operations
+
+use intrinsic functions
+
+def equals (x Pointer(_),y Pointer(_)) bool
+def less   (x Pointer(_),y Pointer(_)) bool
+def greater(x Pointer(_),y Pointer(_)) bool
+def lessEquals   (x Pointer(_),y Pointer(_)) bool
+def greaterEquals(x Pointer(_),y Pointer(_)) bool
 

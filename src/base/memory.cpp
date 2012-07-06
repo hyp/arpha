@@ -2,6 +2,7 @@
 #include "memory.h"
 #include "system.h"
 #include "format.h"
+#include "utf.h"
 
 std::ostream& operator<< (std::ostream& stream,const memory::Block& block){
 	assert(block.ptr());
@@ -61,6 +62,17 @@ namespace memory {
 
 		auto x = Block::construct("",0);
 		assert(x.ptr()!=nullptr && x.length() == 0);
+	}
+
+	StringLiteralConstructor::StringLiteralConstructor (){
+		_ptr = _start =  buffer;
+		_limit = buffer + 256;
+	}
+	void  StringLiteralConstructor::append(UnicodeChar c){
+		if(!(_ptr + 4 >= _limit)) _ptr += UTF8::encode(c,(U8Char*)_ptr);
+	}
+	Block StringLiteralConstructor::toString(){
+		return Block::construct(_start,_ptr - _start).duplicate();
 	}
 
 	ManagedDefinition* definitionsRoot = nullptr;

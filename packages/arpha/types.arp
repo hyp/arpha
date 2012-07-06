@@ -14,11 +14,20 @@
 	The constant values true and false are also defined by the implementation.
 #
 
-# Type functions
-def equals(x Type,y Type) bool
 
-# Standart integer types
+#
+	Type operations.
+	
+	isParametrized returns true if a type is parametrize e.g. Pointer(int32) is parametrized by int32
+#
+
+use intrinsic functions
+
+def equals(type Type,other Type) bool
+def isParametrized(type Type) bool
+def sizeof(type Type) natural
+
+def length(array BoundedPointer(_))   natural
 
 
 
-# utf32 char type char integer

@@ -1,0 +1,101 @@
+#
+	This module implements arpha's arithmetic operators.
+	Author: Hyp
+	Version: 1
+#
+
+import qualified precedence
+
+constraint Negatable(T) = true #TODO
+
+# Unary operators
+macro minus(expression Negatable) = ast.newUnaryOperation(1,expression)
+macro plus (expression Negatable) = expression
+
+macro - 
+{
+	var expr = parser.parse(precedence.unary)
+	return [> $expr.minus() <]
+}
+
+macro + 
+{
+	var expr = parser.parse(precedence.unary)
+	return [> $expr.plus() <]
+}
+
+# Binary operators
+constraint Addable(T)      = true # TODO
+constraint Multipliable(T) = true #TODO
+
+macro add     (x T: Addable,y T) = ast.newBinaryOperation(5,x,y)
+macro subtract(x T: Addable,y T) = ast.newBinaryOperation(6,x,y)
+
+macro multiply(x T: Multipliable,y T) = ast.newBinaryOperation(7,x,y)
+macro divide  (x T: Multipliable,y T) = ast.newBinaryOperation(8,x,y)
+macro mod     (x T: Multipliable,y T) = ast.newBinaryOperation(9,x,y)
+
+use precedence: precedence.term
+macro (x) + 
+{
+	var y = parser.parse(precedence.term,ignoreNewlines: true)
+	return [> $x.add($y) <]
+}
+
+macro (x) - 
+{
+	var y = parser.parse(precedence.term,ignoreNewlines: true)
+	return [> $x.subtract($y) <]
+}
+
+use precedence: precedence.product
+macro (x) * 
+{
+	var y = parser.parse(precedence.product,ignoreNewlines: true)
+	return [> $x.multiply($y) <]
+}
+
+macro (x) / 
+{
+	var y = parser.parse(precedence.product,ignoreNewlines: true)
+	return [> $x.divide($y) <]
+}
+
+macro (x) % 
+{
+	var y = parser.parse(precedence.product,ignoreNewlines: true)
+	return [> $x.mod($y) <]
+}
+
+# Assign modify
+# TODO possible folding into addAssign etc
+use precedence: precedence.assignment
+macro (x) += 
+{
+	var y = parser.parse(precedence.assignment,ignoreNewlines: true)
+	return [> $x = $x + $y <]
+}
+
+macro (x) -= 
+{
+	var y = parser.parse(precedence.assignment,ignoreNewlines: true)
+	return [> $x = $x - $y <]
+}
+
+macro (x) *= 
+{
+	var y = parser.parse(precedence.assignment,ignoreNewlines: true)
+	return [> $x = $x * $y <]
+}
+
+macro (x) /= 
+{
+	var y = parser.parse(precedence.assignment,ignoreNewlines: true)
+	return [> $x = $x / $y <]
+}
+
+macro (x) %= 
+{
+	var y = parser.parse(precedence.assignment,ignoreNewlines: true)
+	return [> $x = $x % $y <]
+}

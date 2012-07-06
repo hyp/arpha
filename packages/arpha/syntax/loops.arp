@@ -1,0 +1,41 @@
+#
+	This module implements the while,until and loop statements.
+	It also defines continue and break statements.
+#
+
+macro continue = ast.newControlFlow(continue: true)
+macro break    = ast.newControlFlow(break: true)
+
+#TODO condition typecheck?
+macro while {
+	parser.expect("(")
+	var condition = parser.parse()
+	parser.expect(")")
+	var body = parser.parse()
+	return ast.newLoop( [> if(! $condition) break ; $body <] )
+}
+
+macro until {
+	parser.expect("(")
+	var condition = parser.parse()
+	parser.expect(")")
+	var body = parser.parse()
+	return ast.newLoop( [> if($condition) break ; $body <] )
+}
+
+macro loop {
+	var body = parser.parse()
+	if(parser.match("while",ignoreNewlines: true)) {
+		parser.expect("(")
+		var condition = parser.parse()
+		parser.expect(")")
+		return ast.newLoop( [> $body ; if(! $condition) break <] )
+	} 
+	else if(parser.match("until",ignoreNewlines: true)) {
+		parser.expect("(")
+		var condition = parser.parse()
+		parser.expect(")")
+		return ast.newLoop( [> $body ; if($condition) break <] )
+	} 
+	else return ast.newLoop( [> $body <] )
+}

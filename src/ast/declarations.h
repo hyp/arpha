@@ -1,19 +1,40 @@
 /**
 * This module contains the amin declarations such as function, type and variable.
 */
-#ifndef DECLARATIONS_H
-#define DECLARATIONS_H
+#ifndef ARPHA_AST_DECLARATIONS_H
+#define ARPHA_AST_DECLARATIONS_H
 
 struct Node;
 struct Parser;
 struct BlockExpression;
 struct CallExpression;
 struct Type;
-struct TypeExpression;
+struct Type;
 struct Resolver;
+struct CTFEintrinsicInvocation;
 
 #include "../base/bigint.h"
 #include "node.h"
+
+
+//Some macroes must be implemented not in arpha but here :(
+struct IntrinsicPrefixMacro : PrefixDefinition {
+	IntrinsicPrefixMacro(SymbolID name);
+
+private:
+	//dummy implementation
+	Node* duplicate(DuplicationModifiers* mods) const { return nullptr; }
+	Node* accept(NodeVisitor* visitor){ return this; }
+};
+
+struct IntrinsicInfixMacro : InfixDefinition {
+	IntrinsicInfixMacro(SymbolID name,int stickiness);
+
+private:
+	//dummy implementation
+	Node* duplicate(DuplicationModifiers* mods) const { return nullptr; }
+	Node* accept(NodeVisitor* visitor){ return this; }
+};
 
 struct Argument;
 
@@ -21,190 +42,109 @@ struct Variable : PrefixDefinition  {
 	enum {
 		//The type that the variable returns isn't equal to the type that the variable was defined with 
 		// e.g. macro foo(x) = x  , x will be _ pattern on declaration, but really it is a *ast.Expression
-		HIDDEN_TYPE = 0x2 ,
+		HIDDEN_TYPE = 0x4 ,
+
+		CONSTANT_SUBSTITUTE = 0x8,//def a = 1 => an occurence of a will be replaced by 1. Make sure value is set before setting this flag.
+
 	};
-	Variable(SymbolID name,Location& location,Scope* owner);
+	Variable(SymbolID name,Location& location);
+	Variable(SymbolID name,Location& location,Scope* owner,Node* value);//constant injection
+
+	bool applyProperty(SymbolID name,Node* value);
 
 	Node* parse(Parser* parser);
 	Node* createReference();
 
 	void setImmutableValue(Node* value);
+	inline Node* asConstantSubstitute(){ return isFlagSet(CONSTANT_SUBSTITUTE) ? value : nullptr; }
 
-	bool isResolved();
-	bool resolve(Resolver* evaluator);
+	Node* resolve(Resolver* resolver);
 	//Use at variable's definition when a type is specified
-	void specifyType(TypeExpression* givenType);
+	void specifyType(Type* givenType);
 	//Matches a type to a patterned type and resolves the patterned type. Returns an error if match fails.
-	bool deduceType(TypeExpression* givenType); 
+	bool deduceType(Type* givenType); 
 
 	bool isLocal() const;
 	Function* functionOwner() const;
 
-	PrefixDefinition* duplicate(DuplicationModifiers* mods);
-
 	virtual Argument* asArgument();
-	virtual TypeExpression* hiddenType() const; //query the flag before using!
+	Type* referenceType() const;
 
 	TypePatternUnresolvedExpression type;
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
 	bool isMutable; // = true
-	bool expandMe;  // = false // assume value != nullptr
-	Scope* _owner;
-	uint16 registerID;
+	Scope* _owner;  // set at resolving
+	uint16 ctfeRegisterID;
+
+	static Node* getIntrinsicValue(Variable* variable);
+
+	DECLARE_NODE(Variable);
 };
 
 struct Argument : Variable {
-	Argument(SymbolID name,Location& location,Scope* owner);
+	enum {
+		IS_EXPENDABLE = 0x10, //Is this argument expendable?
+		IS_VARARG = 0x20
+	};
+
+	Argument(SymbolID name,Location& location,Function* owner);
 
 	Argument* asArgument();	
-	void hideType(TypeExpression* givenType);
-	TypeExpression* hiddenType() const;
+	void hideType(Type* givenType);
+	Type* hiddenType() const;
 
-	PrefixDefinition* duplicate(DuplicationModifiers* mods);
+	Argument* reallyDuplicate(Function* dest,DuplicationModifiers* mods) const;
 
-	Argument* reallyDuplicate(DuplicationModifiers* mods,TypeExpression* newType);
+	Argument* specializedDuplicate(Function* dest,DuplicationModifiers* mods,Type* specializedType,Node* expandedValue);
 
-	void defaultValue(Node* expression,bool inferType,bool typecheck = true);
+	Node* resolve(Resolver* resolver);
+	void  defaultValue(Node* expression);
 	Node* defaultValue() const;
 
-	bool expandAtCompileTime();
+	bool expandAtCompileTime() const;
 	bool isDependent() const;
-	
-	bool _dependent;
+
+	inline bool isVararg() const { return isFlagSet(IS_VARARG); }
+
 	
 private:
-	TypeExpression* _hiddenType;
+	Type* _hiddenType;
 	Node* _defaultValue;
 };
 
-
-struct TypeBase : PrefixDefinition {
-public:
-	TypeBase(SymbolID name,Location& location) : PrefixDefinition(name,location) {}
-
-	virtual size_t size() const = 0;
-
-};
-
-//An intrinsic type
-struct IntrinsicType : public TypeBase {
-	IntrinsicType* _base;
-	IntrinsicType(SymbolID name,Location& location,IntrinsicType* base = nullptr);
-
-	size_t size() const;
-	Node* parse(Parser* parser);
-
-	//A single reference expression
-	TypeExpression _reference;
-	inline TypeExpression* reference(){ return &_reference; }
-	
-	//Parsing special types on creation
-	Function* construct;
-};
-
 //An integral type
-struct IntegerType: public TypeBase {
-	
+struct IntegerType {
+	SymbolID id;
+	Type _type;
+	Type* asType() { return &_type; }
+	const Type* asType() const { return &_type; }
 
 	size_t size() const;
-	bool isValid(BigInt& value) const;
-	bool isUnsigned() const;
+	bool   isValid(BigInt& value) const;
+	bool   isUnsigned() const;
 
 	bool isSubset(IntegerType* other) const;
 
 	static IntegerType* make(BigInt& min,BigInt& max);
 
-	Node* parse(Parser* parser);
 	BigInt max,min;
 	size_t _size;
 private:
-	IntegerType(SymbolID name,Location& location);
+	IntegerType(SymbolID name);
 	static std::vector<IntegerType* > expansions;
-	
 };
-
-//A record type
-struct Record: public TypeBase {
-private:	
-	
-	Record* headRecord; ///if this is null, then the type isn't an unonymous record
-	bool _resolved; // = false
-	size_t _size;
-public:
-	enum {
-		GENERATED = 0x2, // was it generated by a type generating function?
-	};
-	struct Field {
-		SymbolID name;
-		TypePatternUnresolvedExpression type;
-		bool isExtending; //a field aliased as this
-
-		Field(SymbolID id,TypeExpression* typ) : name(id),type(typ),isExtending(false) {}
-		Field duplicate(DuplicationModifiers* mods);
-	private:
-		Field(){}
-	};
-	std::vector<Field> fields;
-
-	Record(SymbolID name,Location& location,Scope* owner);
-
-	bool wasGeneratedBy(Function* func) const;
-	Node* generatedArgument(size_t i) const;
-
-	Node* parse(Parser* parser);
-	Node* createReference();
-
-	// Returns -1 if field isn't found
-	int lookupField(const SymbolID fieldName);
-	// Adds a field to the record. NB record must be unresolved.
-	void add(const Field& var); 
-
-	//Record's properties
-	bool isResolved();
-	size_t size() const;
-	
-	//Try to resolve the record.
-	//NB Not used by anonymous records!
-	bool resolve(Resolver* evaluator);
-
-	PrefixDefinition* duplicate(DuplicationModifiers* mods);
-
-	void generateDestructorBody(Node* self,BlockExpression* dest) const;
-
-	
-	//Unique anonymous record construction
-	//NB all fields must have resolved types
-	static Record* findAnonymousRecord(std::vector<Field>& record);
-	//An anonymous record
-	inline bool isAnonymous() const { return headRecord != nullptr; }
-	//Determines whether two records have the same field types or not
-	inline static bool anonymousRecordsSameTypes(Record* r1,Record* r2){ return r1->headRecord == r2->headRecord; }
-private:
-	Scope* _owner;
-	static Record* createRecordType(std::vector<Field>& record,Record* headRecord = nullptr);
-	static Record* findSubRecord(Record* headRecord,std::vector<Record*>& subRecords,std::vector<Field>& record);
-	
-	//Calculates sizeof etc.
-	void calculateResolvedProperties();
-	bool resolveCircularReferences(Resolver* evaluator);
-};
-
-std::ostream& operator<< (std::ostream& stream,Record* type);
 
 //An overload set consists of function with the same name, whcih are defined in the same scope
 struct Overloadset: public PrefixDefinition {
 	enum {
-		TYPE_GENERATOR_SET = 0x80,//Overload set for functions which generate types e.g. Pointer(T) can't be combined with other sets
+		TYPE_GENERATOR_SET = 0x100,//Overload set for functions which generate types e.g. Pointer(T) can't be combined with other sets
 	};
 	Overloadset(Function* firstFunction);
 
 	Node* parse(Parser* parser);
 
-
-	bool isResolved();
-	bool resolve(Resolver* evaluator);
-	PrefixDefinition* duplicate(DuplicationModifiers* mods);
-	PrefixDefinition* mergedDuplicate(DuplicationModifiers* mods,Overloadset* dest);
+	Node* duplicate(DuplicationModifiers* mods) const { assert(false); return nullptr; }
+	Node* accept(NodeVisitor* visitor){ return this; }
 	void push_back(Function* function);
 
 	Overloadset* asOverloadset();
@@ -213,7 +153,7 @@ struct Overloadset: public PrefixDefinition {
 };
 
 // A function
-// By defualt function is created with an empty body with null scope
+// By default function is created with an empty body with null scope
 // Return type is infered by default
 
 struct Function: public PrefixDefinition {
@@ -221,61 +161,103 @@ struct Function: public PrefixDefinition {
 	enum {
 		//Indicates whether some function, which can be evaluated at compile time,
 		//is allowed to be interpreted only when it's owner function is being interpreted
-		INTERPRET_ONLY_INSIDE = 0x2,
+		INTERPRET_ONLY_INSIDE = 0x4,
 
-		//Allows it to act as a type when declaring arguments for other functions
-		CONSTRAINT_FUNCTION = 0x4,
+		//This function is a body of constraint, it allows it to act as a type in type patterns
+		CONSTRAINT_FUNCTION = 0x8,
 
-		MACRO_FUNCTION = 0x8,
+		//This function is a body of a macro
+		MACRO_FUNCTION = 0x10,
 
-		CONTAINS_RETURN = 0x10,
+		//Is there a return expression present?
+		CONTAINS_RETURN = 0x20,
 
-		CANT_CTFE = 0x20,
-		PURE = 0x40,
+		//This function can't be interpreted at compile time
+		CANT_CTFE = 0x40,
 
-		TYPE_GENERATOR_FUNCTION = 0x80, // type x(T)
+		//This function is pure
+		PURE = 0x80,
+
+		//This function generates a type as a result of it's invocation. It allows it to act as a type in type patterns.
+		TYPE_GENERATOR_FUNCTION = 0x100,
+
+		//Does this function have at least one pattern argument? 
+		// (If it does this function can be specialized)
+		HAS_PATTERN_ARGUMENTS = 0x200,
+
+		//Does this function have at least one expendable argument? 
+		// (If it does this function can be simplified by bringing the arguments like types from the invocation into the function itself)
+		// The function expansion based on expendable arguments is very similar to templates!
+		HAS_EXPENDABLE_ARGUMENTS = 0x400,
+
+		//Use intrinsic
+		IS_INTRINSIC = 0x800,
+
+		//use external
+		IS_EXTERNAL = 0x1000,
 	};
 
-	Function(SymbolID name,Location& location,Scope* bodyScope);
+	enum CallingConvention {
+		CC_ARPHA = 0,
+		CC_CCALL,
+		CC_STDCALL,
+	};
+
+	Function(SymbolID name,Location& location);
+
+	bool applyProperty(SymbolID name,Node* value);
+	
 	
 	Node* parse(Parser* parser);
 	Node* createReference();
 
-	bool isResolved();
-	bool isPartiallyResolved();//It's when arguments and return type are resolved! The function's body doesn't have to be resolved yet.
-	bool resolve(Resolver* evaluator);
-	bool canExpandAtCompileTime();//i.e. f(T Type)
-	bool canAcceptLocalParameter(size_t argument); 
+	Node* resolve(Resolver* evaluator);
 
-	TypeExpression* argumentType();
-	TypeExpression* returnType();
+	void makeAllArgumentsExpendable(); //Makes all arguments to be expendable, essentialy making this function a template.
+
+	//Calling convention
+	bool isIntrinsic() const;
+	CallingConvention callingConvention() const;
+
+	Type* argumentType();
+	Type* returns() const;
 	Scope* owner() const;
 
-	Function* duplicate(DuplicationModifiers* mods);
-	//Used to specialise a function with wildcard parameters
-	Function* specializedDuplicate(DuplicationModifiers* mods,std::vector<TypeExpression* >& specializedArgTypes);
-	bool expandedDuplicate(DuplicationModifiers* mods,std::vector<Node*>& parameters,Function** dest);
+	//Used to specialise a function with type pattern and/or expandable parameters
+	Function* specializationExists(Type** specializedParameters,Node** passedExpressions,Scope* usageScope);
+	Function* specializedDuplicate(DuplicationModifiers* mods,Type** specializedParameters,Node** passedExpressions);
+
+	Function* reallyDuplicate(DuplicationModifiers* mods,bool redefine = true);
 
 	//Returns -1 when an argument isn't found
 	int findArgument(Variable* var) const;
+	void addArgument(Argument* arg);
+	void specifyReturnType(Type* givenType);
 
+
+	std::vector<Argument*> arguments;
 	TypePatternUnresolvedExpression _returnType;
 	BlockExpression body;
-	Node* (*constInterpreter)(Node* parameters); //Can be null. Used to interpret the function with const parameters.
-	std::vector<Argument*> arguments;
 	TypePatternUnresolvedExpression::PatternMatcher allArgMatcher; //a fused matcher is used so that a patterned argument will be able to acess introduced definitons from other patterns
 	//expanded
-	Function* expandedParent;
-	std::vector<Node*> expandedArguments;
-
-	bool _hasGenericArguments;
-	bool _hasExpandableArguments;
-	bool _argsResolved;
-	bool _resolved;
 	uint16 ctfeRegisterCount;
 	uint16 inliningWeight;
+
+	typedef void (*CTFE_Binder)(CTFEintrinsicInvocation* invocation);
+
+	CTFE_Binder intrinsicCTFEbinder;
+
+	//Bindings to compile time evaluator
+	static CTFE_Binder getIntrinsicFunctionBinder(Function* function);
+
+	//generated functions
+	Function* generatedFunctionParent;
+	std::vector<Function*> generatedFunctions;
+	std::vector<Node*>     expandedArguments ;
+	
+	DECLARE_NODE(Function);
 private:
-	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func);
+	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func) const;
 	
 	
 };
@@ -294,6 +276,15 @@ struct ImportedScope : PrefixDefinition {
 	//A single reference expression
 	ImportedScopeReference _reference;
 	inline ImportedScopeReference* reference(){ return &_reference; }
+
+	Node* duplicate(DuplicationModifiers* mods) const { assert(false); return nullptr; }
+	Node* accept(NodeVisitor* visitor){ return this; }
 };
+
+//Macroes
+
+
+
+
 
 #endif

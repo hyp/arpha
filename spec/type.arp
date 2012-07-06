@@ -1,0 +1,31 @@
+import spec # TODO make implicit through package builder
+
+specify "type operations" {
+	int32 == int32 should be true
+	int8  == int32 should be false
+	(*int32).isParametrized should be true
+	int32.isParametrized    should be false
+	int32.sizeof should be 4
+	int8.sizeof  should be 1
+	bool.sizeof  should be 1
+}
+
+specify "boolean operations" {
+	!true          should be false
+	!false         should be true
+	
+	true  == true  should be true
+	false == false should be true
+	true  != false should be false
+	true  == false should be true
+	
+	true  and true  should be true
+	true  and false should be false
+	false and true  should be false
+	false and false should be false
+	
+	true  or true   should be true
+	true  or false  should be true
+	false or true   should be true
+	false or false  should be false	
+}

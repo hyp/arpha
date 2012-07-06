@@ -1,0 +1,86 @@
+﻿import spec
+
+describe "An integer literal" {
+	it "should allow decimal numbers, which consist of characters '0' to '9'" {
+		1 should be 1
+		0 should be 0
+		123049 should be 123049
+	}
+	it "should allow hexadecimal numbers, which are prefixed by '0x' and consist of characters '0' to '9','A' to 'F' and 'a' to 'f'" {
+		0xA  should be 10
+		0xa  should be 0xA
+		0x10 should be 16
+		0xabCD should be 0xABcd
+	}
+	it "should allow underscores to act as a separator between digits" {
+		1_1 should be 1_1
+		4_2 should be 42
+		123_654 should be 123654
+		0xFF_FF should be 0xFFFF
+		123___45 should be 12345
+	}
+	it "should allow trailing underscores to be a part of a number literal" {
+		13_ should be 13
+		1124_5_ should be 11245
+	}
+}
+
+describe "A floating point literal" {
+	it "should allow decimal numbers, which consist of characters '0' to '9', and have a single '.' between them" {
+		1.2 should be 1.2
+		3.0 should be 3.0
+		22.12 should be 22.12
+	}
+	it "should be possible to use '.' without leading number digits to specify a floating point number, which has an integer part of value 0" {
+		.1 should be 0.1
+		.125 should be 0.125
+	}
+	it "should allow underscores to act as a separator between digits" {
+		1.12_34 should be 1.1234
+		12_3.460_91 should be 123.46091
+	}
+}
+
+describe "A character literal" {
+	it "should be delimited by single quotes" {
+		'A' should be 'A'
+	}
+	it "should allow an escape sequence" {
+		'\'' should be '\''
+		'\\' should be '\\'
+		'\n' should be '\n'
+		'\r' should be '\r'
+		'\t' should be '\t'
+		'\"' should be '\"'
+		'\x42' should be '\x42'
+		'\u0D5A' should be '\u0D5A'
+		'\U012AB00' should be '\U012AB00'
+	}
+	it "should allow a unicode character encoded in UTF8" {
+		'Ф' should be 'Ф'
+	}
+}
+
+describe "A string literal" {
+	it "should be delimited by double quotes" {
+		"String" should be "String"
+	}
+	it "should be allowed to contain escape sequences" {
+		"Greendale \"nightschool\"" should be "Greendale \"nightschool\""
+		"C:\\root" should be "C:\\root"
+	}
+	it "should be allowed to contain unicode characters encoded in UTF8" {
+		"Привет мир" should be "Привет мир"
+	}
+}
+
+describe "A comment" {
+	it "should be ignored" {
+		#foo
+	}
+	it "should allow multiline comments" {
+		#
+		This is a multiline comment
+		#
+	}
+}

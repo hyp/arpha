@@ -1,0 +1,27 @@
+#
+	This module implements the 3 logical operators - not , and or
+	
+	They use isTrue to check if an expression is true or not
+#
+
+import qualified precedence
+
+macro ! 
+{
+	var expression = parser.parse(precedence.logical_not)
+	return ast.newUnaryOperation(0, [> $expression.isTrue <] )
+}
+
+use precedence:precedence.logical_and
+macro (x) && 
+{
+	var y = parser.parse(precedence.logical_and)
+	return ast.newBinaryOperation(0, [> $x.isTrue <] , [> $y.isTrue <] )
+}
+
+use precedence:precedence.logical_or
+macro (x) || 
+{
+	var y = parser.parse(precedence.logical_or)
+	return ast.newBinaryOperation(1, [> $x.isTrue <] , [> $y.isTrue <] )
+}

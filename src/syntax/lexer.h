@@ -12,15 +12,43 @@
 struct Lexer {
 	Lexer(const char* source);
 
+	struct State {
+		const char* src;
+		const char* original;
+		Location location;
+		bool peeked;
+		Token peekedToken;
+	};	
+	void saveState(State *state);
+	void restoreState(State *state);
+
 	Token consume();
 	Token peek();
 
-	inline Location currentLocation(){ return location; }
+	inline Location currentLocation() { return location; }
 	inline Location previousLocation(){ return location; }
 
-protected:
+	void syntaxError(std::string& msg);
+private:
 	const char* ptr;
+	const char* original;
 	Location location;
+	bool  peeked;
+	Token peekedToken;
+
+	bool matchNewline();
+	UnicodeChar lexChar();
+	UnicodeChar escapeChar();
+	void lexComment();
+	void lexString(Token& token);
+	void lexChar(Token& token);
+	void lexDecimal(Token& token);
+	void lexHex(Token& token);
+	void lexFloat(Token& token);
+	
+	void onUnexpectedEOF(const char* str);
+	void onExpectedError(const char* str);
+	
 };
 
 #endif

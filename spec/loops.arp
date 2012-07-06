@@ -1,0 +1,43 @@
+import spec
+
+describe "A 'while' statement" {
+	it "should repeat the body while 'condition' is true" {
+		var condition = true
+		while(condition){
+			condition = false
+		}
+		condition should be false
+	}
+}
+
+describe "An 'until' statement" {
+	it "should repeat the body while 'condition' is false" {
+		var condition = false
+		until(condition){
+			condition = true
+		}
+		condition should be true
+	}
+}
+
+describe "A 'break' statement" {
+	it "should stop executing the inner most loop" {
+		var count = 0
+		while(true){
+			break
+			count = count + 1
+		}
+		count should be 0
+	}
+}
+
+describe "A 'continue' statement" {
+	it "should jump to the start of the body of the inner most loop" {
+		var count = 0
+		while(true){
+			count = count + 1
+			if(count == 1) continue else break
+		}
+		count should be 1
+	}
+}

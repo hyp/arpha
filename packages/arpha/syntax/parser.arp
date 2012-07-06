@@ -1,0 +1,17 @@
+#
+	This module contains the definitions for the Arpha parser API.
+	Arpha parser API allows to implement macroes with custom parsing rules in arpha.
+	Author: Hyp
+	Version: 1
+#
+
+import arpha.ast
+
+use intrinsic
+
+def parse(precedence int32 = 0,ignoreNewlines bool = false) Pointer(Expression)
+
+def expect(symbol BoundedPointer(uint8),ignoreNewlines bool = false)
+def match (symbol BoundedPointer(uint8),ignoreNewlines bool = false) bool
+
+#def currentBlock() Pointer(BlockExpression)

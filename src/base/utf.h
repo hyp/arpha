@@ -6,8 +6,10 @@
 
 #include "base.h"
 
+bool isValidUnicodeCharacter(UnicodeChar c);
+
 namespace UTF8 {
-    UnicodeChar decode(U8Char** ptr);
+    UnicodeChar decode(const U8Char** ptr);
     size_t encode(UnicodeChar c, U8Char buf[4]);
 }
 namespace UTF16 {
@@ -22,7 +24,7 @@ namespace UTF16 {
 		U16Char buffer[BufferSize];
 	};
 
-    UnicodeChar decode(U16Char** ptr);
+    UnicodeChar decode(const U16Char** ptr);
     size_t encode(UnicodeChar c, U16Char buf[2]);
 }
 

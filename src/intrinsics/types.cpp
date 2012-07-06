@@ -2,50 +2,51 @@
 #include "../ast/node.h"
 #include "../ast/scope.h"
 #include "../ast/declarations.h"
-#include "../ast/evaluate.h"
+#include "../ast/resolve.h"
+#include "../ast/interpret.h"
 #include "../compiler.h"
+#include "../syntax/parser.h"
 #include "types.h"
-#include "ast.h"
 
 
 namespace intrinsics {
 	namespace types {
-		TypeExpression *Void,*Type;
-		IntrinsicType  *StringLiteral;
+		::Type *Void,*Type;
+		::Type *StringLiteral;
+
+		::Type *NodePointer;
 
 		Function* PointerTypeGenerator,*FunctionTypeGenerator,*RangeTypeGenerator,*StaticArrayTypeGenerator;
+		Function* BoundedPointerTypeGenerator,*BoundedConstantLengthPointerTypeGenerator;
 
-		TypeExpression* boolean = nullptr;
-		TypeExpression* int8 = nullptr;
-		TypeExpression* int16 = nullptr;
-		TypeExpression* int32 = nullptr;
-		TypeExpression* int64 = nullptr;
-		TypeExpression* uint8 = nullptr;
-		TypeExpression* uint16 = nullptr;
-		TypeExpression* uint32 = nullptr;
-		TypeExpression* uint64 = nullptr;
-		TypeExpression* natural;
+		::Type* boolean = nullptr;
+		::Type* int8 = nullptr;
+		::Type* int16 = nullptr;
+		::Type* int32 = nullptr;
+		::Type* int64 = nullptr;
+		::Type* uint8 = nullptr;
+		::Type* uint16 = nullptr;
+		::Type* uint32 = nullptr;
+		::Type* uint64 = nullptr;
+		::Type* natural;
 		
-		//Performs a comparison between 2 types
-		Node* equals(Node* parameters){
-			auto t = parameters->asTupleExpression();
-			return new BoolExpression(t->children[0]->asTypeExpression()->isSame(t->children[1]->asTypeExpression()));
-		}
 
 		//Boots up arpha's type system.
 		void startup() {
-			Void = new TypeExpression(TypeExpression::VOID);
-			Type = new TypeExpression(TypeExpression::TYPE);
-			StringLiteral = new IntrinsicType("StringLiteral",Location());
+			Void = new ::Type(::Type::VOID);
+			Type = new ::Type(::Type::TYPE);
+			
 
-			boolean = new TypeExpression(TypeExpression::BOOL);
+			boolean = new ::Type(::Type::BOOL);
+
+			NodePointer = new ::Type(::Type::POINTER,new ::Type(::Type::NODE,-1));
 
 			BigInt min;
 			BigInt max;
 #define DEF_INT_TYPE(n,t,s) \
 			min = std::numeric_limits<t>::min(); \
 			max = (::uint64)(std::numeric_limits<t>::max()); \
-			n = new TypeExpression(IntegerType::make(min,max)); \
+			n = &IntegerType::make(min,max)->_type; \
 			n->integer->id = #n; n->integer->_size = s;
 
 			DEF_INT_TYPE(int8,signed char,1)
@@ -57,7 +58,7 @@ namespace intrinsics {
 			DEF_INT_TYPE(uint16,unsigned short,2)
 			min = 0;
 			max = (::uint64)(std::numeric_limits<unsigned int>::max());
-			uint32 = new TypeExpression(IntegerType::make(min,max));
+			uint32 = &IntegerType::make(min,max)->_type;
 			uint32->integer->id = "uint32";uint32->integer->_size = 4;
 			DEF_INT_TYPE(uint64,::uint64,8)
 
@@ -67,91 +68,88 @@ namespace intrinsics {
 
 		//Define some types before arpha/types is loaded so that we can use them in the module already.
 		void preinit(Scope* moduleScope){
-			struct Substitute : PrefixDefinition {
-				Substitute(SymbolID name,Node* expr) : PrefixDefinition(name,Location()),expression(expr) {}
+			struct Substitute : IntrinsicPrefixMacro {
+				Substitute(SymbolID name,Node* expr) : IntrinsicPrefixMacro(name),expression(expr) {}
 				Node* parse(Parser* parser){
-					DuplicationModifiers mods;
+					DuplicationModifiers mods(parser->currentScope());
 					return expression->duplicate(&mods);
 				}
 				Node* expression;
 			};
-			moduleScope->define(new Substitute("Nothing",Void));
-			moduleScope->define(new Substitute("Type",Type));
-			moduleScope->define(new Substitute("bool",boolean));
+			moduleScope->define(new Substitute("Nothing",new TypeReference(Void) ));
+			moduleScope->define(new Substitute("Type",new TypeReference(Type) ));
+			moduleScope->define(new Substitute("bool",new TypeReference(boolean) ));
 			moduleScope->define(new Substitute("true" ,new BoolExpression(true)));
 			moduleScope->define(new Substitute("false",new BoolExpression(false)));
 			//temporary
-			moduleScope->define(new Substitute("int8",int8));
-			moduleScope->define(new Substitute("int16",int16));
-			moduleScope->define(new Substitute("int32",int32));
-			moduleScope->define(new Substitute("int64",int64));
+			moduleScope->define(new Substitute("int8",new TypeReference(int8) ));
+			moduleScope->define(new Substitute("int16",new TypeReference(int16) ));
+			moduleScope->define(new Substitute("int32",new TypeReference(int32) ));
+			moduleScope->define(new Substitute("int64",new TypeReference(int64) ));
 
-			moduleScope->define(new Substitute("uint8",uint8));
-			moduleScope->define(new Substitute("uint16",uint16));
-			moduleScope->define(new Substitute("uint32",uint32));
-			moduleScope->define(new Substitute("uint64",uint64));
+			moduleScope->define(new Substitute("uint8",new TypeReference(uint8) ));
+			moduleScope->define(new Substitute("uint16",new TypeReference(uint16) ));
+			moduleScope->define(new Substitute("uint32",new TypeReference(uint32) ));
+			moduleScope->define(new Substitute("uint64",new TypeReference(uint64) ));
 
-			moduleScope->define(new Substitute("natural",natural));
+			moduleScope->define(new Substitute("natural",new TypeReference(natural) ));
 
 			struct TypeFunc {
-				TypeFunc(SymbolID name,Scope* moduleScope,Function** dest,Node* (*eval)(Node*),int args = 1){
-					Function* func = new Function(name,Location(),new Scope(moduleScope));
+				TypeFunc(SymbolID name,Scope* moduleScope,Function** dest,Function::CTFE_Binder binder,int args = 1){
+					Function* func = new Function(name,Location());
 					if(dest) *dest = func;
-					func->body.scope->_functionOwner = func;
 					if(args == 1){
-						func->arguments.push_back(new Argument("type",Location(),func->body.scope));
+						func->arguments.push_back(new Argument("type",Location(),func));
 						func->arguments[0]->specifyType(Type);
 					}else{
 						if(name == SymbolID("Integer")){//TODO
-							func->arguments.push_back(new Argument("min",Location(),func->body.scope));
+							func->arguments.push_back(new Argument("min",Location(),func));
 							func->arguments[0]->specifyType(Type);
-							func->arguments.push_back(new Argument("max",Location(),func->body.scope));
+							func->arguments.push_back(new Argument("max",Location(),func));
 							func->arguments[1]->specifyType(Type);
-						} else if(name == "Array"){
-							func->arguments.push_back(new Argument("T",Location(),func->body.scope));
+						} else if(name == "Array" || name == "BoundedPointer"){
+							func->arguments.push_back(new Argument("T",Location(),func));
 							func->arguments[0]->specifyType(Type);
-							func->arguments.push_back(new Argument("N",Location(),func->body.scope));
+							func->arguments.push_back(new Argument("N",Location(),func));
 							func->arguments[1]->specifyType(natural);
 						}
 						else{
-							func->arguments.push_back(new Argument("parameter",Location(),func->body.scope));
+							func->arguments.push_back(new Argument("parameter",Location(),func));
 							func->arguments[0]->specifyType(Type);
-							func->arguments.push_back(new Argument("return",Location(),func->body.scope));
+							func->arguments.push_back(new Argument("return",Location(),func));
 							func->arguments[1]->specifyType(Type);
 						}
 					}
-					func->constInterpreter = eval;
-					func->setFlag(Function::TYPE_GENERATOR_FUNCTION | Function::PURE);
+					func->intrinsicCTFEbinder = binder;
+					func->setFlag(Function::TYPE_GENERATOR_FUNCTION | Function::PURE | Function::IS_INTRINSIC);
 					func->_returnType.specify(Type);
-					func->_resolved = func->_argsResolved = true;
+					func->setFlag(Node::RESOLVED);
 					moduleScope->defineFunction(func);
 				}
 
-				static Node* Pointer(Node* arg){
-					return new TypeExpression(TypeExpression::POINTER,arg->asTypeExpression());
+				static void Pointer(CTFEintrinsicInvocation* invocation){
+					invocation->ret(new ::Type(Type::POINTER,invocation->getTypeParameter(0)));
 				}
-				static Node* FunctionType(Node* arg){
-					auto t = arg->asTupleExpression();
-					return new TypeExpression(t->children[0]->asTypeExpression(),t->children[1]->asTypeExpression());
+				static void FunctionType(CTFEintrinsicInvocation* invocation){
+					invocation->ret(new ::Type(invocation->getTypeParameter(0),invocation->getTypeParameter(1)));
 				}
-				static Node* StaticArray(Node* arg){
-					auto t = arg->asTupleExpression();
-					return new TypeExpression(t->children[0]->asTypeExpression(),(size_t)t->children[1]->asIntegerLiteral()->integer.u64);
+				static void StaticArray(CTFEintrinsicInvocation* invocation){
+					invocation->ret(new ::Type(::Type::STATIC_ARRAY,invocation->getTypeParameter(0),(size_t)invocation->getInt32Parameter(1)));
 				}
-
+				static void BoundedPointer(CTFEintrinsicInvocation* invocation){
+					invocation->ret(new ::Type(::Type::POINTER_BOUNDED,invocation->getTypeParameter(0)));
+				}
+				static void BoundedPointerConstantLength(CTFEintrinsicInvocation* invocation){
+					invocation->ret(new ::Type(::Type::POINTER_BOUNDED_CONSTANT,invocation->getTypeParameter(0),(size_t)invocation->getInt32Parameter(1)));
+				}
 			};
 			TypeFunc("Pointer",moduleScope,&PointerTypeGenerator,&TypeFunc::Pointer);
 			TypeFunc("Range",moduleScope,&RangeTypeGenerator,&TypeFunc::Pointer);
 			TypeFunc("Function",moduleScope,&FunctionTypeGenerator,&TypeFunc::FunctionType,2);
 			TypeFunc("Array",moduleScope,&StaticArrayTypeGenerator,&TypeFunc::StaticArray,2);
+			TypeFunc("BoundedPointer",moduleScope,&BoundedPointerTypeGenerator,&TypeFunc::BoundedPointer,1);
+			TypeFunc("BoundedPointer",moduleScope,&BoundedConstantLengthPointerTypeGenerator,&TypeFunc::BoundedPointerConstantLength,2);
 		}
 
-		//Perform additional typesystem bindings after arpha/types is loaded
-		void init(Scope* moduleScope){
-			auto f = ensure( ensure(moduleScope->lookupPrefix("equals"))->asOverloadset() )->functions[0];
-			f->constInterpreter = equals;
-			f->setFlag(Function::PURE);
-			
-		};
 	}
 }

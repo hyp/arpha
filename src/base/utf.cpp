@@ -1,15 +1,20 @@
 #include "utf.h"
 
+bool isValidUnicodeCharacter(UnicodeChar c){
+	return c <= 0x10FFFF;
+}
+
 namespace UTF8 {
 
-	UnicodeChar decode(U8Char** ptr) {
-		if (!( (*(*ptr)) & 0x80)) {
-			*ptr = (*ptr) + 1;
-			return (UnicodeChar) *((*ptr)-1);
+	UnicodeChar decode(const U8Char** ptr) {
+		const U8Char* str = *ptr;
+
+		if (!(*str & 0x80)) {
+			(*ptr)++;
+			return (UnicodeChar) *str;
 		}
 
-		U8Char* str = *ptr;
-		U8Char* end;
+		const U8Char* end;
 		U8Char first = *str;
 		UnicodeChar result;
 
@@ -97,7 +102,7 @@ namespace UTF16 {
 	StringBuffer::StringBuffer(const char* str){
 		size_t i =0;
 		const size_t limit = BufferSize - 3;
-		auto u8str = (U8Char*) str;
+		auto u8str = (const U8Char*) str;
 		while(*u8str){
 			i+=UTF16::encode(UTF8::decode(&u8str),buffer + i);
 			if(i>=limit) break;
@@ -109,10 +114,11 @@ namespace UTF16 {
 	}
 
 
-	UnicodeChar decode(U16Char** ptr) {
+	UnicodeChar decode(const U16Char** ptr) {
 		//TODO
+		auto c = **ptr;
 		*ptr = *ptr + 1;
-		return (UnicodeChar)*ptr;
+		return c;
 	}
 
 	size_t encode(UnicodeChar c, U16Char buf[2]) {
@@ -133,7 +139,7 @@ namespace UTF16 {
 
 unittest(UTF){
 #define expect(what) assert(what == UTF8::decode(&src));
-	auto src = (U8Char*) "A\xC2\xA2\xC2\xA9\xC5\x8C\xC5\xBE\xD0\xA0\xE0\xA6\x95\xE2\x88\x9A\xE3\x81\x86\xF0\x9D\x90\x80";
+	auto src = (const U8Char*) "A\xC2\xA2\xC2\xA9\xC5\x8C\xC5\xBE\xD0\xA0\xE0\xA6\x95\xE2\x88\x9A\xE3\x81\x86\xF0\x9D\x90\x80";
 
 	expect('A');
 	expect(0x00A2); //cent sign

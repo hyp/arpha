@@ -8,37 +8,35 @@
 #include "resolve.h"
 #include "interpret.h"
 #include "analyze.h"
-#include "../intrinsics/ast.h"
+#include "../syntax/parser.h"
 #include "../intrinsics/types.h"
-
-//expression evaluation - resolving overloads, inferring types, invoking ctfe
 
 
 //Typecheks an expression
-Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType){
-	if(auto assigns = expectedType->assignableFrom(expression,expression->_returnType())){
+Node* typecheck(Node* expression,Type* expectedType){
+	if(auto assigns = expectedType->assignableFrom(expression,expression->returnType())){
 		return assigns;
 	}
-	else {/* TODO expression->location? */
-		error(loc,"Expected an expression of type %s instead of %s of type %s",expectedType,expression,expression->_returnType());
+	else {
+		error(expression,"Expected an expression of type %s instead of %s of type %s",expectedType,expression,expression->returnType());
 		return expression;
 	}
 }
 
-Resolver::Resolver(Interpreter* interpreter) : _interpreter(interpreter),dontEvaluate(false),forcedToEvaluate(false),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr),mixinedExpression(nullptr),unresolvedExpressions(0) {
+Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilationUnit),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr) {
+	unresolvedExpressions = 0;
+	treatUnresolvedTypesAsResolved = false;
+	currentFunction = nullptr;
 }
 
-//new kind of resolving
-/*
-Node* CastExpression::resolve(Resolver* resolver){
-	object = resolver->resolve(object);
-	if(object->isResolved()){
-		_resolved = true;
-		auto returns = object->_returnType();
-		if(returns->isSame(type)) return object;
-	}
-	return this;
+
+Node* Resolver::resolve(Node* node){
+	if(node->isResolved()) return node;
+	auto result = node->resolve(this);
+	if(!result->isResolved()) markUnresolved(result);
+	return result;
 }
+
 //Resolves children and returns true if all are resolved!
 static bool resolveChildren(NodeList* node,Resolver* resolver){
 	bool allResolved = true;
@@ -49,509 +47,552 @@ static bool resolveChildren(NodeList* node,Resolver* resolver){
 	return allResolved;
 }
 
-Node* ArrayLiteral::resolve(Resolver* resolver){
-	resolveChildren(this,resolver);
+/**
+* Resolving expressions
+*/
+Node* Node::resolve(Resolver* resolver){
+	resolver->markResolved(this);
 	return this;
-}*/
+}
 
-struct AstExpander: NodeVisitor {
-	Resolver* evaluator;
-	AstExpander(Resolver* ev) : evaluator(ev) {}
-
-	//on a.foo(...)
-	static Node* transformCallOnAccess(CallExpression* node,AccessExpression* acessingObject){
-		//a.foo()
-		if(node->arg->asUnitExpression()){
-			delete node->arg;
-			node->arg  = acessingObject->object;
-		}
-		//a.foo(bar)
-		else{
-			if(auto isArgRecord = node->arg->asTupleExpression())
-				isArgRecord->children.insert(isArgRecord->children.begin(),acessingObject->object);
-			else 
-				node->arg = new TupleExpression(acessingObject->object,node->arg);
-		}
-		auto newCalleeObject = new UnresolvedSymbol(node->location,acessingObject->symbol);
-		node->object = newCalleeObject;
-		acessingObject->object = nullptr;
-		delete acessingObject;
-		return node;
+Node* ArrayLiteral::resolve(Resolver* resolver){
+	if(resolveChildren(this,resolver)){
+		resolver->markResolved(this);
+		bool allConst = true;
+		for(auto i = begin();i!=end();i++){ if(!(*i)->isConst()) allConst = false; }
+		if(allConst) setFlag(CONSTANT);
 	}
-	//TODO Type call -> constructor.
-	Node* evalTypeCall(CallExpression* node,TypeExpression* type){
-		/*if(type == intrinsics::ast::Expression){
-			debug("Expression of");
-			auto r = ExpressionReference::create(node->arg);
-			//delte node
-			return r;
-		}*/
-		return node;
+	return this;
+}
+
+Node* VariableReference::resolve(Resolver* resolver){
+	if(variable->asConstantSubstitute() && !resolver->isRHS){
+		DuplicationModifiers mods(resolver->currentScope());
+		return copyLocationSymbol(variable->asConstantSubstitute()->duplicate(&mods));//transforms constant pi into 3.14
 	}
+	if(variable->isResolved()) resolver->markResolved(this);
+	return this;
+}
 
-
-	Node* visit(ArrayLiteral* node){
-		return node;
+Node* TypeReference::resolve(Resolver* resolver){
+	if(type->isResolved() || resolver->treatUnresolvedTypesAsResolved){
+		resolver->markResolved(this);
+		setFlag(CONSTANT);
 	}
-
-	//TODO import qualified foo; var x foo.Foo ; foo.method() <-- FIX
-	Node* visit(CallExpression* node){
-		//evaluate argument
-		node->arg = node->arg->accept(this);
-
-		if(!node->arg->isResolved()) return node;
-		if(auto callingOverloadSet = node->object->asUnresolvedSymbol()){
-			auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : evaluator->currentScope());
-			auto func =  scope->resolveFunction(evaluator,callingOverloadSet->symbol,node->arg);
-			if(func){
-				node->arg = evaluator->constructFittingArgument(&func,node->arg)->accept(this);
-				if(func->isFlagSet(Function::MACRO_FUNCTION)){
-					if(auto f = func->constInterpreter) return f(node->arg);
-					InterpreterInvocation i(evaluator->interpreter(),func,node->arg);
-					if(i.succeded()){
-						DuplicationModifiers mods;
-						mods.expandedMacroOptimization = &i;
-						auto result = evaluator->mixin(&mods,reinterpret_cast<Node*>(i.result()->asValueExpression()->data));
-						result->location = node->location;
-						result->_label = node->_label;
-						return result;
-					}else {
-						error(node->location,"Failed to interpret a macro %s at compile time!",func->id);
-						return ErrorExpression::getInstance();
-					}
-				}  
-				else if(func->isFlagSet(Function::TYPE_GENERATOR_FUNCTION) && !func->constInterpreter){
-					debug("Type generation functions booyah!");
-					return func->body.scope->prefixDefinitions.begin()->second->createReference();
-				}
-				node->object = new FunctionReference(func);
-				node->_resolved = true;
-				if(auto f = func->constInterpreter){
-					if(!func->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && node->arg->isConst()) return f(node->arg);
-				}
-				return node;
-			}else{
-				evaluator->markUnresolved(node);
-			}
-		}
-		else if(auto callingFunc = node->object->asFunctionReference()){
-			if(auto f = callingFunc->function->constInterpreter){
-				if(!callingFunc->function->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && node->arg->isConst()) return f(node->arg);
-			}
-			return node;	//TODO eval?
-		}
-		else if(auto callingAccess = node->object->asAccessExpression()){
-			return transformCallOnAccess(node,callingAccess)->accept(this);
-		}
-		else if(auto type = node->object->asTypeExpression()){
-		}
-		else if(node->object->asVariableReference() && node->object->_returnType()->type == TypeExpression::FUNCTION){
-			return node; //Calling a function pointer
-		}
-		else
-			error(node->object->location,"Invalid function call expression - %s(%s)!",node->object,node->arg);
-		return node;
-	}
-
-	Node* visit(VariableReference* node){
-		if(node->variable->expandMe && !evaluator->isRHS){
-			DuplicationModifiers mods;
-			mods.target = evaluator->currentScope();
-			return node->copyProperties(node->variable->value->duplicate(&mods));
-		}
-		return node;
-	}	
-
-	Node* visit(PointerOperation* node){
-		node->expression = node->expression->accept(this);
-		if(node->expression->isResolved()){
-			node->_resolved = true;
-			if(node->kind == PointerOperation::DEREFERENCE && node->expression->_returnType()->type != TypeExpression::POINTER){
-				error(node->location,"Can't dereference a non-pointer expression!");
+	return this;
+}
+ 
+Node* TupleExpression::resolve(Resolver* resolver){
+	assert(size() > 1);
+	if(resolveChildren(this,resolver)){
+		resolver->markResolved(this);
+		//find the tuple's type!
+		std::vector<Record::Field> fields;
+		bool allTypes = true;
+		bool allConst = true;
+		for(auto i = begin();i!=end();i++){
+			if(!(*i)->isConst()) allConst = false;
+			auto returns = (*i)->returnType();
+			if(returns->isVoid()){
+				error((*i),"A tuple can't contain an expression returning Nothing!");
 				return ErrorExpression::getInstance();
-			}
-		}else{
-			evaluator->markUnresolved(node);
+			} else if(!returns->isType() || !(*i)->isConst()) allTypes = false;
+			fields.push_back(Record::Field((*i)->label(),returns));
 		}
-		return node;
+		if(allConst) setFlag(CONSTANT);
+		//int32,int32 :: Type,Type -> anon-record(int32,int32) :: Type
+		if(resolver->expectedTypeForEvaluatedExpression && resolver->expectedTypeForEvaluatedExpression->isType() && allTypes){
+			auto children = childrenPtr();
+			for(size_t i =0;i<size();i++){
+				fields[i].type = children[i]->asTypeReference()->type;
+			}
+			return resolver->resolve( new TypeReference(Record::findAnonymousRecord(fields)->asType()) );
+		}
+		else {
+			type = Record::findAnonymousRecord(fields)->asType();
+		}
 	}
+	return this;
+}
 
+//Resolve foo.bar(...)
+static Node* transformCallOnAccess(CallExpression* node,AccessExpression* acessingObject){
+	//a.foo()
+	if(node->arg->asUnitExpression())
+		node->arg = acessingObject->object;
+	//a.foo(bar)
+	else{
+		if(auto isArgRecord = node->arg->asTupleExpression())
+			isArgRecord->children.insert(isArgRecord->children.begin(),acessingObject->object);
+		else {
+			auto tuple = new TupleExpression();
+			tuple->addChild(acessingObject->object);
+			tuple->addChild(node->arg);
+			node->arg = tuple;
+		}
+	}
+	node->object = new UnresolvedSymbol(node->location(),acessingObject->symbol);
+	node->setFlag(CallExpression::DOT_SYNTAX);
+	return node;
+}
 
+Node* CallExpression::resolve(Resolver* resolver){
+	arg  = resolver->resolve(arg);
+	if(!arg->isResolved()) return this;
 
-	Node* fieldAccessFromAccess(AccessExpression* node){
-		auto returns = node->object->_returnType();
-		if(returns->type == TypeExpression::POINTER) returns = returns->argument;
-		if(returns->type == TypeExpression::RECORD){
-			auto field = returns->record->lookupField(node->symbol);
-			if(field != -1){
-				auto expr = new FieldAccessExpression(node->object,field);
-				return expr;
+	// symbol(arg)
+	if(auto callingOverloadSet = object->asUnresolvedSymbol()){
+		auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : resolver->currentScope());
+		if(auto func =  resolver->resolveOverload(scope,callingOverloadSet->symbol,arg,isFlagSet(DOT_SYNTAX))){
+			arg = resolver->resolve(resolver->constructFittingArgument(&func,arg));
+			//macro
+			if(func->isFlagSet(Function::MACRO_FUNCTION)) return resolver->executeAndMixinMacro(func,arg);
+			else if(func->isFlagSet(Function::TYPE_GENERATOR_FUNCTION) && !func->isIntrinsic()){
+				debug("Type generation functions booyah!");
+				return resolver->resolve(copyProperties(func->body.scope->prefixDefinitions.begin()->second->createReference()));
+			}
+			object = resolver->resolve(new FunctionReference(func));
+			resolver->markResolved(this);
+			if(func->intrinsicCTFEbinder && !func->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && arg->isConst()){
+				CTFEintrinsicInvocation i(resolver->compilationUnit());
+				i.invoke(func,arg);
+				return resolver->resolve(copyLocationSymbol(i.result()));
 			}
 		}
-		return nullptr;
+	} 
+	else if(auto callingFunc = object->asFunctionReference()){
+		resolver->markResolved(this);
+		auto func = callingFunc->function;
+		if(func->intrinsicCTFEbinder && !func->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && arg->isConst()){
+			CTFEintrinsicInvocation i(resolver->compilationUnit());
+			i.invoke(func,arg);
+			return resolver->resolve(copyLocationSymbol(i.result()));
+		}
 	}
+	else if(auto callingAccess = object->asAccessExpression()){
+		return resolver->resolve(transformCallOnAccess(this,callingAccess));
+	}
+	else if(auto type = object->asTypeReference()){
+		resolver->markResolved(this);
+	}
+	else if(object->asVariableReference() && object->returnType()->isFunction()){
+		resolver->markResolved(this);
+	}
+	else
+		error(object,"Invalid function call expression - %s(%s)!",object,arg);
+	return this;
+}
 
-	//TODO def x = 1;x = 1 => 1=1 on not first use?
-	Node* assign(AssignmentExpression* assignment,Node* object,Node* value,bool* error){
-		if(auto t1 = object->asTupleExpression()){
-			if(auto t2 = value->asTupleExpression()){
-				if(t1->children.size() == t2->children.size()){
-					for(size_t i=0;i<t1->children.size();i++){
-						auto newValue = assign(assignment,t1->children[i],t2->children[i],error);
-						if(newValue) t2->children[i] = newValue;
-						else assignment->_resolved = false;
-					}
-					
-					return t2;
-				}
-				else{
-					error(assignment->location,"Can't assign between tuples of different length");
-					*error = true;
-					return nullptr;
-				}
-			}
-			else{
-				error(assignment->location,"Can't assign a non-tuple to a tuple");
-				*error = true;
-				return nullptr;
-			}
-		}else{
-			auto valuesType = value->_returnType();
-			//Assigning values to variables
-			if(auto var = object->asVariableReference()){
-				if(!var->variable->asArgument() && var->variable->type.isPattern()){
-					if(!var->variable->deduceType(valuesType))
-						error(assignment->location,"Failed to deduce variable's type -\n\tA variable %s is expected to have a type matching a pattern %s, which the type %s derived from the expression %s doesn't match!",
-							var->variable->id,var->variable->type.pattern,valuesType,value);
-					debug("Inferred type %s for variable %s",valuesType,var->variable->id);
-					if(var->variable->isMutable) return value;
-				}
-				if(var->variable->type.isResolved()){
-					if(var->variable->type.type()->hasConstSemantics()){
-						//If variable has a constant type, assign only at place of declaration
-						if(assignment->isInitializingAssignment){
-							if(!var->variable->value)
-								var->variable->setImmutableValue(value);
-						}else{
-							error(value->location,"Can't assign %s to a constant variable %s!",value,object);
-							*error = true;
-							return nullptr;
+bool isComparable(Type* type){
+	return true;
+}
+bool isNegatable(Type* type){
+	return true;
+}
+bool isAddable(Type* type){
+	return true;
+}
+bool isMultipliable(Type* type){
+	return true;
+}
+bool  UnaryOperation::isValid() {
+	auto ret = expression->returnType();
+	switch(kind()){
+	case BOOL_NOT: return ret->isBool();
+	case MINUS:    return isNegatable(ret);
+	}
+	error(this,"The unary expression %s is invalid",this);
+	return false;
+}
+
+Node* UnaryOperation::resolve(Resolver* resolver){
+	expression = resolver->resolve(expression);
+	if(expression->isResolved()){
+		resolver->markResolved(this);
+		if(!this->isValid()) return ErrorExpression::getInstance();
+		/*if(expression->isConst()){
+			return interpret();
+		}*/
+	}
+	return this;
+}
+
+bool  BinaryOperation::isValid() {
+	auto aRet = a->returnType();
+	if(!aRet->isSame(b->returnType())) return false;
+	switch(kind()){
+	case BOOL_AND: case BOOL_OR: return aRet->isBool();
+	case EQUALS: case LESS: case GREATER: return isComparable(aRet);
+	case ADD: case SUBTRACT: return isAddable(aRet);
+	case MULTIPLY: case DIVIDE: case MOD: return isMultipliable(aRet);
+	}
+	error(this,"The binary expression %s is invalid",this);
+	return false;
+}
+
+Node* BinaryOperation::resolve(Resolver* resolver){
+	a = resolver->resolve(a);
+	b = resolver->resolve(b);
+	if(a->isResolved() && b->isResolved()){
+		resolver->markResolved(this); 
+		if(!this->isValid()) return ErrorExpression::getInstance();
+		//if(a->isConst() && b->isConst()) return interpret();
+	}
+	return this;
+}
+
+// TODO tuple destructuring
+Node* AssignmentExpression::resolve(Resolver* resolver){
+
+	struct Splitter {
+		BlockExpression* dest;
+		Location location;
+
+		void split(Node* object,Node* value){
+			if(auto t1 = object->asTupleExpression()){
+				if(auto t2 = value->asTupleExpression()){
+					if(t1->size() == t2->size()){
+						for(size_t i=0;i<t1->size();i++){
+							split(t1->children[i],t2->children[i]);
 						}
 					}
-					if(auto canBeAssigned = var->variable->type.type()->assignableFrom(value,valuesType)){
-						if(!var->variable->isMutable) {
-							//If variable has a constant type, assign only at place of declaration
-							if(assignment->isInitializingAssignment){
-								if(!var->variable->value)
-									var->variable->setImmutableValue(value);
-							}
-							else{
-								error(value->location,"Can't assign %s to %s - immutable variables can only be assigned at declaration!",value,object);
-								*error = true;
-								return nullptr;
-							}
-						}
-						return canBeAssigned;
-					}
-					else {
-						error(value->location,"Can't assign %s to %s - the types don't match!",value,object);
-						*error = true;
-						return nullptr;
-					}
+					else error(t1,"Can't assign between tuples of different length");
+					return;
 				}
-				else return nullptr; //Trying to assign to a variable with unresolved type.. that's a no no!
 			}
-			else if(auto access = object->asAccessExpression()){
-				if (auto fa = fieldAccessFromAccess(access)){
-					if(auto canBeAssigned = fa->_returnType()->assignableFrom(value,valuesType)){
-						return value;
-					} else {
-						error(value->location,"Can't assign %s to %s - the types don't match!",value,fa);
-						*error = true;
-						return nullptr;
-					}
-				}
-				//a.foo = 2 -> foo(a,2)
-				//TODO
-				return (new CallExpression(new UnresolvedSymbol(access->location,access->symbol),new TupleExpression(access->object,value)))->accept(this);
-			}
-			else{
-				error(object->location,"Can't perform an assignment to %s - only variables and fields are assignable!",object);
-				*error = true;
-			}
-			return nullptr;
-		}		
+			auto assignment= new AssignmentExpression(object,value);
+			assignment->_location = object->location();
+			dest->addChild(assignment);
+		}
+	};
+
+	//split
+	if(object->asTupleExpression() && value->asTupleExpression()){
+		auto block = new BlockExpression();
+		block->setFlag(BlockExpression::USES_PARENT_SCOPE);
+		Splitter splitter = { block };
+		splitter.split(object,value);
+		return resolver->resolve(block);
 	}
 
-	Node* visit(AssignmentExpression* node){
-		if(node->_resolved && !evaluator->forcedToEvaluate) return node;//Don't evaluate it again
+	//assign
+	value = resolver->resolve(value);
+	if(!value->isResolved()) return this;
 
-		node->value = node->value->accept(this);
-		if(!node->value->isResolved()) return node;//Don't bother until the value is fully resolved
-		bool error = false;
-
-		node->_resolved = true;
-		auto newValue = assign(node,node->object,node->value,&error);
-		if(newValue){
-			node->value = newValue;
+	//non tuple object
+	auto valuesType = value->returnType();
+	Variable* variable;
+	if(auto var = object->asVariableReference()) variable = var->variable;
+	else {
+		variable = object->asVariable();
+		if(variable) resolver->resolve(variable);
+	}
+	//Assigning values to variables
+	if(variable){
+		//type inferring
+		if(!variable->asArgument() && variable->type.isPattern()){
+			if(!variable->deduceType(valuesType)){
+				error(this,"Failed to deduce variable's type -\n\tA variable '%s' is expected to have a type matching a pattern %s, which the type '%s' derived from the expression %s doesn't match!",
+					variable->label(),variable->type.pattern,valuesType,value);
+			}
+			debug("Inferred type for %s",variable);
+			if(variable->isMutable){
+				resolver->markResolved(this);
+				return this;
+			}
 		}
-		else node->_resolved = false;
-		if(node->_resolved){
-			auto oldRHS = evaluator->isRHS;
-			evaluator->isRHS = true;
-			node->object = node->object->accept(this); // Need to resolve object's tuple's type when some variable is inferred
-			evaluator->isRHS = oldRHS;
+		
+		if(variable->type.isResolved()){
+			if(variable->type.type()->hasConstSemantics()){
+				//If variable has a constant type, assign only at place of declaration
+				if(this->isInitializingAssignment){
+					if(!variable->value)
+						variable->setImmutableValue(value);
+				}else{
+					error(value,"Can't assign %s to a constant variable %s!",value,object);
+				}
+			}
+			if(auto canBeAssigned = variable->type.type()->assignableFrom(value,valuesType)){
+				if(!variable->isMutable) {
+					//If variable has a constant type, assign only at place of declaration
+					if(this->isInitializingAssignment){
+						if(!variable->value)
+							variable->setImmutableValue(value);
+					}
+					else{
+						error(value,"Can't assign %s to %s - immutable variables can only be assigned at declaration!",value,object);
+					}
+				}
+				value = resolver->resolve(canBeAssigned);
+				resolver->markResolved(this);
+			}
+			else error(value,"Can't assign %s to %s - the types don't match!",value,object);
 		}
+	}
+	else if(auto access = object->asAccessExpression()){
+		//a.foo = 2 -> foo(a,2)
+		return resolver->resolve(new CallExpression(new UnresolvedSymbol(access->location(),access->symbol),new TupleExpression(access->object,value)));
+	}
+	else if( object->asPointerOperation() && object->asPointerOperation()->kind == PointerOperation::DEREFERENCE){
+		if(auto canBeAssigned = object->returnType()->assignableFrom(value,valuesType)){
+			value = resolver->resolve(canBeAssigned);
+			resolver->markResolved(this);
+		} else {
+			error(value,"Can't assign %s to %s - the types don't match!",value,object);
+		}
+	}
+	else error(object,"Can't perform an assignment to %s - only variables, fields and derefernced pointers are assignable!",object);
+	
+	return this;
+}
 
-		if(error){
-			//TODO delete tuple's children
-			delete node;
+Node* PointerOperation::resolve(Resolver* resolver){
+	expression = resolver->resolve(expression);
+	if(expression->isResolved()){
+		resolver->markResolved(this);
+		if(isDereference() && !expression->returnType()->isPointer()){
+			error(this,"Can't dereference a non-pointer expression!");
 			return ErrorExpression::getInstance();
 		}
-		else return node;
+	}
+	return this;
+}
+
+Node* ReturnExpression::resolve(Resolver* resolver){
+	auto func = resolver->currentFunction;
+	if(!func) return this; //Error reported during analysis
+
+	func->setFlag(Function::CONTAINS_RETURN);
+	expression = resolver->resolve(expression);
+	if(expression->isResolved()){
+		//Type checking..
+		if(func->_returnType.isPattern()){
+			//Don't allow to return local types
+			auto valRet = expression->returnType();
+			if(!func->_returnType.deduce(valRet,func->body.scope)){
+					error(this,"Failed to deduce function's return type -\n\tA function %s is expected to return a type matching a pattern %s, which the type %s derived from the expression %s doesn't match!",
+					func->label(),func->_returnType.pattern,valRet,expression);
+			}
+			resolver->markResolved(this);
+			debug("Inferred return type %s for function %s",valRet,func->label());
+		}
+		else if(func->_returnType.isResolved()){
+			expression = resolver->resolve(typecheck(expression,func->_returnType.type()));
+			resolver->markResolved(this);
+		}
+	}
+	return this;
+}
+
+// { 1 } => 1
+static Node* simplifyBlock(BlockExpression* block){
+	if(block->size() == 1 && block->scope->numberOfDefinitions() == 0) return *(block->begin());
+	return block;
+}
+
+Node* IfExpression::resolve(Resolver* resolver){
+	condition   = resolver->resolve(condition);
+	if(condition->isResolved()){
+		condition   = resolver->resolve(typecheck(condition,intrinsics::types::boolean));	
+		consequence = resolver->resolve(consequence);
+		alternative = resolver->resolve(alternative);
+		if(consequence->isResolved() && alternative->isResolved()){
+			if(auto block = consequence->asBlockExpression()) consequence = simplifyBlock(block);
+			if(auto block = alternative->asBlockExpression()) alternative = simplifyBlock(block);
+			resolver->markResolved(this);
+		}
+	}
+	return this;
+}
+
+Node* LoopExpression::resolve(Resolver* resolver){
+	body = resolver->resolve(body);
+	if(body->isResolved()) resolver->markResolved(this);
+	return this;
+}
+
+// ToDO
+Node* CastExpression::resolve(Resolver* resolver){
+	object = resolver->resolve(object);
+	if(object->isResolved()){
+		resolver->markResolved(this);
+		auto returns = object->returnType();
+		if(returns->isSame(type)) return object;
+		//TODO
+	}
+	return this;
+}
+
+Node* BlockExpression::resolve(Resolver* resolver){
+	scope->_functionOwner = resolver->currentFunction;
+
+	auto oldScope = resolver->currentScope();
+	resolver->currentScope(scope);
+
+	bool allResolved = true;
+	for(auto i = begin();i!=end();i++){
+		*i = resolver->resolve(*i);
+		if(!(*i)->isResolved()) allResolved = false;
 	}
 
+	if(allResolved) resolver->markResolved(this); 
+	resolver->currentScope(oldScope);
+	return this;
+}
 
-	Node* visit(TupleExpression* node){
-		if(node->isResolved() && !evaluator->forcedToEvaluate) return node;//Don't evaluate it again
-		if(node->children.size() == 1){
-			auto child = node->children[0];
-			delete node;
-			return child;
-		}else if(node->children.size() == 0){
-			delete node;
-			return new UnitExpression;
+Node* UnresolvedSymbol::resolve(Resolver* resolver){
+	//TODO fix
+	//{ Foo/*Should be type Foo */; var Foo int32 } type Foo <-- impossibru	
+	if(auto def = (explicitLookupScope ? explicitLookupScope : resolver->currentScope())->lookupPrefix(symbol)){
+		if(auto ref = def->createReference()){
+			return resolver->resolve(copyLocationSymbol(ref));
 		}
+	}
+	return this;
+}
 
-		std::vector<Record::Field> fields;
-	
-		bool resolved = true;
-		for(size_t i =0;i<node->children.size();i++){
-			node->children[i] = node->children[i]->accept(this);
-
-			if(node->children[i]->isResolved()){
-				//Check that the child doesn't return void
-				auto returns = node->children[i]->_returnType();
-				if(returns == intrinsics::types::Void){
-					error(node->children[i]->location,"A tuple can't contain an expression returning void!");
-					resolved = false;
+// TODO extending types proper filed access!
+Node* AccessExpression::resolve(Resolver* resolver){
+	object = resolver->resolve(object);
+	if(object->isResolved()){
+		Node* result;
+		/**
+		* Record with no deriving hierarchy is very simple to resolve..
+		*/
+		auto returns = object->returnType();
+		if(returns->isPointer()) returns = returns->next();
+		if(returns->isRecord()){
+			auto record = returns->asRecord();
+			if(!record->isFlagSet(Record::HAS_DERIVING_HIERARCHY)){
+				auto fieldID = record->lookupField(symbol);
+				if(fieldID != -1){
+					//Field access
+					if(auto tuple = object->asTupleExpression()) //simplify (x:1,y:1).x => 1
+						result = tuple->childrenPtr()[fieldID];
+					else
+						result = new FieldAccessExpression(object,fieldID);
 				}
 				else {
-					DuplicationModifiers mods;
-					fields.push_back(Record::Field(SymbolID(),returns->duplicate(&mods)->asTypeExpression()));
+					//a.foo => foo(a)
+					result = new CallExpression(new UnresolvedSymbol(location(),symbol),object);
+					result->setFlag(CallExpression::DOT_SYNTAX);
 				}
+			} else {
+				//TODO
+				//warning(location(),"Record deriving hierarchy '.' not yet implemented!");
+				result = new CallExpression(new UnresolvedSymbol(location(),symbol),object);
+				result->setFlag(CallExpression::DOT_SYNTAX);
 			}
-			else resolved = false;
+		} else {
+			//Not a record => a.foo => foo(a)
+			result = new CallExpression(new UnresolvedSymbol(location(),symbol),object);
+			result->setFlag(CallExpression::DOT_SYNTAX);
 		}
+		return resolver->resolve(copyLocationSymbol(result));
+	}
+	return this;
+}
 
-		if(resolved){
-			//int32,int32 :: Type,Type -> anon-record(int32,int32) :: Type
-			if(evaluator->expectedTypeForEvaluatedExpression && evaluator->expectedTypeForEvaluatedExpression->isSame(intrinsics::types::Type)){
-				bool allTypes = true;
-				for(auto i=fields.begin();i!=fields.end();i++){
-					if(!(*i).type.type()->isSame(intrinsics::types::Type)) allTypes = false;
-				}
-				if(allTypes){
-					//int32,int32
-					for(size_t i =0;i<node->children.size();i++){
-						fields[i].type = node->children[i]->asTypeExpression();
+Node* MatchResolver::resolve(Resolver* resolver){
+	object = resolver->resolve(object);
+	if(object->isResolved()){
+		//yes!
+		if(auto type = object->asTypeReference()){
+			for(auto i = begin();i!=end();i+=2){
+				TypePatternUnresolvedExpression pattern;
+				pattern.kind = TypePatternUnresolvedExpression::UNRESOLVED;
+				pattern.unresolvedExpression = *i;
+				pattern.resolve(resolver);
+				bool matches = pattern.isResolved() ? pattern.type()->isSame(type->type) : false;
+				if(pattern.isPattern()){
+					auto scope = (*(i+1))->asBlockExpression()->scope;
+					TypePatternUnresolvedExpression::PatternMatcher matcher(scope);
+					if(matcher.match(type->type,pattern.pattern)){
+						matches = true;
+						matcher.defineIntroducedDefinitions();
 					}
-					delete node;
-					return new TypeExpression(Record::findAnonymousRecord(fields));
 				}
+				if(matches) return resolver->resolve(*(i+1));
 			}
-			node->type = new TypeExpression(Record::findAnonymousRecord(fields));
+			return this; //Can't match..
 		}
-		return node;
-	}
-	//TODO simplify when 1 child and empty scope.. help for mixing and inling as well!
-	Node* visit(BlockExpression* node){
-		if(!evaluator->forcedToEvaluate) assert(!node->isResolved());
-		auto scp = evaluator->currentScope();
-		evaluator->currentScope(node->scope);
-		node->_resolved = true;
-		if(!node->scope->isResolved() || evaluator->forcedToEvaluate){
-			if(!node->scope->resolve(evaluator)) node->_resolved = false;//Resolve unresolved definitions
-		}
-		auto e = evaluator->mixinedExpression;
-		evaluator->mixinedExpression = nullptr;
-		for(size_t i =0;i<node->children.size();i++){
-			if(!node->children[i]->isResolved() || evaluator->forcedToEvaluate){	
-				node->children[i] = node->children[i]->accept(this);
-				if(!node->children[i]->isResolved()) node->_resolved = false;
-				if(evaluator->mixinedExpression){
-					debug("Mixin!");
-					node->children.insert(node->children.begin()+i,evaluator->mixinedExpression);
-					i++;
-					evaluator->mixinedExpression = nullptr;
-				}
-			}	
-		}
-		evaluator->mixinedExpression = e;
-		evaluator->currentScope(scp);
-		return node;
-	}
-	Node* visit(ReturnExpression* node){
-		if(auto func = evaluator->currentScope()->functionOwner()){
-			func->setFlag(Function::CONTAINS_RETURN);
-			node->value = node->value->accept(this);
-			if(node->value->isResolved()){
-				node->_resolved = func->_returnType.isResolved();
-				if(func->_returnType.isPattern()){
-					//TODO Don't allow to return local types
-					auto valRet = node->value->_returnType();
-					if(!valRet->hasLocalSemantics()){
-						if(!func->_returnType.deduce(valRet,func->body.scope)){
-							error(node->location,"Failed to deduce function's return type -\n\tA function %s is expected to return a type matching a pattern %s, which the type %s derived from the expression %s doesn't match!",
-							func->id,func->_returnType.pattern,valRet,node->value);
+		//Integers and booleans
+		auto returns = object->returnType();
+		if(returns->isBool() || returns->isInteger()){
+			//| pattern => if(object == pattern)
+			Node* firstBranch;
+			IfExpression* lastBranch = nullptr;
+			for(auto i = begin();i!=end();i+=2){
+				if(auto sym = (*i)->asUnresolvedSymbol()){
+					if(sym->symbol == "_"){
+						if(i != (end() - 2)){
+							error(sym,"The \"_\" default match must be the last matching branch!");
+							return ErrorExpression::getInstance();
 						}
-						debug("Inferred return type %s for function %s",valRet,func->id);
+						if(lastBranch) lastBranch->alternative = *(i+1); //no conditional needed
+						else firstBranch = *(i+1);
+						break;
 					}
-					else
-						error(node->location,"Can't return %s because of local semantics!",node->value);
 				}
-				else if(func->_returnType.isResolved()){
-					node->value = typecheck(node->value->location,node->value,func->_returnType.type());
-				}
+				IfExpression* newBranch = new IfExpression(new CallExpression(new UnresolvedSymbol((*i)->location(),"equals"),new TupleExpression(object,*i)),*(i+1),nullptr);
+				newBranch->setFlag(IfExpression::MATCH_SYNTAX);
+				if(lastBranch) lastBranch->alternative = newBranch;
+				else firstBranch = newBranch;
+				lastBranch = newBranch;
 			}
+			if(lastBranch && lastBranch->alternative == nullptr) lastBranch->alternative = new UnitExpression();
+			return resolver->resolve(copyLocationSymbol(firstBranch));
 		}
-		return node;
-	}
-
-
-	Node* visit(IfExpression* node){
-		if(node->_resolved && !evaluator->forcedToEvaluate) return node;
-		node->condition = node->condition->accept(this);
-		node->consequence = node->consequence->accept(this);
-		node->alternative = node->alternative->accept(this);
-		if(node->condition->isResolved()){
-			node->condition = typecheck(node->condition->location,node->condition,intrinsics::types::boolean);
-			if(node->consequence->isResolved() && node->alternative->isResolved()) node->_resolved = true;
+		else {
+			error(object,"Can't resolve a match on an object %s of type %s!",object,returns);
+			return ErrorExpression::getInstance();
 		}
-		return node;
 	}
+	return this;
+}
 
-	Node* visit(LoopExpression* node){
-		if(!node->body->isResolved() || evaluator->forcedToEvaluate) node->body = node->body->accept(this);
-		return node;
-	}
-
-	Node* visit(CastExpression* node){
-		node->object = node->object->accept(this);
-		if(node->object->isResolved()){
-			node->_resolved = true;
-			auto returns = node->object->_returnType();
-			if(returns->isSame(node->type)) return node->object;
-
-		}
-		return node;
-	}
-
-	/**
-	* Resolving temporary nodes
-	*/
-	Node* visit(ExpressionVerifier* node){
-		node->expression = node->expression->accept(this);
-		if(node->expression->isResolved()){
-			auto result = typecheck(node->location,node->expression,node->expectedType);
-			node->expression = nullptr;
-			delete node;
-			return result;
-		}
-		//NB No need for unresolved marking
-		return node;
-	}
-
-	Node* visit(UnresolvedSymbol* node){
-		//TODO fix
-		//{ Foo/*Should be type Foo */; var Foo int32 } type Foo <-- impossibru
-		auto def = (node->explicitLookupScope ? node->explicitLookupScope : evaluator->currentScope())->lookupPrefix(node->symbol);
-		if(def){
-			if(auto ref = def->createReference()){
-				ref->location = node->location;
-				ref->_label = node->label();
-				return ref->accept(this);
-			};
-		}
-		evaluator->markUnresolved(node);
-		return node;
-	}
-
-
-
-
-
-	Node* visit(AccessExpression* node){
-		node->object = node->object->accept(this);
-		if(node->passedFirstEval){
-			if(node->object->isResolved()){
-				if(auto fa = fieldAccessFromAccess(node)) return fa;
-				//TODO type field access & expression '.' call notation
-				else return (new CallExpression(new UnresolvedSymbol(node->location,node->symbol),node->object))->accept(this);
+// TODO better error reporting!
+void reportUnresolvedNode(Node* node){
+	if(!node->asBlockExpression() && !node->asErrorExpression() && !node->asTupleExpression()){
+		std::string error;
+		if(auto unr = node->asUnresolvedSymbol()){
+			error = format("Can't resolve the symbol '%s'",unr->symbol);
+		} 
+		else if(auto call = node->asCallExpression()){
+			if(auto unr = call->object->asUnresolvedSymbol()) {
+				if(call->isFlagSet(CallExpression::DOT_SYNTAX)) 
+					 error = format("Can't find the matching overload for the call %s.(%s)",unr->symbol,call->arg);
+				else error = format("Can't find the matching overload for the call %s(%s)",unr->symbol,call->arg);
 			}
+		} 
+		else if(auto var = node->asVariable()){
+			error = format("Can't resolve the variable '%s'",var->label());
 		}
-		else node->passedFirstEval = true;
-		evaluator->markUnresolved(node);
-		return node;
-	}
-
-	Node* visit(MatchResolver* node){
-		node->object = node->object->accept(this);
-		if(node->object->isResolved()){
-			//yes!
-			if(auto type = node->object->asTypeExpression()){
-				for(auto i = node->children.begin();i!=node->children.end();i+=2){
-					TypePatternUnresolvedExpression pattern;
-					pattern.kind = TypePatternUnresolvedExpression::Unresolved;
-					pattern.unresolvedExpression = *i;
-					pattern.resolve(evaluator);
-					bool matches = pattern.isResolved() ? pattern.type()->isSame(type) : false;
-					if(pattern.isPattern()){
-						auto scope = (*(i+1))->asBlockExpression()->scope;
-						TypePatternUnresolvedExpression::PatternMatcher matcher(scope);
-						if(matcher.match(type,pattern.pattern)){
-							matches = true;
-							matcher.defineIntroducedDefinitions();
-						}
-					}
-					if(matches) return (*(i+1));
-				}
-			}
-			else error(node->location,"Can only resolve type matches yet!");
+		else if(auto func = node->asFunction()){
+			error = format("Can't resolve the function '%s'",func->label());
 		}
-		evaluator->markUnresolved(node);
-		return node;
-	}
-
-};
-
-void Resolver::markUnresolved(Node* node){
-	unresolvedExpressions++;
-	if(reportUnevaluated){
-		compiler::subError(node->location,format("Can't resoved expression %s",node));
+		else error = format("Can't resolve expression %s",node);
+		compiler::subError(node->location(),error);
 	}
 }
 
-void Resolver::markUnresolved(PrefixDefinition* node){
+void Resolver::markUnresolved(Node* node){
 	unresolvedExpressions++;
-	if(reportUnevaluated){
-		//TODO more progressive error message
-		compiler::subError(node->location,format("Can't resolve definition %s!",node->id));
-	}
-} 
+	if(reportUnevaluated) reportUnresolvedNode(node);
+}
 
-bool TypePatternUnresolvedExpression::resolve(Resolver* evaluator,PatternMatcher* patternMatcher){
-	assert(kind == Unresolved);
-	auto oldSetting = evaluator->expectedTypeForEvaluatedExpression;
-	evaluator->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
-	unresolvedExpression = evaluator->resolve(unresolvedExpression);
-	evaluator->expectedTypeForEvaluatedExpression = oldSetting;
+bool TypePatternUnresolvedExpression::resolve(Resolver* resolver,PatternMatcher* patternMatcher){
+	assert(kind == UNRESOLVED);
+	auto oldSetting = resolver->expectedTypeForEvaluatedExpression;
+	resolver->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
+	unresolvedExpression = resolver->resolve(unresolvedExpression);
+	resolver->expectedTypeForEvaluatedExpression = oldSetting;
 	
 	
-	if(auto isTypeExpr = unresolvedExpression->asTypeExpression()){
-		if(isTypeExpr->isResolved()){
-			kind = Type;
-			_type = isTypeExpr;
+	if(auto isTypeRef = unresolvedExpression->asTypeReference()){
+		if(isTypeRef->isResolved()){
+			kind = TYPE;
+			_type = isTypeRef->type;
 			return true;
 		}
 	} else { 
@@ -559,15 +600,15 @@ bool TypePatternUnresolvedExpression::resolve(Resolver* evaluator,PatternMatcher
 		if(patternMatcher){
 			auto oldSize = patternMatcher->introducedDefinitions.size();
 			if(patternMatcher->check(unresolvedExpression)){
-				kind = Pattern;
+				kind = PATTERN;
 				pattern = unresolvedExpression;
 				return true;
 			} else if(oldSize != patternMatcher->introducedDefinitions.size()) 
 				patternMatcher->introducedDefinitions.erase(patternMatcher->introducedDefinitions.begin() + oldSize,patternMatcher->introducedDefinitions.end());
 		} else {
-			PatternMatcher matcher(evaluator->currentScope());
+			PatternMatcher matcher(resolver->currentScope());
 			if(matcher.check(unresolvedExpression)){
-				kind = Pattern;
+				kind = PATTERN;
 				pattern = unresolvedExpression; //NB: not really necessary because they are in one union together
 				return true;
 			}
@@ -577,16 +618,262 @@ bool TypePatternUnresolvedExpression::resolve(Resolver* evaluator,PatternMatcher
 	return false;
 }
 
-Node* Resolver::resolve(Node* node){
-	AstExpander expander(this);
-	if(dontEvaluate) return node;
-	return node->accept(&expander);
+/**
+* Resolving definition nodes
+*/
+Node* Variable::resolve(Resolver* resolver){
+	_owner = resolver->currentScope();
+	auto _resolved = true;
+	if(type.isResolved()) _resolved = true;
+	else if(type.isPattern()) _resolved = false;
+	else _resolved = type.resolve(resolver) && type.isResolved();
+
+	if(_resolved) {
+		setFlag(RESOLVED);
+		if(!type.type()->isValidTypeForVariable()) error(this,"A variable '%s' can't have a type %s",label(),type.type());
+	}
+	return this;
 }
 
-//TODO ignore unresolved functions which cant be resolved
-void Resolver::evaluateModule(BlockExpression* module){
+Node* Argument::resolve(Resolver* resolver){
+	//Type (NB: allow patterns)
+	auto _resolved = type.kind == TypePatternUnresolvedExpression::UNRESOLVED ? type.resolve(resolver,&functionOwner()->allArgMatcher) : true;
+
+	if(!_resolved) return false;
+	//Default value
+	if(_defaultValue){
+		_defaultValue = resolver->resolve(_defaultValue);
+		if(_defaultValue->isResolved() && _defaultValue->isConst()){
+			//infer type when ... ,x = 1, ...
+			if(type.isPattern() && type.pattern == nullptr){
+				type.deduce(_defaultValue->returnType(),_owner);
+			}
+			_resolved = true;
+		} 
+		else {
+			if(_defaultValue->isResolved()) // Implies non constant default value!
+				error(_defaultValue,"The default value to function's parameter must resolve to a constant expression!");
+			_resolved = false;
+		}
+	}
+
+	if(_resolved){
+		setFlag(RESOLVED);
+		if(type.isResolved() && !type.type()->isValidTypeForArgument()) error(this,"An argument '%s' can't have a type %s",label(),type.type());
+		//TODO What about x Arithmetic = false..?
+		if(_defaultValue && type.isResolved()) _defaultValue = ::typecheck(_defaultValue,type.type());
+	}
+	return this;
+}
+
+//Record analysis
+//Collects all the extenders field from the record extender hierarchy
+static bool insertUniqueExtender(std::vector<Type*>& collection,Type* extender){
+	for(auto i = collection.begin();i!=collection.end();i++){
+		if((*i)->isSame(extender)){
+			collection.push_back(extender);
+			return false;
+		}
+	}
+	collection.push_back(extender);
+	return true;
+}
+static bool traverseExtenderHierarchy(Record* record,std::vector<Type*>& collection){
+	for(auto i = record->fields.begin();i!=record->fields.end();i++){
+		if((*i).type.isResolved() && (*i).isExtending){
+			if(!insertUniqueExtender(collection,(*i).type.type())) return false;
+		}
+		if((*i).type.isResolved() && (*i).type.type()->isRecord())
+			if(!traverseExtenderHierarchy((*i).type.type()->asRecord(),collection)) return false;
+	}
+	return true;
+}
+
+Node* Record::resolve(Resolver* resolver){
+	_owner = resolver->currentScope();
+	/*if(_owner && _owner->functionOwner() && _owner->functionOwner()->isFlagSet(Function::TYPE_GENERATOR_FUNCTION)){
+		debug("Record %s is generated!",label());
+		setFlag(GENERATED);
+	}*/
+
+	auto allResolved = true;
+	//Pretend unresolved types are resolved, so that expressions like type Foo { var x *Foo } can be evaluated
+	resolver->treatUnresolvedTypesAsResolved = true;
+	for(auto i = fields.begin();i!=fields.end();++i){
+		if(!(*i).type.isResolved()){
+			(*i).type.resolve(resolver);
+			if(!(*i).type.isResolved() || !(*i).type.type()->isPartiallyResolved()) allResolved = false;
+		} else if(!(*i).type.type()->isPartiallyResolved()) allResolved = false;
+	}
+	resolver->treatUnresolvedTypesAsResolved = false;
+	if(!allResolved) return this;
+	//analyze
+	std::vector<Type*> collection;
+	if(!traverseExtenderHierarchy(this,collection)){
+		error(this,"Faulty type extension hierarchy - The type %s features multiple path to type %s",label(),collection.back());
+		return this;
+	}
+	//
+	setFlag(Node::RESOLVED);
+	calculateResolvedProperties();
+	debug("Successfully resolved record type %s - sizeof %s",label(),_size);
+	return this;
+}
+
+DeclaredType* Trait::resolve(Resolver* resolver){
+	if(!declaration->optionalStaticBlock || declaration->optionalStaticBlock->isResolved()){
+		_resolved = true;
+	}
+	return this;
+}
+
+DeclaredType* Variant::resolve(Resolver* resolver){
+	if(!declaration->optionalStaticBlock || declaration->optionalStaticBlock->isResolved()){
+		_resolved = true;
+		calculateResolvedProperties();
+	}
+	return this;
+}
+
+Node* TypeDeclaration::resolve(Resolver* resolver){
+	if(optionalStaticBlock){
+		optionalStaticBlock->scope->setParent(resolver->currentScope());
+		if(!optionalStaticBlock->isResolved()) optionalStaticBlock->resolve(resolver);
+	}
+	if(!_type->isResolved())
+		_type = _type->resolve(resolver);
+	if(_type->isResolved() && (optionalStaticBlock? optionalStaticBlock->isResolved() : true)){
+		setFlag(RESOLVED);
+	}
+	return this;
+}
+
+template<typename T>
+struct ScopedStateChange {
+	T  oldValue;
+	T* dest;
+	ScopedStateChange(T* old,T newValue) : oldValue(*old) , dest(old) {
+		*old = newValue;
+	}
+	~ScopedStateChange(){
+		*dest = oldValue;
+	}
+};
+
+Node* Function::resolve(Resolver* resolver){
+	ScopedStateChange<Function*> _(&resolver->currentFunction,this);
+
+	//Resolve parameters!
+	for(auto i = arguments.begin();i!=arguments.end();++i){
+		if(!(*i)->isResolved()){
+			(*i)->resolve(resolver);
+			if(!(*i)->isResolved()) return this;
+		}
+
+		//inspect an argument
+		if((*i)->isResolved() && !isIntrinsic()){
+			if((*i)->type.isResolved()){
+				//Type => if it is Type then we can expand this argument
+				if((*i)->type.type()->isType() && !(*i)->isFlagSet(Argument::HIDDEN_TYPE) && !isFlagSet(CONSTRAINT_FUNCTION)){
+					(*i)->setFlag(Argument::IS_EXPENDABLE);
+					setFlag(HAS_EXPENDABLE_ARGUMENTS);
+				}
+			}
+			else {
+				//pattern
+				if(!(*i)->isFlagSet(Argument::HIDDEN_TYPE)) setFlag(HAS_PATTERN_ARGUMENTS);
+			}
+		}
+	}
+
+	//If this is a generic or expendable function don't resolve body and return type!
+	if( isFlagSet(HAS_EXPENDABLE_ARGUMENTS) || isFlagSet(HAS_PATTERN_ARGUMENTS) ){
+		setFlag(Node::RESOLVED);
+		debug("Function %s is partially resolved!",label());
+		return this;
+	}
+
+	//resolve return type. (Don't quit yet because the body may infer it!)
+	//TODO def foo(x Pointer(T:_)) T {}
+	if(!_returnType.isResolved() && !_returnType.isPattern()){
+		auto oldScope = resolver->currentScope();
+		resolver->currentScope(body.scope);
+		_returnType.resolve(resolver);
+		resolver->currentScope(oldScope);
+	}
+	//resolve body.
+	if(!body.isResolved()){
+		resolver->resolve(&body);
+		if(!body.isResolved()) return this;
+	}
+
+	//Body has no return expression => return void
+	if(!isFlagSet(CONTAINS_RETURN) && _returnType.isPattern() && _returnType.pattern == nullptr) _returnType.specify(intrinsics::types::Void);
+	
+	if(!_returnType.isResolved()){
+		if(_returnType.isPattern() && isIntrinsic()){
+			debug("Pattern return intrinsic!");
+		}
+		else return this;
+	}
+
+	//Everything was resolved!
+	setFlag(Node::RESOLVED);
+	//debug("Function %s is fully resolved!\n E : %s G : %s Ret : %s Body: %s",id,isFlagSet(HAS_EXPENDABLE_ARGUMENTS),isFlagSet(HAS_PATTERN_ARGUMENTS),_returnType.type(),&body);
+	if(isIntrinsic()){
+		debug("INTRINSIC MAP %s",label());
+		//map to implementation!
+		if(auto binder = getIntrinsicFunctionBinder(this)){
+			intrinsicCTFEbinder = binder;
+		}
+	}
+	else analyze(&body,this);
+	return this;
+}
+
+Node* PrefixMacro::resolve(Resolver* resolver){
+	if(!function->isResolved()) function->resolve(resolver);
+	if(function->isResolved()){
+		setFlag(RESOLVED);
+	}
+	return this;
+}
+
+Node* InfixMacro::resolve(Resolver* resolver){
+	if(!function->isResolved()) function->resolve(resolver);
+	if(function->isResolved()){
+		stickinessExpression = stickinessExpression->resolve(resolver);
+		if(stickinessExpression->isResolved()){
+			if(auto intLiteral = stickinessExpression->asIntegerLiteral()){
+				this->stickiness = int(intLiteral->integer.u64);
+				setFlag(RESOLVED);
+			}
+			else error(stickinessExpression,"The precedence for the infix macro '%s' is expected to be an integer literal, and not %s!",label(),stickinessExpression);
+		}
+	}
+	return this;
+}
+
+/**
+* Misc
+*/
+Node* Resolver::multipassResolve(Node* node){
+	size_t prevUnresolvedExpressions;
+	unresolvedExpressions = 0xDEADBEEF;
+	do{
+		prevUnresolvedExpressions = unresolvedExpressions;
+		unresolvedExpressions = 0;
+		node = resolve(node);
+	}
+	while(prevUnresolvedExpressions != unresolvedExpressions && unresolvedExpressions != 0);
+	return node;
+}
+
+//Multi-pass module resolver
+void  Resolver::resolveModule(BlockExpression* module){
 	
 	size_t prevUnresolvedExpressions;
+	unresolvedExpressions = 0xDEADBEEF;
 	int pass = 1;
 	do{
 		prevUnresolvedExpressions = unresolvedExpressions;
@@ -595,9 +882,9 @@ void Resolver::evaluateModule(BlockExpression* module){
 		debug("After extra pass %d(%d,%d) the module is %s",pass,prevUnresolvedExpressions,unresolvedExpressions,module);
 		pass++;
 	}
-	while(prevUnresolvedExpressions > unresolvedExpressions && unresolvedExpressions != 0);
+	while(prevUnresolvedExpressions != unresolvedExpressions && unresolvedExpressions != 0);
 	if(unresolvedExpressions > 0){
-		compiler::headError(module->location,format("Can't resolve %s expressions and definitions:",unresolvedExpressions));
+		compiler::headError(module->location(),format("Can't resolve %s expressions and definitions:",unresolvedExpressions));
 		//Do an extra pass gathering unresolved definitions
 		reportUnevaluated = true;
 		auto reportLevel = compiler::reportLevel;
@@ -608,120 +895,218 @@ void Resolver::evaluateModule(BlockExpression* module){
 	analyze(module,nullptr);
 }
 
-/**
-*How inlining and mixining should work:
+Node* Resolver::resolveMacroAtParseStage(Node* macro){
+	assert(_compilationUnit->parser);
+	currentScope(_compilationUnit->parser->currentScope());
+	return multipassResolve(macro);
+}
 
-*def f(x Type){ var y x = 0; return y + 1; }
-*mixin(f(int32)) =>
-*	def r04903
-*	var y int32
-*	{
-*		r04903 = y + 1
-*	}
-*	r04903
-*inline(f(int32)) =>
-*	def r04903
-*	{
-*		var y int32
-*		r04903 = y + 1
-*	}
-*	r04903
+Node* Resolver::executeAndMixinMacro(Function* function,Node* arg){
+	CTFEinvocation i(compilationUnit(),function);
+	if(i.invoke(arg)) return mixinMacro(&i,currentScope());
+	error(arg,"Failed to interpret a macro '%s' at compile time!",function->label());
+	return ErrorExpression::getInstance();
+}
+
+/**
+* Mixining the expression inside the [> <] obtained from macro invocation.
+* Scenarios: mixin( [> 1 <] ) => 
+				1
+             mixin( [> var x = 2 ; 2 } <] ) => 
+				{ var x = 2 ; 2 } using parent scope, returning 2
+				The mixined block will use the parent scope to define x, and will return the result of the last expression - i.e. 2
 */
-Node* Resolver::mixinFunction(Location &location,Function* func,Node* arg,bool inlined){
-	Node* result;
-	if(!func->body.children.size()){
-		error(location,"Can't mixin a function %s without body!",func->id);
-		return ErrorExpression::getInstance();
-	}
-	//set appropriate settings
-	auto oldForcedToEvaluate = forcedToEvaluate;
-	forcedToEvaluate = true;
-	debug("<<M");
-	DuplicationModifiers mods;
-	//Replace arguments
-	std::vector<Node*> inlinedArguments;
-	inlinedArguments.resize(func->arguments.size());
-	//NB args > 1 because of def f(x) mixin f(1,2)
-	auto argsBegin = arg->asTupleExpression() && func->arguments.size()>1 ? arg->asTupleExpression()->children.begin()._Ptr : &(arg);
-	for(size_t i =0;i<func->arguments.size();i++){
-		mods.redirectors[reinterpret_cast<void*>(static_cast<Variable*>(func->arguments[i]))] = std::make_pair(reinterpret_cast<void*>(argsBegin[i]),true);
-	}
-	mods.location = location;
-	auto target = inlined ? new Scope(currentScope()) : currentScope();
-	mods.target = target;
-	//Simple form of f(x) = x
-	if(func->body.scope->numberOfDefinitions() <= func->arguments.size() && func->body.children.size() == 1){
-		if(auto ret = func->body.children[0]->asReturnExpression()){
-			debug("SimpleForm");
-			auto result = resolve(ret->value->duplicate(&mods));
-			forcedToEvaluate = oldForcedToEvaluate;
-			return result;
-		}
-	}
-	//Mixin definitions
-	func->body.scope->duplicate(&mods);
-	//inline body
-	if(!func->_returnType.isResolved() || !func->returnType()->isSame(intrinsics::types::Void)){
-		auto varName = std::string(inlined ? "_inlined_" : "_mixined_") + std::string(func->id.ptr());
-		auto v = new Variable(SymbolID(varName.begin()._Ptr,varName.length()),location,currentScope());
-		v->isMutable = false;
-		//v->type.infer(func->returnType());
-		currentScope()->define(v);
-		result = new VariableReference(v);
-		mods.returnValueRedirector = v;
-	}else result = new UnitExpression();
-	//NB when not inlined still need to create a new empty scope anyway!!
-	auto block = new BlockExpression(inlined ? target : new Scope(currentScope()));
-	debug("M0: %s",&func->body);
-	func->body._duplicate(block,&mods);
-	debug("M1: %s",block);
-	mixinedExpression = resolve(block);
-	debug("M2: %s",mixinedExpression);
-	result = resolve(result);
-	forcedToEvaluate = oldForcedToEvaluate;
-	return result;
-}
-Node* Resolver::mixinFunctionCall(CallExpression* node,bool inlined){
-	assert(node->isResolved());
-	return mixinFunction(node->location,node->object->asFunctionReference()->function,node->arg,inlined);
-}
-Node* Resolver::mixin(DuplicationModifiers* mods,Node* node){
-	auto oldForcedToEvaluate = forcedToEvaluate;
-	forcedToEvaluate = true;
-	mods->target = currentScope();
+Node* mixinMacro(CTFEinvocation* invocation,Scope* scope){
+	DuplicationModifiers mods(scope);
+	mods.expandedMacroOptimization = invocation;
 	Node* resultingExpression;
-	if(auto block = node->asBlockExpression()){
-		//Mixin definitions
-		block->scope->duplicate(mods);
-		//Mixin body
-		//If block contains only one expression we simplify it
-		if(block->children.size() == 1) resultingExpression = block->children[0]->duplicate(mods);
-		else {
-			auto b = new BlockExpression(new Scope(currentScope()));
-			block->_duplicate(b,mods);
-			resultingExpression = b;
-		}
-	}
-	else resultingExpression = node->duplicate(mods); //no block
-	resultingExpression->location = mods->location;
-	//Evaluate the result
-	//resultingExpression = eval(resultingExpression);
-	//TODO evaluate definitons?
-	forcedToEvaluate = oldForcedToEvaluate;
+	auto  noderef = invocation->result()->asNodeReference();
+	auto  inside  = noderef->node();
+	if(auto block = inside->asBlockExpression()){
+		auto size = block->size();
+		if(size == 0) resultingExpression = new UnitExpression;
+		else if(size == 1) resultingExpression = (*block->begin())->duplicate(&mods);
+		else resultingExpression = block->duplicateMixin(&mods);
+	} else resultingExpression = inside->duplicate(&mods);
 	return resultingExpression;
 }
 
-//Analyze the function's code to check if the parameter is
-bool Function::canAcceptLocalParameter(size_t argument){
-	return true;//TODO
+// Function overload resolving based on a function's type
+// TODO
+Function* Resolver::resolveOverload(Scope* scope,SymbolID function,Type* functionType){
+	assert(functionType->isFunction());
+	return nullptr;
 }
-//TODO function duplication with certain wildcard params - which scope to put in generated functions?
+
+// TODO Better error messages!
+static Function* errorOnMultipleMatches(Function** functions,size_t count,Node* arg){
+	//TODO
+	compiler::onError(arg,format("Multiple function overloads found when resolving the call %s(%s):",functions[0]->label(),arg));
+	Function** end = functions + count;
+	for(auto i = functions;i!=end;i++){
+		compiler::onError((*i)->location(),format("\tFunction %s",(*i)->label()));
+	}
+	return nullptr;
+}
+
+// Function overload resolving based on a given argument
+// TODO import qualified foo; var x foo.Foo ; foo.method() <-- FIX use dot syntax
+Function* Resolver::resolveOverload(Scope* scope,SymbolID function,Node* arg,bool dotSyntax){
+	
+	std::vector<Function*> results;
+	//step 1 - check current scope for matching function
+	if(auto hasDef = scope->containsPrefix(function)){
+		if(auto os = hasDef->asOverloadset()){
+			findMatchingFunctions(os->functions,results,arg);
+			if(results.size() == 1) return results[0];
+			else if(results.size()>1) return errorOnMultipleMatches(results.begin()._Ptr,results.size(),arg);
+		}
+	}
+	//step 2 - check imported scopes for matching function
+	if(scope->imports.size()){
+		std::vector<Function*> overloads;
+		for(auto i = scope->imports.begin();i!=scope->imports.end();++i){ 
+			if(auto hasDef = (*i)->containsPrefix(function)){
+				if(auto os = hasDef->asOverloadset()){
+					if(overloads.size()>0 && os->isFlagSet(Overloadset::TYPE_GENERATOR_SET)){
+						error(arg,"Function '%s' overloading abmiguity - it is either a type generation or a normal function!",function);
+						return nullptr;//TODO better error message
+					}
+					else overloads.insert(overloads.end(),os->functions.begin(),os->functions.end());
+				}
+			}
+		}
+		findMatchingFunctions(overloads,results,arg,true);
+		if(results.size() == 1) return results[0];
+		else if(results.size()>1) return errorOnMultipleMatches(results.begin()._Ptr,results.size(),arg);
+	}
+	//step 3 - check parent scope
+	if(scope->parent) return resolveOverload(scope->parent,function,arg,dotSyntax);
+	return nullptr;
+}
+
+/**
+*  Generic function specialization with parameter type deduction and/or value expansion
+*  The original function contains the set of the generated specializations.
+*  Before we generate a new function, we check if original already created a matching specialization.
+*  If the original didn't generate the given specialization yet, we generate one and add it to the original's set.
+*
+*  The generated functions will have access to the declaration scope, and the module scope of the user expansion.
+*  TODO: identical specialization reduction!
+*/
+Function* Function::specializationExists(Type** specializedParameters,Node** passedExpressions,Scope* usageScope){
+	auto numberOfParameters= arguments.size();
+	size_t j = 0;
+	for(auto i = generatedFunctions.begin();i!=generatedFunctions.end();i++){
+		auto alreadyGenerated = *i;
+		bool match = true;
+		size_t expandedParameterOffset = 0;
+		if(usageScope && alreadyGenerated->owner()->imports[1] != usageScope) continue;
+		for(j = 0; j<numberOfParameters; j++){
+			if(arguments[j]->expandAtCompileTime()){
+				//TODO Node::isSame
+				if(!alreadyGenerated->expandedArguments[expandedParameterOffset]->asTypeReference()->type->isSame(passedExpressions[j]->asTypeReference()->type)){
+					match = false;
+					break;
+				}
+				expandedParameterOffset++;
+			}
+			else if(specializedParameters && !alreadyGenerated->arguments[j - expandedParameterOffset]->type.type()->isSame(specializedParameters[j])){
+				match = false;
+				break;
+			}
+		}
+		if(match) return alreadyGenerated;
+	}
+	return nullptr;
+}
+
+Argument* Argument::specializedDuplicate(Function* dest,DuplicationModifiers* mods,Type* specializedType,Node* expandedValue){
+	//value expansion
+	if(this->expandAtCompileTime()){
+		mods->expandArgument(this,expandedValue);
+		return nullptr;
+	}
+	Argument* dup = new Argument(label(),location(),dest);
+	
+	//type specialization
+	if(specializedType){
+		assert(type.isPattern());
+		dup->type.specify(specializedType);
+	}
+	else dup->type = type.duplicate(mods);
+	dup->isMutable = isMutable;
+	//dup->ctfeRegisterID = ctfeRegisterID; //NB: no need, since original argument won't be analyzed yet. 
+	dup->_defaultValue  = _defaultValue ? _defaultValue->duplicate(mods) : nullptr;
+	dup->_hiddenType    = _hiddenType;
+	mods->duplicateDefinition(this,dup);
+	copyProperties(dup);
+	return dup;
+}
+
+Function* Function::specializedDuplicate(DuplicationModifiers* mods,Type** specializedParameters,Node** passedExpressions) {	
+	auto numberOfParameters= arguments.size();
+
+	debug("Need to duplicate determined function %s!",label());
+	auto func = new Function(label(),location());
+	func->body.scope->parent = mods->target;
+	mods->target = func->body.scope;
+	
+	//args
+	for(size_t i = 0;i < numberOfParameters;++i){
+		auto arg = arguments[i]->specializedDuplicate(func,mods,specializedParameters ? specializedParameters[i] : nullptr,passedExpressions[i]);
+		if(arg) func->addArgument(arg);
+		else    func->expandedArguments.push_back(passedExpressions[i]);//Give the specialized function the knowledge about what parameters where expanded to create it
+	}
+
+	duplicateReturnBody(mods,func);
+	func->generatedFunctionParent = this;
+	this->generatedFunctions.push_back(func);
+	func->flags &= (~RESOLVED);
+	func->flags &= (~HAS_PATTERN_ARGUMENTS);
+	func->flags &= (~HAS_EXPENDABLE_ARGUMENTS);
+	return func;
+}
+
+Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternMatcher& patternMatcher,Function* original,Type** specializedParameters,Node** passedExpressions){
+	size_t numberOfParameters = original->arguments.size();
+	assert(original->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || original->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS));	
+	
+	Scope* usageScope;
+	if(original->owner()->moduleScope() != this->compilationUnit()->moduleBody->scope) usageScope = this->compilationUnit()->moduleBody->scope;
+	else usageScope = nullptr;
+
+	if(auto exists = original->specializationExists(specializedParameters,passedExpressions,usageScope)) return exists;
+	//Create a new block for specialization which will import the required scopes
+	auto specializationWrapper = new BlockExpression();
+	specializationWrapper->scope->import(original->owner()); //import the scope in which the original function was defined.
+	if(usageScope) specializationWrapper->scope->import(usageScope);//import the usage scope
+	//duplicate the original
+	DuplicationModifiers mods(specializationWrapper->scope);
+	auto specialization = original->specializedDuplicate(&mods,specializedParameters,passedExpressions);
+	specializationWrapper->addChild(specialization);
+	//bring in the T in def foo(x T:_) into the function
+	if(original->isFlagSet(Function::HAS_PATTERN_ARGUMENTS)){
+		patternMatcher.container = specialization->body.scope;
+		patternMatcher.defineIntroducedDefinitions();
+	}
+	//Resolve.. TODO error handling
+	this->multipassResolve(specialization);	
+	assert(!(specialization->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS) || specialization->isFlagSet(Function::HAS_PATTERN_ARGUMENTS)));
+	//
+	compiler::addGeneratedExpression(specializationWrapper);
+	return specialization;
+}
+
+/**
+* Adjusting the argument
+*/
 Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool dependentChecker,int* weight){
 	Function* func = *function;
 	std::vector<Node*> result;
 	result.resize(func->arguments.size(),nullptr);
 	bool determinedFunction = false;
-	std::vector<TypeExpression* > determinedArguments;//Boolean to indicate whether the argument was expanded at compile time and is no longer needed
+	std::vector<Type* > determinedArguments;//Boolean to indicate whether the argument was expanded at compile time and is no longer needed
 
 	TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);//need to match the second time round to inject introduced definitions..
 
@@ -746,7 +1131,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 	}
 
 	if(argsCount < expressionCount){
-		if(argsCount > 0&& func->arguments[argsCount-1]->type.isPattern()){
+		if(argsCount > 0 && func->arguments[argsCount-1]->type.isPattern()){
 			argsCount--;
 			auto tuple = new TupleExpression();
 			for(auto i = argsCount;i<expressionCount;i++)
@@ -757,7 +1142,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 
 			determinedFunction = true;
 			determinedArguments.resize(argsCount+1,nullptr);
-			determinedArguments[argsCount] = result[argsCount]->_returnType();
+			determinedArguments[argsCount] = result[argsCount]->returnType();
 		}
 		else assert(false);
 	}
@@ -767,7 +1152,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 		if(!label.isNull()){
 			//Labeled
 			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
-				if(func->arguments[currentArg]->id == label)
+				if(func->arguments[currentArg]->label() == label)
 					break;
 			}
 		}
@@ -782,30 +1167,27 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 		}
 		else if( func->arguments[currentArg]->type.isPattern() ){
 			result[currentArg] = exprBegin[currentExpr];
-			if(auto pattern = func->arguments[currentArg]->type.pattern) matcher.match(exprBegin[currentExpr]->_returnType(),pattern);
+			if(auto pattern = func->arguments[currentArg]->type.pattern) matcher.match(exprBegin[currentExpr]->returnType(),pattern);
 			if(!determinedFunction){
 				determinedFunction = true;
 				determinedArguments.resize(argsCount,nullptr);
 			}
-			determinedArguments[currentArg] = result[currentArg]->_returnType();
+			determinedArguments[currentArg] = result[currentArg]->returnType();
 		}
 		else {
-			auto ret = exprBegin[currentExpr]->_returnType();
-			auto oldLocal = ret->_localSemantics;
-			ret->_localSemantics = false;
-			result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],ret);
-			if(oldLocal) ret->_localSemantics = true;
+			result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType());
 		}
 		currentArg++;resolvedArgs++;currentExpr++;	
 	}
 
 	//Default args
 	for(currentArg = 0; currentArg < argsCount;currentArg ++){
-		if(!result[currentArg]) result[currentArg] = func->arguments[currentArg]->defaultValue()->duplicate();
+		DuplicationModifiers mods(func->body.scope);
+		if(!result[currentArg]) result[currentArg] = func->arguments[currentArg]->defaultValue()->duplicate(&mods);//NB: Duplication might not be even necessary!
 	}
 
 	if(dependentChecker){
-		DuplicationModifiers mods;
+		DuplicationModifiers mods(func->body.scope);
 		for(size_t i = 0;i< result.size();i++){
 			if(!func->arguments[i]->isDependent()){
 				mods.redirectors[reinterpret_cast<void*>(static_cast<Variable*>(func->arguments[i]))] =
@@ -816,21 +1198,14 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 		bool resolved = true;
 		for(size_t i = 0;i< result.size();i++){
 			if(func->arguments[i]->isDependent()){
-				mods.target = func->body.scope;
-				auto dup = func->arguments[i]->reallyDuplicate(&mods,nullptr);
+				auto dup = func->arguments[i]->reallyDuplicate(func,&mods);
 				//TODO resolve in scope of function
 				if(dup->resolve(this)){ //TODO how about allowing this to be a constraint? >_>
 					//typecheck
-					auto ret = result[i]->_returnType();
-					auto oldLocal = ret->_localSemantics;
-					ret->_localSemantics= false;
+					auto ret = result[i]->returnType();
 					auto w = dup->type.type()->canAssignFrom(result[i],ret);
 					if(w == -1) resolved = false;
 					else {
-						if(oldLocal){
-							oldLocal = true;
-							if(!func->canAcceptLocalParameter(i)) resolved = false;
-						}
 						*weight += w;
 					}
 				}
@@ -845,44 +1220,16 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 
 	}
 
-	if(!func->isFlagSet(Function::MACRO_FUNCTION) && !func->constInterpreter){//Macro optimization, so that we dont duplicate unnecessary
+	if(!func->isFlagSet(Function::MACRO_FUNCTION) && !func->isIntrinsic()){//Macro optimization, so that we dont duplicate unnecessary
 		//Determine the function?
-		if(determinedFunction){
-			DuplicationModifiers mods;
-			mods.target = func->owner();
-			mods.location = arg->location;
-			auto oldForcedToEvaluate = forcedToEvaluate;
-			forcedToEvaluate = true;
-			auto f = func->specializedDuplicate(&mods,determinedArguments);
-			matcher.container = f->body.scope;
-			matcher.defineIntroducedDefinitions();
-			f->resolve(this);
-			forcedToEvaluate = oldForcedToEvaluate;			
-			if(!f->canExpandAtCompileTime()) func->owner()->defineFunction(f);
-			*function = f;
-		}
-
-		if((*function)->canExpandAtCompileTime()){
-			DuplicationModifiers mods;
-			mods.target = (*function)->owner();
-			mods.location = arg->location;
-			auto oldForcedToEvaluate = forcedToEvaluate;
-			forcedToEvaluate = true;
-			Function* f;
-			auto generated = (*function)->expandedDuplicate(&mods,result,&f);
-			if(generated){
-				f->resolve(this);
-				(*function)->owner()->defineFunction(f);
-			}
-			forcedToEvaluate = oldForcedToEvaluate;		
-			*function = f;
-		}	
+		if(determinedFunction || func->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS))
+			*function = specializeFunction(matcher,func,determinedFunction ? &determinedArguments[0] : nullptr,&result[0]);
 	}
 
 	//Wrap all parameters in [> <] for macro functions
 	if(func->isFlagSet(Function::MACRO_FUNCTION)){
 		for(auto i = result.begin();i!=result.end();i++){
-			*i = (*i)->asValueExpression() ? *i : new ValueExpression(*i,intrinsics::ast::ExprPtr);
+			*i = (*i)->asNodeReference() ? *i : new NodeReference(*i);
 		}
 	}
 
@@ -900,11 +1247,10 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 		if(!(tuple = arg->asTupleExpression())){
 			if(auto u = arg->asUnitExpression()) delete arg;
 			tuple = new TupleExpression();
-		}else{
-			tuple->type = nullptr;
 		}
-		tuple->children = result;
-		return tuple;
+
+		tuple->children = result;	
+		return tuple->resolve(this);
 	}
 
 }
@@ -920,7 +1266,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 *Scenario 4 - tuple with expressions being non labeled and labeled:
 *	f(1,a:5) matches f(b,a), f(b,a,x = true)
 *	f(a:5,1) matches f(a,b), f(b,a,x = true)
-*Also:
+*Also(should it?)
 *	f(1,2) matches f(x)
 *	f(1,2,3) matches f(x,y)
 */
@@ -963,17 +1309,17 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 	if(argsCount < expressionCount){
 		if(argsCount > 0){
 			bool matches = false;
-			if(func->arguments[argsCount-1]->type.isPattern()){
-				if(auto pattern = func->arguments[currentArg]->type.pattern){
+			if(func->arguments[argsCount-1]->isVararg() && func->arguments[argsCount-1]->type.isPattern()){
+				if(auto pattern = func->arguments[argsCount-1]->type.pattern){
 					TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);
 					//construct a record from the tailed parameters
 					std::vector<Record::Field> fields;
-					for(auto i = argsCount - 1;i < expressionCount;i++) fields.push_back(Record::Field(exprBegin[i]->label(),exprBegin[i]->_returnType()));
-					TypeExpression record(Record::findAnonymousRecord(fields));
-					if(!matcher.match(&record,pattern)) return false;
+					for(auto i = argsCount - 1;i < expressionCount;i++) fields.push_back(Record::Field(exprBegin[i]->label(),exprBegin[i]->returnType()));
+					auto record = Record::findAnonymousRecord(fields)->asType();
+					if(!matcher.match(record,pattern)) return false;
 				}
 			}
-			else if(!func->arguments[argsCount-1]->type.type()->isSame(intrinsics::ast::ExprPtr)) return false;
+			else if(!func->arguments[argsCount-1]->type.type()->isSame(intrinsics::types::NodePointer)) return false;
 			argsCount--;
 			checked[argsCount] = true;
 			expressionCount = argsCount;
@@ -990,7 +1336,7 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 			//TODO same label multiple times error!
 			bool foundMatch = false;
 			for(currentArg =lastNonLabeledExpr ; currentArg < argsCount;currentArg++){
-				if(func->arguments[currentArg]->id == label){
+				if(func->arguments[currentArg]->label() == label){
 					foundMatch = true;
 					break;
 				}
@@ -1009,21 +1355,14 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 		}
 		else if( func->arguments[currentArg]->type.isPattern() ){
 			if(auto pattern = func->arguments[currentArg]->type.pattern){
-				if(!matcher.match(exprBegin[currentExpr]->_returnType(),pattern)) return false;
+				if(!matcher.match(exprBegin[currentExpr]->returnType(),pattern)) return false;
 				weight += WILDCARD + 1;
 			}
 			else weight += WILDCARD;
 		}
 		else {
-			auto ret = exprBegin[currentExpr]->_returnType();
-			auto oldLocal = ret->_localSemantics;
-			ret->_localSemantics= false;
-			if((w = func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],ret))!= -1 ){
+			if((w = func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType() ))!= -1 ){
 				weight += w;
-				if(oldLocal){
-					ret->_localSemantics = true;
-					if(!func->canAcceptLocalParameter(currentArg)) return false;
-				}
 			}
 			else return false;
 		}
@@ -1039,7 +1378,8 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 		}
 	}
 
-	//Try to match dependent args by solving independent args and then resolving dependent ones
+	//Try  to match dependent args by solving independent args and then resolving dependent ones
+	//TODO remove
 	if(result && hasDependentArg){
 		debug("Trying to match dependent args");
 		
@@ -1052,8 +1392,8 @@ void Resolver::findMatchingFunctions(std::vector<Function*>& overloads,std::vect
 	int weight = 0;
 	int maxweight = -1;
 	for(auto i=overloads.begin();i!=overloads.end();++i){
-		if(enforcePublic && (*i)->visibilityMode != Visibility::Public) continue;
-		if(!(*i)->_argsResolved) continue; //TODO what if we need this
+		if(enforcePublic && !(*i)->isPublic()) continue;
+		if(!(*i)->isResolved()) continue; //TODO what if we need this
 		if(match(this,(*i),argument,weight)){
 			if(weight == maxweight){
 				results.push_back(*i);

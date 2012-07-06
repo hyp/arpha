@@ -4,43 +4,63 @@
 #include "../ast/node.h"
 #include "../ast/scope.h"
 #include "../ast/declarations.h"
+#include "../ast/resolve.h"
+#include "../ast/interpret.h"
 #include "parser.h"
 #include "../compiler.h"
 #include "../intrinsics/types.h"
 
-Parser::Parser(const char* src,Resolver* evaluator) : Lexer(src),_evaluator(evaluator) {  
+Parser::Parser(const char* src,CompilationUnit* compilationUnit) : Lexer(src),_compilationUnit(compilationUnit) {  
+	_currentScope = nullptr;
+	_outerMacroOuterScope = nullptr;
+}
+CompilationUnit* Parser::compilationUnit() const {
+	return _compilationUnit;
 }
 
-void Parser::saveState(State *state){
-	state->src= ptr;
-	state->location = location;
+void Parser::ignoreNewlines(){
+	for(auto next = peek();next.isLine();next = peek()) consume();
 }
-void Parser::restoreState(State *state){
-	ptr = state->src;
-	location = state->location;
+
+Parser::NewlineIgnorer::NewlineIgnorer(bool doIgnore,Parser* parser) {	
+	ignore = doIgnore;
+	if(ignore){
+		parser->saveState(&state);
+		for(auto next = parser->peek();next.isLine();next = parser->peek()) parser->consume();
+		this->parser = parser;
+	}
+}
+void Parser::NewlineIgnorer::rollback(){
+	if(ignore) parser->restoreState(&state);
 }
 
 void Parser::currentScope(Scope* scope){
-	_currentScope=scope;
-	_evaluator->currentScope(scope);
+	_currentScope = scope;
+}
+void Parser::enterBlock(BlockExpression* block){
+	block->scope->setParent(_currentScope);
+	_currentScope = block->scope;
+}
+void Parser::leaveBlock(){
+	_currentScope = _currentScope->parent;
 }
 
 void Parser::expect(SymbolID token){
 	Token tok = consume();
-	if(tok.isSymbol()==false || tok.symbol!=token){
-		error(previousLocation(),"'%s' expected!",token);
+	if(!tok.isSymbol() || tok.symbol!=token){
+		syntaxError(format("Unexpected token %s - '%s' is expected!",tok,token));
 	}
 }
 
 bool Parser::match(SymbolID token){
 	Token tok = peek();
-	if(tok.isSymbol()==false || tok.symbol!=token) return false;
+	if(!tok.isSymbol() || tok.symbol!=token) return false;
 	consume();
 	return true;
 }
 
 bool Parser::match(int tokenType){
-	assert(tokenType >= Token::Symbol && tokenType <= Token::Eof); 
+	//assert(tokenType >= Token::Symbol && tokenType <= Token::Eof); 
 	Token tok = peek();
 	if(tok.type != tokenType) return false;
 	consume();
@@ -49,52 +69,53 @@ bool Parser::match(int tokenType){
 
 SymbolID Parser::expectName(){
 	Token tok = consume();
-	if(tok.isSymbol()==false){
-		error(previousLocation(),"A valid symbol is expected instead of %s!",tok);
+	if(!tok.isSymbol()){
+		syntaxError(format("Unexpected token %s - a valid symbol is expected!",tok));
 		return SymbolID("error-name");
 	}
 	return tok.symbol;
 }
-
-Node* Parser::evaluate(Node* node){
-	return _evaluator->resolve(node);
-}
-
 
 static Node* parseNotSymbol(Parser* parser){
 	Token& token = parser->lookedUpToken;
 	if(token.isUinteger()){
 		return new IntegerLiteral(BigInt(token.uinteger));
 	}
+	else if(token.isReal()){
+		return new FloatingPointLiteral(token.real);
+	}
 	else if(token.isString()){
 		return new StringLiteral(token.string);
 	}
 	else{
-		error(parser->previousLocation(),"Unexpected token %s!",token);
+		parser->syntaxError(format("Can't parse token %s!",token));
 		return ErrorExpression::getInstance();
 	}
 }
 
 /**
-* Pratt parser is fucking awsome.
+* Pratt parser is fucking awesome.
+* TODO  definition caching for improved symbol lookup.
+* TODO  investigate stack limitations.
 */
 Node* Parser::parse(int stickiness){
 	Node* expression;
 
 	//prefix	
-	auto location = currentLocation();
 	lookedUpToken = consume();
+	auto location = previousLocation();
 	if(lookedUpToken.isSymbol()){
 		auto next = peek();
-		if(next.isSymbol() && next.symbol == ":"){//TODo macroes featuring ':'
-			labelForNextNode = lookedUpToken.symbol;
+		if(next.isSymbol() && next.symbol == ":"){
+			auto label = lookedUpToken.symbol;
 			consume();
-			return parse(stickiness);
+			expression = parse(20);//TODO this is hacky..
+			location = expression->location();
+			expression->_label = label;
 		}
 		else{
 			auto prefixDefinition = _currentScope->lookupPrefix(lookedUpToken.symbol);
 			if(!prefixDefinition){ 
-				debug("line %s: Can't prefix parse %s at first round!",location.line(),lookedUpToken); //TODO unresolved name
 				expression = new UnresolvedSymbol(location,lookedUpToken.symbol);
 			}else{
 				expression = prefixDefinition->parse(this);
@@ -102,10 +123,7 @@ Node* Parser::parse(int stickiness){
 		}
 	}
 	else expression = parseNotSymbol(this);
-	expression->location = location;
-	expression->_label = labelForNextNode;
-	labelForNextNode = SymbolID();
-	expression = evaluate(expression);
+	expression->_location = location;
 
 	//infix parsing
 	while(1){
@@ -113,11 +131,10 @@ Node* Parser::parse(int stickiness){
 		if(lookedUpToken.isSymbol()){
 			auto infixDefinition = _currentScope->lookupInfix(lookedUpToken.symbol);
 			if(infixDefinition && stickiness < infixDefinition->stickiness){
-				location = currentLocation();
 				consume();
+				location = previousLocation();
 				expression = infixDefinition->parse(this,expression);
-				expression->location = location;
-				expression = evaluate(expression);
+				expression->_location = location;
 			}
 			else break;
 		}else break;	
@@ -125,69 +142,108 @@ Node* Parser::parse(int stickiness){
 	return expression;	
 }
 
+//Definition properties application
+// TODO remove this hacks!!
+void Parser::useProperty(SymbolID name,Node* value){
+	if(name == "precedence"){
+		currentScope()->precedenceProperty = value;
+	}
+}
+void Parser::useProperty(SymbolID name){
+	if(name == "intrinsic"){
+		//hacks
+		currentScope()->externalFunction = 1;
+	}
+}
+void Parser::clearProperties(){
+}
+void Parser::useTypedArgument(SymbolID name,Node* type){
+}
+void Parser::applyProperties(Node* node){
+	if(currentScope()->externalFunction) node->applyProperty("intrinsic",nullptr);
+	if(currentScope()->precedenceProperty && node->asInfixMacro()) node->applyProperty("precedence",currentScope()->precedenceProperty);
+}
+
+//introducing definitions
+void Parser::introduceDefinition(Variable* variableDefinition){
+	currentScope()->define(variableDefinition);
+}
+void Parser::introduceDefinition(Function* functionDefinition){
+	if(functionDefinition->isFlagSet(Function::CONSTRAINT_FUNCTION)){
+		currentScope()->define(functionDefinition);
+	}
+	else currentScope()->defineFunction(functionDefinition);
+}
+void Parser::introduceDefinition(Record* recordDefinition){
+	currentScope()->define(recordDefinition);
+}
+void Parser::introduceDefinition(TypeDeclaration* typeDeclaration){
+	currentScope()->define(typeDeclaration);
+}
+void Parser::introduceDefinition(PrefixMacro* macroDefinition){
+	currentScope()->define(macroDefinition);
+}
+void Parser::introduceDefinition(InfixMacro* macroDefinition){
+	currentScope()->define(macroDefinition);
+}
 
 //parsing declarations
+
+Node* Parser::mixinMacroResult(CTFEinvocation* invocation){
+	return mixinMacro(invocation,currentScope());
+}
 
 Node* ImportedScope::parse(Parser* parser) {
 	return reference();
 }
 
-void TypePatternUnresolvedExpression::parse(Parser* parser,int stickiness,PatternMatcher* patternMatcher){
-	auto oldSetting = parser->evaluator()->expectedTypeForEvaluatedExpression;
-	parser->evaluator()->expectedTypeForEvaluatedExpression = intrinsics::types::Type;
-	auto node = parser->parse(stickiness);
-	parser->evaluator()->expectedTypeForEvaluatedExpression = oldSetting;
-
-	if( auto isTypeExpr = node->asTypeExpression()){
-		if(isTypeExpr->isResolved()){
-			kind = Type;
-			_type = isTypeExpr;
-			return;
-		}
-	} else {
-		//pattern type?
-		if(patternMatcher){
-			auto oldSize = patternMatcher->introducedDefinitions.size();
-			if(patternMatcher->check(node)){
-				kind = Pattern;
-				pattern = node;
-				return;
-			} else if(oldSize != patternMatcher->introducedDefinitions.size()) 
-				patternMatcher->introducedDefinitions.erase(patternMatcher->introducedDefinitions.begin() + oldSize,patternMatcher->introducedDefinitions.end());
-		} else {
-			PatternMatcher matcher(parser->currentScope());
-			if(matcher.check(node)){
-				kind = Pattern;
-				pattern = node;
-				return;
-			}
-		}
-	}
-	kind = Unresolved;
-	unresolvedExpression = node;
+void TypePatternUnresolvedExpression::parse(Parser* parser,int stickiness){
+	kind = UNRESOLVED;
+	unresolvedExpression = parser->parse(stickiness);
 }
 
 Node* Variable::parse(Parser* parser){
 	return new VariableReference(this);
 }
 
-Node* Record::parse(Parser* parser){
-	return new TypeExpression(this);
+Node* AggregateType::parse(Parser* parser){
+	return new TypeReference(&_type);
 }
-
-Node* IntegerType::parse(Parser* parser){
-	return new TypeExpression(this);
-}
-
-Node* IntrinsicType::parse(Parser* parser){
-	return reference();
+Node* TypeDeclaration::parse(Parser* parser){
+	return new TypeReference(_type);
 }
 
 Node* Function::parse(Parser* parser){
 	return new FunctionReference(this);
 }
 
-
 Node* Overloadset::parse(Parser* parser){
 	return new UnresolvedSymbol(parser->previousLocation(),parser->lookedUpToken.symbol);
 }
+
+Node* PrefixMacro::parse(Parser* parser){
+	if(isResolved() || function->isFlagSet(Function::CANT_CTFE)){
+		CTFEinvocation i(parser->compilationUnit(),function);
+		if(i.invoke(nullptr)) return parser->mixinMacroResult(&i);
+		else error(parser->previousLocation(),"Failed to interpret a macro '%s' at compile time:\n\tCan't interpret an expression %s!",label(),i.result());
+	}
+	else {
+		if(isResolved()) error(parser->previousLocation(),"Can't parse macro '%s' - the macro can't be interpreted!",label());
+		else error(parser->previousLocation(),"Can't parse macro '%s' - the macro isn't resolved at usage time!",label());
+	}
+	return ErrorExpression::getInstance();
+}
+
+Node* InfixMacro::parse(Parser* parser,Node* node){
+	if(isResolved() || function->isFlagSet(Function::CANT_CTFE)){
+		CTFEinvocation i(parser->compilationUnit(),function);
+		if(i.invoke(new NodeReference(node))) return parser->mixinMacroResult(&i);
+		else error(parser->previousLocation(),"Failed to interpret a macro '%s' at compile time:\n\tCan't interpret an expression %s!",label(),i.result());
+	}
+	else {
+		if(isResolved()) error(parser->previousLocation(),"Can't parse macro '%s' - the macro can't be interpreted!",label());
+		else error(parser->previousLocation(),"Can't parse macro '%s' - the macro isn't resolved at usage time!",label());
+	}
+	return ErrorExpression::getInstance();
+}
+

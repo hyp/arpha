@@ -1,0 +1,70 @@
+import spec
+
+describe "An if-else expression" {
+	it "should evaluate the 'consequence' expression if the condition is true" {
+		var evaluated = false
+		if(true) evaluated = true else ()
+		evaluated should be true
+		
+		evaluated = false
+		if(false) evaluated = true else ()
+		evaluated should be false
+	}
+	it "should evaluate the 'alternative' expression if the condition is false" {
+		var evaluated = false
+		if(false) () else evaluated = true
+		evaluated should be true
+		
+		evaluated = false
+		if(false) () else evaluated = true
+		evaluated should be false
+	}
+	it "should return the 'consequence' expression if the condition is true" {
+		(if(true) 1 else 2) should be 1
+	}
+	it "should return the 'alternative' expression if the condition is false" {
+		(if(false) 1 else 2) should be 2
+	}
+	it "should allow the 'alternative' expression to be optional" {
+		var evaluated = false
+		if(true) evalued = true
+		evaluated should be false
+	}
+	it "should allow the 'else' keyword to appear on the next line after the 'consequence' expression" {
+		var evaluated = false
+		if(true){
+		}
+		else evaluated = true
+		evaluated should be true
+	}
+	it "should allow a block as a 'consequence' expression" {
+		var x = 1
+		if(true){
+			var x = 2
+			x should be 2
+		}
+		x should be 1
+	}
+	it "should allow a block as an 'alternative' expression" {
+		var x = 1
+		if(true){
+			var x = 2
+			x should be 2
+		} else {
+			var x = 1
+			x should be 1
+		}
+		x should be 1
+	}
+	it "should allow another if-else expression as an 'alternative' expression" {
+		var value = true
+		if(value){
+		}
+		else if(true){
+			value = false
+		}
+		else {
+		}
+		value should be false
+	}
+}

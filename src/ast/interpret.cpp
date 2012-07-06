@@ -8,8 +8,25 @@
 #include "visitor.h"
 #include "resolve.h"
 #include "interpret.h"
-#include "../intrinsics/ast.h"
 #include "../intrinsics/types.h"
+
+Node* UnaryOperation::interpret() const{
+	switch(kind()){
+	case BOOL_NOT: return new BoolExpression(!expression->asBoolExpression()->value);
+	case MINUS:   return nullptr;
+	}
+	assert(false);
+	return nullptr;
+}
+
+Node* BinaryOperation::interpret() const{
+	switch(kind()){
+	case BOOL_AND: return new BoolExpression(a->asBoolExpression()->value && b->asBoolExpression()->value);
+	case BOOL_OR:  return new BoolExpression(a->asBoolExpression()->value || b->asBoolExpression()->value);
+	}
+	assert(false);
+	return nullptr;
+}
 
 /**
 * Walks the AST node and checks if the node can be interpreted at compile-time.
@@ -46,25 +63,51 @@ struct Interpreter : NodeVisitor {
 
 	//Interpreting expressions
 	Node* visit(ReturnExpression* node){
-		auto result = node->value->accept(this);
+		auto result = node->expression->accept(this);
 		if(!walkEverywhere){
 			returnValueRegister = result;
 			status = RETURN;
 		}
 		return result;
 	}
+	static bool isConst(Node* node){
+		if(node->isConst()) return true;
+		if(auto tuple = node->asTupleExpression()){
+			for(auto i = tuple->begin();i!= tuple->end(); i++){
+				if(!isConst(*i)) return false;
+			}
+			return true;
+		}
+		return false;
+	}
+	Node* visit(UnaryOperation* node){
+		auto expr = node->expression->accept(this);
+		if(status == FAILURE) return nullptr;
+		if(isConst(expr)) ;
+		else return fail(node);
+	}
+	Node* visit(BinaryOperation* node){
+		auto a = node->a->accept(this);
+		auto b = node->b->accept(this);
+		if(status == FAILURE) return nullptr;
+		if(isConst(a) && isConst(b)) ;
+		else return fail(node);
+	}
 	Node* visit(VariableReference* node){
-		if(node->variable->functionOwner() == currentFunction) return registers[node->variable->registerID];
+		if(node->variable->functionOwner() == currentFunction) return registers[node->variable->ctfeRegisterID];
 		else return fail(node,"This variable is outside the function's scope!");
 	}
 	Node* visit(AssignmentExpression* node){
 		auto obj = node->object;//NB: Don't interpret the object!
 		auto val = node->value->accept(this);
 		if(status == FAILURE) return nullptr;
-		if(val->isConst()){
-			if(auto var = obj->asVariableReference()){
-				if(var->variable->functionOwner() == currentFunction){
-					registers[var->variable->registerID] = val;
+		if(isConst(val)){
+			Variable* variable;
+			if(auto var = obj->asVariableReference()) variable = var->variable;
+			else variable = obj->asVariable();
+			if(variable){
+				if(variable->functionOwner() == currentFunction){
+					registers[variable->ctfeRegisterID] = val;
 					return val;
 				}
 				else return fail(node,"This variable is outside the function's scope!");
@@ -84,7 +127,7 @@ struct Interpreter : NodeVisitor {
 		if(status == FAILURE) return nullptr;
 		if(createNew){
 			auto tuple = new TupleExpression();
-			node->copyProperties(tuple);
+			node->copyLocationSymbol(tuple);
 			tuple->children = newChildren;
 			return tuple;
 		}
@@ -97,7 +140,7 @@ struct Interpreter : NodeVisitor {
 		if(parameter){	
 			auto argsBegin = parameter->asTupleExpression() && f->arguments.size()>1 ? parameter->asTupleExpression()->children.begin()._Ptr : &(parameter);
 			for(size_t i = 0;i<f->arguments.size();i++){
-				registers[f->arguments[i]->registerID] = argsBegin[i];
+				registers[f->arguments[i]->ctfeRegisterID] = argsBegin[i];
 			}
 		}
 		//intepret body
@@ -108,8 +151,10 @@ struct Interpreter : NodeVisitor {
 		auto obj = node->object->accept(this);
 		if(status == FAILURE) return nullptr;
 		if(auto func = obj->asFunctionReference()){
-			if(auto f = func->function->constInterpreter){
-				if(arg->isConst()) return f(arg);
+			if(func->function->intrinsicCTFEbinder && isConst(arg)){
+				CTFEintrinsicInvocation i(compiler::currentUnit());
+				i.invoke(func->function,arg);
+				return i.result();
 			}
 			return fail(node,"The function can't be interpreted!");
 		}
@@ -160,32 +205,99 @@ struct Interpreter : NodeVisitor {
 
 };
 
-InterpreterInvocation::InterpreterInvocation(Interpreter* interpreter,Function* f,Node* parameter,bool visitAllBranches) : func(f) {
-	if(f->isFlagSet(Function::CANT_CTFE)){
-		_succeded = false;
-		return;
+CTFEinvocation::CTFEinvocation(CompilationUnit* compilationUnit,Function* function) : _compilationUnit(compilationUnit),func(function) {
+	if(!function->isFlagSet(Function::CANT_CTFE)){
+		if(function->ctfeRegisterCount > 0) registers.resize(function->ctfeRegisterCount);
 	}
+}
+CTFEinvocation::~CTFEinvocation(){
+}
+bool CTFEinvocation::invoke(Node* parameter){
+	if(parameter)
+		assert(parameter->isConst());
+
+	if(func->isFlagSet(Function::CANT_CTFE)){
+		return false;
+	} 
+	auto interpreter = _compilationUnit->interpreter;
 	auto oldFunc = interpreter->currentFunction;
 	auto oldRegisters = interpreter->registers;
-	size_t numRegs = f->ctfeRegisterCount;
-	if(numRegs > 0){
-		registers.resize(numRegs);
+	if(func->ctfeRegisterCount > 0){
 		interpreter->registers = &registers[0];
 	}
-	interpreter->currentFunction = f;
-	interpreter->walkEverywhere = visitAllBranches;
-	interpreter->interpretCall(f,parameter);
-	_succeded = interpreter->status != Interpreter::FAILURE;
-	_result = interpreter->returnValueRegister;
+	interpreter->currentFunction = func;
+	interpreter->interpretCall(func,parameter);
+	auto success = interpreter->status != Interpreter::FAILURE;
+	_result = success ? interpreter->returnValueRegister : interpreter->failureNode;
 
 	interpreter->registers = oldRegisters;
 	interpreter->currentFunction = oldFunc;
 	interpreter->status = Interpreter::WALKING;
+	return success;
 }
-InterpreterInvocation::~InterpreterInvocation(){
+Node* CTFEinvocation::getValue(const Variable* variable){
+	return variable->_owner && variable->functionOwner() == func ? registers[variable->ctfeRegisterID] : nullptr;
 }
-Node* InterpreterInvocation::getValue(const Variable* variable){
-	return variable->functionOwner() == func ? registers[variable->registerID] : nullptr;
+
+/**
+*	API for intrinsic function bindings.
+*/
+CTFEintrinsicInvocation::CTFEintrinsicInvocation(CompilationUnit* compilationUnit) : _compilationUnit(compilationUnit) {
+}
+bool CTFEintrinsicInvocation::invoke(Function* function,Node* parameter){
+	assert(function->isIntrinsic() && function->intrinsicCTFEbinder);
+	auto t = parameter->asTupleExpression();
+	_params = t ? t->childrenPtr() : &parameter;
+	function->intrinsicCTFEbinder(this);
+	return true;
+}
+Node* CTFEintrinsicInvocation::result() const {
+	return _result;
+}
+
+int      CTFEintrinsicInvocation::getInt32Parameter(uint16 id) const {
+	return (int)_params[id]->asIntegerLiteral()->integer.u64;
+}
+uint32   CTFEintrinsicInvocation::getUint32Parameter(uint16 id) const {
+	return (uint32)_params[id]->asIntegerLiteral()->integer.u64;
+}
+bool     CTFEintrinsicInvocation::getBoolParameter(uint16 id) const {
+	return _params[id]->asBoolExpression()->value;
+}
+Type*    CTFEintrinsicInvocation::getTypeParameter(uint16 id) const {
+	return _params[id]->asTypeReference()->type;
+}
+Node*    CTFEintrinsicInvocation::getNodeParameter(uint16 id) const {
+	return _params[id]->asNodeReference()->node();
+}
+SymbolID CTFEintrinsicInvocation::getStringParameterAsSymbol(uint16 id) const {
+	auto str = _params[id]->asStringLiteral();
+	return SymbolID(str->block.ptr(),str->block.length());
+}
+Parser*  CTFEintrinsicInvocation::getParser() const {
+	return _compilationUnit->parser;
+}
+
+void CTFEintrinsicInvocation::ret(){
+	_result = new UnitExpression();
+}
+void CTFEintrinsicInvocation::ret(bool value ){
+	_result = new BoolExpression(value);
+}
+void CTFEintrinsicInvocation::ret(Type* value){
+	_result = new TypeReference(value);
+}
+void CTFEintrinsicInvocation::ret(Node* node ){
+	_result = new NodeReference(node);
+}
+void CTFEintrinsicInvocation::ret(SymbolID symbolAsString){
+	_result = new StringLiteral(symbolAsString);
+}
+void CTFEintrinsicInvocation::retNatural(size_t value){
+	_result = new IntegerLiteral((uint64)value);
+}
+void CTFEintrinsicInvocation::retNaturalNatural(size_t a,size_t b){
+	_result = new TupleExpression(new IntegerLiteral((uint64)a),new IntegerLiteral((uint64)b));
 }
 
 Interpreter* constructInterpreter(InterpreterSettings* settings){

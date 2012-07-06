@@ -12,6 +12,7 @@
 
 #include "scope.h"
 
+
 struct Variable;
 struct IntegerType;
 struct IntrinsicType;
@@ -21,13 +22,20 @@ struct Function;
 struct ImportedScope;
 
 struct NodeVisitor;
+struct Node;
+struct NodeList;
+struct TypePatternUnresolvedExpression;
+struct Type;
+struct CTFEinvocation;
 struct Resolver;
+struct Argument;
+
 
 
 //Injects visitor callback and dynamic cast function into a node structure
 //Note: only does the definitions, the appropriate implementations are done by traversing NODE_LIST
 #define DECLARE_NODE(T) \
-	Node* duplicate(DuplicationModifiers* mods = nullptr) const; \
+	Node* duplicate(DuplicationModifiers* mods) const; \
 	Node* accept(NodeVisitor* visitor);    \
 	private:             \
 	T* as##T();  \
@@ -37,17 +45,20 @@ struct Resolver;
 //This is a list of node types. TODO refactor into NODETYPE_LIST
 #define NODE_LIST(X)  \
 	X(IntegerLiteral) \
+	X(FloatingPointLiteral) \
 	X(BoolExpression) \
 	X(StringLiteral)  \
 	X(ArrayLiteral)   \
 	X(UnitExpression) \
 	X(ErrorExpression)        \
-	X(TypeExpression)         \
+	X(TypeReference)          \
 	X(ImportedScopeReference) \
 	X(VariableReference)     \
 	X(FunctionReference)     \
 	X(TupleExpression)       \
 	X(CallExpression)        \
+	X(UnaryOperation) \
+	X(BinaryOperation) \
 	X(FieldAccessExpression) \
 	X(AccessExpression)      \
 	X(AssignmentExpression)  \
@@ -62,88 +73,165 @@ struct Resolver;
 	X(ExpressionVerifier) \
 	X(UnresolvedSymbol)   \
 	X(MatchResolver)      \
-	X(ValueExpression)
+	X(NodeReference)      \
+	\
+	X(InfixMacro) \
+	X(PrefixMacro) \
+	X(Variable) \
+	X(Function) \
+	X(Record)   \
+	X(TypeDeclaration)
 
 //Forward declaration of node types
-struct Node;
 #define NODE_FORWARD_DECLARATION(X) struct X;
 	NODE_LIST(NODE_FORWARD_DECLARATION)
 #undef NODE_FORWARD_DECLARATION
-
-struct InterpreterInvocation;
 
 //TODO
 struct DuplicationModifiers {
 	Location location;
 	Scope* target;
-	InterpreterInvocation* expandedMacroOptimization;//when a macro returns [> $x <] we replace x with a value during mixining into the caller's body
+	CTFEinvocation* expandedMacroOptimization;//when a macro returns [> $x <] we replace x with a value during mixining into the caller's body
 
 	//The bool indicates whether the redirector is expression(true) or a definition(false)
 	std::map<void*,std::pair<void*,bool> > redirectors;//Used to redirect references for duplicated definitions
 	
 	Variable* returnValueRedirector;//The variable to which the return value is assigned in inlined and mixined functions
 
-	DuplicationModifiers() : returnValueRedirector(nullptr),expandedMacroOptimization(nullptr) {}
+	DuplicationModifiers(Scope* target) : returnValueRedirector(nullptr),expandedMacroOptimization(nullptr) { this->target = target; }
+
+	void expandArgument(Argument* original,Node* value);
+	void duplicateDefinition(Argument* original,Argument* duplicate);
+	void duplicateDefinition(Variable* original,Variable* duplicate);
+	void duplicateDefinition(Function* original,Function* duplicate);
+	void duplicateDefinition(Record* original,Record* duplicate);
+	void duplicateDefinition(TypeDeclaration* original,TypeDeclaration* duplicate);
+	void duplicateDefinition(PrefixMacro* original,PrefixMacro* duplicate);
+	void duplicateDefinition(InfixMacro* original,InfixMacro* duplicate);
 };
 
 //An AST node
 struct Node {
-	Location location;
-	SymbolID _label; //optional lable e.g. x:1 => 1 will have label x
+protected:	
+	SymbolID _label; //optional label e.g. x:1 => 1 will have label x
+public:
+	Location _location;
+protected:	
+	uint16   flags;
 
-	virtual TypeExpression* _returnType() const;
+	friend struct Parser;
+	
+public:
+	enum {
+		RESOLVED = 0x1,
+		CONSTANT = 0x2, //marks a constant expression
+	};
 
-	//Accepts an ast visitor
+	inline Node() : flags(0) {}
+
+	void setFlag  (uint16 id);
+	bool isFlagSet(uint16 id) const ;
+	inline bool isResolved() const { return isFlagSet(RESOLVED); }
+	inline bool isConst()    const { return isFlagSet(CONSTANT); }
+
+	virtual Type* returnType() const;
+
+	//Accepts an AST visitor
 	virtual Node* accept(NodeVisitor* visitor) = 0;
 
-	virtual Node* duplicate(DuplicationModifiers* mods = nullptr) const  = 0;
-	Node* copyProperties(Node* dest) const;
+	virtual Node* duplicate(DuplicationModifiers* mods) const  = 0;
+protected:
+	Node* copyProperties(Node* dest) const; 
+public:
+	Node* copyLocationSymbol(Node* dest) const;//Doesn't copy the flags.. use when resolving between nodes of different types
 
-	virtual bool isResolved() const { return true; }
+	virtual Node* resolve(Resolver* resolver);
 
-	virtual bool isConst()    const { return false; }
-
-	virtual bool isLocal()    const { return false; }
-
-	inline SymbolID label()   const { return _label; }
+	inline  SymbolID label()   const { return _label; }
+    Location location() const { return _location; }
+	virtual bool applyProperty(SymbolID name,Node* value){ return false; }
 
 	//Dynamic casts
 #define CAST(T) virtual T* as##T() { return nullptr; }
 	NODE_LIST(CAST)
 #undef CAST
 };
-
-//Node to string
 std::ostream& operator<< (std::ostream& stream,Node* node);
 
+/**
+* These nodes are definition nodes.
+* A definition node provides a mapping from a symbol in the source file into an custom expression for both parser and resolver.
+*/
+struct DefinitionNode : Node {
 
-struct ConstantNode: Node {
-	bool isConst() const { return true; }
+	uint8 visibilityMode() const;
+	bool  isPublic() const;
+//protected:
+	void visibilityMode(uint8 mode);
+
+	void* generatorData; //extra data used by generator
+};
+
+struct PrefixDefinition : DefinitionNode {
+
+	PrefixDefinition(SymbolID name,Location& location);
+	virtual Node* parse(Parser* parser) = 0;
+
+	virtual Overloadset* asOverloadset(){ return nullptr; }
+
+	//For resolving symbols after parsing
+	virtual Node* createReference(){ return nullptr; }
+};
+
+struct InfixDefinition : DefinitionNode {
+	int stickiness;//The parsing precedence
+	
+	InfixDefinition(SymbolID name,int stickiness,Location& location);
+	virtual Node* parse(Parser* parser,Node* node) = 0;
+};
+
+#include "type.h"
+
+struct LiteralNode: Node {
+	inline LiteralNode() { setFlag(CONSTANT | RESOLVED); }
 };
 
 //(0..9)+ : integer
-struct IntegerLiteral : ConstantNode {
+struct IntegerLiteral : LiteralNode {
 	IntegerLiteral(const BigInt& integer);
-	TypeExpression* _returnType() const;	
+	Type* returnType() const;	
 	
 	BigInt integer;
 	IntegerType* _type;//optional
 	DECLARE_NODE(IntegerLiteral);
 };
 
+//Either a float or a double
+struct FloatingPointLiteral : LiteralNode {
+	enum {
+		IS_FLOAT = 0x8,//is it a float(or a double)
+	};
+
+	FloatingPointLiteral(const double v);
+	Type* returnType() const;
+
+	double value;
+	DECLARE_NODE(FloatingPointLiteral);
+};
+
 //true | false
-struct BoolExpression: ConstantNode {
+struct BoolExpression: LiteralNode {
 	BoolExpression(const bool v);
-	TypeExpression* _returnType() const;
+	Type* returnType() const;
 
 	bool value;
 	DECLARE_NODE(BoolExpression);
 };
 
-struct StringLiteral : ConstantNode {
+struct StringLiteral : LiteralNode {
 	StringLiteral(memory::Block& block);
 	StringLiteral(SymbolID symbol);//<-- reuses the string, no duplication
-	TypeExpression* _returnType() const;
+	Type* returnType() const;
 	
 	memory::Block block;
 	DECLARE_NODE(StringLiteral);
@@ -164,18 +252,18 @@ struct NodeList : Node {
 
 struct ArrayLiteral : NodeList {
 	ArrayLiteral();
-	TypeExpression* _returnType() const;
+	
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
 
 	DECLARE_NODE(ArrayLiteral);
 };
 
 
 //():void
-struct UnitExpression : Node {
+struct UnitExpression : LiteralNode {
 	UnitExpression(){}
-	TypeExpression* _returnType() const;
-
-	bool isConst() const;
+	Type* returnType() const;
 
 	DECLARE_NODE(UnitExpression);
 private:
@@ -184,171 +272,59 @@ private:
 
 
 //: intrinsics::types::Scope
-struct ImportedScopeReference : ConstantNode {
+struct ImportedScopeReference : LiteralNode {
 	ImportedScopeReference(ImportedScope* scope);
 
-	TypeExpression* _returnType() const;
+	Type* returnType() const;
 
 	ImportedScope* scope;
 	DECLARE_NODE(ImportedScopeReference);
 };
 
-struct ValueExpression : ConstantNode {
-	ValueExpression(void* d,TypeExpression* type); //..
-	
-	TypeExpression* _returnType() const;
-
-	TypeExpression* type;
-	void* data;
-	DECLARE_NODE(ValueExpression);
+struct NodeReference : LiteralNode {
+	NodeReference(Node* node);
+        
+	Type* returnType() const;
+    Node* node() const { return _node; }
+      
+	DECLARE_NODE(NodeReference);
+private:
+    Node* _node;
 };
-
-// This is either a type expression or a type pattern. 
-// It can also be an unresolved expression which is expected to resolve into a type or type pattern at a later stage.
-struct TypePatternUnresolvedExpression {
-	enum {
-		Pattern,//_,Pointer(_) etc
-		Unresolved,
-		Type,
-	};
-	int kind;
-	union {
-		TypeExpression* _type;
-		Node* unresolvedExpression;
-		Node* pattern; //it can be null to indicate that the pattern is "_"
-	};
-
-	inline TypePatternUnresolvedExpression() : kind(Pattern),pattern(nullptr) {}
-	inline TypePatternUnresolvedExpression(TypeExpression* expr) : kind(Type),_type(expr) {}
-	inline bool isResolved() const { return kind == Type;     }
-	inline bool isPattern() const  { return kind == Pattern;  }
-	TypeExpression* type() const;
-
-	TypePatternUnresolvedExpression duplicate(DuplicationModifiers* mods) const;
-
-	void specify(TypeExpression* givenType);
-	bool deduce(TypeExpression* givenType,Scope* container);
-
-	struct PatternMatcher {
-		struct IntroducedDefinition {
-			SymbolID name;Location location;Node* value;
-
-			inline IntroducedDefinition(SymbolID n,Location l,Node* v) : name(n),location(l),value(v) {}
-		};
-		std::vector<IntroducedDefinition> introducedDefinitions;
-		Scope* container;
-
-		PatternMatcher(Scope* scope) : container(scope) {}
-		IntroducedDefinition* lookupDefinition(SymbolID name);
-		void introduceDefinition(SymbolID name,Location location,Node* value = nullptr);
-		bool check(Node* expression); //Returns true if a certain expression is a type pattern e.g. _
-		bool match(Node* object,Node* pattern);
-		void defineIntroducedDefinitions();
-	};
-
-	bool resolve(Resolver* evaluator,PatternMatcher* patternMatcher = nullptr);
-	void parse(Parser* parser,int stickiness,PatternMatcher* patternMatcher = nullptr);
-};
-
-//(type ...): intrinsics::types::Type
-struct TypeExpression : Node {
-
-	enum {
-		VOID,
-		TYPE,//typeof(int32)
-		BOOL,
-		RECORD,
-		INTEGER,
-		INTRINSIC,
-		FUNCTION,
-		POINTER,
-		STATIC_ARRAY,
-	};
-
-	TypeExpression(int kind);
-	TypeExpression(IntrinsicType* intrinsic);
-	TypeExpression(IntegerType* integer);
-	TypeExpression(Record* record);
-	TypeExpression(int kind,TypeExpression* next);//ptr
-	TypeExpression(TypeExpression* argument,TypeExpression* returns);//function
-	TypeExpression(TypeExpression* T,size_t N); //static array
-
-	//self explanatory
-	bool isValidTypeForVariable();
-	bool isValidTypeForArgument();
-
-	//..
-	bool isResolved() const;
-	bool isConst() const;//NB: this is very different to hasConstSematics
-	bool matchRecord(Record* record) const;
-	TypeExpression* _returnType() const;
-	size_t size() const;
-
-	bool isSame(TypeExpression* other);
-
-	bool hasLocalSemantics() const { return _localSemantics; }
-	//const int32
-	bool hasConstSemantics() const { return false; }
-
-
-	bool wasGenerated() const; //Is this a parametrized type?
-	bool wasGeneratedBy(Function* function) const;  //Returns the function which generated this type
-	Node* generatedArgument(size_t i) const; //Returns the parameter i which was the argument to the function which generated this type
-
-	/**
-	* This is the one of the key functions of the type system.
-	* Given an expression and its type, this function will check if the 'this' type can be assigned from expression's type.
-	* If such an assignment is possible, it will return the resulting expression with possible conversions.
-	* If not, it will return null.
-	*/
-	Node* assignableFrom(Node* expression,TypeExpression* type);
-	int canAssignFrom(Node* expression,TypeExpression* type);
-
-	DECLARE_NODE(TypeExpression);
-public:
-	int type;
-	bool _localSemantics;
-	union {
-		IntrinsicType* intrinsic;
-		Record* record;
-		IntegerType* integer;
-		TypeExpression* argument;
-		Node* pattern;
-	};
-	union {
-		TypeExpression* returns;
-		size_t N;
-	};
-	friend std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
-};
-std::ostream& operator<< (std::ostream& stream,TypeExpression* node);
 
 // Type checks the expression, returning an expression which fits the expectedType or null if the types don't match
-Node* typecheck(Location& loc,Node* expression,TypeExpression* expectedType);
+Node* typecheck(Node* expression,Type* expectedType);
+
+struct TypeReference : Node {
+	TypeReference(Type* type);
+
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
+
+	Type* type;
+	DECLARE_NODE(TypeReference);
+};
 
 //: variable->type
 struct VariableReference : Node {
 	VariableReference(Variable* variable);
 
-	TypeExpression* _returnType() const;
-	bool isResolved() const;
-	bool isLocal() const;
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
 
 	Variable* variable;
 	DECLARE_NODE(VariableReference);
 };
 
 //: record
-struct TupleExpression : Node {
+struct TupleExpression : NodeList {
 	TupleExpression();
 	TupleExpression(Node* a,Node* b);
 
-	TypeExpression* _returnType() const;
-	bool isConst() const;
-	bool isResolved() const;
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
 
-	std::vector<Node*> children;
-	TypeExpression* type; // = nullptr
+	Type* type; // = nullptr
 
 	DECLARE_NODE(TupleExpression);
 };
@@ -356,24 +332,78 @@ struct TupleExpression : Node {
 struct FunctionReference : Node {
 	FunctionReference(Function* func);
 
-	TypeExpression* _returnType() const;
-	bool isResolved() const;
-	bool isConst() const;
+	Type* returnType() const;
 
 	Function* function;
 	DECLARE_NODE(FunctionReference);
 };
 
 struct CallExpression : Node {
+	enum {
+		DOT_SYNTAX = 0x4, //a call expression created from foo.bar
+	};
 	CallExpression(Node* object,Node* argument);
 
-	TypeExpression* _returnType() const;
-	bool isResolved() const;
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
 
 	Node* object;
 	Node* arg;
-	bool _resolved;
 	DECLARE_NODE(CallExpression);
+};
+
+//this is an expression which has multiple variants
+struct VariantNode : Node {
+	VariantNode(uint32 kind);
+	uint32 kind() const;
+protected:
+	void mutate(uint32 newKind);
+private:
+	uint32 _kind;
+};
+
+struct UnaryOperation : VariantNode {
+	enum {
+		BOOL_NOT = 0, // ! true
+		MINUS, // - 
+		MAX_VARIANT,
+	};
+	UnaryOperation(uint32 kind,Node* expression);
+
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
+
+	bool  isValid() ;
+	Node* interpret() const;
+
+	Node* expression;
+	DECLARE_NODE(UnaryOperation);
+};
+
+struct BinaryOperation : VariantNode {
+	enum {
+		BOOL_AND = 0,//true && true
+		BOOL_OR,     //false || false
+		EQUALS,
+		LESS,
+		GREATER,
+		ADD,
+		SUBTRACT,
+		MULTIPLY,
+		DIVIDE,
+		MOD,
+		MAX_VARIANT,
+	};
+	BinaryOperation(uint32 kind,Node* a,Node* b);
+
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
+
+	bool  isValid() ;
+	Node* interpret() const;
+
+	Node* a,*b;
+	DECLARE_NODE(BinaryOperation);
 };
 
 // Record.field
@@ -381,27 +411,26 @@ struct CallExpression : Node {
 struct FieldAccessExpression : Node {
 	FieldAccessExpression(Node* object,int field);
 
-	TypeExpression* _returnType() const;
+	Type* returnType() const;
 
 	// Returns record T when object is of type T or pointer T 
 	Record* objectsRecord() const;
-	bool isLocal() const;
 
 	Node* object;
 	int field;
 	DECLARE_NODE(FieldAccessExpression);
 };
 
+/// NB: assignment(make exception for the initializing assignment) is a statement(Hello nemerle)
 struct AssignmentExpression : Node {
 	AssignmentExpression(Node* object,Node* value);
 
-	TypeExpression* _returnType() const;
-	bool isResolved() const;
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
 
 	Node* object;
 	Node* value;
 	bool isInitializingAssignment;// = false
-	bool _resolved;
 	DECLARE_NODE(AssignmentExpression);
 };
 
@@ -409,10 +438,9 @@ struct AssignmentExpression : Node {
 struct ReturnExpression : Node {
 	ReturnExpression(Node* expression);
 
-	bool isResolved() const;
+	Node* resolve(Resolver* resolver);
 
-	Node* value;
-	bool _resolved;
+	Node* expression;
 	DECLARE_NODE(ReturnExpression);
 };
 
@@ -434,44 +462,55 @@ struct ControlFlowExpression: Node {
 //: Pointer(expression.typeof)
 struct PointerOperation : Node {
 	PointerOperation(Node* expression,int type);
-	TypeExpression* _returnType() const;
-	bool isResolved() const;
+
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
 
 	enum {
 		ADDRESS,     //&
 		DEREFERENCE, //*
 	};	
+	inline bool isAddress()     const { return kind == ADDRESS; }
+	inline bool isDereference() const { return kind == DEREFERENCE; }
 	Node* expression;
 	int kind; // = ADDRESS
-	bool _resolved;
 	DECLARE_NODE(PointerOperation);
 };
 
 struct IfExpression : Node {
+	enum {
+		MATCH_SYNTAX = 0x4, //Produced by a match expression
+	};
 	IfExpression(Node* condition,Node* consequence,Node* alternative);
 
-	TypeExpression* _returnType() const;
-	bool isResolved() const;
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
 
 	Node* condition;
 	Node* consequence;
 	Node* alternative;
-	bool _resolved;
 	DECLARE_NODE(IfExpression);
 };
 
 // : intrinsics::types::Void
-struct BlockExpression : Node {
-	BlockExpression(Scope* scope);
+struct BlockExpression : NodeList {
+	enum {
+		RETURNS_LAST_EXPRESSION = 0x8,
+		USES_PARENT_SCOPE = 0x10 ,//mixined blocks [> <] use parent scope to define definitons and they return the last expression
+	};
+    BlockExpression();
 
-	bool isResolved() const;//TODO true or false?
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
 
 	void _duplicate(BlockExpression* dest,DuplicationModifiers* mods) const;
 
-	std::vector<Node*> children;
+	BlockExpression* duplicateMixin(DuplicationModifiers* mods) const;
+
 	Scope* scope;
-	bool _resolved;
 	DECLARE_NODE(BlockExpression);
+private:
+	BlockExpression(Scope* scope);
 };
 
 // A while or a do while expression
@@ -479,21 +518,20 @@ struct BlockExpression : Node {
 struct LoopExpression : Node {
 	LoopExpression(Node* body);
 
-	bool isResolved() const;
+	Node* resolve(Resolver* resolver);
 
 	Node* body;
 	DECLARE_NODE(LoopExpression);
 };
 
 struct CastExpression : Node {
-	CastExpression(Node* object,TypeExpression* type);
+	CastExpression(Node* object,Type* type);
 
-	bool isResolved() const;
-	TypeExpression* _returnType() const;
+	Node* resolve(Resolver* resolver);
+	Type* returnType() const;
 
 	Node* object;
-	TypeExpression* type;
-	bool _resolved;
+	Type* type;
 	DECLARE_NODE(CastExpression);
 };
 
@@ -502,21 +540,22 @@ struct CastExpression : Node {
 *****/
 
 struct AlwaysUnresolved : Node {
-	bool isResolved() const { return false; }
 };
 
 // Used for typetesting - verifies that a given expression is compatible to a certain type
 struct ExpressionVerifier : AlwaysUnresolved {
-	ExpressionVerifier(const Location& loc,Node* child,TypeExpression* typeExpected);
+	ExpressionVerifier(const Location& loc,Node* child,Type* typeExpected);
 
 	Node* expression;
-	TypeExpression* expectedType;
+	Type* expectedType;
 	DECLARE_TEMPNODE(ExpressionVerifier);
 };
 
 // An unresolved symbol
 struct UnresolvedSymbol :AlwaysUnresolved {
 	UnresolvedSymbol(const Location& loc,SymbolID sym,Scope* scope = nullptr);
+
+	Node* resolve(Resolver* resolver);
 
 	//Scope in which to look for resolving. 
 	//Leave it null to search in the current scope.
@@ -533,19 +572,21 @@ struct UnresolvedSymbol :AlwaysUnresolved {
 struct AccessExpression : AlwaysUnresolved {
 	AccessExpression(Node* object,SymbolID symbol);
 	
+	Node* resolve(Resolver* resolver);
+
 	Node* object;
 	SymbolID symbol;
-	bool passedFirstEval; //On first evaluation don't touch this node!!
 	DECLARE_TEMPNODE(AccessExpression);
 };
 
 // An expression representing pattern matching of a certain object
 // A temporary match placeholder must be used before if-else tree so that the pattern for certain object like Types or records will be produced correctly!
-struct MatchResolver : AlwaysUnresolved {
+struct MatchResolver : NodeList {
 	MatchResolver(Node* object);
 
+	Node* resolve(Resolver* resolver);
+
 	Node* object;
-	std::vector<Node*> children; // 0: pattern 1: consequence ...
 	DECLARE_TEMPNODE(MatchResolver);
 };
 
@@ -558,6 +599,38 @@ struct ErrorExpression : AlwaysUnresolved {
 private:
 	ErrorExpression(){}
 	ErrorExpression(const ErrorExpression& other){}
+};
+
+//Macroes
+struct PrefixMacro: PrefixDefinition {
+
+	PrefixMacro(Function* f);
+
+	Node* parse(Parser* parser);
+
+	Node* resolve(Resolver* resolver);
+
+	inline Function* func(){ return function; }
+
+	DECLARE_NODE(PrefixMacro);
+protected:
+	Function* function;
+};
+
+struct InfixMacro: InfixDefinition {
+	InfixMacro(Function* f,Node* stickiness);
+	bool applyProperty(SymbolID name,Node* value);
+
+	Node* parse(Parser* parser,Node* node);
+
+	Node* resolve(Resolver* resolver);
+
+	inline Function* func(){ return function; }
+
+	DECLARE_NODE(InfixMacro);
+protected:
+	Function* function;
+	Node* stickinessExpression;
 };
 
 #endif
