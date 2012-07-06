@@ -5,7 +5,7 @@
 	Version: 1
 #
 
-use intrinsic
+import arpha.intrinsic
 
 def Expression           Type
 

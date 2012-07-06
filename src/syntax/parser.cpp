@@ -150,17 +150,12 @@ void Parser::useProperty(SymbolID name,Node* value){
 	}
 }
 void Parser::useProperty(SymbolID name){
-	if(name == "intrinsic"){
-		//hacks
-		currentScope()->externalFunction = 1;
-	}
 }
 void Parser::clearProperties(){
 }
 void Parser::useTypedArgument(SymbolID name,Node* type){
 }
 void Parser::applyProperties(Node* node){
-	if(currentScope()->externalFunction) node->applyProperty("intrinsic",nullptr);
 	if(currentScope()->precedenceProperty && node->asInfixMacro()) node->applyProperty("precedence",currentScope()->precedenceProperty);
 }
 

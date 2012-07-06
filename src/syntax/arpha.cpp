@@ -223,6 +223,7 @@ struct VarParser: IntrinsicPrefixMacro {
 		auto var = new Variable(first,parser->previousLocation());
 		var->isMutable = isMutable;
 		parser->applyProperties(var);
+		if(!isMutable && parser->compilationUnit()->moduleBody->scope->importsArphaIntrinsic) var->applyProperty("intrinsic",nullptr);
 		parser->introduceDefinition(var);
 		vars.push_back(var);
 		while(parser->match(",")){
@@ -309,7 +310,7 @@ void parseFunctionBody(Parser* parser,Function* func,bool allowNoBody = false){
 	else i.rollback();
 #endif
 	if(isEndExpression(parser->peek())){
-		if(!allowNoBody) error(parser->currentLocation(),"The function %s needs to have a body( You can use either '=' expression or '{' body '}')!",func->label());
+		if(!allowNoBody) error(parser->previousLocation(),"The function %s needs to have a body( You can use either '=' expression or '{' body '}')!",func->label());
 		return;
 	}
 
@@ -329,6 +330,8 @@ void parseFunctionBody(Parser* parser,Function* func,bool allowNoBody = false){
 static Function* parseFunction(SymbolID name,Parser* parser){
 	//Function
 	auto func = new Function(name,parser->previousLocation());
+	//
+	if(parser->compilationUnit()->moduleBody->scope->importsArphaIntrinsic) func->applyProperty("intrinsic",nullptr);
 	parser->applyProperties(func);
 	parser->introduceDefinition(func);
 
@@ -391,9 +394,10 @@ struct DefParser: IntrinsicPrefixMacro {
 
 	Node* parse(Parser* parser){
 		auto name = parser->expectName();
-
-		if(parser->match("(")) return parseFunction(name,parser);
-		else return VarParser::parseVar(parser,name,false);
+		Node* result;
+		if(parser->match("(")) result = parseFunction(name,parser);
+		else result = VarParser::parseVar(parser,name,false);
+		return result;
 	}
 };
 
@@ -817,6 +821,13 @@ struct ImportParser: IntrinsicPrefixMacro {
 			}
 			if(auto moduleScope = compiler::findModule(modulePath.c_str())){
 				debug("Importing %s.",modulePath);
+				/**
+				* This is a hack for intrinsic definitions so that there won't be symbol conflict
+				* TODO might require checks so that we can only import it in certain modules
+				*/
+				if(modulePath == "arpha/intrinsic"){
+					parser->currentScope()->importsArphaIntrinsic = true;
+				}
 				parser->currentScope()->import(moduleScope,modulePath.c_str(),qualified,exported);
 			}else{
 				error(location,"Module '%s' wasn't found!",modulePath);
@@ -904,7 +915,11 @@ struct CaptureParser : IntrinsicPrefixMacro {
 	}
 };
 
-void arpha::defineCoreSyntax(Scope* scope){
+
+
+namespace arpha {
+
+void defineCoreSyntax(Scope* scope){
 
 	blockParser = new BlockParser;
 	scope->define(new ImportParser);
@@ -932,4 +947,10 @@ void arpha::defineCoreSyntax(Scope* scope){
 	scope->define(new UseParser);
 
 	scope->define(new CaptureParser);
+}
+
+void defineIntrinsicSyntax(Scope* scope){
+
+}
+
 }

@@ -69,8 +69,8 @@ struct Scope {
 	std::vector<Scope*> imports;
 
 	//definition modifier commands(visibility mode, etc)
-	int externalFunction;
 	Node* precedenceProperty;
+	bool importsArphaIntrinsic;
 private:
 	
 	std::vector<std::pair<Scope*,std::pair<SymbolID,bool> > > exportedImports;

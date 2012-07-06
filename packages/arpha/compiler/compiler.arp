@@ -4,7 +4,7 @@
 	Version: 1
 #
 
-use intrinsic
+import arpha.intrinsic
 
 def version major: natural, minor: natural
 #def info    string

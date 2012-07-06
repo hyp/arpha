@@ -5,6 +5,8 @@
 	Version: 1
 #
 
+import arpha.intrinsic
+
 variant Platform {
 	| native
 #	| computation #gpu, cell spu

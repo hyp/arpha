@@ -21,7 +21,7 @@
 	isParametrized returns true if a type is parametrize e.g. Pointer(int32) is parametrized by int32
 #
 
-use intrinsic functions
+import arpha.intrinsic
 
 def equals(type Type,other Type) bool
 def isParametrized(type Type) bool

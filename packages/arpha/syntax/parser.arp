@@ -5,9 +5,7 @@
 	Version: 1
 #
 
-import arpha.ast
-
-use intrinsic
+import  arpha.intrinsic, arpha.ast
 
 def parse(precedence int32 = 0,ignoreNewlines bool = false) Pointer(Expression)
 
