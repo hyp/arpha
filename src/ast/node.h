@@ -162,7 +162,7 @@ std::ostream& operator<< (std::ostream& stream,Node* node);
 * These nodes are definition nodes.
 * A definition node provides a mapping from a symbol in the source file into an custom expression for both parser and resolver.
 */
-struct DefinitionNode : Node {
+struct DefinitionNode : Node { 
 
 	uint8 visibilityMode() const;
 	bool  isPublic() const;
@@ -170,6 +170,8 @@ struct DefinitionNode : Node {
 	void visibilityMode(uint8 mode);
 
 	void* generatorData; //extra data used by generator
+private:
+	enum { IS_PRIVATE = 0x2 };//NB: it overrides the const flag, which is irrelevant for declarations
 };
 
 struct PrefixDefinition : DefinitionNode {

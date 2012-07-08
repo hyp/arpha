@@ -63,12 +63,13 @@ Node* Node::copyLocationSymbol(Node* dest) const {
 }
 
 uint8 DefinitionNode::visibilityMode() const {
-	return data::ast::PUBLIC; //TODO
+	return isFlagSet(IS_PRIVATE) ? data::ast::PRIVATE : data::ast::PUBLIC;
 }
 bool  DefinitionNode::isPublic() const {
-	return true;
+	return !isFlagSet(IS_PRIVATE);
 }
 void DefinitionNode::visibilityMode(uint8 mode){
+	if(mode == data::ast::PRIVATE) setFlag(IS_PRIVATE);
 }
 
 PrefixDefinition::PrefixDefinition(SymbolID name,Location& location){
