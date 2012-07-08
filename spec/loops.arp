@@ -38,6 +38,6 @@ describe "A 'continue' statement" {
 			count = count + 1
 			if(count == 1) continue else break
 		}
-		count should be 1
+		count should be 2
 	}
 }

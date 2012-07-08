@@ -28,11 +28,11 @@ describe "An if-else expression" {
 	it "should allow the 'alternative' expression to be optional" {
 		var evaluated = false
 		if(true) evalued = true
-		evaluated should be false
+		evaluated should be true
 	}
 	it "should allow the 'else' keyword to appear on the next line after the 'consequence' expression" {
 		var evaluated = false
-		if(true){
+		if(false){
 		}
 		else evaluated = true
 		evaluated should be true

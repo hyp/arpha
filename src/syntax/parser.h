@@ -69,6 +69,7 @@ public:
 	//Current parsing state
 	Token  lookedUpToken;
 	Scope* _outerMacroOuterScope;//the [> <] inside a macro will be parsed using this scope
+	std::vector<Node*> mixinedExpressions;
 private:
 	Scope* _currentScope;
 	

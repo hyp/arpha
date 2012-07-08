@@ -122,6 +122,7 @@ struct Type {
 	bool isPartiallyResolved() const;
 	bool matchRecord(Record* record) const;
 	size_t size() const;
+	uint32 alignment() const;
 
 	bool isSame(Type* other);
 

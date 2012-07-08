@@ -151,6 +151,13 @@ Node* CallExpression::resolve(Resolver* resolver){
 				debug("Type generation functions booyah!");
 				return resolver->resolve(copyProperties(func->body.scope->prefixDefinitions.begin()->second->createReference()));
 			}
+			else if(func->isFieldAccessMacro()){
+				if(auto t = arg->asTupleExpression()){
+					assert(t->size() == 2);
+					return resolver->resolve(copyProperties(new AssignmentExpression( new FieldAccessExpression(*t->begin(),func->getField()) , *(t->begin()+1) )));
+				}
+				return resolver->resolve(copyProperties(new FieldAccessExpression(arg,func->getField())));
+			}
 			object = resolver->resolve(new FunctionReference(func));
 			resolver->markResolved(this);
 			if(func->intrinsicCTFEbinder && !func->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && arg->isConst()){
@@ -242,6 +249,7 @@ Node* BinaryOperation::resolve(Resolver* resolver){
 }
 
 // TODO tuple destructuring
+// TODO anonymous records a.foo
 Node* AssignmentExpression::resolve(Resolver* resolver){
 
 	struct Splitter {
@@ -332,6 +340,13 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 	else if(auto access = object->asAccessExpression()){
 		//a.foo = 2 -> foo(a,2)
 		return resolver->resolve(new CallExpression(new UnresolvedSymbol(access->location(),access->symbol),new TupleExpression(access->object,value)));
+	}
+	else if(auto access = object->asFieldAccessExpression()){
+		if(auto canBeAssigned = access->objectsRecord()->fields[access->field].type.type()->assignableFrom(value,valuesType)){
+			value = resolver->resolve(canBeAssigned);
+			resolver->markResolved(this);
+		}
+		else error(value,"Can't assign %s to %s - the types don't match!",value,object);
 	}
 	else if( object->asPointerOperation() && object->asPointerOperation()->kind == PointerOperation::DEREFERENCE){
 		if(auto canBeAssigned = object->returnType()->assignableFrom(value,valuesType)){
@@ -451,19 +466,18 @@ Node* UnresolvedSymbol::resolve(Resolver* resolver){
 	return this;
 }
 
-// TODO extending types proper filed access!
 Node* AccessExpression::resolve(Resolver* resolver){
 	object = resolver->resolve(object);
 	if(object->isResolved()){
 		Node* result;
 		/**
-		* Record with no deriving hierarchy is very simple to resolve..
+		* Map Anonymous records directly to fields
 		*/
 		auto returns = object->returnType();
 		if(returns->isPointer()) returns = returns->next();
 		if(returns->isRecord()){
 			auto record = returns->asRecord();
-			if(!record->isFlagSet(Record::HAS_DERIVING_HIERARCHY)){
+			if(record->isAnonymous()){
 				auto fieldID = record->lookupField(symbol);
 				if(fieldID != -1){
 					//Field access
@@ -471,23 +485,13 @@ Node* AccessExpression::resolve(Resolver* resolver){
 						result = tuple->childrenPtr()[fieldID];
 					else
 						result = new FieldAccessExpression(object,fieldID);
+					return resolver->resolve(copyLocationSymbol(result));
 				}
-				else {
-					//a.foo => foo(a)
-					result = new CallExpression(new UnresolvedSymbol(location(),symbol),object);
-					result->setFlag(CallExpression::DOT_SYNTAX);
-				}
-			} else {
-				//TODO
-				//warning(location(),"Record deriving hierarchy '.' not yet implemented!");
-				result = new CallExpression(new UnresolvedSymbol(location(),symbol),object);
-				result->setFlag(CallExpression::DOT_SYNTAX);
 			}
-		} else {
-			//Not a record => a.foo => foo(a)
-			result = new CallExpression(new UnresolvedSymbol(location(),symbol),object);
-			result->setFlag(CallExpression::DOT_SYNTAX);
 		}
+		// a.foo => foo(a)
+		result = new CallExpression(new UnresolvedSymbol(location(),symbol),object);
+		result->setFlag(CallExpression::DOT_SYNTAX);
 		return resolver->resolve(copyLocationSymbol(result));
 	}
 	return this;
@@ -787,7 +791,7 @@ Node* Function::resolve(Resolver* resolver){
 	}
 
 	//If this is a generic or expendable function don't resolve body and return type!
-	if( isFlagSet(HAS_EXPENDABLE_ARGUMENTS) || isFlagSet(HAS_PATTERN_ARGUMENTS) ){
+	if( isFlagSet(HAS_EXPENDABLE_ARGUMENTS) || isFlagSet(HAS_PATTERN_ARGUMENTS) || isFlagSet(FIELD_ACCESS_FUNCTION)){
 		setFlag(Node::RESOLVED);
 		debug("Function %s is partially resolved!",label());
 		return this;
@@ -1220,7 +1224,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 
 	}
 
-	if(!func->isFlagSet(Function::MACRO_FUNCTION) && !func->isIntrinsic()){//Macro optimization, so that we dont duplicate unnecessary
+	if(!func->isFlagSet(Function::MACRO_FUNCTION) && !func->isIntrinsic() && !func->isFieldAccessMacro()){//Macro optimization, so that we dont duplicate unnecessary
 		//Determine the function?
 		if(determinedFunction || func->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS))
 			*function = specializeFunction(matcher,func,determinedFunction ? &determinedArguments[0] : nullptr,&result[0]);

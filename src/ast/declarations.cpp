@@ -240,6 +240,16 @@ void   Function::makeAllArgumentsExpendable(){
 	}
 	setFlag(HAS_EXPENDABLE_ARGUMENTS);
 }
+
+//field access macro function
+void Function::makeFieldAccess(int fieldId) {
+	setFlag(FIELD_ACCESS_FUNCTION);
+	ctfeRegisterCount = fieldId;
+}
+int  Function::getField() const {
+	return ctfeRegisterCount;
+}
+
 Node*  Function::duplicate(DuplicationModifiers* mods) const{
 	return const_cast<Function*>(this)->reallyDuplicate(mods);
 }

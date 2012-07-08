@@ -1,1 +1,7 @@
 # TODO static + dynamic linking throught assemblies
+
+def import_assembly("clib") {
+}
+
+
+

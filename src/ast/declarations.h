@@ -195,6 +195,8 @@ struct Function: public PrefixDefinition {
 
 		//use external
 		IS_EXTERNAL = 0x1000,
+
+		FIELD_ACCESS_FUNCTION = 0x2000, //optimization
 	};
 
 	enum CallingConvention {
@@ -233,6 +235,10 @@ struct Function: public PrefixDefinition {
 	int findArgument(Variable* var) const;
 	void addArgument(Argument* arg);
 	void specifyReturnType(Type* givenType);
+
+	void makeFieldAccess(int fieldId);
+	inline bool isFieldAccessMacro(){ return isFlagSet(FIELD_ACCESS_FUNCTION); }
+	int  getField() const;
 
 
 	std::vector<Argument*> arguments;

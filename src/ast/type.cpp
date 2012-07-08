@@ -276,6 +276,9 @@ size_t Type::size() const {
 			throw std::runtime_error("TypeExpression type invariant failed");
 	}
 }
+uint32 Type::alignment() const {
+	return size(); //TODO
+}
 bool Type::isSame(Type* other){
 	if(this->type != other->type) return false;
 	switch(type){

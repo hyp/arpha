@@ -49,6 +49,13 @@ struct BlockParser: IntrinsicPrefixMacro {
 		BlockChildParser(BlockExpression* block) : _block(block) {}
 		bool operator ()(Parser* parser){
 			_block->addChild(parser->parse());
+			if(parser->mixinedExpressions.size()){
+				for(auto i = parser->mixinedExpressions.begin();i!=parser->mixinedExpressions.end();i++){
+					if(auto f = (*i)->asFunction()) parser->introduceDefinition(f);
+					_block->addChild(*i);
+				}
+				parser->mixinedExpressions.clear();
+			}
 			return true;
 		}
 	};
@@ -358,18 +365,18 @@ enum MethodContext {
 // TODO contract requirements
 // TODO this pointer type
 // TODO interface no body check
-static Function* parseMethod(Parser* parser,Type* thisType,MethodContext context){
-	auto name = parser->expectName();
-
+static Function* parseMethod(Parser* parser,Type* thisType,SymbolID name,MethodContext context){
 	auto func = new Function(name,parser->previousLocation());
 	parser->introduceDefinition(func);
 
 	parser->enterBlock(&func->body);
 	//parse arguments
 	auto arg = new Argument("this",parser->previousLocation(),func);
-	arg->type.specify(thisType);
+	arg->type.unresolvedExpression = new TypeReference(thisType);
+	arg->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
 	func->addArgument(arg);
 
+	if(context != MethodContextType) parser->expect("(");
 	parseFunctionParameters(parser,func);
 	//return type & body
 	auto token = parser->peek();
@@ -387,12 +394,24 @@ static void parseTypeInvariant(Parser* parser,TypeDeclaration* typeDecl){
 	parser->syntaxError(format("Invariants aren't supported yet"));
 }
 
+void parseProperties(Parser* parser){
+	do {
+		auto prop = parser->expectName();
+		Node* value = nullptr;
+		if(parser->match(":")) value = parser->parse(arpha::Precedence::Tuple);
+		//if(value) parser->useProperty(prop,value);
+		//else parser->useProperty(prop);
+	} while(parser->match(","));
+	parser->expect(")");
+}
+
 /// constant  ::= 'def' names  '=' [Newlines] initializers
 /// function  ::= 'def' <name> params [returnType] functionBody
 struct DefParser: IntrinsicPrefixMacro {
 	DefParser(): IntrinsicPrefixMacro("def") {  }
 
 	Node* parse(Parser* parser){
+		if(parser->match("(")) parseProperties(parser);
 		auto name = parser->expectName();
 		Node* result;
 		if(parser->match("(")) result = parseFunction(name,parser);
@@ -520,7 +539,7 @@ struct ConceptParser: IntrinsicPrefixMacro {
 			auto  cmd = parser->expectName();
 			if(cmd == "def"){
 				//method requirement/implementation
-				auto func = parseMethod(parser,trait,MethodContextTrait);
+				auto func = parseMethod(parser,trait,parser->expectName(),MethodContextTrait);
 				
 			}
 			else if(cmd == "invariant") 
@@ -557,6 +576,30 @@ struct InterfaceParser: IntrinsicPrefixMacro {
 	}
 };
 
+void createFieldGettersSetters(Parser* parser,Type* thisType,SymbolID field,int fieldID,bool isPrivate,bool isReadonly){
+	auto location = parser->previousLocation();
+	//getter
+	auto getter = new Function(field,location);
+	auto gthis = new Argument("this",location,getter);
+	gthis->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,thisType));
+	gthis->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
+	getter->addArgument(gthis);
+	getter->makeFieldAccess(fieldID);
+	
+	//setter
+	auto setter = new Function(field,location);
+	auto sthis  = new Argument("this",location,setter);
+	sthis->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,thisType));
+	sthis->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
+	setter->addArgument(sthis);
+	auto value = new Argument("value",location,setter);
+	setter->addArgument(value);
+	setter->makeFieldAccess(fieldID);
+
+	parser->mixinedExpressions.push_back(getter);
+	parser->mixinedExpressions.push_back(setter);
+}
+
 /// fields       ::= ['private'] 'var'|'def' names (type | type '=' [Newlines] initializers | '=' [Newlines] initializers)
 /// method       ::= 'def' <name> params [returnType] functionBody
 /// declaration  ::= fields | method
@@ -578,11 +621,13 @@ struct TypeParser: IntrinsicPrefixMacro {
 		field.isExtending = isExtending;
 		//TODO private
 		record->add(field);
+		createFieldGettersSetters(parser,record->asType(),field.name,record->fields.size()-1,false,false);
 		while(parser->match(",")) {
 			auto field = Record::Field(parser->expectName(),intrinsics::types::Void);
 			field.isExtending = isExtending;
 			//TODO private
 			record->add(field);
+			createFieldGettersSetters(parser,record->asType(),field.name,record->fields.size()-1,false,false);
 		}
 		
 		TypePatternUnresolvedExpression type;
@@ -620,7 +665,10 @@ struct TypeParser: IntrinsicPrefixMacro {
 				if(isDef){
 					if(parser->match("(")){
 						if(flags & FIELDS_EXT) parser->syntaxError(format("Can't use property 'extends' on a function declaration!"));
-						parser->syntaxError(format("Can't parse member functions yet!"));
+						else {
+							auto func = parseMethod(parser,record->asType(),name,MethodContextType);
+							return true;
+						}
 					}
 					flags |= FIELDS_DEF;
 				}
@@ -794,7 +842,7 @@ struct CatchParser: IntrinsicPrefixMacro {
 struct ThrowParser: IntrinsicPrefixMacro {
 	ThrowParser(): IntrinsicPrefixMacro("throw") {}
 	Node* parse(Parser* parser){
-		
+		auto expr = parser->parse();
 		return new UnitExpression();
 	}
 };

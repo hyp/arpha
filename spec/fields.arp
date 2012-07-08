@@ -1,0 +1,34 @@
+import spec
+
+describe "A type's field" {
+	type Base {
+		var field int32 = 3
+	}
+	it "can be accessed through '.'" {
+		var base Base
+		base.field    should be 3
+		(&base).field should be 3
+	}
+	it "can be modified through '.'" {
+		var base Base
+		base.field = 5
+		base.field    should be 5
+		(&base).field = 42
+		(&base).field should be 42		
+	}
+}
+
+describe "An anonymous record's field" {
+	it "can be accessed through '.'" {
+		var version major: natural,minor: natural = 1,2
+		version.major should be 1
+		version.minor should be 2
+	}
+	it "can be modified through '.'" {
+		var version major: natural,minor: natural
+		version.major = 9
+		version.major should be 9
+		version.minor = 1
+		version.minor should be 1
+	}
+}

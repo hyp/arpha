@@ -396,7 +396,7 @@ Node* LLVMgenerator::visit(Variable* variable){
 		ss<<mangler<<variable->label().length()<<variable->label().ptr();
 		//
 		auto var = new llvm::GlobalVariable(*module,genType(variable->type.type()),cnst,genLinkage(variable),init,llvm::Twine(ss.str().c_str()),nullptr,threadLocal);
-		var->setAlignment(/* TODO */4);
+		var->setAlignment(variable->type.type()->alignment());
 		map(variable,var);
 	} else {
 		auto block = builder.GetInsertBlock();
