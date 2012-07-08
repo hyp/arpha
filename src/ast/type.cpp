@@ -197,31 +197,37 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 /**
 * The type
 */
-Type::Type(int kind) : type(kind) {
+Type::Type(int kind) : type(kind),flags(0) {
 	assert(kind == VOID || kind == TYPE || kind == BOOL || kind == RECORD || kind == VARIANT);
 }
-Type::Type(IntegerType* integer) : type(INTEGER) {
+Type::Type(IntegerType* integer) : type(INTEGER),flags(0) {
 	this->integer = integer;
 }
-Type::Type(Record* record) : type(RECORD) {
+Type::Type(Record* record) : type(RECORD),flags(0) {
 	this->record = record;
 }
-Type::Type(int kind,Type* next) : type(kind) {
+Type::Type(int kind,Type* next) : type(kind),flags(0) {
 	assert(kind == POINTER || kind == POINTER_BOUNDED);
 	this->argument = next;
 }
-Type::Type(Type* argument,Type* returns) : type(FUNCTION) {
+Type::Type(Type* argument,Type* returns) : type(FUNCTION),flags(0) {
 	this->argument = argument;
 	this->returns = returns;
 }
-Type::Type(int kind,Type* T,size_t N) : type(kind) {
+Type::Type(int kind,Type* T,size_t N) : type(kind),flags(0) {
 	assert(kind == STATIC_ARRAY || kind == POINTER_BOUNDED_CONSTANT);
 	argument = T;
 	this->N  = N;
 }
-Type::Type(int kind,int subtype) : type(NODE) {
+Type::Type(int kind,int subtype) : type(NODE),flags(0) {
 	assert(kind == NODE);
 	nodeSubtype = subtype;
+}
+void Type::setFlag(uint16 flag){
+	flags |= flag;
+}
+bool Type::isFlagSet(uint16 flag) const {
+	return (flags & flag) == flag;
 }
 bool Type::isValidTypeForVariable(){
 	if(type == NODE) return false;

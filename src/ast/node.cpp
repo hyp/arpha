@@ -63,7 +63,7 @@ Node* Node::copyLocationSymbol(Node* dest) const {
 }
 
 uint8 DefinitionNode::visibilityMode() const {
-	return Visibility::Public; //TODO
+	return data::ast::PUBLIC; //TODO
 }
 bool  DefinitionNode::isPublic() const {
 	return true;

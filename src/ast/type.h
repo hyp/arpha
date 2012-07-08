@@ -126,8 +126,11 @@ struct Type {
 
 	bool isSame(Type* other);
 
+	void setFlag(uint16 flag);
+	bool isFlagSet(uint16 flag) const;
+
 	//const int32
-	bool hasConstSemantics() const { return false; }
+	inline bool hasConstSemantics() const { return isFlagSet(HAS_CONSTANT_SEMANTICS); }
 
 
 	bool wasGenerated() const; //Is this a parametrized type?
@@ -143,7 +146,13 @@ struct Type {
 	Node* assignableFrom(Node* expression,Type* type);
 	int canAssignFrom(Node* expression,Type* type);
 public:
-	int type;
+	enum {
+		IS_RESOLVED = 0x1,
+		HAS_CONSTANT_SEMANTICS = 0x2,
+		HAS_LOCAL_SEMANTICS = 0x4,
+	};
+	uint16 type;
+	uint16 flags;
 	union {
 		Record* record;
 		IntegerType* integer;

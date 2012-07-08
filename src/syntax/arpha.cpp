@@ -575,6 +575,7 @@ struct InterfaceParser: IntrinsicPrefixMacro {
 	}
 };
 
+// TODO getter self pointer type const and local, setter self pointer type local
 void createFieldGettersSetters(Parser* parser,Type* thisType,SymbolID field,int fieldID,bool isPrivate,bool isReadonly){
 	auto location = parser->previousLocation();
 	//getter
@@ -595,6 +596,9 @@ void createFieldGettersSetters(Parser* parser,Type* thisType,SymbolID field,int 
 	setter->addArgument(value);
 	setter->makeFieldAccess(fieldID);
 
+	if(isPrivate) getter->visibilityMode(data::ast::PRIVATE);
+	if(isPrivate || isReadonly) setter->visibilityMode(data::ast::PRIVATE);
+
 	parser->mixinedExpressions.push_back(getter);
 	parser->mixinedExpressions.push_back(setter);
 }
@@ -605,7 +609,7 @@ void createFieldGettersSetters(Parser* parser,Type* thisType,SymbolID field,int 
 /// declarations ::= declaration (';'|Newlines) declarations | declaration
 /// type         ::= 'type' <name> '{' declarations '}'
 
-/// TODO field initializers, private fields
+/// TODO field initializers
 /// TODO stuff
 struct TypeParser: IntrinsicPrefixMacro {
 	TypeParser(): IntrinsicPrefixMacro("type") {  }
@@ -614,19 +618,21 @@ struct TypeParser: IntrinsicPrefixMacro {
 	enum { FIELDS_EXT = 0x1,FIELDS_DEF = 0x2,FIELDS_PRIVATE = 0x4 };
 	static void fields(SymbolID first,Parser* parser,Record* record,int flags = 0){
 		size_t i = record->fields.size();
-		bool isExtending = (flags & FIELDS_EXT)!=0;
+		const bool isExtending = (flags & FIELDS_EXT)!=0;
+		const bool isPrivate   = (flags & FIELDS_PRIVATE)!=0;
+		const bool isReadonly  = (flags & FIELDS_DEF)!=0;
 
 		auto field = Record::Field(first,intrinsics::types::Void);
 		field.isExtending = isExtending;
 		//TODO private
 		record->add(field);
-		createFieldGettersSetters(parser,record->asType(),field.name,record->fields.size()-1,false,false);
+		createFieldGettersSetters(parser,record->asType(),field.name,record->fields.size()-1,isPrivate,isReadonly);
 		while(parser->match(",")) {
 			auto field = Record::Field(parser->expectName(),intrinsics::types::Void);
 			field.isExtending = isExtending;
 			//TODO private
 			record->add(field);
-			createFieldGettersSetters(parser,record->asType(),field.name,record->fields.size()-1,false,false);
+			createFieldGettersSetters(parser,record->asType(),field.name,record->fields.size()-1,isPrivate,isReadonly);
 		}
 		
 		TypePatternUnresolvedExpression type;

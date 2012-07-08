@@ -169,7 +169,7 @@ void Overloadset::push_back(Function* function){
 		error(function,"Can't add the function %s to type overload set",function->label());
 		return;
 	}
-	if(visibilityMode() == Visibility::Private && function->visibilityMode() == Visibility::Public) visibilityMode(Visibility::Public);
+	if(visibilityMode() == data::ast::PRIVATE && function->isPublic()) visibilityMode(data::ast::PUBLIC);
 	functions.push_back(function);//TODO check against same functions
 }
 
@@ -287,7 +287,7 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 //Imported scope
 ImportedScope::ImportedScope(SymbolID name,Location& location) : PrefixDefinition(name,location),scope(nullptr),_reference(this) {
 	setFlag(Node::RESOLVED);
-	visibilityMode(Visibility::Private);
+	visibilityMode(data::ast::PRIVATE);
 }
 
 //Macroes

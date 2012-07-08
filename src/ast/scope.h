@@ -18,13 +18,6 @@ struct DuplicationModifiers;
 struct PrefixDefinition;
 struct InfixDefinition;
 
-namespace Visibility {
-	enum {
-		Public = 0,
-		Private,	
-	};
-}
-
 //Scope resolves symbols to corresponding definitions, which tells parser how to parse the encountered symbol
 struct Scope {
 

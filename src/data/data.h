@@ -12,6 +12,9 @@ namespace data {
 	};
 
 	namespace ast {
+		enum VisibilityMode {
+			PUBLIC,PRIVATE
+		};
 		enum FunctionCallConvention {
 			ARPHA,CCALL,STDCALL
 		};
