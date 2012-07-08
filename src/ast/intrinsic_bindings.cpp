@@ -120,6 +120,9 @@ static void initMapping(){
 	MAP_PROP("element(BoundedPointer,natural)",Function::MACRO_FUNCTION,{
 		invocation->ret(new BinaryOperation(BinaryOperation::BOUNDED_POINTER_ELEMENT,invocation->getNodeParameter(0),invocation->getNodeParameter(1)));
 	});
+	MAP_PROP("add(BoundedPointer,natural)",Function::MACRO_FUNCTION,{
+		invocation->ret(new BinaryOperation(BinaryOperation::ADD,invocation->getNodeParameter(0),invocation->getNodeParameter(1)));
+	});
 	mappingInitialized = true;
 }
 

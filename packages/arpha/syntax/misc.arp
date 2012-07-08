@@ -1,8 +1,25 @@
 #
-	This module implements the indexing operator
+	This module implements miscellaneos operators
 #
 import qualified precedence
 
+# Pointer adressing and dereference operators. Pointer Type.
+macro & 
+{
+	var expr = parser.parse(precedence.unary)
+	return ast.newPointerOperation(expr,addressof: true)
+}
+
+macro * 
+{
+	var expr = parser.parse(precedence.unary)
+	return [> derefOrPtrType($expr) <]
+}
+macro derefOrPtrType(T Type)                 = [> Pointer($T) <]
+macro derefOrPtrType(expr Pointer(_))        = ast.newPointerOperation(expr,dereference: true)
+macro derefOrPtrType(expr BoundedPointer(_)) = ast.newPointerOperation(expr,dereference: true) 
+
+# Indexing operator.
 use precedence: precedence.index
 macro (sequence) [
 {

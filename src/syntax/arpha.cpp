@@ -309,19 +309,19 @@ void parseFunctionParameters(Parser* parser,Function* func,Type* defaultType = n
 
 /// functionBody   ::= nothing | '=' expression | '{' block '}'
 //TODO: maybe make this more eficcient by moving up the '=' test
-void parseFunctionBody(Parser* parser,Function* func,bool allowNoBody = false){
+bool parseFunctionBody(Parser* parser,Function* func,bool allowNoBody = false){
 	//NB: need to take \n '{' into account!
 #ifdef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
 	Parser::NewlineIgnorer i(true,parser);
 	if(parser->match("{")){
 		blockParser->body(parser,BlockParser::BlockChildParser(&func->body));
-		return;
+		return true;
 	}
 	else i.rollback();
 #endif
 	if(isEndExpression(parser->peek())){
 		if(!allowNoBody) error(parser->previousLocation(),"The function %s needs to have a body( You can use either '=' expression or '{' body '}')!",func->label());
-		return;
+		return false;
 	}
 
 	if(parser->match("=")){
@@ -334,6 +334,7 @@ void parseFunctionBody(Parser* parser,Function* func,bool allowNoBody = false){
 		parser->expect("{");
 		blockParser->body(parser,BlockParser::BlockChildParser(&func->body));
 	}
+	return true;
 }
 
 // TODO contract requirements?
@@ -366,7 +367,7 @@ enum MethodContext {
 };
 
 // TODO contract requirements
-// TODO interface no body check
+// TODO interface no body check ??
 static Function* parseMethod(Parser* parser,Type* thisType,SymbolID name,MethodContext context){
 	auto func = new Function(name,parser->previousLocation());
 
@@ -385,8 +386,15 @@ static Function* parseMethod(Parser* parser,Type* thisType,SymbolID name,MethodC
 	if(!isEndExpression(token) && !(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
 		func->_returnType.parse(parser,arpha::Precedence::Assignment);
 	}
-	parseFunctionBody(parser,func,context != MethodContextType);
+	//special handling for body
+	auto hasBody= parseFunctionBody(parser,func,context != MethodContextType);
 	parser->leaveBlock();
+	if(context == MethodContextTrait && hasBody){//trait Foo {} def method(foo Foo)
+		func->arguments[0]->type.pattern = new TypeReference(thisType);
+		func->arguments[0]->type.kind = TypePatternUnresolvedExpression::PATTERN;
+		parser->mixinedExpressions.push_back(func);
+		return nullptr;//don't add to trait's required methods
+	}
 
 	return func;	
 }
@@ -529,7 +537,6 @@ Function* parseTypeTemplateDeclaration(SymbolID name,Parser* parser){
 /// declaration    ::= requirement | implementation | invariant
 /// declarations   ::= declaration (';'|Newlines) declarations | declaration
 /// trait          ::= 'trait' <name> ( '{' declarations '}' ) | ('{' '}')
-/// TODO proper method handling
 /// TODO trait inheritance
 struct ConceptParser: IntrinsicPrefixMacro {
 	ConceptParser(): IntrinsicPrefixMacro("trait") {}
@@ -540,9 +547,8 @@ struct ConceptParser: IntrinsicPrefixMacro {
 		bool operator()(Parser* parser){
 			auto  cmd = parser->expectName();
 			if(cmd == "def"){
-				//method requirement/implementation
 				auto func = parseMethod(parser,trait,parser->expectName(),MethodContextTrait);
-				
+				if(func) trait->methods.push_back(func);
 			}
 			else if(cmd == "invariant") 
 				parseTypeInvariant(parser,trait->declaration);

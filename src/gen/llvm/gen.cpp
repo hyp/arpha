@@ -193,6 +193,9 @@ Node* LLVMgenerator::visit(UnaryOperation* node){
 
 Node* LLVMgenerator::visit(BinaryOperation* node){
 	llvm::Value* instr;
+	if(node->kind() == BinaryOperation::BOUNDED_POINTER_ELEMENT){
+		//TODO
+	}
 	bool isFloatOp = false;
 	auto lhs = generateExpression(node->a);
 	auto rhs = generateExpression(node->b);
@@ -220,9 +223,6 @@ Node* LLVMgenerator::visit(BinaryOperation* node){
 			instr =builder.CreateMul(lhs,rhs);
 		else 
 			instr =builder.CreateFMul(lhs,rhs);
-		break;
-	case BinaryOperation::BOUNDED_POINTER_ELEMENT:
-		//TODOinstr =
 		break;
 	}
 	emit(instr);

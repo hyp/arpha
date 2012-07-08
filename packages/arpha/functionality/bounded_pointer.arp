@@ -8,3 +8,5 @@ import arpha.intrinsic
 
 def length (array BoundedPointer(_))
 def element(array BoundedPointer(_),index natural)
+
+def add(array BoundedPointer(_),offset natural)

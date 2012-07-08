@@ -10,6 +10,11 @@
 
 data::gen::AbstractTarget::TypeSystemState Type::typeSystemState;
 
+//TODO
+bool  typeSatistiesTrait(Type* type,Trait* trait,Scope* lookupScope){
+	return true;
+}
+
 Type* TypePatternUnresolvedExpression::type() const {
 	assert(kind == TYPE);
 	return  _type;
@@ -193,6 +198,7 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 		container->define(var);
 	}
 }
+
 
 /**
 * The type
