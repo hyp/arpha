@@ -363,20 +363,19 @@ enum MethodContext {
 };
 
 // TODO contract requirements
-// TODO this pointer type
 // TODO interface no body check
 static Function* parseMethod(Parser* parser,Type* thisType,SymbolID name,MethodContext context){
 	auto func = new Function(name,parser->previousLocation());
-	parser->introduceDefinition(func);
 
 	parser->enterBlock(&func->body);
 	//parse arguments
-	auto arg = new Argument("this",parser->previousLocation(),func);
-	arg->type.unresolvedExpression = new TypeReference(thisType);
-	arg->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
-	func->addArgument(arg);
-
-	if(context != MethodContextType) parser->expect("(");
+	if(context == MethodContextType){
+		auto arg = new Argument("self",parser->previousLocation(),func);
+		arg->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,thisType));
+		arg->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
+		func->addArgument(arg);
+	}
+	else parser->expect("(");
 	parseFunctionParameters(parser,func);
 	//return type & body
 	auto token = parser->peek();
@@ -580,7 +579,7 @@ void createFieldGettersSetters(Parser* parser,Type* thisType,SymbolID field,int 
 	auto location = parser->previousLocation();
 	//getter
 	auto getter = new Function(field,location);
-	auto gthis = new Argument("this",location,getter);
+	auto gthis = new Argument("self",location,getter);
 	gthis->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,thisType));
 	gthis->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
 	getter->addArgument(gthis);
@@ -588,7 +587,7 @@ void createFieldGettersSetters(Parser* parser,Type* thisType,SymbolID field,int 
 	
 	//setter
 	auto setter = new Function(field,location);
-	auto sthis  = new Argument("this",location,setter);
+	auto sthis  = new Argument("self",location,setter);
 	sthis->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,thisType));
 	sthis->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
 	setter->addArgument(sthis);
@@ -667,6 +666,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 						if(flags & FIELDS_EXT) parser->syntaxError(format("Can't use property 'extends' on a function declaration!"));
 						else {
 							auto func = parseMethod(parser,record->asType(),name,MethodContextType);
+							parser->mixinedExpressions.push_back(func);
 							return true;
 						}
 					}
