@@ -146,7 +146,14 @@ Node* CallExpression::resolve(Resolver* resolver){
 		if(auto func =  resolver->resolveOverload(scope,callingOverloadSet->symbol,arg,isFlagSet(DOT_SYNTAX))){
 			arg = resolver->resolve(resolver->constructFittingArgument(&func,arg));
 			//macro
-			if(func->isFlagSet(Function::MACRO_FUNCTION)) return resolver->executeAndMixinMacro(func,arg);
+			if(func->isFlagSet(Function::MACRO_FUNCTION)){
+				if(func->intrinsicCTFEbinder){
+					CTFEintrinsicInvocation i(resolver->compilationUnit());
+					i.invoke(func,arg);
+					return resolver->resolve(copyLocationSymbol(i.result()->asNodeReference()->node()));
+				}
+				else return resolver->executeAndMixinMacro(func,arg);
+			}
 			else if(func->isFlagSet(Function::TYPE_GENERATOR_FUNCTION) && !func->isIntrinsic()){
 				debug("Type generation functions booyah!");
 				return resolver->resolve(copyProperties(func->body.scope->prefixDefinitions.begin()->second->createReference()));
@@ -207,6 +214,7 @@ bool  UnaryOperation::isValid() {
 	switch(kind()){
 	case BOOL_NOT: return ret->isBool();
 	case MINUS:    return isNegatable(ret);
+	case BOUNDED_POINTER_LENGTH: return ret->isBoundedPointer();
 	}
 	error(this,"The unary expression %s is invalid",this);
 	return false;
@@ -224,8 +232,14 @@ Node* UnaryOperation::resolve(Resolver* resolver){
 	return this;
 }
 
+//TODO
 bool  BinaryOperation::isValid() {
 	auto aRet = a->returnType();
+	auto bRet = b->returnType();
+	switch(kind()){
+	case BOUNDED_POINTER_ELEMENT: 
+		return aRet->isBoundedPointer() && bRet->isSame(intrinsics::types::natural);
+	}
 	if(!aRet->isSame(b->returnType())) return false;
 	switch(kind()){
 	case BOOL_AND: case BOOL_OR: return aRet->isBool();
@@ -347,6 +361,16 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 			resolver->markResolved(this);
 		}
 		else error(value,"Can't assign %s to %s - the types don't match!",value,object);
+	}
+	else if( auto binop = object->asBinaryOperation()){
+		if(binop->kind() == BinaryOperation::BOUNDED_POINTER_ELEMENT){
+			if(auto canBeAssigned = binop->a->returnType()->next()->assignableFrom(value,valuesType)){
+				value = resolver->resolve(canBeAssigned);
+				resolver->markResolved(this);
+			}
+			else error(value,"Can't assign %s to %s - the types don't match!",value,object);
+		}
+		else error(object,"Can't perform an assignment to %s - only variables, fields and derefernced pointers are assignable!",object);
 	}
 	else if( object->asPointerOperation() && object->asPointerOperation()->kind == PointerOperation::DEREFERENCE){
 		if(auto canBeAssigned = object->returnType()->assignableFrom(value,valuesType)){
@@ -724,16 +748,24 @@ Node* Record::resolve(Resolver* resolver){
 	return this;
 }
 
+void generateDestructorBody(Record* type,Variable* selfObject,BlockExpression* body){
+	auto size= type->fields.size();
+	for(size_t i = 0; i<size;i++ ){
+		if(type->fields[i].type.type()->requiresDestructorCall())
+			body->addChild(new CallExpression(new UnresolvedSymbol(Location(),"destroy"),new PointerOperation(new FieldAccessExpression(new VariableReference(selfObject),i),PointerOperation::ADDRESS)));
+	}
+}
+
 DeclaredType* Trait::resolve(Resolver* resolver){
 	if(!declaration->optionalStaticBlock || declaration->optionalStaticBlock->isResolved()){
-		_resolved = true;
+		setFlag(IS_RESOLVED);
 	}
 	return this;
 }
 
 DeclaredType* Variant::resolve(Resolver* resolver){
 	if(!declaration->optionalStaticBlock || declaration->optionalStaticBlock->isResolved()){
-		_resolved = true;
+		setFlag(IS_RESOLVED);
 		calculateResolvedProperties();
 	}
 	return this;

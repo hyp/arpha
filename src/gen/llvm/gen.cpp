@@ -183,6 +183,9 @@ Node* LLVMgenerator::visit(UnaryOperation* node){
 		//builder.CreateFNeg(value);
 		instr =builder.CreateNeg(value);
 		break;
+	case UnaryOperation::BOUNDED_POINTER_LENGTH:
+		//TODO
+		break;
 	}
 	emit(instr);
 	return node;
@@ -217,6 +220,9 @@ Node* LLVMgenerator::visit(BinaryOperation* node){
 			instr =builder.CreateMul(lhs,rhs);
 		else 
 			instr =builder.CreateFMul(lhs,rhs);
+		break;
+	case BinaryOperation::BOUNDED_POINTER_ELEMENT:
+		//TODOinstr =
 		break;
 	}
 	emit(instr);

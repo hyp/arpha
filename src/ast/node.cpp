@@ -359,6 +359,7 @@ Type* UnaryOperation::returnType() const {
 	switch(kind()){
 	case BOOL_NOT: intrinsics::types::boolean;
 	case MINUS: return expression->returnType();
+	case BOUNDED_POINTER_LENGTH: return intrinsics::types::natural;
 	}
 }
 Node* UnaryOperation::duplicate(DuplicationModifiers* mods) const {
@@ -376,6 +377,8 @@ Type* BinaryOperation::returnType() const {
 		return intrinsics::types::boolean;
 	case ADD: case SUBTRACT: case MULTIPLY: case DIVIDE: case MOD: 
 		return a->returnType();
+	case BOUNDED_POINTER_ELEMENT: 
+		return a->returnType()->next();
 	}
 	return nullptr;
 }

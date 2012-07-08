@@ -1,0 +1,30 @@
+import spec
+
+describe "A 'var' expression" {
+	it "should declare a mutable variable in the current block" {
+		var i int32 = 1
+		i should be 1
+		i = 4
+		i should be 4
+	}
+	it "should allow the variable's type to be inferred" {
+		var i = false
+		i should be false
+	}
+	it "should allow multiple variable declarations which are separated by comma" {
+		var x,y = 5,6
+		x should be 5
+		y should be 6
+	}
+	it "should shadow a variable in an outer block" {
+		var i = true
+		{
+			var i = false
+			i should be false
+		}
+		i should be true
+	}
+	it "should return the variable's value when only one variable is declared" {
+		(var x = false) should be false
+	}
+}

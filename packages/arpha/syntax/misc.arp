@@ -1,0 +1,16 @@
+#
+	This module implements the indexing operator
+#
+import qualified precedence
+
+use precedence: precedence.index
+macro (sequence) [
+{
+	var i = parser.parse()
+	if(parser.match("..")){
+		var e = if(parser.match("]")) [> $sequence.length - 1 <] else parser.parse()
+		return [> $sequence.slice($i,$e) <]
+	}
+	parser.expect("]")
+	return [> $sequence.element($i) <]
+}

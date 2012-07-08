@@ -370,6 +370,7 @@ struct UnaryOperation : VariantNode {
 	enum {
 		BOOL_NOT = 0, // ! true
 		MINUS, // - 
+		BOUNDED_POINTER_LENGTH,//ptr.length
 		MAX_VARIANT,
 	};
 	UnaryOperation(uint32 kind,Node* expression);
@@ -396,6 +397,7 @@ struct BinaryOperation : VariantNode {
 		MULTIPLY,
 		DIVIDE,
 		MOD,
+		BOUNDED_POINTER_ELEMENT,//ptr[i]
 		MAX_VARIANT,
 	};
 	BinaryOperation(uint32 kind,Node* a,Node* b);

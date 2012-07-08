@@ -51,7 +51,10 @@ struct BlockParser: IntrinsicPrefixMacro {
 			_block->addChild(parser->parse());
 			if(parser->mixinedExpressions.size()){
 				for(auto i = parser->mixinedExpressions.begin();i!=parser->mixinedExpressions.end();i++){
-					if(auto f = (*i)->asFunction()) parser->introduceDefinition(f);
+					if(auto f = (*i)->asFunction()){
+						parser->introduceDefinition(f);
+						f->body.scope->setParent(parser->currentScope());
+					}
 					_block->addChild(*i);
 				}
 				parser->mixinedExpressions.clear();
@@ -369,13 +372,13 @@ static Function* parseMethod(Parser* parser,Type* thisType,SymbolID name,MethodC
 
 	parser->enterBlock(&func->body);
 	//parse arguments
+	auto arg = new Argument("self",parser->previousLocation(),func);
 	if(context == MethodContextType){
-		auto arg = new Argument("self",parser->previousLocation(),func);
 		arg->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,thisType));
 		arg->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
-		func->addArgument(arg);
 	}
 	else parser->expect("(");
+	func->addArgument(arg);
 	parseFunctionParameters(parser,func);
 	//return type & body
 	auto token = parser->peek();

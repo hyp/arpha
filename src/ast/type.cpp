@@ -237,9 +237,17 @@ bool Type::isValidTypeForArgument(){
 	if(type == NODE) return false;
 	return true;
 }
+bool Type::requiresDestructorCall() const {
+	switch(type){
+		case RECORD:  
+		case VARIANT: return true;
+	}
+	return false;
+}
 bool Type::isResolved() const {
 	switch(type){
 		case RECORD:  return record->isResolved();
+		case VARIANT: return isFlagSet(IS_RESOLVED);
 		case POINTER:
 		case POINTER_BOUNDED:
 		case POINTER_BOUNDED_CONSTANT:
@@ -591,6 +599,7 @@ Trait::Trait() : DeclaredType(Type::VARIANT) {
 
 DeclaredType* Trait::duplicate(DuplicationModifiers* mods) const {
 	auto dup = new Trait();
+	dup->flags = flags;
 	return dup;
 }
 
@@ -615,7 +624,7 @@ size_t Variant::size(){
 }
 DeclaredType* Variant::duplicate(DuplicationModifiers* mods) const{
 	auto dup = new Variant();
-	dup->_resolved = _resolved;
+	dup->flags = flags;
 	dup->_layout = _layout;
 	return dup;
 }

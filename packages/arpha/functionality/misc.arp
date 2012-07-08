@@ -1,0 +1,7 @@
+#
+	This module implements miscellaneos funcitonality
+	TODO: alignof expression
+#
+
+macro typeof(expression) = ast.returnType(expression)
+macro sizeof(expression) = [> sizeof(typeof($expression)) <]

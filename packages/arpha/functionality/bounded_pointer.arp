@@ -1,0 +1,10 @@
+#
+	This module defines functions for performing indexing and arithmetics on bounded pointers
+	TODO: arithmetics
+	TODO: bounded pointer must match to trait Sequence
+#
+
+import arpha.intrinsic
+
+def length (array BoundedPointer(_))
+def element(array BoundedPointer(_),index natural)

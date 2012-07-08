@@ -44,8 +44,6 @@ static void initMapping(){
 	MAP("equals(Type,Type)",   { invocation->ret(invocation->getTypeParameter(0)->isSame(invocation->getTypeParameter(1))); });
 	MAP("isParametrized(Type)",{ invocation->ret(invocation->getTypeParameter(0)->wasGenerated()); });
 	MAP("sizeof(Type)",        { invocation->retNatural(invocation->getTypeParameter(0)->size()); });
-	MAP("length(BoundedPointer)",{ invocation->retNatural(invocation->getStringParameterAsSymbol(0).length()); });
-	MAP("index(BoundedPointer)",{ invocation->retNatural(0); });
 
 	//arpha.ast.ast
 	int nodeSubtype = -1;
@@ -112,26 +110,36 @@ static void initMapping(){
 		if(!match) i.rollback();
 		invocation->ret(match);
 	});
+
+	/**
+	* arpha.functionality.bounded_pointer
+	*/
+	MAP_PROP("length(BoundedPointer)",Function::MACRO_FUNCTION,{
+		invocation->ret(new UnaryOperation(UnaryOperation::BOUNDED_POINTER_LENGTH,invocation->getNodeParameter(0)));
+	});
+	MAP_PROP("element(BoundedPointer,natural)",Function::MACRO_FUNCTION,{
+		invocation->ret(new BinaryOperation(BinaryOperation::BOUNDED_POINTER_ELEMENT,invocation->getNodeParameter(0),invocation->getNodeParameter(1)));
+	});
 	mappingInitialized = true;
 }
 
-std::string mangleArgType(Type* type){
+std::string mangleArgType(Type* type,bool nat){
 	if(type->isType()) return "Type";
 	else if(type->isBool()) return "bool";
 	else if(type->isNodePointer()) return "Expression";
 	else if(type->isInteger()){
-		return type->asInteger()->id.ptr();
+		 return nat && type->isSame(intrinsics::types::natural) ? "natural" :type->asInteger()->id.ptr();
 	}
 	else if(type->isPointer()){
-		return std::string("*")+mangleArgType(type->next());
+		return std::string("*")+mangleArgType(type->next(),nat);
 	} else if(type->isBoundedPointer()){
-		return std::string("[]")+mangleArgType(type->next());
+		return std::string("[]")+mangleArgType(type->next(),nat);
 	}
 	return "";
 }
 
 
-std::string intrinsicMangle(Function* function,bool argNames){
+std::string intrinsicMangle(Function* function,bool argNames,bool nat = false){
 	std::string result = function->label().ptr();
 	result += "(";
 	for(auto i = function->arguments.begin();i!=function->arguments.end();i++){
@@ -149,7 +157,7 @@ std::string intrinsicMangle(Function* function,bool argNames){
 				}
 			}
 		}
-		else result += mangleArgType((*i)->type.type());
+		else result += mangleArgType((*i)->type.type(),nat);
 		if((i+1) != function->arguments.end()) result += ",";
 	}
 	result+=")";
@@ -168,6 +176,13 @@ Function::CTFE_Binder Function::getIntrinsicFunctionBinder(Function* function){
 		return (*value).second.binder;
 	}
 	signature = intrinsicMangle(function,true);
+	value = functionMapping.find(signature);
+	if(value != functionMapping.end()){
+		if((*value).second.extraFlags) function->setFlag((*value).second.extraFlags);
+		return (*value).second.binder;
+	}
+	//uint32 => natural mangle
+	signature = intrinsicMangle(function,false,true);
 	value = functionMapping.find(signature);
 	if(value != functionMapping.end()){
 		if((*value).second.extraFlags) function->setFlag((*value).second.extraFlags);

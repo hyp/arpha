@@ -124,6 +124,8 @@ struct Type {
 	size_t size() const;
 	uint32 alignment() const;
 
+	bool requiresDestructorCall() const;
+
 	bool isSame(Type* other);
 
 	void setFlag(uint16 flag);
@@ -174,11 +176,9 @@ struct DeclaredType: public Type {
 
 	virtual DeclaredType* duplicate(DuplicationModifiers* mods) const = 0;
 	virtual DeclaredType* resolve(Resolver* resolver) = 0;
-	inline  bool  isResolved(){ return _resolved; }
+	inline  bool  isResolved() const { return isFlagSet(IS_RESOLVED); }
 
 	TypeDeclaration* declaration;
-protected:
-	bool _resolved;
 };
 
 /**

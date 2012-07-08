@@ -6,13 +6,14 @@
 
 import export types
 
-#import qualified precedence
-
 import export syntax.conditional
 import export syntax.logical
 import export syntax.loops
 import export syntax.comparison
 import export syntax.arithmetic
+import export syntax.misc
+
+import export functionality.bounded_pointer
 
 
 macro & {
@@ -50,14 +51,6 @@ macro [] {
 	return [> Range($expr) <]
 }
 
-
-import export operators
-
-import export operations
-
-macro typeof(expression) = ast.returnType(expression)
-
-macro sizeof(expression) = [> sizeof(typeof($expression)) <]
 
 #
 

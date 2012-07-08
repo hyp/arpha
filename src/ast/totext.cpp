@@ -83,7 +83,8 @@ struct NodeToString: NodeVisitor {
 		return "op";
 	}
 	Node* visit(UnaryOperation* node){
-		stream<<' '<<unaryOp(node->kind())<<' '<<node->expression;
+		if(node->kind() == UnaryOperation::BOUNDED_POINTER_LENGTH) stream<<node->expression<<".length";
+		else stream<<' '<<unaryOp(node->kind())<<' '<<node->expression;
 		return node;
 	}
 	const char* binaryOp(int kind){
@@ -102,7 +103,8 @@ struct NodeToString: NodeVisitor {
 		return "op";
 	}
 	Node* visit(BinaryOperation* node){
-		stream<<node->a<<' '<<binaryOp(node->kind())<<' '<<node->b;
+		if(node->kind() == BinaryOperation::BOUNDED_POINTER_ELEMENT) stream<<node->a<<"["<<node->b<<"]";
+		else stream<<node->a<<' '<<binaryOp(node->kind())<<' '<<node->b;
 		return node;
 	}
 	Node* visit(FieldAccessExpression* node){
