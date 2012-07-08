@@ -152,6 +152,7 @@ public:
 	virtual bool applyProperty(SymbolID name,Node* value){ return false; }
 
 	//Dynamic casts
+	virtual bool isDefinitionNode(){ return false; }
 #define CAST(T) virtual T* as##T() { return nullptr; }
 	NODE_LIST(CAST)
 #undef CAST
@@ -171,6 +172,7 @@ struct DefinitionNode : Node {
 
 	void* generatorData; //extra data used by generator
 private:
+	bool isDefinitionNode(){ return true; }
 	enum { IS_PRIVATE = 0x2 };//NB: it overrides the const flag, which is irrelevant for declarations
 };
 
