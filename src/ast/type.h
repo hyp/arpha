@@ -63,6 +63,8 @@ struct TypeLayout {
 	uint32 alignment;
 };
 
+struct AnonymousAggregate;
+
 //(type ...): intrinsics::types::Type
 struct Type {
 	static data::gen::AbstractTarget::TypeSystemState typeSystemState;
@@ -80,6 +82,8 @@ struct Type {
 		POINTER_BOUNDED_CONSTANT, //[2]int32
 		POINTER_BOUNDED, //[]int32
 		NODE, //i.e. *ast.Expression, uses nodeSubtype to determine the type
+		ANONYMOUS_RECORD,
+		ANONYMOUS_VARIANT
 	};
 
 	Type(int kind);
@@ -109,6 +113,8 @@ struct Type {
 
 	IntegerType* asInteger(){ return integer; }
 	const IntegerType* asInteger() const { return integer; }
+
+	AnonymousAggregate* asAnonymousRecord();
 
 	inline Type* next(){ return argument; }
 	inline const Type* next() const { return argument; }
@@ -170,6 +176,32 @@ public:
 };
 
 std::ostream& operator<< (std::ostream& stream,Type* type);
+
+/*
+* Anonymous aggregate
+* It can be either a record type or a sum(variant) type
+*/
+struct AnonymousAggregate: public Type {
+	struct Field {
+		SymbolID name;
+		Type*    type;
+	};
+
+	// Returns -1 if field isn't found
+	int lookupField(const SymbolID fieldName) const;
+
+	//Unique anonymous record construction
+	static AnonymousAggregate* create(Field* fields,size_t fieldsCount,bool isVariant = false);
+private:
+	AnonymousAggregate(Type** t,SymbolID* fs,size_t n,bool isVariant);
+	void calculateLayout();
+
+public:
+	Type**     types;          //points to [int32,int32]
+	SymbolID*  fields;         //points to ["x","y"]
+	size_t     numberOfFields; // 2
+	TypeLayout _layout;
+};
 
 struct DeclaredType: public Type {
 	DeclaredType(int kind) : Type(kind) {}
@@ -247,9 +279,6 @@ public:
 
 //A record type
 struct Record: public AggregateType {
-private:	
-	Record* headRecord; ///if this is null, then the type isn't an unonymous record
-public:
 	enum {
 		HAS_DERIVING_HIERARCHY = 0x8, // Is there any field that is derived?
 	};
@@ -276,19 +305,8 @@ public:
 	//NB Not used by anonymous records!
 	Node* resolve(Resolver* resolver);
 
-	//Unique anonymous record construction
-	//NB all fields must have resolved types
-	static Record* findAnonymousRecord(std::vector<Field>& record);
-	//An anonymous record
-	inline bool isAnonymous() const { return headRecord != nullptr; }
-	//Determines whether two records have the same field types or not
-	inline static bool anonymousRecordsSameTypes(Record* r1,Record* r2){ return r1->headRecord == r2->headRecord; }
-
 	DECLARE_NODE(Record);
 private:
-	
-	static Record* createRecordType(std::vector<Field>& record,Record* headRecord = nullptr);
-	static Record* findSubRecord(Record* headRecord,std::vector<Record*>& subRecords,std::vector<Field>& record);
 	
 	//Calculates sizeof etc.
 	void calculateResolvedProperties();

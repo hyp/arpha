@@ -223,11 +223,12 @@ Type*  Function::argumentType()  {
 	auto args = arguments.size();
 	if(args == 0) return intrinsics::types::Void;
 	else if(args == 1) return arguments[0]->type.type();
-	std::vector<Record::Field> fields;
+	std::vector<AnonymousAggregate::Field> fields;
 	for(auto i = arguments.begin();i!=arguments.end();++i){
-		fields.push_back(Record::Field(SymbolID(),(*i)->type.type()));
+		AnonymousAggregate::Field field = { SymbolID(),(*i)->type.type() };
+		fields.push_back(field);
 	}
-	return new Type(Record::findAnonymousRecord(fields));
+	return AnonymousAggregate::create(&fields[0],fields.size());
 }
 Type*  Function::returns() const {
 	assert(isFlagSet(Node::RESOLVED));

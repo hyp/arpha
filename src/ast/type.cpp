@@ -1,6 +1,7 @@
 #include "../base/base.h"
 #include "../base/bigint.h"
 #include "../base/symbol.h"
+#include "../base/system.h"
 #include "../compiler.h"
 #include "node.h"
 #include "declarations.h"
@@ -204,7 +205,7 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 * The type
 */
 Type::Type(int kind) : type(kind),flags(0) {
-	assert(kind == VOID || kind == TYPE || kind == BOOL || kind == RECORD || kind == VARIANT);
+	assert(kind == VOID || kind == TYPE || kind == BOOL || kind == RECORD || kind == VARIANT || kind == ANONYMOUS_RECORD || kind== ANONYMOUS_VARIANT);
 }
 Type::Type(IntegerType* integer) : type(INTEGER),flags(0) {
 	this->integer = integer;
@@ -245,8 +246,7 @@ bool Type::isValidTypeForArgument(){
 }
 bool Type::requiresDestructorCall() const {
 	switch(type){
-		case RECORD:  
-		case VARIANT: return true;
+		case RECORD:  return true;
 	}
 	return false;
 }
@@ -292,12 +292,21 @@ size_t Type::size() const {
 		case POINTER_BOUNDED:
 			return typeSystemState.pointerSizeof*2;
 		case STATIC_ARRAY: return argument->size() * N;
+		case ANONYMOUS_RECORD:
+		case ANONYMOUS_VARIANT:
+			return static_cast<const AnonymousAggregate*>(this)->_layout.size;
 		default:
 			throw std::runtime_error("TypeExpression type invariant failed");
 	}
 }
+//TODO
 uint32 Type::alignment() const {
-	return size(); //TODO
+	switch(type){
+	case ANONYMOUS_RECORD:
+	case ANONYMOUS_VARIANT:
+		return static_cast<const AnonymousAggregate*>(this)->_layout.alignment;
+	};
+	return size();
 }
 bool Type::isSame(Type* other){
 	if(this->type != other->type) return false;
@@ -311,6 +320,10 @@ bool Type::isSame(Type* other){
 		case POINTER_BOUNDED_CONSTANT: return argument->isSame(other->argument) && N == other->N;
 		case STATIC_ARRAY: return argument->isSame(other->argument) && N == other->N;
 		case NODE: return nodeSubtype == other->nodeSubtype;
+		case ANONYMOUS_RECORD:
+		case ANONYMOUS_VARIANT:
+			return static_cast<AnonymousAggregate*>(this)->types  == static_cast<AnonymousAggregate*>(other)->types &&
+				   static_cast<AnonymousAggregate*>(this)->fields == static_cast<AnonymousAggregate*>(other)->fields;
 		default:
 			throw std::runtime_error("TypeExpression type invariant failed");	
 			return false;
@@ -448,6 +461,89 @@ Node* Type::assignableFrom(Node* expression,Type* type) {
 	return nullptr;
 }
 
+
+/**
+* Anonymous records/variants
+*/
+std::vector<std::pair<Type**,size_t>>    anonymousRecordTypes ;
+std::vector<std::pair<SymbolID*,size_t>> anonymousRecordFields;
+
+AnonymousAggregate::AnonymousAggregate(Type** t,SymbolID* fs,size_t n,bool isVariant): Type(isVariant? ANONYMOUS_VARIANT: ANONYMOUS_RECORD),types(t),fields(fs),numberOfFields(n) {
+	calculateLayout();
+}
+AnonymousAggregate* Type::asAnonymousRecord(){
+	return type == ANONYMOUS_RECORD? static_cast<AnonymousAggregate*>(this) : nullptr;
+}
+int AnonymousAggregate::lookupField(const SymbolID fieldName) const {
+	if(fields){
+		for(auto i = fields;i!= (fields+numberOfFields);i++){
+			if( (*i) == fieldName ) return int(i - fields);
+		}
+	}
+	return -1;
+}
+AnonymousAggregate* AnonymousAggregate::create(Field* fields,size_t fieldsCount,bool isVariant){
+	assert(fieldsCount > 1);
+	auto end = fields + fieldsCount;
+
+	//Check to see if the record has named fields
+	auto areFieldsUnnamed = true;
+	for(auto i = fields;i!=end;i++){
+		if(!(*i).name.isNull()) areFieldsUnnamed = false;
+	}
+
+	//find the corresponding type array
+	Type** typeArray = nullptr;
+	for(auto i = anonymousRecordTypes.begin();i!=anonymousRecordTypes.end();i++){
+		if((*i).second == fieldsCount){
+			auto otherFields = (*i).first;
+			bool allTypesSame = true;
+			for(size_t j=0;j<fieldsCount;j++){
+				if(!(otherFields[j]->isSame(fields[j].type))){
+					allTypesSame = false;
+					break;
+				}
+			}
+			if(allTypesSame){
+				typeArray = otherFields;
+				break;
+			}
+		}
+	}
+	if(!typeArray){
+		typeArray = (Type**)System::malloc(sizeof(Type*)*fieldsCount);
+		for(size_t j=0;j<fieldsCount;j++) typeArray[j] = fields[j].type;
+		anonymousRecordTypes.push_back(std::make_pair(typeArray,fieldsCount));
+	}
+
+	if(areFieldsUnnamed) return new AnonymousAggregate(typeArray,nullptr,fieldsCount,isVariant);
+
+	//find the corresponding field array
+	SymbolID* symbolArray = nullptr;
+	for(auto i = anonymousRecordFields.begin();i!=anonymousRecordFields.end();i++){
+		if((*i).second == fieldsCount){
+			auto otherFields = (*i).first;
+			bool allSymbolsSame = true;
+			for(size_t j=0;j<fieldsCount;j++){
+				if(!(otherFields[j] == fields[j].name)){
+					allSymbolsSame = false;
+					break;
+				}
+			}
+			if(allSymbolsSame){
+				symbolArray = otherFields;
+				break;
+			}
+		}
+	}
+	if(!symbolArray){
+		symbolArray = (SymbolID*)System::malloc(sizeof(SymbolID)*fieldsCount);
+		for(size_t j=0;j<fieldsCount;j++) symbolArray[j] = fields[j].name;
+		anonymousRecordFields.push_back(std::make_pair(symbolArray,fieldsCount));
+	}
+	return new AnonymousAggregate(typeArray,symbolArray,fieldsCount,isVariant);
+}
+
 /**
 * Aggregate type
 */
@@ -472,7 +568,6 @@ size_t AggregateType::size(){
 * Record type
 */
 Record::Record(SymbolID name,Location& location) : AggregateType(Type::RECORD,name,location) {
-	headRecord   = nullptr;
 	_type.record = this;
 }
 int Record::lookupField(const SymbolID fieldName) const {
@@ -485,14 +580,6 @@ void Record::add(const Field& var){
 	assert(!isResolved());
 	fields.push_back(var);
 }
-void Record::calculateResolvedProperties(){
-	//sizeof
-	_size = 0;
-	for(auto i = fields.begin();i!=fields.end();++i){
-		_size += (*i).type.type()->size();
-		if((*i).isExtending) setFlag(HAS_DERIVING_HIERARCHY);
-	}
-}
 Record::Field Record::Field::duplicate(DuplicationModifiers* mods) const{
 	Field result;
 	result.name = name;
@@ -501,8 +588,6 @@ Record::Field Record::Field::duplicate(DuplicationModifiers* mods) const{
 	return result;
 }
 Node* Record::duplicate(DuplicationModifiers* mods) const {
-	if(headRecord) assert(false);
-
 	auto rec = new Record(label(),location());
 	mods->duplicateDefinition(const_cast<Record*>(this),rec);
 	rec->_owner = mods->target;
@@ -514,91 +599,10 @@ Node* Record::duplicate(DuplicationModifiers* mods) const {
 }
 
 std::ostream& operator<< (std::ostream& stream,Record* type){
-	if(type->isAnonymous()){
-		stream<<"anon-record"; 
-		for(size_t i = 0;i < type->fields.size();i++){
-			stream<<(i == 0 ? '(' : ',')<<(type->fields[i].name.isNull()?"_":type->fields[i].name)<<":"<<type->fields[i].type.type();
-		}
-		stream<<')';
-	}
-	else stream<<type->label();
+	stream<<type->label();
 	return stream;
 }
 
-/**
-*Organized as
-*  record(int32,int32) <-- headRecord
-*     record(x: int32,y:int32) <-- subRecord
-*     record(width: int32, height: int32)
-*  record(int32,bool)
-*/
-std::vector<std::pair<Record*,std::vector<Record*> > > records;
-
-Record* Record::createRecordType(std::vector<Field>& record,Record* headRecord){
-	std::string typeName = "record";
-	for(size_t i=0;i<record.size();i++)//TODO change this ludicrous display
-		typeName+=format("%c%s:%s",i == 0 ? '(' : ',',record[i].name.isNull() ?  "_" : record[i].name.ptr(),record[i].type.type());
-	typeName+=')';
-	debug("Tuple created: %s",typeName);
-
-	auto type=new Record(typeName.c_str(),Location(0,0));
-	type->headRecord = headRecord ? headRecord : type;
-	for(size_t i=0;i<record.size();i++){
-		type->add(Field(headRecord!=nullptr?(record[i].name):(SymbolID()),record[i].type.type() ));
-	}
-	type->setFlag(Node::RESOLVED);
-	type->calculateResolvedProperties();
-	return type;
-}
-
-Record* Record::findSubRecord(Record* headRecord,std::vector<Record*>& subRecords,std::vector<Field>& record){
-	//Match the names to the corresponding record
-	for(auto i=subRecords.begin();i!=subRecords.end();i++){
-		auto subRecord = *i;
-		auto areFieldsSameName = true;
-		for(size_t j=0;j < record.size();j++){
-			if(subRecord->fields[j].name != record[j].name) areFieldsSameName = false;
-		}
-		if(areFieldsSameName) return subRecord;
-	}
-	//If the record doesn't exist we have to add it to subrecords
-	auto t = createRecordType(record,headRecord);
-	subRecords.push_back(t);
-	return t;
-}
-
-Record* Record::findAnonymousRecord(std::vector<Field>& record){
-	assert(record.size() > 1);
-
-	//Check to see if the record has named fields
-	auto areFieldsUnnamed = true;
-	for(size_t j=0;j < record.size();j++){
-		if(!record[j].name.isNull()) areFieldsUnnamed = false;
-		assert(record[j].type.isResolved());
-	}
-
-	//Check to see if the following record already exists.
-	//Match the types to the corresponding tuple
-	for(auto i=records.begin();i!=records.end();i++){
-		auto headRecord = (*i).first;
-		if(headRecord->fields.size() == record.size()){
-			auto areFieldsSameType = true;			
-			for(size_t j=0;j < record.size();j++){
-				if(!(headRecord->fields[j].type.type()->isSame(record[j].type.type()))) areFieldsSameType = false;
-			}
-			//Match the names to the corresponding record
-			if(areFieldsSameType) return areFieldsUnnamed ? headRecord : findSubRecord(headRecord,(*i).second,record);
-		}
-	}
-
-	//If the record doesn't exist we have to add it to head and sub records
-	auto t = createRecordType(record);
-	records.push_back(std::make_pair(t,std::vector<Record*>()));
-	if(areFieldsUnnamed) return t;
-	t = createRecordType(record,t);
-	records.back().second.push_back(t);
-	return t;
-}
 
 Trait::Trait() : DeclaredType(Type::VARIANT) {
 }
@@ -634,15 +638,6 @@ DeclaredType* Variant::duplicate(DuplicationModifiers* mods) const{
 	dup->_layout = _layout;
 	return dup;
 }
-//TODO proper tag size.. and tag alignment 
-void Variant::calculateResolvedProperties(){
-	_layout.size   = fields.size() < 256? 1 : 4;
-	auto sb = declaration->optionalStaticBlock;
-	for(auto i = fields.begin();i!=fields.end();++i){
-		if(i->associatedType != -1)
-			_layout.size = std::max(_layout.size,(*(sb->begin()+i->associatedType))->asTypeDeclaration()->type()->size());
-	}
-}
 
 TypeDeclaration::TypeDeclaration(DeclaredType* type,SymbolID name) : PrefixDefinition(name,Location()), _type(type),optionalStaticBlock(nullptr) { 
 	_type->declaration = this; 
@@ -659,4 +654,47 @@ Node*  TypeDeclaration::duplicate(DuplicationModifiers* mods) const {
 	dup->optionalStaticBlock = sb;
 	mods->duplicateDefinition(const_cast<TypeDeclaration*>(this),dup);
 	return copyProperties(dup);
+}
+
+/**
+* Layout calculations foro aggregate type
+* TODO possible better alignment for tuple of ints/floats to be sse compatible
+* TODO variant tag sizes
+*/
+bool isNullablePointerVariant(Type* a,Type* b){
+	return ( (a->isPointer() || a->isBoundedPointer()) && b->isVoid() );
+}
+void AnonymousAggregate::calculateLayout(){
+	_layout.size      = 0;
+	_layout.alignment = 0;
+	if(type == ANONYMOUS_RECORD){
+		for(auto i = types;i!=(types+numberOfFields);i++){
+			_layout.size      += (*i)->size();
+			_layout.alignment =  std::max((*i)->alignment(),_layout.alignment);
+		}
+	} else {
+		//tag
+		bool includeTag = numberOfFields == 2 && ( isNullablePointerVariant(types[0],types[1]) || isNullablePointerVariant(types[1],types[0]) );// *T | Nothing
+		if(includeTag) _layout.size = numberOfFields < 256? 1 : 4;
+		for(auto i = types;i!=(types+numberOfFields);i++){
+			_layout.size      =  std::max(_layout.size,(*i)->size());
+			_layout.alignment =  std::max((*i)->alignment(),_layout.alignment);
+		}
+	}
+}
+void Variant::calculateResolvedProperties(){
+	_layout.size   = fields.size() < 256? 1 : 4;
+	auto sb = declaration->optionalStaticBlock;
+	for(auto i = fields.begin();i!=fields.end();++i){
+		if(i->associatedType != -1)
+			_layout.size = std::max(_layout.size,(*(sb->begin()+i->associatedType))->asTypeDeclaration()->type()->size());
+	}
+}
+void Record::calculateResolvedProperties(){
+	//sizeof
+	_size = 0;
+	for(auto i = fields.begin();i!=fields.end();++i){
+		_size += (*i).type.type()->size();
+		if((*i).isExtending) setFlag(HAS_DERIVING_HIERARCHY);
+	}
 }

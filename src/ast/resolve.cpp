@@ -87,7 +87,7 @@ Node* TupleExpression::resolve(Resolver* resolver){
 	if(resolveChildren(this,resolver)){
 		resolver->markResolved(this);
 		//find the tuple's type!
-		std::vector<Record::Field> fields;
+		std::vector<AnonymousAggregate::Field> fields;
 		bool allTypes = true;
 		bool allConst = true;
 		for(auto i = begin();i!=end();i++){
@@ -97,7 +97,8 @@ Node* TupleExpression::resolve(Resolver* resolver){
 				error((*i),"A tuple can't contain an expression returning Nothing!");
 				return ErrorExpression::getInstance();
 			} else if(!returns->isType() || !(*i)->isConst()) allTypes = false;
-			fields.push_back(Record::Field((*i)->label(),returns));
+			AnonymousAggregate::Field field = { (*i)->label(),returns};
+			fields.push_back(field);
 		}
 		if(allConst) setFlag(CONSTANT);
 		//int32,int32 :: Type,Type -> anon-record(int32,int32) :: Type
@@ -106,10 +107,10 @@ Node* TupleExpression::resolve(Resolver* resolver){
 			for(size_t i =0;i<size();i++){
 				fields[i].type = children[i]->asTypeReference()->type;
 			}
-			return resolver->resolve( new TypeReference(Record::findAnonymousRecord(fields)->asType()) );
+			return resolver->resolve( new TypeReference(AnonymousAggregate::create(&fields[0],fields.size())) );
 		}
 		else {
-			type = Record::findAnonymousRecord(fields)->asType();
+			type = AnonymousAggregate::create(&fields[0],fields.size());
 		}
 	}
 	return this;
@@ -356,7 +357,7 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 		return resolver->resolve(new CallExpression(new UnresolvedSymbol(access->location(),access->symbol),new TupleExpression(access->object,value)));
 	}
 	else if(auto access = object->asFieldAccessExpression()){
-		if(auto canBeAssigned = access->objectsRecord()->fields[access->field].type.type()->assignableFrom(value,valuesType)){
+		if(auto canBeAssigned = access->fieldsType()->assignableFrom(value,valuesType)){
 			value = resolver->resolve(canBeAssigned);
 			resolver->markResolved(this);
 		}
@@ -499,18 +500,15 @@ Node* AccessExpression::resolve(Resolver* resolver){
 		*/
 		auto returns = object->returnType();
 		if(returns->isPointer()) returns = returns->next();
-		if(returns->isRecord()){
-			auto record = returns->asRecord();
-			if(record->isAnonymous()){
-				auto fieldID = record->lookupField(symbol);
-				if(fieldID != -1){
-					//Field access
-					if(auto tuple = object->asTupleExpression()) //simplify (x:1,y:1).x => 1
-						result = tuple->childrenPtr()[fieldID];
-					else
-						result = new FieldAccessExpression(object,fieldID);
-					return resolver->resolve(copyLocationSymbol(result));
-				}
+		if(auto record = returns->asAnonymousRecord()){
+			auto fieldID = record->lookupField(symbol);
+			if(fieldID != -1){
+				//Field access
+				if(auto tuple = object->asTupleExpression()) //simplify (x:1,y:1).x => 1
+					result = tuple->childrenPtr()[fieldID];
+				else
+					result = new FieldAccessExpression(object,fieldID);
+				return resolver->resolve(copyLocationSymbol(result));
 			}
 		}
 		// a.foo => foo(a)
@@ -1349,9 +1347,12 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 				if(auto pattern = func->arguments[argsCount-1]->type.pattern){
 					TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);
 					//construct a record from the tailed parameters
-					std::vector<Record::Field> fields;
-					for(auto i = argsCount - 1;i < expressionCount;i++) fields.push_back(Record::Field(exprBegin[i]->label(),exprBegin[i]->returnType()));
-					auto record = Record::findAnonymousRecord(fields)->asType();
+					std::vector<AnonymousAggregate::Field> fields;
+					for(auto i = argsCount - 1;i < expressionCount;i++){
+						AnonymousAggregate::Field field = { exprBegin[i]->label(),exprBegin[i]->returnType() };
+						fields.push_back(field);
+					}
+					auto record = AnonymousAggregate::create(&fields[0],fields.size());
 					if(!matcher.match(record,pattern)) return false;
 				}
 			}

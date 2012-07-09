@@ -105,6 +105,7 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(UnaryOperation* node);
 	Node* visit(BinaryOperation* node);
 	Node* visit(AssignmentExpression* node);
+	Node* visit(FieldAccessExpression* node);
 	Node* visit(CallExpression* node);
 	Node* visit(PointerOperation* node);
 	Node* visit(ReturnExpression* node);
@@ -139,9 +140,39 @@ LLVMgenerator::LLVMgenerator(
 
 	gen(root->asBlockExpression());
 }
+
+llvm::Type* generateAnonymousRecord(LLVMgenerator* generator,AnonymousAggregate* type){
+	std::vector<llvm::Type*> fields(type->numberOfFields);
+	for(size_t i = 0;i<type->numberOfFields;i++){
+		fields[i] = generator->genType(type->types[i]);
+	}
+	return llvm::StructType::get(generator->context,fields,false);
+}
+/*TODO
+llvm::Type* generateRecord(LLVMgenerator* generator,Record* record,const char* mangledName){
+	std::vector<llvm::Type*> fields(type->numberOfFields);
+	for(size_t i = 0;i<type->numberOfFields;i++){
+		fields[i] = generator->genType(type->types[i]);
+	}
+	return llvm::StructType::create(generator->context,fields,mangledName,false);	
+}*/
+llvm::Type* generatePointerType(LLVMgenerator* generator,Type* next){
+	return llvm::PointerType::get(generator->genType(next),0);
+}
+
+
+
 llvm::Type* LLVMgenerator::genType(Type* type){
-	if(type->isVoid()) return coreTypes[GEN_TYPE_VOID] ;
-	else if(type->isBool()) return coreTypes[GEN_TYPE_I8];
+	switch(type->type){
+	case Type::VOID: return llvm::Type::getVoidTy(context);
+	case Type::TYPE: assert(false); break;
+	case Type::BOOL: return llvm::Type::getInt8Ty(context);
+	case Type::POINTER:
+		return generatePointerType(this,type->next());
+	case Type::NODE: assert(false); break;
+	case Type::ANONYMOUS_RECORD:
+		return generateAnonymousRecord(this,static_cast<AnonymousAggregate*>(type));
+	}
 	return coreTypes[0];
 }
 void LLVMgenerator::emitConstant(llvm::Constant* value){
@@ -229,14 +260,27 @@ Node* LLVMgenerator::visit(BinaryOperation* node){
 	return node;
 };
 Node* LLVMgenerator::visit(AssignmentExpression* node){
+	auto val = generateExpression(node->value);
+	assert(val);
 	if(auto var = node->object->asVariableReference()){
-		auto val = generateExpression(node->value);
-		assert(val);
 		emitStore(unmap(var->variable),val);
+	} else if(auto field = node->object->asFieldAccessExpression()){
+		if(auto vref = field->object->asVariableReference()){
+			auto variable = unmap(vref->variable);
+			auto fieldPtr = builder.CreateStructGEP(variable,field->field);
+			emitStore(fieldPtr,val);
+		}
 	}
 	return node;
 }
-
+Node* LLVMgenerator::visit(FieldAccessExpression* node){
+	if(auto vref = node->object->asVariableReference()){
+		auto variable = unmap(vref->variable);
+		auto fieldPtr = builder.CreateStructGEP(variable,node->field);
+		emitLoad(fieldPtr);
+	}
+	return node;
+}
 Node* LLVMgenerator::visit(CallExpression* node){
 	llvm::Value* instr;
 	if(auto fcall = node->object->asFunctionReference()){

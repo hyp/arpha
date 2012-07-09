@@ -419,8 +419,8 @@ struct FieldAccessExpression : Node {
 
 	Type* returnType() const;
 
-	// Returns record T when object is of type T or pointer T 
-	Record* objectsRecord() const;
+	Type*    fieldsType() const;
+	SymbolID fieldsName() const;
 
 	Node* object;
 	int field;

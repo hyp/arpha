@@ -310,16 +310,26 @@ Node* FunctionReference::duplicate(DuplicationModifiers* mods) const {
 FieldAccessExpression::FieldAccessExpression(Node* object,int field){
 	this->object = object;
 	this->field = field;
-	assert(objectsRecord());
+	assert(fieldsType());
 }
-Record* FieldAccessExpression::objectsRecord() const {
+Type*    FieldAccessExpression::fieldsType() const{
 	auto type = object->returnType();
-	if(type->type == Type::RECORD) return type->record;
-	else if(type->type == Type::POINTER && type->argument->type == Type::RECORD) return type->argument->record;
+	if(type->isPointer()) type = type->next();
+	if(type->isRecord()) return type->asRecord()->fields[field].type.type();
+	else if(auto rec = type->asAnonymousRecord()) return rec->types[field];
+	assert(false);
+	return nullptr;
+}
+SymbolID FieldAccessExpression::fieldsName() const{
+	auto type = object->returnType();
+	if(type->isPointer()) type = type->next();
+	if(type->isRecord()) return type->asRecord()->fields[field].name;
+	else if(auto rec = type->asAnonymousRecord()) return rec->fields[field];
+	assert(false);
 	return nullptr;
 }
 Type* FieldAccessExpression::returnType() const {
-	return objectsRecord()->fields[field].type.type();
+	return fieldsType();
 }
 Node* FieldAccessExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new FieldAccessExpression(object->duplicate(mods),field));

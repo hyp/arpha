@@ -108,7 +108,7 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(FieldAccessExpression* node){
-		stream<<node->object<<" f. "<<node->objectsRecord()->fields[node->field].name;
+		stream<<node->object<<" f. "<<node->fieldsName();
 		return node;
 	}
 
@@ -251,6 +251,20 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 		case Type::NODE:
 			stream<<"ast.Expression";
 			if(type->nodeSubtype != -1) stream<<"("<<type->nodeSubtype<<")"; 
+			break;
+		case Type::ANONYMOUS_RECORD:
+		case Type::ANONYMOUS_VARIANT:
+			{
+			auto sep = type->type == Type::ANONYMOUS_RECORD? ", ":"| ";
+			auto aggr = static_cast<AnonymousAggregate*>(type);
+			stream<<"(";
+			for(size_t i =0;i<aggr->numberOfFields;i++){
+				if(i) stream<<sep;
+				if(aggr->fields && !aggr->fields[i].isNull()) stream<<aggr->fields[i]<<": ";
+				stream<<aggr->types[i];
+			}
+			stream<<")";
+			}
 			break;
 	}
 	return stream;
