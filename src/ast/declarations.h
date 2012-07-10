@@ -199,12 +199,6 @@ struct Function: public PrefixDefinition {
 		FIELD_ACCESS_FUNCTION = 0x2000, //optimization
 	};
 
-	enum CallingConvention {
-		CC_ARPHA = 0,
-		CC_CCALL,
-		CC_STDCALL,
-	};
-
 	Function(SymbolID name,Location& location);
 
 	bool applyProperty(SymbolID name,Node* value);
@@ -219,7 +213,7 @@ struct Function: public PrefixDefinition {
 
 	//Calling convention
 	bool isIntrinsic() const;
-	CallingConvention callingConvention() const;
+	data::ast::Function::CallConvention callingConvention() const;
 
 	Type* argumentType();
 	Type* returns() const;
@@ -248,6 +242,7 @@ struct Function: public PrefixDefinition {
 	//expanded
 	uint16 ctfeRegisterCount;
 	uint16 inliningWeight;
+	uint8  cc;
 
 	typedef void (*CTFE_Binder)(CTFEintrinsicInvocation* invocation);
 

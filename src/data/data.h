@@ -15,9 +15,11 @@ namespace data {
 		enum VisibilityMode {
 			PUBLIC,PRIVATE
 		};
-		enum FunctionCallConvention {
-			ARPHA,CCALL,STDCALL
-		};
+		namespace Function {
+			enum CallConvention {
+				ARPHA,CCALL,STDCALL
+			};
+		}
 	}
 
 	namespace gen {

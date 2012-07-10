@@ -263,6 +263,25 @@ Node* BinaryOperation::resolve(Resolver* resolver){
 	return this;
 }
 
+/**
+* Maps Anonymous records directly to fields
+*/
+Node* accessingAnonymousRecordField(AccessExpression* node){
+	auto returns = node->object->returnType();
+	if(returns->isPointer()) returns = returns->next();
+	if(auto record = returns->asAnonymousRecord()){
+		auto fieldID = record->lookupField(node->symbol);
+		if(fieldID != -1){
+			//Field access
+			if(auto tuple = node->object->asTupleExpression()) //simplify (x:1,y:1).x => 1
+				return tuple->childrenPtr()[fieldID];
+			else
+				return new FieldAccessExpression(node->object,fieldID);
+		}
+	}
+	return nullptr;
+}
+
 // TODO tuple destructuring
 // TODO anonymous records a.foo
 Node* AssignmentExpression::resolve(Resolver* resolver){
@@ -353,8 +372,12 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 		}
 	}
 	else if(auto access = object->asAccessExpression()){
+		if(auto f = accessingAnonymousRecordField(access)){
+			object = resolver->resolve(access->copyLocationSymbol(f));
+			resolver->markResolved(this);
+		}
 		//a.foo = 2 -> foo(a,2)
-		return resolver->resolve(new CallExpression(new UnresolvedSymbol(access->location(),access->symbol),new TupleExpression(access->object,value)));
+		else return resolver->resolve(new CallExpression(new UnresolvedSymbol(access->location(),access->symbol),new TupleExpression(access->object,value)));
 	}
 	else if(auto access = object->asFieldAccessExpression()){
 		if(auto canBeAssigned = access->fieldsType()->assignableFrom(value,valuesType)){
@@ -494,25 +517,11 @@ Node* UnresolvedSymbol::resolve(Resolver* resolver){
 Node* AccessExpression::resolve(Resolver* resolver){
 	object = resolver->resolve(object);
 	if(object->isResolved()){
-		Node* result;
-		/**
-		* Map Anonymous records directly to fields
-		*/
-		auto returns = object->returnType();
-		if(returns->isPointer()) returns = returns->next();
-		if(auto record = returns->asAnonymousRecord()){
-			auto fieldID = record->lookupField(symbol);
-			if(fieldID != -1){
-				//Field access
-				if(auto tuple = object->asTupleExpression()) //simplify (x:1,y:1).x => 1
-					result = tuple->childrenPtr()[fieldID];
-				else
-					result = new FieldAccessExpression(object,fieldID);
-				return resolver->resolve(copyLocationSymbol(result));
-			}
+		if(auto f = accessingAnonymousRecordField(this)){
+			return resolver->resolve(copyLocationSymbol(f));
 		}
 		// a.foo => foo(a)
-		result = new CallExpression(new UnresolvedSymbol(location(),symbol),object);
+		auto result = new CallExpression(new UnresolvedSymbol(location(),symbol),object);
 		result->setFlag(CallExpression::DOT_SYNTAX);
 		return resolver->resolve(copyLocationSymbol(result));
 	}

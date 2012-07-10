@@ -283,6 +283,7 @@ size_t Type::size() const {
 		case VOID: case TYPE: return 0;
 		case BOOL: return 1;
 		case RECORD: return record->size();
+		case VARIANT: return static_cast<const Variant*>(this)->_layout.size;
 		case INTEGER: return integer->size();
 		case POINTER: 
 		case POINTER_BOUNDED_CONSTANT:
@@ -302,6 +303,7 @@ size_t Type::size() const {
 //TODO
 uint32 Type::alignment() const {
 	switch(type){
+	case VARIANT: return static_cast<const Variant*>(this)->_layout.alignment;
 	case ANONYMOUS_RECORD:
 	case ANONYMOUS_VARIANT:
 		return static_cast<const AnonymousAggregate*>(this)->_layout.alignment;
@@ -313,6 +315,7 @@ bool Type::isSame(Type* other){
 	switch(type){
 		case VOID: case TYPE: case BOOL: return type == other->type;
 		case RECORD: return record == other->record;
+		case VARIANT: return this == other;
 		case INTEGER: return integer == other->integer;
 		case POINTER: return argument->isSame(other->argument);
 		case FUNCTION: return argument->isSame(other->argument) && returns->isSame(other->returns);
@@ -695,6 +698,5 @@ void Record::calculateResolvedProperties(){
 	_size = 0;
 	for(auto i = fields.begin();i!=fields.end();++i){
 		_size += (*i).type.type()->size();
-		if((*i).isExtending) setFlag(HAS_DERIVING_HIERARCHY);
 	}
 }

@@ -242,8 +242,8 @@ struct Variant: public DeclaredType {
 	DeclaredType* resolve(Resolver* resolver);
 
 	std::vector<Field> fields;
-private:
 	TypeLayout _layout;
+private:
 	void calculateResolvedProperties();
 };
 
@@ -279,9 +279,6 @@ public:
 
 //A record type
 struct Record: public AggregateType {
-	enum {
-		HAS_DERIVING_HIERARCHY = 0x8, // Is there any field that is derived?
-	};
 	struct Field {
 		SymbolID name;
 		TypePatternUnresolvedExpression type;

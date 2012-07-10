@@ -179,6 +179,7 @@ Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,loc
 	intrinsicCTFEbinder = nullptr;
 	generatedFunctionParent = nullptr;
 	body.scope->_functionOwner = this;
+	cc = data::ast::Function::ARPHA;
 }
 bool   Function::applyProperty(SymbolID name,Node* value){
 	if(name == "intrinsic"){
@@ -193,8 +194,8 @@ bool   Function::applyProperty(SymbolID name,Node* value){
 bool   Function::isIntrinsic() const {
 	return isFlagSet(IS_INTRINSIC);
 }
-Function::CallingConvention Function::callingConvention() const {
-	return CC_ARPHA;
+data::ast::Function::CallConvention Function::callingConvention() const {
+	return (data::ast::Function::CallConvention)cc;
 }
 Scope* Function::owner() const {
 	return body.scope->parent;
@@ -277,6 +278,7 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	mods->returnValueRedirector = oldRed;
 	func->ctfeRegisterCount = ctfeRegisterCount;
 	func->inliningWeight = inliningWeight;
+	func->cc = cc;
 	if(generatedFunctionParent) {
 		assert(false);
 	}

@@ -61,6 +61,7 @@ struct LLVMgenerator: NodeVisitor {
 	std::string        mangler;
 	uint32 anonCounter;
 	Function* functionOwner;
+	std::vector<Node*> moduleInitializerBody;
 
 	/**
 	* Control flow chains
@@ -137,6 +138,8 @@ LLVMgenerator::LLVMgenerator(
 	anonCounter = 0;
 
 	mangler = "_ARP3src";
+
+	//create a module initializer
 
 	gen(root->asBlockExpression());
 }
@@ -303,12 +306,21 @@ Node* LLVMgenerator::visit(CallExpression* node){
 	emit(instr);
 	return node;
 }
+
+llvm::Value* genDereference(LLVMgenerator* generator,PointerOperation* node){
+	auto ptr = generator->generateExpression(node->expression);
+	auto idx = llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],0,false);
+	return generator->builder.CreateGEP(ptr,idx);
+}
+
 Node* LLVMgenerator::visit(PointerOperation* node){
 	if(node->isAddress()){
 		auto expr = node->expression;
 		if(auto var = expr->asVariableReference()){
 			emit(unmap(var->variable));
 		}
+	} else {
+		emitLoad(genDereference(this,node));
 	}
 	return node;
 }
@@ -457,8 +469,12 @@ Node* LLVMgenerator::visit(Variable* variable){
 	return variable;
 }
 
-llvm::CallingConv::ID genCallingConvention(int kind){
-	return llvm::CallingConv::C;
+llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention cc){
+	switch(cc){
+	case data::ast::Function::ARPHA:   return llvm::CallingConv::C;//Fast;
+	case data::ast::Function::CCALL:   return llvm::CallingConv::C;
+	case data::ast::Function::STDCALL: return llvm::CallingConv::X86_StdCall;
+	}
 }
 
 Node* LLVMgenerator::visit(Function* function){
@@ -466,7 +482,6 @@ Node* LLVMgenerator::visit(Function* function){
 	bool ffiC     = function->label() == SymbolID("putchar") ||  function->label() == SymbolID("main");
 	bool isExtern = function->label() == SymbolID("putchar");//ffiC;
 	
-	auto cc = genCallingConvention(function->callingConvention());
 	//
 	llvm::FunctionType* t;
 	if(function->arguments.size() == 0){
@@ -511,7 +526,6 @@ Node* LLVMgenerator::visit(Function* function){
 	}
 	return function;
 }
-
 
 
 /*void llvmGenIntegerConstant (LLVMgenerator* generator,int type,uint64 value,bool isSigned){
