@@ -365,6 +365,7 @@ enum {
 	RECORD_SUBTYPE,
 	EXACT
 };
+
 int   Type::canAssignFrom(Node* expression,Type* type){
 	if(this->isSame(type)) return EXACT;
 
@@ -588,6 +589,7 @@ Record::Field Record::Field::duplicate(DuplicationModifiers* mods) const{
 	result.name = name;
 	result.type = type.duplicate(mods);
 	result.isExtending = isExtending;
+	result.initializer = initializer;
 	return result;
 }
 DeclaredType* Record::duplicate(DuplicationModifiers* mods) const {

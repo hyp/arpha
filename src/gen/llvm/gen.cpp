@@ -125,6 +125,8 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(Variable* var);
 	Node* visit(Function* func);
 	Node* visit(TypeDeclaration* node);
+
+	llvm::Function* getFunctionDeclaration(Function* function);
 };
 
 
@@ -320,25 +322,44 @@ Node* LLVMgenerator::visit(FieldAccessExpression* node){
 	}
 	return node;
 }
+
+//TODO cc for function pointers
 Node* LLVMgenerator::visit(CallExpression* node){
-	llvm::Value* instr;
+	llvm::Value* callee;
+	llvm::CallInst* instr;
+	const char* reg;
+
 	if(auto fcall = node->object->asFunctionReference()){
-		llvm::Twine twine(fcall->function->returns()->isVoid()? "" : "calltmp");
-		auto f = unmap(fcall->function);
-		if(node->arg->asUnitExpression()){
-			instr = builder.CreateCall(f,twine);
-		}
-		else if(auto tuple = node->arg->asTupleExpression()) {
+		reg = fcall->function->returns()->isVoid()? "" : "calltmp";
+		callee = getFunctionDeclaration(fcall->function);
+	}
+	else {
+		reg = "calltmp";
+		callee = generateExpression(node->object); //calling a function pointer
+	}
+	
+	llvm::Twine twine(reg);
+	if(node->arg->asUnitExpression()){
+		instr = builder.CreateCall(callee,twine);
+	}
+	else if(auto tuple = node->arg->asTupleExpression()) {
+		auto argCount = tuple->size();
+		if(argCount == 2){
+			instr = builder.CreateCall2(callee,generateExpression(*(tuple->begin())),generateExpression(*(tuple->begin()+1)),twine);
+		} else {
 			std::vector<llvm::Value*> args;
+			args.reserve(argCount);
 			for(auto i = tuple->begin();i!=tuple->end();i++){
 				args.push_back(generateExpression(*i));
-			}
-			instr = builder.CreateCall(f,args,twine);
-		}
-		else {
-			instr = builder.CreateCall(f,generateExpression(node->arg),twine);
+			}	
+			instr = builder.CreateCall(callee,args,twine);
 		}
 	}
+	else {
+		instr = builder.CreateCall(callee,generateExpression(node->arg),twine);
+	}
+	//TODO cc for function pointers: instr->setCallingConv();
+
 	emit(instr);
 	return node;
 }
@@ -507,32 +528,41 @@ llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention c
 	}
 }
 
-Node* LLVMgenerator::visit(Function* function){
-	if(function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro()) return function;
-	//FFI, namemangling, calling convention and extern
-	bool ffiC     = function->label() == SymbolID("putchar") ||  function->label() == SymbolID("main");
-	bool isExtern = function->label() == SymbolID("putchar");//ffiC;
-	
-	//
+//TODO mangling
+llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
+	if(function->generatorData) return static_cast<llvm::Function*>(unmap(function));
+
+	// mangle
+	//std::stringstream ss;
+	//if(!ffiC)
+	//	ss<<mangler<<function->label().length()<<function->label().ptr();
+	//else ss<<function->label().ptr();
+
+	//create the actual declaration
 	llvm::FunctionType* t;
 	if(function->arguments.size() == 0){
 		t = llvm::FunctionType::get(genType(function->_returnType.type()),false);
 	} else {
 		std::vector<llvm::Type*> args;
+		args.reserve(function->arguments.size());
 		for(auto i = function->arguments.begin();i!=function->arguments.end();i++){
 			args.push_back(genType((*i)->type.type()));
 		}
 		t = llvm::FunctionType::get(genType(function->_returnType.type()),args,false);
 	}
-	// mangle
-	std::stringstream ss;
-	if(!ffiC)
-		ss<<mangler<<function->label().length()<<function->label().ptr();
-	else ss<<function->label().ptr();
-	auto func = llvm::Function::Create(t,genLinkage(function),ss.str().c_str(),module);
+
+	auto func = llvm::Function::Create(t,genLinkage(function),function->label().ptr(),module);
 	func->setCallingConv(genCallingConvention(function->callingConvention()));
 	map(function,func);
-	
+	return func;
+}
+
+Node* LLVMgenerator::visit(Function* function){
+	bool isExtern = function->label() == SymbolID("putchar");//ffiC;
+	if(isExtern || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro()) return function;
+
+	auto func = getFunctionDeclaration(function);
+
 	// Initialize arguments
 	size_t i = 0;
 	for (llvm::Function::arg_iterator arg = func->arg_begin(); i != function->arguments.size(); ++arg, ++i) {
@@ -540,21 +570,20 @@ Node* LLVMgenerator::visit(Function* function){
 		map(function->arguments[i],arg);
 	}
 
-	if(!isExtern){
-		llvm::BasicBlock *block = llvm::BasicBlock::Create(context, "entry", func);
-		builder.SetInsertPoint(block);
+	//generate body
+	llvm::BasicBlock *block = llvm::BasicBlock::Create(context, "entry", func);
+	builder.SetInsertPoint(block);
 
-
-		auto oldFunction = functionOwner;
-		functionOwner = function;
-		gen(&function->body);
-		if(!function->isFlagSet(Function::CONTAINS_RETURN)) builder.CreateRetVoid();
-		if(llvm::verifyFunction(*func,llvm::VerifierFailureAction::PrintMessageAction)){
-			//TODO
-		}
-		passManager->run(*func);
-		functionOwner = oldFunction;
+	auto oldFunction = functionOwner;
+	functionOwner = function;
+	gen(&function->body);
+	if(!function->isFlagSet(Function::CONTAINS_RETURN)) builder.CreateRetVoid();
+	if(llvm::verifyFunction(*func,llvm::VerifierFailureAction::PrintMessageAction)){
+		//TODO
 	}
+	passManager->run(*func);
+	functionOwner = oldFunction;
+
 	return function;
 }
 

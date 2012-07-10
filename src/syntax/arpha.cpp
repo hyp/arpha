@@ -612,7 +612,7 @@ void createFieldGettersSetters(Parser* parser,Type* thisType,SymbolID field,int 
 	parser->mixinedExpressions.push_back(setter);
 }
 
-/// fields       ::= ['private'] 'var'|'def' names (type | type '=' [Newlines] initializers | '=' [Newlines] initializers)
+/// fields       ::= ['private'] 'var'|'def' names (type | type '=' [Newlines] initializers)
 /// method       ::= 'def' <name> params [returnType] functionBody
 /// declaration  ::= fields | method
 /// declarations ::= declaration (';'|Newlines) declarations | declaration
@@ -632,13 +632,11 @@ struct TypeParser: IntrinsicPrefixMacro {
 
 		auto field = Record::Field(first,intrinsics::types::Void);
 		field.isExtending = isExtending;
-		//TODO private
 		record->add(field);
 		createFieldGettersSetters(parser,record,field.name,record->fields.size()-1,isPrivate,isReadonly);
 		while(parser->match(",")) {
 			auto field = Record::Field(parser->expectName(),intrinsics::types::Void);
 			field.isExtending = isExtending;
-			//TODO private
 			record->add(field);
 			createFieldGettersSetters(parser,record,field.name,record->fields.size()-1,isPrivate,isReadonly);
 		}
