@@ -233,14 +233,6 @@ void Type::setFlag(uint16 flag){
 bool Type::isFlagSet(uint16 flag) const {
 	return (flags & flag) == flag;
 }
-bool Type::isValidTypeForVariable(){
-	if(type == NODE) return false;
-	return true;
-}
-bool Type::isValidTypeForArgument(){
-	if(type == NODE) return false;
-	return true;
-}
 bool Type::requiresDestructorCall() const {
 	switch(type){
 		case RECORD:  return true;
@@ -463,6 +455,33 @@ Node* Type::assignableFrom(Node* expression,Type* type) {
 	return nullptr;
 }
 
+/**
+* Type validity checks
+*/
+bool isValidType(Type* type){
+	if(type->type == Type::NODE) return false;
+	return true;
+}
+bool Type::isValidTypeForVariable(){
+	if(type == NODE) return false;
+	return true;
+}
+bool Type::isValidTypeForArgument(){
+	if(type == VOID) return false;
+	if(type == NODE) return false;
+	return true;
+}
+bool Type::isValidTypeForReturn(){
+	bool result = isValidType(this);
+	if(type == TYPE) result = false;
+	return result;
+}
+bool Type::isValidTypeForField(){
+	bool result = isValidType(this);
+	if(type == VOID)      result = false;
+	else if(type == TYPE) result = false;
+	return result;
+}
 
 /**
 * Anonymous records/variants

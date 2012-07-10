@@ -694,7 +694,8 @@ Node* Argument::resolve(Resolver* resolver){
 
 	if(_resolved){
 		setFlag(RESOLVED);
-		if(type.isResolved() && !type.type()->isValidTypeForArgument()) error(this,"An argument '%s' can't have a type %s",label(),type.type());
+		if(type.isResolved() && !type.type()->isValidTypeForArgument())
+			error(this,"The type '%s' can't be used as a parameter's type",type.type());
 		//TODO What about x Arithmetic = false..?
 		if(_defaultValue && type.isResolved()) _defaultValue = ::typecheck(_defaultValue,type.type());
 	}

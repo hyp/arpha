@@ -121,6 +121,8 @@ struct Type {
 	//self explanatory
 	bool isValidTypeForVariable();
 	bool isValidTypeForArgument();
+	bool isValidTypeForReturn();
+	bool isValidTypeForField();
 
 	//..
 	bool isResolved() const;
@@ -248,6 +250,7 @@ struct Record: public DeclaredType {
 	struct Field {
 		SymbolID name;
 		TypePatternUnresolvedExpression type;
+		Node* initializer;
 		bool isExtending; //a field aliased as this
 
 		Field(SymbolID id,Type* typ) : name(id),type(typ),isExtending(false) {}

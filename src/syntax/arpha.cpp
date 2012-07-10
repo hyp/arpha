@@ -618,7 +618,6 @@ void createFieldGettersSetters(Parser* parser,Type* thisType,SymbolID field,int 
 /// declarations ::= declaration (';'|Newlines) declarations | declaration
 /// type         ::= 'type' <name> '{' declarations '}'
 
-/// TODO field initializers
 /// TODO stuff
 struct TypeParser: IntrinsicPrefixMacro {
 	TypeParser(): IntrinsicPrefixMacro("type") {  }
@@ -646,12 +645,38 @@ struct TypeParser: IntrinsicPrefixMacro {
 		
 		TypePatternUnresolvedExpression type;
 		type.parse(parser,arpha::Precedence::Assignment);
-		for(;i<record->fields.size();i++) record->fields[i].type = type;
+		Node** initializers;
+		size_t numberOfInitializers = 0;
+		Node* initializerExpr;
 		if(parser->match("=")){
 			parser->ignoreNewlines();//NB: for consistency with other usages of '='
-			auto initializers = parser->parse();
-			//TODO integrate initializers
+			initializerExpr = parser->parse();
+			auto fieldsDeclared = record->fields.size() - i;
+
+			if(auto tuple = initializerExpr->asTupleExpression()){
+				if(fieldsDeclared == 1){
+					initializers=&initializerExpr;
+					numberOfInitializers = 1;
+				} else {
+					initializers = tuple->childrenPtr();
+					numberOfInitializers = tuple->size();
+				}
+			} else {
+				initializers=&initializerExpr;
+				numberOfInitializers = 1;
+			}
+			
+			if(numberOfInitializers != fieldsDeclared){
+				parser->syntaxError(format("Initializing assignment tuple size mismatch"));
+				numberOfInitializers = 0;
+			}
 		}
+		
+		for(auto j =i;j<record->fields.size();j++){
+			record->fields[j].type = type;
+			record->fields[j].initializer = numberOfInitializers==0? nullptr: initializers[j-i];
+		}
+
 	}
 
 	// body ::= '{' fields ';' fields ... '}'

@@ -240,7 +240,7 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 	if(type->hasConstSemantics()) stream<<"const ";
 	switch(type->type){
 		case Type::VOID: stream<<"void"; break;
-		case Type::TYPE: stream<<"type"; break;
+		case Type::TYPE: stream<<"Type"; break;
 		case Type::BOOL: stream<<"bool"; break;
 		case Type::RECORD:  stream<<static_cast<Record*>(type)->declaration->label(); break;
 		case Type::VARIANT: stream<<static_cast<Variant*>(type)->declaration->label(); break;

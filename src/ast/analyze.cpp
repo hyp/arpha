@@ -320,6 +320,9 @@ void analyze(Node* node,Function* owner){
 
 		owner->ctfeRegisterCount = (uint16)visitor.mappingOffset;
 		owner->inliningWeight = (uint16)std::min((int)(visitor.inliningWeight),(int)std::numeric_limits<uint16>::max());
+		if(!owner->returns()->isValidTypeForReturn()){
+			error(owner,"The type '%s' isn't allowed to be used as a function's return type",owner->returns());
+		}
 		if(owner->body.size() && !owner->returns()->isVoid()){
 			if(visitor.returnFlags == 0 && !owner->returns()->isVoid()){
 				error(owner,"The function %s is expected to return a value of type %s, but has no return statements inside!",owner->label(),owner->returns());
