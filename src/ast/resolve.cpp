@@ -724,13 +724,7 @@ static bool traverseExtenderHierarchy(Record* record,std::vector<Type*>& collect
 	return true;
 }
 
-Node* Record::resolve(Resolver* resolver){
-	_owner = resolver->currentScope();
-	/*if(_owner && _owner->functionOwner() && _owner->functionOwner()->isFlagSet(Function::TYPE_GENERATOR_FUNCTION)){
-		debug("Record %s is generated!",label());
-		setFlag(GENERATED);
-	}*/
-
+DeclaredType* Record::resolve(Resolver* resolver){
 	auto allResolved = true;
 	//Pretend unresolved types are resolved, so that expressions like type Foo { var x *Foo } can be evaluated
 	resolver->treatUnresolvedTypesAsResolved = true;
@@ -745,13 +739,12 @@ Node* Record::resolve(Resolver* resolver){
 	//analyze
 	std::vector<Type*> collection;
 	if(!traverseExtenderHierarchy(this,collection)){
-		error(this,"Faulty type extension hierarchy - The type %s features multiple path to type %s",label(),collection.back());
+		error(declaration,"Faulty type extension hierarchy - The type %s features multiple path to type %s",declaration->label(),collection.back());
 		return this;
 	}
-	//
-	setFlag(Node::RESOLVED);
+	setFlag(IS_RESOLVED);
 	calculateResolvedProperties();
-	debug("Successfully resolved record type %s - sizeof %s",label(),_size);
+	debug("Successfully resolved record type %s - sizeof %s",declaration->label(),_layout.size);
 	return this;
 }
 

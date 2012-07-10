@@ -635,13 +635,13 @@ struct TypeParser: IntrinsicPrefixMacro {
 		field.isExtending = isExtending;
 		//TODO private
 		record->add(field);
-		createFieldGettersSetters(parser,record->asType(),field.name,record->fields.size()-1,isPrivate,isReadonly);
+		createFieldGettersSetters(parser,record,field.name,record->fields.size()-1,isPrivate,isReadonly);
 		while(parser->match(",")) {
 			auto field = Record::Field(parser->expectName(),intrinsics::types::Void);
 			field.isExtending = isExtending;
 			//TODO private
 			record->add(field);
-			createFieldGettersSetters(parser,record->asType(),field.name,record->fields.size()-1,isPrivate,isReadonly);
+			createFieldGettersSetters(parser,record,field.name,record->fields.size()-1,isPrivate,isReadonly);
 		}
 		
 		TypePatternUnresolvedExpression type;
@@ -680,7 +680,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 					if(parser->match("(")){
 						if(flags & FIELDS_EXT) parser->syntaxError(format("Can't use property 'extends' on a function declaration!"));
 						else {
-							auto func = parseMethod(parser,record->asType(),name,MethodContextType);
+							auto func = parseMethod(parser,record,name,MethodContextType);
 							parser->mixinedExpressions.push_back(func);
 							return true;
 						}
@@ -699,13 +699,8 @@ struct TypeParser: IntrinsicPrefixMacro {
 
 	Node* parse(Parser* parser){
 		auto name      = parser->expectName();
-		auto location  = parser->previousLocation();
 
-		Function* typeGenerationFunction = nullptr;
-
-		if(parser->match("(")) typeGenerationFunction = parseTypeTemplateDeclaration(name,parser);
-
-		Node* result;
+		//if(parser->match("(")) typeGenerationFunction = parseTypeTemplateDeclaration(name,parser);
 		
 		/*if(parser->match("=")){
 			parser->syntaxError(format("NOT ALLOWED >_<!"));
@@ -715,11 +710,12 @@ struct TypeParser: IntrinsicPrefixMacro {
 #endif
 		parser->expect("{");
 		//record
-		auto record = new Record(name,location);
-		parser->introduceDefinition(record);
-		result = record;
+		auto record = new Record();
 		blockParser->body(parser,BodyParser(record));
 
+		auto decl = new TypeDeclaration(record,name);
+		parser->introduceDefinition(decl);
+		return decl;
 		/*if(typeGenerationFunction){
 			record->setFlag(Record::GENERATED);
 			record->_owner = typeGenerationFunction->body.scope;
@@ -728,7 +724,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 			parser->introduceDefinition(typeGenerationFunction);
 			return typeGenerationFunction;
 		}
-		else*/ return result;
+		else*/
 	}
 };
 

@@ -185,17 +185,23 @@ struct NodeToString: NodeVisitor {
 	void newline(){
 		stream<<std::endl<<"\t";
 	}
-	Node* visit(Record* record){
-		stream<<"record "<<record->label()<<"{";
-		newline();
-		for(auto i = record->fields.begin();i!=record->fields.end();i++) stream<<"field "<<(*i).name<<" as "<<(*i).type;
-		return record;
-	}
 
+	//TODO variant
 	Node* visit(TypeDeclaration* decl){
-		stream<<"DECL "<<decl->type();
+		auto type = decl->type();
+		if(auto record = type->asRecord()){
+			stream<<"type "<<decl->label()<<" {";
+			for(auto i = record->fields.begin();i!=record->fields.end();i++){
+				newline();
+				stream<<"var "<<(*i).name<<" "<<(*i).type;
+			}
+			newline();
+			stream<<"}";
+		}
+		else {
+			stream<<"variant "<<decl->label();
+		}
 		//newline();
-		//for(auto i = record->fields.begin();i!=record->fields.end();i++) stream<<"field "<<(*i).name<<" as "<<(*i).type;
 		return decl;
 	}
 	Node* visit(Function* node){
@@ -236,7 +242,8 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 		case Type::VOID: stream<<"void"; break;
 		case Type::TYPE: stream<<"type"; break;
 		case Type::BOOL: stream<<"bool"; break;
-		case Type::RECORD: stream<<type->record; break;
+		case Type::RECORD:  stream<<static_cast<Record*>(type)->declaration->label(); break;
+		case Type::VARIANT: stream<<static_cast<Variant*>(type)->declaration->label(); break;
 		case Type::INTEGER: stream<<type->integer->id; break;
 		case Type::POINTER: 
 			stream<<"Pointer("<<type->next()<<')'; break;

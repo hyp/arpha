@@ -52,7 +52,6 @@ public:
 	//introducing definitions
 	void introduceDefinition(Variable* variableDefinition);
 	void introduceDefinition(Function* functionDefinition);
-	void introduceDefinition(Record* recordDefinition);
 	void introduceDefinition(TypeDeclaration* typeDeclaration);
 	void introduceDefinition(PrefixMacro* macroDefinition);
 	void introduceDefinition(InfixMacro* macroDefinition);

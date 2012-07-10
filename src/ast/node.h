@@ -79,7 +79,6 @@ struct Argument;
 	X(PrefixMacro) \
 	X(Variable) \
 	X(Function) \
-	X(Record)   \
 	X(TypeDeclaration)
 
 //Forward declaration of node types
@@ -104,7 +103,6 @@ struct DuplicationModifiers {
 	void duplicateDefinition(Argument* original,Argument* duplicate);
 	void duplicateDefinition(Variable* original,Variable* duplicate);
 	void duplicateDefinition(Function* original,Function* duplicate);
-	void duplicateDefinition(Record* original,Record* duplicate);
 	void duplicateDefinition(TypeDeclaration* original,TypeDeclaration* duplicate);
 	void duplicateDefinition(PrefixMacro* original,PrefixMacro* duplicate);
 	void duplicateDefinition(InfixMacro* original,InfixMacro* duplicate);

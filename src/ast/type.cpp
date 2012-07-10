@@ -210,9 +210,6 @@ Type::Type(int kind) : type(kind),flags(0) {
 Type::Type(IntegerType* integer) : type(INTEGER),flags(0) {
 	this->integer = integer;
 }
-Type::Type(Record* record) : type(RECORD),flags(0) {
-	this->record = record;
-}
 Type::Type(int kind,Type* next) : type(kind),flags(0) {
 	assert(kind == POINTER || kind == POINTER_BOUNDED);
 	this->argument = next;
@@ -252,7 +249,7 @@ bool Type::requiresDestructorCall() const {
 }
 bool Type::isResolved() const {
 	switch(type){
-		case RECORD:  return record->isResolved();
+		case RECORD:  return isFlagSet(IS_RESOLVED);
 		case VARIANT: return isFlagSet(IS_RESOLVED);
 		case POINTER:
 		case POINTER_BOUNDED:
@@ -268,13 +265,11 @@ bool Type::isResolved() const {
 //Partially resolved means sizeof(T) would succeed
 bool Type::isPartiallyResolved() const {
 	switch(type){
-	case RECORD:  return record->isResolved();
+	case RECORD:  return isFlagSet(IS_RESOLVED);
+	case VARIANT: return isFlagSet(IS_RESOLVED);
 	default:
 		return true;
 	}
-}
-bool Type::matchRecord(Record* record) const {
-	return type == RECORD && this->record == record;
 }
 
 //TODO non references
@@ -282,7 +277,7 @@ size_t Type::size() const {
 	switch(type){
 		case VOID: case TYPE: return 0;
 		case BOOL: return 1;
-		case RECORD: return record->size();
+		case RECORD:  return static_cast<const Record*> (this)->_layout.size;
 		case VARIANT: return static_cast<const Variant*>(this)->_layout.size;
 		case INTEGER: return integer->size();
 		case POINTER: 
@@ -303,6 +298,7 @@ size_t Type::size() const {
 //TODO
 uint32 Type::alignment() const {
 	switch(type){
+	case RECORD:  return static_cast<const Record*> (this)->_layout.alignment;
 	case VARIANT: return static_cast<const Variant*>(this)->_layout.alignment;
 	case ANONYMOUS_RECORD:
 	case ANONYMOUS_VARIANT:
@@ -313,9 +309,10 @@ uint32 Type::alignment() const {
 bool Type::isSame(Type* other){
 	if(this->type != other->type) return false;
 	switch(type){
-		case VOID: case TYPE: case BOOL: return type == other->type;
-		case RECORD: return record == other->record;
-		case VARIANT: return this == other;
+		case VOID: case TYPE: case BOOL: return true;
+		case RECORD :
+		case VARIANT:
+			return this == other;
 		case INTEGER: return integer == other->integer;
 		case POINTER: return argument->isSame(other->argument);
 		case FUNCTION: return argument->isSame(other->argument) && returns->isSame(other->returns);
@@ -336,7 +333,7 @@ bool Type::wasGenerated() const {
 	switch(type){
 	case POINTER: return true;
 	case FUNCTION: return true;
-	case RECORD: return record->wasGenerated();
+	//case RECORD: return record->wasGenerated();
 	case POINTER_BOUNDED: return true;
 	case POINTER_BOUNDED_CONSTANT: return true;
 	case STATIC_ARRAY: return true;
@@ -347,7 +344,7 @@ bool Type::wasGeneratedBy(Function* function) const {
 	switch(type){
 	case POINTER: return function == intrinsics::types::PointerTypeGenerator;
 	case FUNCTION: return function == intrinsics::types::FunctionTypeGenerator;
-	case RECORD: return record->wasGeneratedBy(function);
+	//case RECORD: return record->wasGeneratedBy(function);
 	case STATIC_ARRAY: return function == intrinsics::types::StaticArrayTypeGenerator;
 	case POINTER_BOUNDED: return function == intrinsics::types::BoundedPointerTypeGenerator;
 	case POINTER_BOUNDED_CONSTANT: return function == intrinsics::types::BoundedConstantLengthPointerTypeGenerator;
@@ -361,7 +358,7 @@ Node* Type::generatedArgument(size_t i) const {
 	case POINTER_BOUNDED:
 		return new TypeReference(argument);
 	case FUNCTION: return new TypeReference(i == 0 ? argument : returns);
-	case RECORD: return record->generatedArgument(i);
+	//case RECORD: return record->generatedArgument(i);
 	case STATIC_ARRAY: 
 	case POINTER_BOUNDED_CONSTANT:
 		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)N);
@@ -387,9 +384,10 @@ int   Type::canAssignFrom(Node* expression,Type* type){
 		}
 		if(type->integer->isSubset(this->integer)) return RECORD_SUBTYPE;
 	}else if(type->type == RECORD){
+		auto record = static_cast<Record*>(type);
 		//Extenders fields
-		for(size_t i = 0;i < type->record->fields.size();i++){
-			Record::Field* field = &type->record->fields[i];
+		for(size_t i = 0;i < record->fields.size();i++){
+			Record::Field* field = &record->fields[i];
 			if(field->isExtending && field->type.isResolved()){
 				auto dummyFieldAcess = new FieldAccessExpression(expression,i);
 				if(this->canAssignFrom(dummyFieldAcess,field->type.type()) != -1){
@@ -432,8 +430,9 @@ Node* Type::assignableFrom(Node* expression,Type* type) {
 		if(type->integer->isSubset(this->integer)) return expression;
 	}else if(type->type == RECORD){
 		//Extenders fields
-		for(size_t i = 0;i < type->record->fields.size();i++){
-			Record::Field* field = &type->record->fields[i];
+		auto record = static_cast<Record*>(type);
+		for(size_t i = 0;i < record->fields.size();i++){
+			Record::Field* field = &record->fields[i];
 			if(field->isExtending && field->type.isResolved()){
 				auto dummyFieldAcess = new FieldAccessExpression(expression,i);
 				if(auto assigns = this->assignableFrom(dummyFieldAcess,field->type.type())) return assigns;
@@ -548,30 +547,12 @@ AnonymousAggregate* AnonymousAggregate::create(Field* fields,size_t fieldsCount,
 }
 
 /**
-* Aggregate type
+* Record(class like) type
 */
-AggregateType::AggregateType(int typeKind,SymbolID name,Location& location) : PrefixDefinition(name,location),_type(typeKind) {
-	_size = 0;
+Record::Record() : DeclaredType(Type::RECORD) {
 }
-bool AggregateType::wasGeneratedBy(Function* func) const {
-	return func == _owner->functionOwner()->generatedFunctionParent;
-}
-Node* AggregateType::generatedArgument(size_t i) const {
-	return _owner->functionOwner()->expandedArguments[i];
-}
-Node*  AggregateType::createReference(){
-	return new TypeReference(&_type);
-}
-size_t AggregateType::size(){
-	assert(isResolved());
-	return _size;
-}
-
-/**
-* Record type
-*/
-Record::Record(SymbolID name,Location& location) : AggregateType(Type::RECORD,name,location) {
-	_type.record = this;
+Record* Type::asRecord(){
+	return type == RECORD? static_cast<Record*>(this) : nullptr;
 }
 int Record::lookupField(const SymbolID fieldName) const {
 	for(size_t i = 0;i<fields.size();i++){
@@ -590,32 +571,25 @@ Record::Field Record::Field::duplicate(DuplicationModifiers* mods) const{
 	result.isExtending = isExtending;
 	return result;
 }
-Node* Record::duplicate(DuplicationModifiers* mods) const {
-	auto rec = new Record(label(),location());
-	mods->duplicateDefinition(const_cast<Record*>(this),rec);
-	rec->_owner = mods->target;
-	for(auto i = fields.begin();i!=fields.end();i++){
-		rec->fields.push_back((*i).duplicate(mods));
-	}
-	rec->_size = _size;
-	return copyProperties(rec);
+DeclaredType* Record::duplicate(DuplicationModifiers* mods) const {
+	auto rec= new Record();
+	rec->flags = flags;
+	rec->fields.reserve(fields.size());
+	for(auto i = fields.begin();i!=fields.end();++i) rec->fields.push_back((*i).duplicate(mods));
+	rec->_layout = _layout;
+	return rec;
 }
 
-std::ostream& operator<< (std::ostream& stream,Record* type){
-	stream<<type->label();
-	return stream;
-}
-
-
+/**
+* Trait(concept like) type
+*/
 Trait::Trait() : DeclaredType(Type::VARIANT) {
 }
-
 DeclaredType* Trait::duplicate(DuplicationModifiers* mods) const {
 	auto dup = new Trait();
 	dup->flags = flags;
 	return dup;
 }
-
 
 /**
 * Variant type
@@ -632,9 +606,6 @@ void Variant::add(const Field& field) {
 	assert(!isResolved());
 	fields.push_back(field);
 }
-size_t Variant::size(){
-	return _layout.size;
-}
 DeclaredType* Variant::duplicate(DuplicationModifiers* mods) const{
 	auto dup = new Variant();
 	dup->flags = flags;
@@ -642,6 +613,9 @@ DeclaredType* Variant::duplicate(DuplicationModifiers* mods) const{
 	return dup;
 }
 
+/**
+* Type declaration node
+*/
 TypeDeclaration::TypeDeclaration(DeclaredType* type,SymbolID name) : PrefixDefinition(name,Location()), _type(type),optionalStaticBlock(nullptr) { 
 	_type->declaration = this; 
 }
@@ -660,7 +634,7 @@ Node*  TypeDeclaration::duplicate(DuplicationModifiers* mods) const {
 }
 
 /**
-* Layout calculations foro aggregate type
+* Layout calculations for aggregate types
 * TODO possible better alignment for tuple of ints/floats to be sse compatible
 * TODO variant tag sizes
 */
@@ -695,8 +669,8 @@ void Variant::calculateResolvedProperties(){
 }
 void Record::calculateResolvedProperties(){
 	//sizeof
-	_size = 0;
+	_layout.size = 0;
 	for(auto i = fields.begin();i!=fields.end();++i){
-		_size += (*i).type.type()->size();
+		_layout.size += (*i).type.type()->size();
 	}
 }

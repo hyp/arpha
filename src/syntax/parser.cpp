@@ -169,9 +169,6 @@ void Parser::introduceDefinition(Function* functionDefinition){
 	}
 	else currentScope()->defineFunction(functionDefinition);
 }
-void Parser::introduceDefinition(Record* recordDefinition){
-	currentScope()->define(recordDefinition);
-}
 void Parser::introduceDefinition(TypeDeclaration* typeDeclaration){
 	currentScope()->define(typeDeclaration);
 }
@@ -201,9 +198,6 @@ Node* Variable::parse(Parser* parser){
 	return new VariableReference(this);
 }
 
-Node* AggregateType::parse(Parser* parser){
-	return new TypeReference(&_type);
-}
 Node* TypeDeclaration::parse(Parser* parser){
 	return new TypeReference(_type);
 }

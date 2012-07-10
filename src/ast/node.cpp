@@ -24,10 +24,6 @@ void DuplicationModifiers::duplicateDefinition(Function* original,Function* dupl
 	target->defineFunction(duplicate);
 	redirectors[reinterpret_cast<void*>(original)] = std::make_pair(reinterpret_cast<void*>(duplicate),false);
 }
-void DuplicationModifiers::duplicateDefinition(Record* original,Record* duplicate){
-	target->define(duplicate);
-	redirectors[reinterpret_cast<void*>(original)] = std::make_pair(reinterpret_cast<void*>(duplicate),false);
-}
 void DuplicationModifiers::duplicateDefinition(TypeDeclaration* original,TypeDeclaration* duplicate){
 	target->define(duplicate);
 	redirectors[reinterpret_cast<void*>(original)] = std::make_pair(reinterpret_cast<void*>(duplicate),false);
@@ -315,7 +311,7 @@ FieldAccessExpression::FieldAccessExpression(Node* object,int field){
 Type*    FieldAccessExpression::fieldsType() const{
 	auto type = object->returnType();
 	if(type->isPointer()) type = type->next();
-	if(type->isRecord()) return type->asRecord()->fields[field].type.type();
+	if(auto record = type->asRecord()) return record->fields[field].type.type();
 	else if(auto rec = type->asAnonymousRecord()) return rec->types[field];
 	assert(false);
 	return nullptr;
@@ -323,7 +319,7 @@ Type*    FieldAccessExpression::fieldsType() const{
 SymbolID FieldAccessExpression::fieldsName() const{
 	auto type = object->returnType();
 	if(type->isPointer()) type = type->next();
-	if(type->isRecord()) return type->asRecord()->fields[field].name;
+	if(auto record = type->asRecord()) return record->fields[field].name;
 	else if(auto rec = type->asAnonymousRecord()) return rec->fields[field];
 	assert(false);
 	return nullptr;
