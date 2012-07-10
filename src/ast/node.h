@@ -162,6 +162,7 @@ std::ostream& operator<< (std::ostream& stream,Node* node);
 * A definition node provides a mapping from a symbol in the source file into an custom expression for both parser and resolver.
 */
 struct DefinitionNode : Node { 
+	DefinitionNode() : generatorData(nullptr){}
 
 	uint8 visibilityMode() const;
 	bool  isPublic() const;

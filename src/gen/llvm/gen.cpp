@@ -92,6 +92,12 @@ struct LLVMgenerator: NodeVisitor {
 	inline static llvm::Value* unmap(DefinitionNode* def){
 		return reinterpret_cast<llvm::Value*>(def->generatorData);
 	}
+	inline static void map(DeclaredType* type,llvm::Type* value){
+		type->generatorData = value;
+	}
+	inline static llvm::Type* unmap(DeclaredType* type){
+		return reinterpret_cast<llvm::Type*>(type->generatorData);
+	}
 	inline void emitLoad(llvm::Value* value){
 		emmittedValue = builder.CreateLoad(value);
 	}
@@ -118,6 +124,7 @@ struct LLVMgenerator: NodeVisitor {
 
 	Node* visit(Variable* var);
 	Node* visit(Function* func);
+	Node* visit(TypeDeclaration* node);
 };
 
 
@@ -151,26 +158,41 @@ llvm::Type* generateAnonymousRecord(LLVMgenerator* generator,AnonymousAggregate*
 	}
 	return llvm::StructType::get(generator->context,fields,false);
 }
-/*TODO
+
 llvm::Type* generateRecord(LLVMgenerator* generator,Record* record,const char* mangledName){
-	std::vector<llvm::Type*> fields(type->numberOfFields);
-	for(size_t i = 0;i<type->numberOfFields;i++){
-		fields[i] = generator->genType(type->types[i]);
+	auto numberOfFields = record->fields.size();
+	std::vector<llvm::Type*> fields(numberOfFields);
+	for(size_t i = 0;i<numberOfFields;i++){
+		fields[i] = generator->genType(record->fields[i].type.type());
 	}
-	return llvm::StructType::create(generator->context,fields,mangledName,false);	
-}*/
+	auto t = llvm::StructType::create(generator->context,fields,mangledName,false);	
+	generator->map(record,t);
+	return t;
+}
+
 llvm::Type* generatePointerType(LLVMgenerator* generator,Type* next){
 	return llvm::PointerType::get(generator->genType(next),0);
 }
 
-
+//TODO mangling
+Node* LLVMgenerator::visit(TypeDeclaration* node){
+	auto type = node->type();
+	if(auto record= type->asRecord()){
+		generateRecord(this,record,node->label().ptr());
+	}
+	return node;
+}
 
 llvm::Type* LLVMgenerator::genType(Type* type){
 	switch(type->type){
 	case Type::VOID: return llvm::Type::getVoidTy(context);
 	case Type::TYPE: assert(false); break;
 	case Type::BOOL: return llvm::Type::getInt8Ty(context);
+	case Type::RECORD:
+		return unmap(static_cast<Record*>(type));
 	case Type::POINTER:
+	case Type::POINTER_BOUNDED:
+	case Type::POINTER_BOUNDED_CONSTANT:
 		return generatePointerType(this,type->next());
 	case Type::NODE: assert(false); break;
 	case Type::ANONYMOUS_RECORD:
@@ -218,17 +240,31 @@ Node* LLVMgenerator::visit(UnaryOperation* node){
 		instr =builder.CreateNeg(value);
 		break;
 	case UnaryOperation::BOUNDED_POINTER_LENGTH:
-		//TODO
+		//TODO 2nd field
 		break;
 	}
 	emit(instr);
 	return node;
 }
 
+//ptr + 0
+llvm::Value* genDereference(LLVMgenerator* generator,PointerOperation* node){
+	auto ptr = generator->generateExpression(node->expression);
+	auto idx = llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],0,false);
+	return generator->builder.CreateGEP(ptr,idx);
+}
+//ptr + i
+llvm::Value* genPointerAddressing(LLVMgenerator* generator,Node* object,Node* index){
+	auto ptr = generator->generateExpression(object);
+	auto idx = generator->generateExpression(index);
+	return generator->builder.CreateGEP(ptr,idx);
+}
+
 Node* LLVMgenerator::visit(BinaryOperation* node){
 	llvm::Value* instr;
 	if(node->kind() == BinaryOperation::BOUNDED_POINTER_ELEMENT){
-		//TODO
+		emitLoad(genPointerAddressing(this,node->a,node->b));//TODO first field from bp
+		return node;
 	}
 	bool isFloatOp = false;
 	auto lhs = generateExpression(node->a);
@@ -305,12 +341,6 @@ Node* LLVMgenerator::visit(CallExpression* node){
 	}
 	emit(instr);
 	return node;
-}
-
-llvm::Value* genDereference(LLVMgenerator* generator,PointerOperation* node){
-	auto ptr = generator->generateExpression(node->expression);
-	auto idx = llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],0,false);
-	return generator->builder.CreateGEP(ptr,idx);
 }
 
 Node* LLVMgenerator::visit(PointerOperation* node){
@@ -478,6 +508,7 @@ llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention c
 }
 
 Node* LLVMgenerator::visit(Function* function){
+	if(function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro()) return function;
 	//FFI, namemangling, calling convention and extern
 	bool ffiC     = function->label() == SymbolID("putchar") ||  function->label() == SymbolID("main");
 	bool isExtern = function->label() == SymbolID("putchar");//ffiC;

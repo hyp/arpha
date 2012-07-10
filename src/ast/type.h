@@ -201,13 +201,14 @@ public:
 };
 
 struct DeclaredType: public Type {
-	DeclaredType(int kind) : Type(kind) {}
+	DeclaredType(int kind) : Type(kind),generatorData(nullptr) {}
 
 	virtual DeclaredType* duplicate(DuplicationModifiers* mods) const = 0;
 	virtual DeclaredType* resolve(Resolver* resolver) = 0;
 	inline  bool  isResolved() const { return isFlagSet(IS_RESOLVED); }
 
 	TypeDeclaration* declaration;
+	void* generatorData;
 };
 
 /**
