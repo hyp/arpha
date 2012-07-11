@@ -20,7 +20,7 @@ describe "An 'alignof' expression" {
 		alignof(int32) should be 4
 	}
 	it "should return the alignment(in bytes) of the expression's type when it is being given any expression" {
-		alignof(int64) should be sizeof(int64)
+		alignof(true) should be alignof(bool)
 	}
 }
 
