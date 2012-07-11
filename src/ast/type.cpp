@@ -205,13 +205,13 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 * The type
 */
 Type::Type(int kind) : type(kind),flags(0) {
-	assert(kind == VOID || kind == TYPE || kind == BOOL || kind == RECORD || kind == VARIANT || kind == ANONYMOUS_RECORD || kind== ANONYMOUS_VARIANT);
+	assert(kind == VOID || kind == TYPE || kind == BOOL || kind == RECORD || kind == VARIANT || kind == ANONYMOUS_RECORD || kind== ANONYMOUS_VARIANT || kind == LITERAL_STRING);
 }
 Type::Type(IntegerType* integer) : type(INTEGER),flags(0) {
 	this->integer = integer;
 }
 Type::Type(int kind,Type* next) : type(kind),flags(0) {
-	assert(kind == POINTER || kind == POINTER_BOUNDED);
+	assert(kind == POINTER || kind == POINTER_BOUNDED || kind == LINEAR_SEQUENCE);
 	this->argument = next;
 }
 Type::Type(Type* argument,Type* returns) : type(FUNCTION),flags(0) {
@@ -283,6 +283,8 @@ size_t Type::size() const {
 		case ANONYMOUS_RECORD:
 		case ANONYMOUS_VARIANT:
 			return static_cast<const AnonymousAggregate*>(this)->_layout.size;
+		case LINEAR_SEQUENCE:
+			return typeSystemState.pointerSizeof*2;
 		default:
 			throw std::runtime_error("TypeExpression type invariant failed");
 	}
@@ -316,6 +318,8 @@ bool Type::isSame(Type* other){
 		case ANONYMOUS_VARIANT:
 			return static_cast<AnonymousAggregate*>(this)->types  == static_cast<AnonymousAggregate*>(other)->types &&
 				   static_cast<AnonymousAggregate*>(this)->fields == static_cast<AnonymousAggregate*>(other)->fields;
+		case LINEAR_SEQUENCE: return argument->isSame(other->argument);
+		case LITERAL_STRING:  return true;
 		default:
 			throw std::runtime_error("TypeExpression type invariant failed");	
 			return false;
@@ -329,6 +333,7 @@ bool Type::wasGenerated() const {
 	case POINTER_BOUNDED: return true;
 	case POINTER_BOUNDED_CONSTANT: return true;
 	case STATIC_ARRAY: return true;
+	case LINEAR_SEQUENCE: return true;
 	default: return false;
 	}
 }
@@ -348,6 +353,7 @@ Node* Type::generatedArgument(size_t i) const {
 	switch(type){
 	case POINTER:
 	case POINTER_BOUNDED:
+	case LINEAR_SEQUENCE:
 		return new TypeReference(argument);
 	case FUNCTION: return new TypeReference(i == 0 ? argument : returns);
 	//case RECORD: return record->generatedArgument(i);

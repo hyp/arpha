@@ -15,6 +15,7 @@ struct Resolver {
 private:
 	CompilationUnit* _compilationUnit;
 	Scope* _currentScope;
+	Node* _currentParent;
 	bool reportUnevaluated;
 	size_t unresolvedExpressions;
 public:
@@ -46,8 +47,11 @@ public:
 	//Function-like macro
 	Node* executeAndMixinMacro(Function* function,Node* arg);
 
-	inline Scope* currentScope() const { return _currentScope; }
-	void currentScope(Scope* scope){ _currentScope = scope; }
+	inline Scope* currentScope() const        { return _currentScope;  }
+	inline void currentScope(Scope* scope)    { _currentScope = scope; }
+
+	inline void currentParentNode(Node* node) { _currentParent = node; }
+	inline Node* currentParentNode() const    { return _currentParent; }
 
 	inline void markResolved(Node* node){ node->setFlag(Node::RESOLVED); }
 	void markUnresolved(Node* node);

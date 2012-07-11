@@ -38,6 +38,13 @@ void System::print(const std::string& message){
 		std::cout<<message;
 	#endif
 }
+void System::print(const char* message){
+	#ifdef  _WIN32
+		wprintf(L"%S", message); 
+	#else
+		std::cout<<message;
+	#endif
+}
 void System::debugPrint(const std::string& message){
 	#ifdef  _WIN32
 		auto cstr = message.c_str();

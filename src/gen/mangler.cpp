@@ -1,0 +1,111 @@
+#include "../base/base.h"
+#include "../base/symbol.h"
+#include "../base/system.h"
+#include "../ast/node.h"
+#include "../ast/scope.h"
+#include "../ast/declarations.h"
+#include "../data/data.h"
+#include "mangler.h"
+
+using namespace gen;
+
+//The number to go before _495849
+int blockComponentLength(uintptr_t n){
+	int count = 2;
+	for(; n > 9;count++) n/=10;
+	return count;
+}
+
+void Mangler::Element::mangleModule(BlockExpression* root){
+	stream<<"A3src";
+}
+
+void Mangler::Element::mangleComponents(Node* component){
+	if(auto block = component->asBlockExpression()){ 
+		if(block->parentNode == nullptr) mangleModule(block);
+		else {
+			mangleComponents(block->parentNode);
+			if(!block->label().isNull()) stream<<block->label().length()<<block->label();
+			else stream<<blockComponentLength((uintptr_t)block)<<'_'<<((uintptr_t)block);
+		}
+	} else assert(false);
+}
+
+void mangleNode(std::stringstream& stream,Node* node){
+	auto label = node->label();
+	if(!label.isNull()) stream<<label.length()<<label;
+	else stream<<blockComponentLength((uintptr_t)node)<<'_'<<((uintptr_t)node);
+}
+
+void Mangler::Element::mangle(Type* type){
+	switch(type->type){
+	case Type::VOID:     stream<<'n'; break;
+	case Type::BOOL:     stream<<'b'; break;
+	case Type::INTEGER:  stream<<'i'; break;//TODO
+	case Type::RECORD:   mangle(static_cast<Record*>(type)->declaration); break;
+	case Type::VARIANT:  mangle(static_cast<Variant*>(type)->declaration); break;
+	case Type::POINTER:  stream<<'P'; mangle(type->next()); break;
+	case Type::FUNCTION: stream<<'C'; break;
+	case Type::ANONYMOUS_RECORD:
+	case Type::ANONYMOUS_VARIANT:
+		{
+		auto rec = static_cast<AnonymousAggregate*>(type);
+		stream<<(type->type == Type::ANONYMOUS_RECORD?'T':'U')<<rec->numberOfFields<<'_';
+		for(size_t i = 0;i < rec->numberOfFields;i++){
+			if(rec->fields && !rec->fields[i].isNull())
+				stream<<rec->fields[i].length()<<rec->fields[i];
+			else stream<<'0';
+			mangle(rec->types[i]);
+		}
+	}
+	break;
+	case Type::LINEAR_SEQUENCE: stream<<'S'; mangle(type->next()); break;
+	default:
+		assert(false);
+	}
+}
+
+char mangleCC(uint8 cc){
+	switch(cc){
+	case data::ast::Function::CCALL:   return 'C';
+	case data::ast::Function::STDCALL: return 'S';
+	}
+}
+
+void Mangler::Element::mangle(Function* function){
+	mangleComponents(function->parentNode);
+	stream<<'F';
+	//properties
+	bool streamedProperties = false;
+	if(function->callingConvention() != data::ast::Function::ARPHA){
+		if(!streamedProperties){ stream<<'_'; streamedProperties = true; }
+		stream<<'c'<<mangleCC(function->callingConvention());
+	}
+
+	mangleNode(stream,function);
+	stream<<function->arguments.size()<<'_';
+	for(auto i = function->arguments.begin();i!=function->arguments.end();i++){
+		stream<<(*i)->label().length()<<(*i)->label().ptr();
+		mangle((*i)->type.type());
+	}
+	mangle(function->returns());
+}
+
+void Mangler::Element::mangle(Variable* variable){
+	mangleComponents(variable->parentNode);
+	stream<<'G';
+	mangleNode(stream,variable);
+}
+
+char typePrefix(Type* type){
+	switch(type->type){
+	case Type::RECORD:   return 'R';
+	case Type::VARIANT:  return 'V';
+	}
+}
+
+void Mangler::Element::mangle(TypeDeclaration* type){
+	mangleComponents(type->parentNode);
+	stream<<typePrefix(type->type());
+	mangleNode(stream,type);
+}

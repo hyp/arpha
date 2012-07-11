@@ -1,15 +1,15 @@
 #include "../base/base.h"
-#include "stdio.h"
+#include "../base/system.h"
 #include "gen.h"
 
 using namespace gen;
 
 void AbstractBackend::onError     (std::string& str){
-	printf(str.c_str());//TODO fix
+	System::print(str);
 }
 void AbstractBackend::onFatalError(std::string& str){
-	onFatalError(str.c_str());
+	System::print(str);
 }
 void AbstractBackend::onFatalError(const char*  str){
-	printf(str);
+	System::print(str);
 }

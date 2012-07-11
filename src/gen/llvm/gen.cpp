@@ -29,6 +29,7 @@
 #include "../../ast/visitor.h"
 
 #include "gen.h"
+#include "../mangler.h"
 
 /**
 * Globals
@@ -58,8 +59,7 @@ struct LLVMgenerator: NodeVisitor {
 	llvm::LLVMContext& context;
 	llvm::Module*      module;
 	llvm::Value*       emmittedValue;
-	std::string        mangler;
-	uint32 anonCounter;
+	gen::Mangler*      moduleMangler;
 	Function* functionOwner;
 	std::vector<Node*> moduleInitializerBody;
 
@@ -126,6 +126,10 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(Function* func);
 	Node* visit(TypeDeclaration* node);
 
+	llvm::GlobalVariable* getGlobalVariableDeclaration(Variable* variable);
+	inline llvm::Value*   getVariable(Variable* variable) {
+		return variable->isLocal()? unmap(variable): getGlobalVariableDeclaration(variable);
+	}
 	llvm::Function* getFunctionDeclaration(Function* function);
 };
 
@@ -144,9 +148,6 @@ LLVMgenerator::LLVMgenerator(
 	functionOwner = nullptr;
 	loopChain = nullptr;
 	ifFallthrough = false;
-	anonCounter = 0;
-
-	mangler = "_ARP3src";
 
 	//create a module initializer
 
@@ -161,13 +162,19 @@ llvm::Type* generateAnonymousRecord(LLVMgenerator* generator,AnonymousAggregate*
 	return llvm::StructType::get(generator->context,fields,false);
 }
 
-llvm::Type* generateRecord(LLVMgenerator* generator,Record* record,const char* mangledName){
+llvm::Type* getRecordDeclaration(LLVMgenerator* generator,Record* record){
+	if(record->generatorData) return generator->unmap(record);
+
+	//mangle
+	gen::Mangler::Element mangler(generator->moduleMangler);
+	mangler.mangle(record->declaration);
+
 	auto numberOfFields = record->fields.size();
 	std::vector<llvm::Type*> fields(numberOfFields);
 	for(size_t i = 0;i<numberOfFields;i++){
 		fields[i] = generator->genType(record->fields[i].type.type());
 	}
-	auto t = llvm::StructType::create(generator->context,fields,mangledName,false);	
+	auto t = llvm::StructType::create(generator->context,fields,mangler.stream.str(),false);	
 	generator->map(record,t);
 	return t;
 }
@@ -176,12 +183,13 @@ llvm::Type* generatePointerType(LLVMgenerator* generator,Type* next){
 	return llvm::PointerType::get(generator->genType(next),0);
 }
 
-//TODO mangling
+// { T* ptr,natural length }
+llvm::Type* generateLinearSequence(LLVMgenerator* generator,Type* next){
+	llvm::Type* fields[2] = { generatePointerType(generator,next),coreTypes[GEN_TYPE_SIZE_T] };
+	return llvm::StructType::get(generator->context,fields,true);//NB: packed
+}
+
 Node* LLVMgenerator::visit(TypeDeclaration* node){
-	auto type = node->type();
-	if(auto record= type->asRecord()){
-		generateRecord(this,record,node->label().ptr());
-	}
 	return node;
 }
 
@@ -191,7 +199,7 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 	case Type::TYPE: assert(false); break;
 	case Type::BOOL: return llvm::Type::getInt8Ty(context);
 	case Type::RECORD:
-		return unmap(static_cast<Record*>(type));
+		return getRecordDeclaration(this,static_cast<Record*>(type));
 	case Type::POINTER:
 	case Type::POINTER_BOUNDED:
 	case Type::POINTER_BOUNDED_CONSTANT:
@@ -199,6 +207,10 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 	case Type::NODE: assert(false); break;
 	case Type::ANONYMOUS_RECORD:
 		return generateAnonymousRecord(this,static_cast<AnonymousAggregate*>(type));
+	case Type::LINEAR_SEQUENCE:
+		return generateLinearSequence(this,type->next());
+	case Type::LITERAL_STRING:
+		assert(false); break;
 	}
 	return coreTypes[0];
 }
@@ -226,7 +238,7 @@ Node* LLVMgenerator::visit(BoolExpression* node){
 }
 
 Node* LLVMgenerator::visit(VariableReference* node){
-	emitLoad(unmap(node->variable));
+	emitLoad(getVariable(node->variable));
 	return node;
 }
 
@@ -304,7 +316,7 @@ Node* LLVMgenerator::visit(AssignmentExpression* node){
 	auto val = generateExpression(node->value);
 	assert(val);
 	if(auto var = node->object->asVariableReference()){
-		emitStore(unmap(var->variable),val);
+		emitStore(getVariable(var->variable),val);
 	} else if(auto field = node->object->asFieldAccessExpression()){
 		if(auto vref = field->object->asVariableReference()){
 			auto variable = unmap(vref->variable);
@@ -480,37 +492,32 @@ void  LLVMgenerator::gen(BlockExpression* node){
 		generateExpression(*i);
 	}
 }
-int   numberStringLength(uint32 n){
-	return (n/10) + 4;//1+ "_AN".length
-}
-Node* LLVMgenerator::visit(BlockExpression* node){
-	size_t ml = mangler.length();
-	std::stringstream ss;
-	if(node->label().isNull()){
-		ss<<numberStringLength(anonCounter)<<"_AN"<<anonCounter;
-		anonCounter++;
-	}
-	else ss<<node->label().length()<<node->label().ptr();		
-	mangler+=ss.str();
 
+Node* LLVMgenerator::visit(BlockExpression* node){
 	gen(node);
-	mangler.erase(mangler.begin()+ml,mangler.end());
 	return node;
 }
 
+llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* variable){
+	if(variable->generatorData) return static_cast<llvm::GlobalVariable*>(unmap(variable));
+
+	// mangle
+	gen::Mangler::Element mangler(moduleMangler);
+	mangler.mangle(variable);
+
+	auto threadLocal = true;
+	auto cnst = false;
+	llvm::Constant* init = llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],0,false);
+	auto var = new llvm::GlobalVariable(*module,genType(variable->type.type()),cnst,genLinkage(variable),nullptr,mangler.stream.str(),nullptr,threadLocal);
+	var->setAlignment(variable->type.type()->alignment());
+	map(variable,var);
+
+	return var;
+}
 
 Node* LLVMgenerator::visit(Variable* variable){
 	if(!functionOwner){
-		auto cnst = false;
-		llvm::Constant* init = llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],0,false);
-		auto threadLocal = true;
-		//mangle
-		std::stringstream ss;
-		ss<<mangler<<variable->label().length()<<variable->label().ptr();
-		//
-		auto var = new llvm::GlobalVariable(*module,genType(variable->type.type()),cnst,genLinkage(variable),init,llvm::Twine(ss.str().c_str()),nullptr,threadLocal);
-		var->setAlignment(variable->type.type()->alignment());
-		map(variable,var);
+		auto var = getGlobalVariableDeclaration(variable);
 	} else {
 		auto block = builder.GetInsertBlock();
 		llvm::IRBuilder<> _builder(block,block->begin());
@@ -528,15 +535,12 @@ llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention c
 	}
 }
 
-//TODO mangling
 llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 	if(function->generatorData) return static_cast<llvm::Function*>(unmap(function));
 
 	// mangle
-	//std::stringstream ss;
-	//if(!ffiC)
-	//	ss<<mangler<<function->label().length()<<function->label().ptr();
-	//else ss<<function->label().ptr();
+	gen::Mangler::Element mangler(moduleMangler);
+	mangler.mangle(function);
 
 	//create the actual declaration
 	llvm::FunctionType* t;
@@ -551,7 +555,7 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 		t = llvm::FunctionType::get(genType(function->_returnType.type()),args,false);
 	}
 
-	auto func = llvm::Function::Create(t,genLinkage(function),function->label().ptr(),module);
+	auto func = llvm::Function::Create(t,genLinkage(function),mangler.stream.str(),module);
 	func->setCallingConv(genCallingConvention(function->callingConvention()));
 	map(function,func);
 	return func;

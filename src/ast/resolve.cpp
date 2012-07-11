@@ -27,6 +27,7 @@ Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilat
 	unresolvedExpressions = 0;
 	treatUnresolvedTypesAsResolved = false;
 	currentFunction = nullptr;
+	_currentParent = nullptr;
 }
 
 
@@ -488,9 +489,12 @@ Node* CastExpression::resolve(Resolver* resolver){
 
 Node* BlockExpression::resolve(Resolver* resolver){
 	scope->_functionOwner = resolver->currentFunction;
+	parentNode = resolver->currentParentNode();
 
 	auto oldScope = resolver->currentScope();
 	resolver->currentScope(scope);
+	auto oldParent = resolver->currentParentNode();
+	resolver->currentParentNode(this);
 
 	bool allResolved = true;
 	for(auto i = begin();i!=end();i++){
@@ -499,6 +503,7 @@ Node* BlockExpression::resolve(Resolver* resolver){
 	}
 
 	if(allResolved) resolver->markResolved(this); 
+	resolver->currentParentNode(oldParent);
 	resolver->currentScope(oldScope);
 	return this;
 }
@@ -658,6 +663,8 @@ bool TypePatternUnresolvedExpression::resolve(Resolver* resolver,PatternMatcher*
 */
 Node* Variable::resolve(Resolver* resolver){
 	_owner = resolver->currentScope();
+	parentNode = resolver->currentParentNode();
+
 	auto _resolved = true;
 	if(type.isResolved()) _resolved = true;
 	else if(type.isPattern()) _resolved = false;
@@ -772,7 +779,10 @@ DeclaredType* Variant::resolve(Resolver* resolver){
 	return this;
 }
 
+//static block parent
 Node* TypeDeclaration::resolve(Resolver* resolver){
+	parentNode = resolver->currentParentNode();
+
 	if(optionalStaticBlock){
 		optionalStaticBlock->scope->setParent(resolver->currentScope());
 		if(!optionalStaticBlock->isResolved()) optionalStaticBlock->resolve(resolver);
@@ -798,6 +808,7 @@ struct ScopedStateChange {
 };
 
 Node* Function::resolve(Resolver* resolver){
+	parentNode = resolver->currentParentNode();
 	ScopedStateChange<Function*> _(&resolver->currentFunction,this);
 
 	//Resolve parameters!
@@ -840,7 +851,10 @@ Node* Function::resolve(Resolver* resolver){
 	}
 	//resolve body.
 	if(!body.isResolved()){
+		auto oldParent = resolver->currentParentNode();
+		resolver->currentParentNode(this);
 		resolver->resolve(&body);
+		resolver->currentParentNode(oldParent);
 		if(!body.isResolved()) return this;
 	}
 
@@ -895,6 +909,8 @@ Node* InfixMacro::resolve(Resolver* resolver){
 * Misc
 */
 Node* Resolver::multipassResolve(Node* node){
+	_currentParent = nullptr;
+
 	size_t prevUnresolvedExpressions;
 	unresolvedExpressions = 0xDEADBEEF;
 	do{
@@ -908,7 +924,8 @@ Node* Resolver::multipassResolve(Node* node){
 
 //Multi-pass module resolver
 void  Resolver::resolveModule(BlockExpression* module){
-	
+	_currentParent = nullptr;
+
 	size_t prevUnresolvedExpressions;
 	unresolvedExpressions = 0xDEADBEEF;
 	int pass = 1;

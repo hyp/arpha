@@ -403,9 +403,10 @@ Node* LoopExpression::duplicate(DuplicationModifiers* mods) const{
 // Block expression
 BlockExpression::BlockExpression(){
 	this->scope = new Scope(nullptr);
+	this->parentNode = nullptr;
 }
 BlockExpression::BlockExpression(Scope* scope){
-	this->scope = scope;
+	this->scope        = scope;
 }
 Type *BlockExpression::returnType() const {
 	if(isFlagSet(RETURNS_LAST_EXPRESSION) && size()>0) return (*(end()-1))->returnType();

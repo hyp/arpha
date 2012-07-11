@@ -170,6 +170,7 @@ struct DefinitionNode : Node {
 	void visibilityMode(uint8 mode);
 
 	void* generatorData; //extra data used by generator
+	Node* parentNode;
 private:
 	bool isDefinitionNode(){ return true; }
 	enum { IS_PRIVATE = 0x2 };//NB: it overrides the const flag, which is irrelevant for declarations
@@ -184,6 +185,7 @@ struct PrefixDefinition : DefinitionNode {
 
 	//For resolving symbols after parsing
 	virtual Node* createReference(){ return nullptr; }
+
 };
 
 struct InfixDefinition : DefinitionNode {
@@ -513,6 +515,7 @@ struct BlockExpression : NodeList {
 	BlockExpression* duplicateMixin(DuplicationModifiers* mods) const;
 
 	Scope* scope;
+	Node* parentNode;
 	DECLARE_NODE(BlockExpression);
 private:
 	BlockExpression(Scope* scope);

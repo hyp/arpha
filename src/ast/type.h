@@ -83,7 +83,9 @@ struct Type {
 		POINTER_BOUNDED, //[]int32
 		NODE, //i.e. *ast.Expression, uses nodeSubtype to determine the type
 		ANONYMOUS_RECORD,
-		ANONYMOUS_VARIANT
+		ANONYMOUS_VARIANT,
+		LINEAR_SEQUENCE,//a range of elements = { T*,natural }
+		LITERAL_STRING,
 	};
 
 	Type(int kind);

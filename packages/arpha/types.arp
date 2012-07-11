@@ -23,6 +23,7 @@
 
 import arpha.intrinsic
 
+
 def equals(type Type,other Type) bool
 def isParametrized(type Type) bool
 def sizeof(type Type) natural

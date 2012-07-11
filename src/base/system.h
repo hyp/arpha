@@ -13,6 +13,7 @@ namespace System {
 
 	//Console io
 	void print(const std::string& message);
+	void print(const char* message);
 	void debugPrint(const std::string& message);
 
 	//Heap allocation
