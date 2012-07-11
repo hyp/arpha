@@ -752,8 +752,7 @@ DeclaredType* Record::resolve(Resolver* resolver){
 		return this;
 	}
 	setFlag(IS_RESOLVED);
-	calculateResolvedProperties();
-	debug("Successfully resolved record type %s - sizeof %s",declaration->label(),_layout.size);
+	debug("Successfully resolved record type %s",declaration->label());
 	return this;
 }
 
@@ -775,7 +774,6 @@ DeclaredType* Trait::resolve(Resolver* resolver){
 DeclaredType* Variant::resolve(Resolver* resolver){
 	if(!declaration->optionalStaticBlock || declaration->optionalStaticBlock->isResolved()){
 		setFlag(IS_RESOLVED);
-		calculateResolvedProperties();
 	}
 	return this;
 }

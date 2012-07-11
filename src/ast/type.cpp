@@ -9,7 +9,6 @@
 #include "interpret.h"
 #include "../intrinsics/types.h"
 
-data::gen::AbstractTarget::TypeSystemState Type::typeSystemState;
 
 //TODO
 bool  typeSatistiesTrait(Type* type,Trait* trait,Scope* lookupScope){
@@ -264,42 +263,6 @@ bool Type::isPartiallyResolved() const {
 	}
 }
 
-//TODO non references
-size_t Type::size() const {
-	switch(type){
-		case VOID: case TYPE: return 0;
-		case BOOL: return 1;
-		case RECORD:  return static_cast<const Record*> (this)->_layout.size;
-		case VARIANT: return static_cast<const Variant*>(this)->_layout.size;
-		case INTEGER: return integer->size();
-		case POINTER: 
-		case POINTER_BOUNDED_CONSTANT:
-			return typeSystemState.pointerSizeof;
-		case FUNCTION:
-			return typeSystemState.functionPointerSizeof;
-		case POINTER_BOUNDED:
-			return typeSystemState.pointerSizeof*2;
-		case STATIC_ARRAY: return argument->size() * N;
-		case ANONYMOUS_RECORD:
-		case ANONYMOUS_VARIANT:
-			return static_cast<const AnonymousAggregate*>(this)->_layout.size;
-		case LINEAR_SEQUENCE:
-			return typeSystemState.pointerSizeof*2;
-		default:
-			throw std::runtime_error("TypeExpression type invariant failed");
-	}
-}
-//TODO
-uint32 Type::alignment() const {
-	switch(type){
-	case RECORD:  return static_cast<const Record*> (this)->_layout.alignment;
-	case VARIANT: return static_cast<const Variant*>(this)->_layout.alignment;
-	case ANONYMOUS_RECORD:
-	case ANONYMOUS_VARIANT:
-		return static_cast<const AnonymousAggregate*>(this)->_layout.alignment;
-	};
-	return size();
-}
 bool Type::isSame(Type* other){
 	if(this->type != other->type) return false;
 	switch(type){
@@ -497,7 +460,6 @@ std::vector<std::pair<Type**,size_t>>    anonymousRecordTypes ;
 std::vector<std::pair<SymbolID*,size_t>> anonymousRecordFields;
 
 AnonymousAggregate::AnonymousAggregate(Type** t,SymbolID* fs,size_t n,bool isVariant): Type(isVariant? ANONYMOUS_VARIANT: ANONYMOUS_RECORD),types(t),fields(fs),numberOfFields(n) {
-	calculateLayout();
 }
 AnonymousAggregate* Type::asAnonymousRecord(){
 	return type == ANONYMOUS_RECORD? static_cast<AnonymousAggregate*>(this) : nullptr;
@@ -603,7 +565,6 @@ DeclaredType* Record::duplicate(DuplicationModifiers* mods) const {
 	rec->flags = flags;
 	rec->fields.reserve(fields.size());
 	for(auto i = fields.begin();i!=fields.end();++i) rec->fields.push_back((*i).duplicate(mods));
-	rec->_layout = _layout;
 	return rec;
 }
 
@@ -636,7 +597,6 @@ void Variant::add(const Field& field) {
 DeclaredType* Variant::duplicate(DuplicationModifiers* mods) const{
 	auto dup = new Variant();
 	dup->flags = flags;
-	dup->_layout = _layout;
 	return dup;
 }
 
@@ -658,46 +618,4 @@ Node*  TypeDeclaration::duplicate(DuplicationModifiers* mods) const {
 	dup->optionalStaticBlock = sb;
 	mods->duplicateDefinition(const_cast<TypeDeclaration*>(this),dup);
 	return copyProperties(dup);
-}
-
-/**
-* Layout calculations for aggregate types
-* TODO possible better alignment for tuple of ints/floats to be sse compatible
-* TODO variant tag sizes
-*/
-bool isNullablePointerVariant(Type* a,Type* b){
-	return ( (a->isPointer() || a->isBoundedPointer()) && b->isVoid() );
-}
-void AnonymousAggregate::calculateLayout(){
-	_layout.size      = 0;
-	_layout.alignment = 0;
-	if(type == ANONYMOUS_RECORD){
-		for(auto i = types;i!=(types+numberOfFields);i++){
-			_layout.size      += (*i)->size();
-			_layout.alignment =  std::max((*i)->alignment(),_layout.alignment);
-		}
-	} else {
-		//tag
-		bool includeTag = numberOfFields == 2 && ( isNullablePointerVariant(types[0],types[1]) || isNullablePointerVariant(types[1],types[0]) );// *T | Nothing
-		if(includeTag) _layout.size = numberOfFields < 256? 1 : 4;
-		for(auto i = types;i!=(types+numberOfFields);i++){
-			_layout.size      =  std::max(_layout.size,(*i)->size());
-			_layout.alignment =  std::max((*i)->alignment(),_layout.alignment);
-		}
-	}
-}
-void Variant::calculateResolvedProperties(){
-	_layout.size   = fields.size() < 256? 1 : 4;
-	auto sb = declaration->optionalStaticBlock;
-	for(auto i = fields.begin();i!=fields.end();++i){
-		if(i->associatedType != -1)
-			_layout.size = std::max(_layout.size,(*(sb->begin()+i->associatedType))->asTypeDeclaration()->type()->size());
-	}
-}
-void Record::calculateResolvedProperties(){
-	//sizeof
-	_layout.size = 0;
-	for(auto i = fields.begin();i!=fields.end();++i){
-		_layout.size += (*i).type.type()->size();
-	}
 }

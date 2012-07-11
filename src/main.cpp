@@ -375,10 +375,6 @@ int main(int argc, const char * argv[]){
 
 	//initialize backend and frontend
 	//gen::LLVMBackend backend(&target,&genOptions);
-	
-	target.typeSystemState.pointerSizeof = 4;
-	target.typeSystemState.sizetSizeof = 4;
-	Type::typeSystemState = target.typeSystemState;//bind the type system state obtained from the backend
 
 	//gen::Linker linker(&target,&genOptions);
 

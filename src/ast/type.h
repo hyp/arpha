@@ -58,16 +58,11 @@ std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& 
 
 #include "../data/data.h"
 
-struct TypeLayout {
-	uint32 size;
-	uint32 alignment;
-};
 
 struct AnonymousAggregate;
 
 //(type ...): intrinsics::types::Type
 struct Type {
-	static data::gen::AbstractTarget::TypeSystemState typeSystemState;
 
 	enum {
 		VOID,
@@ -129,8 +124,6 @@ struct Type {
 	//..
 	bool isResolved() const;
 	bool isPartiallyResolved() const;
-	size_t size() const;
-	uint32 alignment() const;
 
 	bool requiresDestructorCall() const;
 
@@ -195,13 +188,11 @@ struct AnonymousAggregate: public Type {
 	static AnonymousAggregate* create(Field* fields,size_t fieldsCount,bool isVariant = false);
 private:
 	AnonymousAggregate(Type** t,SymbolID* fs,size_t n,bool isVariant);
-	void calculateLayout();
 
 public:
 	Type**     types;          //points to [int32,int32]
 	SymbolID*  fields;         //points to ["x","y"]
-	size_t     numberOfFields; // 2
-	TypeLayout _layout;
+	size_t     numberOfFields; // 2;
 };
 
 struct DeclaredType: public Type {
@@ -243,9 +234,6 @@ struct Variant: public DeclaredType {
 	DeclaredType* resolve(Resolver* resolver);
 
 	std::vector<Field> fields;
-	TypeLayout _layout;
-private:
-	void calculateResolvedProperties();
 };
 
 struct Record: public DeclaredType {
@@ -273,11 +261,6 @@ struct Record: public DeclaredType {
 	DeclaredType* resolve(Resolver* resolver);
 
 	std::vector<Field> fields;
-	TypeLayout _layout;
-private:
-	
-	//Calculates sizeof etc.
-	void calculateResolvedProperties();
 };
 
 // an actual declaration of a type which is added to the expression list
