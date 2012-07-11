@@ -299,6 +299,11 @@ void CTFEintrinsicInvocation::retNatural(size_t value){
 void CTFEintrinsicInvocation::retNaturalNatural(size_t a,size_t b){
 	_result = new TupleExpression(new IntegerLiteral((uint64)a),new IntegerLiteral((uint64)b));
 }
+void CTFEintrinsicInvocation::retError(const char* err){
+	auto noderef = _params[0]->asNodeReference();
+	compiler::onError(noderef? noderef->node():_params[0],err);
+	_result = ErrorExpression::getInstance();
+}
 
 Interpreter* constructInterpreter(InterpreterSettings* settings){
 	return new Interpreter;

@@ -25,6 +25,7 @@ bool mappingInitialized = false;
 
 /**
 * This function initializes the mapping between intrinsic definitions in arpha and the appropriate value or handler from the source code
+* TODO bind sizeof etc with backend
 */
 static void initMapping(){
 
@@ -43,7 +44,6 @@ static void initMapping(){
 	*/
 	MAP("equals(Type,Type)",   { invocation->ret(invocation->getTypeParameter(0)->isSame(invocation->getTypeParameter(1))); });
 	MAP("isParametrized(Type)",{ invocation->ret(invocation->getTypeParameter(0)->wasGenerated()); });
-	MAP("sizeof(Type)",        { invocation->retNatural(invocation->getTypeParameter(0)->size()); });
 
 	//arpha.ast.ast
 	int nodeSubtype = -1;
@@ -122,6 +122,27 @@ static void initMapping(){
 	});
 	MAP_PROP("add(BoundedPointer,natural)",Function::MACRO_FUNCTION,{
 		invocation->ret(new BinaryOperation(BinaryOperation::ADD,invocation->getNodeParameter(0),invocation->getNodeParameter(1)));
+	});
+
+	/**
+	* arpha.functionality.misc
+	*/
+	MAP_PROP("typeof(_)",Function::MACRO_FUNCTION,{ 
+		invocation->ret(new TypeReference(invocation->getNodeParameter(0)->returnType())); 
+	});
+	MAP("sizeof(Type)",{ 
+		invocation->retNatural(4); 
+	});
+	MAP("alignof(Type)",{ 
+		invocation->retNatural(4); 
+	});
+	MAP_PROP("offsetof(_)",Function::MACRO_FUNCTION,{
+		auto node = invocation->getNodeParameter(0);
+		if(auto field= node->asFieldAccessExpression()){
+			invocation->ret(new IntegerLiteral(BigInt((uint64)0)));
+		} else {
+			invocation->retError("The parameter to the function 'offsetof' must be a valid field access expression!");
+		}
 	});
 	mappingInitialized = true;
 }

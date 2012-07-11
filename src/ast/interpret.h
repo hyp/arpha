@@ -57,6 +57,7 @@ struct CTFEintrinsicInvocation {
 	void ret(SymbolID symbolAsString);
 	void retNatural(size_t value);
 	void retNaturalNatural(size_t a,size_t b);
+	void retError(const char* err);
 private:
 	CompilationUnit* _compilationUnit;
 	Node** _params;

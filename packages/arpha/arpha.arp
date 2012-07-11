@@ -14,3 +14,4 @@ import export syntax.arithmetic
 import export syntax.misc
 
 import export functionality.bounded_pointer
+import export functionality.misc

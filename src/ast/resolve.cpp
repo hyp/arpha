@@ -152,6 +152,7 @@ Node* CallExpression::resolve(Resolver* resolver){
 				if(func->intrinsicCTFEbinder){
 					CTFEintrinsicInvocation i(resolver->compilationUnit());
 					i.invoke(func,arg);
+					if(auto err = i.result()->asErrorExpression()) return err;
 					return resolver->resolve(copyLocationSymbol(i.result()->asNodeReference()->node()));
 				}
 				else return resolver->executeAndMixinMacro(func,arg);

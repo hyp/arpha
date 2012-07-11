@@ -1,0 +1,32 @@
+import spec
+
+describe "A 'typeof' expression" {
+	it "should return the type of a given expression" {
+		typeof(true) should be bool
+	}
+}
+
+describe "A 'sizeof' expression" {
+	it "should return the size(in bytes) when it is being given a type" {
+		sizeof(int32) should be 4
+	}
+	it "should return the size(in bytes) of the expression's type when it is being given any expression" {
+		sizeof(false) should be sizeof(bool)
+	}
+}
+
+describe "An 'alignof' expression" {
+	it "should return the alignment(in bytes) when it is being given a type" {
+		alignof(int32) should be 4
+	}
+	it "should return the alignment(in bytes) of the expression's type when it is being given any expression" {
+		alignof(int64) should be sizeof(int64)
+	}
+}
+
+describe "An 'offsetof' expression" {
+	it "should return the offset(in bytes) from the start of a record to the given field" {
+		var foo (x: int32,y: int32)
+		offsetof(foo.x) should be 0
+	}
+}
