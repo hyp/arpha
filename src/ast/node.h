@@ -46,6 +46,7 @@ struct Argument;
 #define NODE_LIST(X)  \
 	X(IntegerLiteral) \
 	X(FloatingPointLiteral) \
+	X(CharacterLiteral) \
 	X(BoolExpression) \
 	X(StringLiteral)  \
 	X(ArrayLiteral)   \
@@ -222,6 +223,15 @@ struct FloatingPointLiteral : LiteralNode {
 
 	double value;
 	DECLARE_NODE(FloatingPointLiteral);
+};
+
+struct CharacterLiteral: LiteralNode {
+	CharacterLiteral(UnicodeChar c);
+	Type* returnType() const;
+
+	UnicodeChar value ;
+	Type* explicitType;
+	DECLARE_NODE(CharacterLiteral);
 };
 
 //true | false

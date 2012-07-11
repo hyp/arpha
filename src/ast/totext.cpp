@@ -25,6 +25,11 @@ struct NodeToString: NodeVisitor {
 		stream<<node->value;
 		return node;
 	}
+	Node* visit(CharacterLiteral* node){
+		if(node->value<=127) stream<<'\''<<(char)node->value<<'\'';
+		else stream<<"'\\U"<<node->value<<'\'';
+		return node;
+	}
 	Node* visit(BoolExpression* node){
 		stream<<(node->value?"true":"false");
 		return node;
@@ -245,6 +250,8 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 		case Type::RECORD:  stream<<static_cast<Record*>(type)->declaration->label(); break;
 		case Type::VARIANT: stream<<static_cast<Variant*>(type)->declaration->label(); break;
 		case Type::INTEGER: stream<<type->integer->id; break;
+		case Type::FLOAT: stream<<(type->bits == 32? "float":"double"); break;
+		case Type::CHAR:  stream<<"char"<<type->bits; break;
 		case Type::POINTER: 
 			stream<<"Pointer("<<type->next()<<')'; break;
 		case Type::POINTER_BOUNDED:
@@ -273,6 +280,12 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 			stream<<")";
 			}
 			break;
+		case Type::LITERAL_FLOAT:
+			stream<<"literal.real"; break;
+		case Type::LITERAL_CHAR:
+			stream<<"literal.char"; break;
+		case Type::LITERAL_STRING:
+			stream<<"literal.string"; break;
 	}
 	return stream;
 }

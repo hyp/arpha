@@ -71,6 +71,8 @@ struct Type {
 		RECORD,
 		VARIANT,
 		INTEGER,
+		FLOAT,//float32,float64
+		CHAR,//char8,char16,char32
 		FUNCTION,
 		POINTER,
 		STATIC_ARRAY,
@@ -80,6 +82,9 @@ struct Type {
 		ANONYMOUS_RECORD,
 		ANONYMOUS_VARIANT,
 		LINEAR_SEQUENCE,//a range of elements = { T*,natural }
+
+		LITERAL_FLOAT,//1.2
+		LITERAL_CHAR,//'A'
 		LITERAL_STRING,
 	};
 
@@ -90,11 +95,21 @@ struct Type {
 	Type(int kind,Type* next,size_t N); //static array | bounded pointer constant length
 	Type(int kind,int subtype);//node
 
+	static Type* getFloatType(int bits);
+	static Type* getFloatLiteralType();
+	static Type* getCharType (int bits);
+	static Type* getCharLiteralType();
+	
+
 	//
 	inline bool isVoid()     const { return type == VOID;     }
 	inline bool isType()     const { return type == TYPE;     }
 	inline bool isBool()     const { return type == BOOL;     }
 	inline bool isInteger()  const { return type == INTEGER;  }
+	inline bool isFloat()    const { return type == FLOAT;    }
+	inline bool isFloat32()  const { return type == FLOAT && bits == 32; }
+	inline bool isFloat64()  const { return type == FLOAT && bits == 64; }
+	inline bool isChar   ()  const { return type == CHAR;     }
 	inline bool isPointer()  const { return type == POINTER;  }
 	inline bool isRecord()   const { return type == RECORD;   }
 	inline bool isVariant()  const { return type == VARIANT;  }
@@ -161,6 +176,7 @@ public:
 		Type* argument;
 		Node* pattern;
 		int   nodeSubtype;//USE -1 for untyped note i.e. [> 1 <] returns untyped node, but new ast.IntegerLiteral returns typed node!
+		int   bits;       //number of bits in an integer / character type
 	};
 	union {
 		Type* returns;

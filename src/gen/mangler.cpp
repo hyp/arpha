@@ -42,6 +42,8 @@ void Mangler::Element::mangle(Type* type){
 	case Type::VOID:     stream<<'n'; break;
 	case Type::BOOL:     stream<<'b'; break;
 	case Type::INTEGER:  stream<<'i'; break;//TODO
+	case Type::FLOAT:    stream<<(type->bits == 32? 'f':'d'); break;
+	case Type::CHAR:     stream<<(type->bits == 8? 'x': type->bits == 32? 'y' : 'z'); break;
 	case Type::RECORD:   mangle(static_cast<Record*>(type)->declaration); break;
 	case Type::VARIANT:  mangle(static_cast<Variant*>(type)->declaration); break;
 	case Type::POINTER:  stream<<'P'; mangle(type->next()); break;

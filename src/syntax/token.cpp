@@ -6,12 +6,13 @@ Token::Token(){
 }
 
 std::ostream& operator<< (std::ostream& stream,const Token& token){
-	if(token.isSymbol()) stream<<'\''<<token.symbol.ptr()<<'\'';
+	if(token.isSymbol()) stream<<token.symbol.ptr();
 	else if(token.isUinteger()) stream<<token.uinteger;
 	else if(token.isLine()) stream<<"NEWLINE";
 	else if(token.isReal()) stream<<token.real;
 	else if(token.isEOF()) stream<<"EOF";
 	else if(token.isString()) stream<<'"'<<token.string<<'"';
+	else if(token.isChar()) stream<<'\''<<token.character<<'\'';
 	else throw std::runtime_error("Token is of unknown type!");
 	return stream;
 }

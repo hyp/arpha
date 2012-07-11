@@ -94,6 +94,21 @@ namespace intrinsics {
 
 			moduleScope->define(new Substitute("natural",new TypeReference(natural) ));
 
+			struct TypeRefCreator : IntrinsicPrefixMacro {
+				TypeRefCreator(SymbolID name,::Type* t) : IntrinsicPrefixMacro(name),type(t) {}
+				Node* parse(Parser* parser){
+					return new TypeReference(type);
+				}
+				::Type* type;
+			};
+
+			moduleScope->define(new TypeRefCreator("char8",::Type::getCharType(8)) );
+			moduleScope->define(new TypeRefCreator("char16",::Type::getCharType(16)) );
+			moduleScope->define(new TypeRefCreator("char32",::Type::getCharType(32)) );
+
+			moduleScope->define(new TypeRefCreator("float",::Type::getFloatType(32)) );
+			moduleScope->define(new TypeRefCreator("double",::Type::getFloatType(64)) );
+
 			struct TypeFunc {
 				TypeFunc(SymbolID name,Scope* moduleScope,Function** dest,Function::CTFE_Binder binder,int args = 1){
 					Function* func = new Function(name,Location());

@@ -200,6 +200,10 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 	case Type::BOOL: return llvm::Type::getInt8Ty(context);
 	case Type::RECORD:
 		return getRecordDeclaration(this,static_cast<Record*>(type));
+	case Type::FLOAT:
+		return type->bits == 32? llvm::Type::getFloatTy(context) : llvm::Type::getDoubleTy(context);
+	case Type::CHAR:
+		return coreTypes[type->bits == 8? GEN_TYPE_I8 : (type->bits == 32? GEN_TYPE_I32 : GEN_TYPE_I16)];
 	case Type::POINTER:
 	case Type::POINTER_BOUNDED:
 	case Type::POINTER_BOUNDED_CONSTANT:
@@ -229,6 +233,11 @@ llvm::GlobalValue::LinkageTypes LLVMgenerator::genLinkage(PrefixDefinition* def)
 
 Node* LLVMgenerator::visit(IntegerLiteral* node){
 	emitConstant(llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],node->integer.u64,false));
+	return node;
+}
+
+Node* LLVMgenerator::visit(CharacterLiteral* node){
+	emitConstant(llvm::ConstantInt::get(generateType(node->returnType()),node->value,false));
 	return node;
 }
 
@@ -509,7 +518,7 @@ llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* var
 	auto cnst = false;
 	llvm::Constant* init = llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],0,false);
 	auto var = new llvm::GlobalVariable(*module,genType(variable->type.type()),cnst,genLinkage(variable),nullptr,mangler.stream.str(),nullptr,threadLocal);
-	var->setAlignment(variable->type.type()->alignment());
+	//var->setAlignment(variable->type.type()->alignment());
 	map(variable,var);
 
 	return var;

@@ -87,6 +87,9 @@ static Node* parseNotSymbol(Parser* parser){
 	else if(token.isString()){
 		return new StringLiteral(token.string);
 	}
+	else if(token.isChar()){
+		return new CharacterLiteral(token.character);
+	}
 	else{
 		parser->syntaxError(format("Can't parse token %s!",token));
 		return ErrorExpression::getInstance();

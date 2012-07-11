@@ -156,9 +156,9 @@ void Lexer::lexString(Token& token){
 }
 void Lexer::lexChar(Token& token){
 	ptr++;
-	token.type = Token::Uinteger;
+	token.type = Token::Char;
 	if(!matchNewline()){
-		token.uinteger = lexChar();
+		token.character = lexChar();
 		if(*ptr != '\'') onExpectedError("a closing '");
 		else ptr++;
 	}

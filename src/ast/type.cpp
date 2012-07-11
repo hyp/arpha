@@ -204,7 +204,7 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 * The type
 */
 Type::Type(int kind) : type(kind),flags(0) {
-	assert(kind == VOID || kind == TYPE || kind == BOOL || kind == RECORD || kind == VARIANT || kind == ANONYMOUS_RECORD || kind== ANONYMOUS_VARIANT || kind == LITERAL_STRING);
+	assert(kind == VOID || kind == TYPE || kind == BOOL || kind == RECORD || kind == VARIANT || kind == ANONYMOUS_RECORD || kind== ANONYMOUS_VARIANT || kind == LITERAL_STRING || kind == LITERAL_CHAR);
 }
 Type::Type(IntegerType* integer) : type(INTEGER),flags(0) {
 	this->integer = integer;
@@ -222,10 +222,23 @@ Type::Type(int kind,Type* T,size_t N) : type(kind),flags(0) {
 	argument = T;
 	this->N  = N;
 }
-Type::Type(int kind,int subtype) : type(NODE),flags(0) {
-	assert(kind == NODE);
+Type::Type(int kind,int subtype) : type(kind),flags(0) {
 	nodeSubtype = subtype;
 }
+
+Type* Type::getFloatType(int bits){
+	return new Type(FLOAT,bits);
+}
+Type* Type::getFloatLiteralType(){
+	return new Type(LITERAL_FLOAT);
+}
+Type* Type::getCharType(int bits){
+	return new Type(CHAR,bits);
+}
+Type* Type::getCharLiteralType(){
+	return new Type(LITERAL_CHAR);
+}
+
 void Type::setFlag(uint16 flag){
 	flags |= flag;
 }
@@ -271,6 +284,9 @@ bool Type::isSame(Type* other){
 		case VARIANT:
 			return this == other;
 		case INTEGER: return integer == other->integer;
+		case FLOAT:
+		case CHAR:  
+			return bits == other->bits;
 		case POINTER: return argument->isSame(other->argument);
 		case FUNCTION: return argument->isSame(other->argument) && returns->isSame(other->returns);
 		case POINTER_BOUNDED: return argument->isSame(other->argument);
@@ -282,6 +298,8 @@ bool Type::isSame(Type* other){
 			return static_cast<AnonymousAggregate*>(this)->types  == static_cast<AnonymousAggregate*>(other)->types &&
 				   static_cast<AnonymousAggregate*>(this)->fields == static_cast<AnonymousAggregate*>(other)->fields;
 		case LINEAR_SEQUENCE: return argument->isSame(other->argument);
+		case LITERAL_FLOAT :
+		case LITERAL_CHAR  :
 		case LITERAL_STRING:  return true;
 		default:
 			throw std::runtime_error("TypeExpression type invariant failed");	

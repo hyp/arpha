@@ -119,6 +119,15 @@ Node* FloatingPointLiteral::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new FloatingPointLiteral(value));
 }
 
+CharacterLiteral::CharacterLiteral(UnicodeChar c) : value(c),explicitType(nullptr) {}
+Type* CharacterLiteral::returnType() const {
+	return explicitType? explicitType: Type::getCharLiteralType();
+}
+Node* CharacterLiteral::duplicate(DuplicationModifiers* mods) const {
+	auto dup = new CharacterLiteral(value);
+	dup->explicitType = explicitType;
+	return copyProperties(dup);
+}
 
 BoolExpression::BoolExpression(const bool v) : value(v) { }
 Type* BoolExpression::returnType() const {

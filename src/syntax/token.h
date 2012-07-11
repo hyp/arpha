@@ -16,11 +16,13 @@ struct Token {
 		Real,
 		Line,
 		String,
+		Char,
 		Eof,
 	};
 	
 	union {
 		uint64 uinteger;
+		UnicodeChar character;
 		double real;
 		memory::Block string;
 	};
@@ -30,6 +32,7 @@ struct Token {
 	Token();
 	inline bool isSymbol() const { return type == Symbol; }
 	inline bool isUinteger() const { return type == Uinteger; }
+	inline bool isChar() const { return type == Char; }
 	inline bool isReal() const { return type == Real; }
 	inline bool isEOF() const { return type == Eof; }
 	inline bool isLine() const { return type == Line; }
