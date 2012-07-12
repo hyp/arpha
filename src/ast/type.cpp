@@ -489,11 +489,56 @@ int literalTypeAssignment(Type* givenType,Node** literalNode,Type* literalNodeTy
 	return -1;
 }
 
+/**
+Scenarios:
+  def x uint64 = uint8,uint16,uint32
+        uint32 = uint8,uint16
+		uint16 = uint8
+
+		int64  = (u)int8,(u)int16,(u)int32
+		int32  = (u)int8,(u)int16
+		int16  = (u)int8,(u)int16
+
+  def x float  = (u)intX
+        double = (u)intX
+		double = float
+*/
+int automaticTypeCast(Type* givenType,Node** node,Type* nodeType,bool doTransform){
+	int weight = -1;
+
+	if(givenType->isInteger() && nodeType->isInteger()){
+		//uintX = uint(X-1)
+		if(givenType->bits > 0){
+			if(nodeType->bits > 0 && nodeType->bits < givenType->bits)
+				weight = LITERAL_CONVERSION;
+		}
+		//intX = (u)int(X-1)
+		else {
+			if(std::abs(nodeType->bits) < -givenType->bits)
+				weight = LITERAL_CONVERSION;
+		}
+	}
+	else if(givenType->isFloat()){
+		if(nodeType->isFloat() && nodeType->bits < givenType->bits)
+			weight = LITERAL_CONVERSION;
+		else if(nodeType->isInteger())
+			weight = LITERAL_TYPE_SPECIFICATION;
+	}
+
+	if(weight != -1 && doTransform) *node = new CastExpression(*node,givenType);
+	return weight;
+}
+
 int   Type::canAssignFrom(Node* expression,Type* type){
 	if(this->isSame(type)) return EXACT;
 
+	int assigns;
+
 	if(type->isLiteral()){
 		return literalTypeAssignment(this,&expression,type,false);
+	}
+	else if( (assigns = automaticTypeCast(this,&expression,type,false)) != -1 ){
+		return assigns;
 	}
 	else if(type->type == RECORD){
 		auto record = static_cast<Record*>(type);
@@ -536,6 +581,9 @@ Node* Type::assignableFrom(Node* expression,Type* type) {
 		if( (assigns = literalTypeAssignment(this,&expression,type,true)) != -1){
 			return expression;
 		}
+	}
+	else if( (assigns = automaticTypeCast(this,&expression,type,true)) != -1 ){
+		return expression;
 	}
 	else if(type->type == RECORD){
 		//Extenders fields
