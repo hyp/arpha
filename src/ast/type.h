@@ -105,6 +105,9 @@ struct Type {
 	static Type* getCharType (int bits);
 	static Type* getCharLiteralType();
 	bool   doesLiteralFit(CharacterLiteral* node); // type must be character
+
+	static Type* getStringLiteralType();
+
 	
 
 	//

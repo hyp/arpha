@@ -240,6 +240,9 @@ Type* Type::getCharType(int bits){
 Type* Type::getCharLiteralType(){
 	return new Type(LITERAL_CHAR);
 }
+Type* Type::getStringLiteralType(){
+	return new Type(LITERAL_STRING);
+}
 
 void Type::setFlag(uint16 flag){
 	flags |= flag;

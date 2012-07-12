@@ -45,6 +45,12 @@ static void initMapping(){
 	MAP("equals(Type,Type)",   { invocation->ret(invocation->getTypeParameter(0)->isSame(invocation->getTypeParameter(1))); });
 	MAP("isParametrized(Type)",{ invocation->ret(invocation->getTypeParameter(0)->wasGenerated()); });
 
+#define MAP_LITERAL_TYPE(s,T) variableMapping[std::string("literal.")+s] = new TypeReference(T)
+	MAP_LITERAL_TYPE("integer",Type::getIntegerLiteralType());
+	MAP_LITERAL_TYPE("real"   ,Type::getFloatLiteralType());
+	MAP_LITERAL_TYPE("char"   ,Type::getCharLiteralType());
+	MAP_LITERAL_TYPE("string" ,Type::getStringLiteralType());
+
 	//arpha.ast.ast
 	int nodeSubtype = -1;
 #define MAP_NODETYPE(s,T) variableMapping[std::string("ast.")+s] = new TypeReference(new Type(Type::NODE,nodeSubtype++))
@@ -230,6 +236,9 @@ Node* Variable::getIntrinsicValue(Variable* variable){
 
 	std::string signature = std::string("ast.") + variable->label().ptr();
 	auto value = variableMapping.find(signature);
+	if(value != variableMapping.end()) return (*value).second;
+	signature = std::string("literal.") + variable->label().ptr();
+	value = variableMapping.find(signature);
 	if(value != variableMapping.end()) return (*value).second;
 	compiler::intrinsicFatalError(variable->location(),format(" Intrinsic binding failure - The variable '%s' isn't intrinsic!\nPlease don't use the intrinsic property on it!",variable->label()));
 	return new UnitExpression();

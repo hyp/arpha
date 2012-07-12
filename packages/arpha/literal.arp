@@ -1,0 +1,8 @@
+# Literal types
+
+import arpha.intrinsic
+
+def integer Type
+def real    Type
+def char    Type
+def string  Type
