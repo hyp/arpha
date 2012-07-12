@@ -1,0 +1,24 @@
+#
+	This module defines standart floating point operations
+#
+import arpha.intrinsic
+
+macro defineRealOperations(T Type) = [>
+	def minus(x $T) $T
+	
+	def add(x $T,y $T) $T
+	def subtract(x $T,y $T) $T
+	def multiply(x $T,y $T) $T
+	def divide(x $T,y $T) $T
+	
+	def equals(x $T,y $T) $T
+	def less(x $T,y $T) $T
+	def greater(x $T,y $T) $T
+	def lessEquals(x $T,y $T) $T
+	def greaterEquals(x $T,y $T) $T
+<]
+
+defineRealOperations(arpha.literal.real)
+
+defineRealOperations(float)
+defineRealOperations(double)

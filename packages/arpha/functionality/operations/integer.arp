@@ -1,0 +1,40 @@
+#
+	This module defines standart integer operations
+#
+import arpha.intrinsic
+
+macro defineIntegerOperations(T Type) = [>
+	def minus(x $T) $T
+	
+	def add(x $T,y $T) $T
+	def subtract(x $T,y $T) $T
+	def multiply(x $T,y $T) $T
+	def divide(x $T,y $T) $T
+	def remainder(x $T,y $T) $T
+	
+	def bit_not(x $T) $T
+	def bit_and(x $T,y $T) $T
+	def bit_or (x $T,y $T) $T
+	def bit_xor(x $T,y $T) $T
+	
+	def shl(x $T,y $T) $T
+	def shr(x $T,y $T) $T
+	
+	def equals(x $T,y $T) $T
+	def less(x $T,y $T) $T
+	def greater(x $T,y $T) $T
+	def lessEquals(x $T,y $T) $T
+	def greaterEquals(x $T,y $T) $T
+<]
+
+defineIntegerOperations(arpha.literal.integer)
+
+defineIntegerOperations(int8)
+defineIntegerOperations(int16)
+defineIntegerOperations(int32)
+defineIntegerOperations(int64)
+
+defineIntegerOperations(uint8)
+defineIntegerOperations(uint16)
+defineIntegerOperations(uint32)
+defineIntegerOperations(uint64)
