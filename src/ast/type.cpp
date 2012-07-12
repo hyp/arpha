@@ -376,7 +376,7 @@ inline bool characterFits(int bits,uint32 value){
 	return value <= 0x10FFFF? true:false; //UNICODE_MAX
 }
 
-bool integerFits(int bits,uint64 value,bool isNegative){
+bool Type::integerFits(uint64 value,bool isNegative){
 	if(isNegative && bits>0) return false;
 
 	int64 min;
@@ -398,7 +398,7 @@ bool integerFits(int bits,uint64 value,bool isNegative){
 
 bool   Type::doesLiteralFit(IntegerLiteral* node){
 	if(isInteger()){
-		return integerFits(bits,node->integer.u64,node->integer.isNegative());
+		return integerFits(node->integer.u64,node->integer.isNegative());
 	}
 	else {
 		assert(isChar());
@@ -413,7 +413,7 @@ inline bool doesIntegerLiteralFitInLiteralChar(IntegerLiteral* node){
 
 bool   Type::doesLiteralFit(CharacterLiteral* node){
 	if(isInteger()){
-		return integerFits(bits,node->value,false);
+		return integerFits(node->value,false);
 	}
 	else {
 		assert(isChar());

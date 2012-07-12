@@ -12,16 +12,109 @@
 std::map<std::string,Node*> variableMapping; //mapping constant variables to values
 
 struct FunctionBinder {
-	Function::CTFE_Binder binder;
+	bool   isOperation;
 	uint16 extraFlags; //extra flags to apply to this intrinsic function
+	union {
+		Function::CTFE_Binder binder;
+		data::ast::Operations::Kind operation;
+	};
+	
 
-	FunctionBinder() : binder(nullptr),extraFlags(0) {}
-	FunctionBinder(Function::CTFE_Binder f,uint16 flags) : binder(f),extraFlags(flags) {}
+	FunctionBinder() : isOperation(false),binder(nullptr),extraFlags(0) {}
+	FunctionBinder(Function::CTFE_Binder f,uint16 flags) : isOperation(false),binder(f),extraFlags(flags) {}
+	FunctionBinder(data::ast::Operations::Kind operation,uint16 flags) : isOperation(true),extraFlags(flags),operation(operation) {}
+
+	void bind(Function* function){
+		if(isOperation) function->makeIntrinsicOperation(operation);
+		else function->intrinsicCTFEbinder = binder;
+		function->setFlag(extraFlags);
+	}
 };
 std::map<std::string,FunctionBinder> functionMapping;
 
 bool mappingInitialized = false;
 
+#define MAPOP(sig,op) functionMapping[sig] = FunctionBinder(op,Function::PURE);
+
+
+
+std::string mangleArgType(Type* type,bool nat){
+	if(type->isType()) return "Type";
+	else if(type->isBool()) return "bool";
+	else if(type->isNodePointer()) return "Expression";
+	else if(type->isInteger()){
+		if(nat && type->isSame(intrinsics::types::natural)) return "natural";
+		else {
+			std::stringstream str;
+			str<<(type->bits<0?"int":"uint")<<std::abs(type->bits);
+			return str.str();
+		}
+	}
+	else if(type->isPointer()){
+		return std::string("*")+mangleArgType(type->next(),nat);
+	} else if(type->isBoundedPointer()){
+		return std::string("[]")+mangleArgType(type->next(),nat);
+	}
+	else if(type->isLiteral()){
+		if(type->type == Type::LITERAL_INTEGER) return "literal.integer";
+		else if(type->type == Type::LITERAL_FLOAT) return "literal.real";
+		else if(type->type == Type::LITERAL_CHAR) return "literal.char";
+		else if(type->type == Type::LITERAL_STRING) return "literal.string";
+	}
+	return "";
+}
+
+void mapIntegerOperations(const char* t1){
+	std::string base1 = std::string("(") + t1 + ")";
+	std::string base2 = std::string("(") + t1 + "," + t1 + ")";
+	MAPOP(std::string("minus")+base1,data::ast::Operations::NEGATION);
+
+	MAPOP(std::string("add")+base2,data::ast::Operations::ADDITION);
+	MAPOP(std::string("subtract")+base2,data::ast::Operations::SUBTRACTION);
+	MAPOP(std::string("multiply")+base2,data::ast::Operations::MULTIPLICATION);
+	MAPOP(std::string("divide")+base2,data::ast::Operations::DIVISION);
+	MAPOP(std::string("remainder")+base2,data::ast::Operations::REMAINDER);
+
+	MAPOP(std::string("bit_not")+base1,data::ast::Operations::BIT_NOT);
+	MAPOP(std::string("bit_and")+base2,data::ast::Operations::BIT_AND);
+	MAPOP(std::string("bit_or")+base2,data::ast::Operations::BIT_OR);
+	MAPOP(std::string("bit_xor")+base2,data::ast::Operations::BIT_XOR);
+
+	MAPOP(std::string("shl")+base2,data::ast::Operations::LEFT_SHIFT);
+	MAPOP(std::string("shr")+base2,data::ast::Operations::RIGHT_SHIFT);
+
+	MAPOP(std::string("equals")+base2,data::ast::Operations::EQUALITY_COMPARISON);
+	MAPOP(std::string("less")+base2,data::ast::Operations::LESS_COMPARISON);
+	MAPOP(std::string("greater")+base2,data::ast::Operations::GREATER_COMPARISON);
+	MAPOP(std::string("lessEquals")+base2,data::ast::Operations::LESS_EQUALS_COMPARISON);
+	MAPOP(std::string("greaterEquals")+base2,data::ast::Operations::GREATER_EQUALS_COMPARISON);
+}
+void mapRealOperations(const char* t1){
+	std::string base1 = std::string("(") + t1 + ")";
+	std::string base2 = std::string("(") + t1 + "," + t1 + ")";
+	MAPOP(std::string("minus")+base1,data::ast::Operations::NEGATION);
+
+	MAPOP(std::string("add")+base2,data::ast::Operations::ADDITION);
+	MAPOP(std::string("subtract")+base2,data::ast::Operations::SUBTRACTION);
+	MAPOP(std::string("multiply")+base2,data::ast::Operations::MULTIPLICATION);
+	MAPOP(std::string("divide")+base2,data::ast::Operations::DIVISION);
+
+	MAPOP(std::string("equals")+base2,data::ast::Operations::EQUALITY_COMPARISON);
+	MAPOP(std::string("less")+base2,data::ast::Operations::LESS_COMPARISON);
+	MAPOP(std::string("greater")+base2,data::ast::Operations::GREATER_COMPARISON);
+	MAPOP(std::string("lessEquals")+base2,data::ast::Operations::LESS_EQUALS_COMPARISON);
+	MAPOP(std::string("greaterEquals")+base2,data::ast::Operations::GREATER_EQUALS_COMPARISON);
+}
+
+void mapStandartOperations(Type* t){
+	auto s =mangleArgType(t,false);
+	if(t->isInteger() || t->type == Type::LITERAL_INTEGER){
+		mapIntegerOperations(s.c_str());
+	}
+	else if(t->isFloat() || t->type == Type::LITERAL_FLOAT){
+		mapRealOperations(s.c_str());
+	}
+}
 
 /**
 * This function initializes the mapping between intrinsic definitions in arpha and the appropriate value or handler from the source code
@@ -118,6 +211,24 @@ static void initMapping(){
 	});
 
 	/**
+	*arpha.functionality.operations.integer
+	*/
+
+	mapStandartOperations(Type::getIntegerLiteralType());
+	mapStandartOperations(intrinsics::types::int32);
+	mapStandartOperations(intrinsics::types::int8);
+	mapStandartOperations(intrinsics::types::int16);
+	mapStandartOperations(intrinsics::types::int64);
+	mapStandartOperations(intrinsics::types::uint32);
+	mapStandartOperations(intrinsics::types::uint8);
+	mapStandartOperations(intrinsics::types::uint16);
+	mapStandartOperations(intrinsics::types::uint64);
+
+	mapStandartOperations(Type::getFloatLiteralType());
+	mapStandartOperations(Type::getFloatType(32));
+	mapStandartOperations(Type::getFloatType(64));
+
+	/**
 	* arpha.functionality.bounded_pointer
 	*/
 	MAP_PROP("length(BoundedPointer)",Function::MACRO_FUNCTION,{
@@ -153,30 +264,6 @@ static void initMapping(){
 	mappingInitialized = true;
 }
 
-std::string mangleArgType(Type* type,bool nat){
-	if(type->isType()) return "Type";
-	else if(type->isBool()) return "bool";
-	else if(type->isNodePointer()) return "Expression";
-	else if(type->isInteger()){
-		if(nat && type->isSame(intrinsics::types::natural)) return "natural";
-		else {
-			std::stringstream str;
-			str<<(type->bits<0?"int":"uint")<<std::abs(type->bits);
-			return str.str();
-		}
-	}
-	else if(type->isPointer()){
-		return std::string("*")+mangleArgType(type->next(),nat);
-	} else if(type->isBoundedPointer()){
-		return std::string("[]")+mangleArgType(type->next(),nat);
-	}
-	else if(type->isLiteral()){
-		std::string result = "literal.";
-		return result;
-	}
-	return "";
-}
-
 
 std::string intrinsicMangle(Function* function,bool argNames,bool nat = false){
 	std::string result = function->label().ptr();
@@ -203,32 +290,33 @@ std::string intrinsicMangle(Function* function,bool argNames,bool nat = false){
 	return result;
 }
 
-Function::CTFE_Binder Function::getIntrinsicFunctionBinder(Function* function){
+void Function::getIntrinsicFunctionBinder(Function* function){
 	if(!mappingInitialized) initMapping();
 	assert(function->isIntrinsic());
+
 	std::string signature = intrinsicMangle(function,false);
-
-
 	auto value = functionMapping.find(signature);
 	if(value != functionMapping.end()){
-		if((*value).second.extraFlags) function->setFlag((*value).second.extraFlags);
-		return (*value).second.binder;
+		(*value).second.bind(function);
+		return;
 	}
+
 	signature = intrinsicMangle(function,true);
 	value = functionMapping.find(signature);
 	if(value != functionMapping.end()){
-		if((*value).second.extraFlags) function->setFlag((*value).second.extraFlags);
-		return (*value).second.binder;
+		(*value).second.bind(function);
+		return;
 	}
+
 	//uint32 => natural mangle
 	signature = intrinsicMangle(function,false,true);
 	value = functionMapping.find(signature);
 	if(value != functionMapping.end()){
-		if((*value).second.extraFlags) function->setFlag((*value).second.extraFlags);
-		return (*value).second.binder;
+		(*value).second.bind(function);
+		return;
 	}
+	
 	compiler::intrinsicFatalError(function->location(),format(" Intrinsic binding failure - The function '%s' isn't intrinsic!\nPlease don't use the intrinsic property on it!",function->label()));
-	return nullptr;
 }
 
 Node* Variable::getIntrinsicValue(Variable* variable){

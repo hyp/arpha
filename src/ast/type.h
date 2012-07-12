@@ -97,6 +97,7 @@ struct Type {
 
 	static Type* getIntegerType(int bits,bool isSigned);
 	static Type* getIntegerLiteralType();
+	bool   integerFits(uint64 value,bool isNegative);
 	bool   doesLiteralFit(IntegerLiteral* node); // type must be integer or character
 
 	static Type* getFloatType(int bits);

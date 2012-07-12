@@ -138,6 +138,8 @@ static Node* transformCallOnAccess(CallExpression* node,AccessExpression* acessi
 	return node;
 }
 
+Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter);
+
 Node* CallExpression::resolve(Resolver* resolver){
 	arg  = resolver->resolve(arg);
 	if(!arg->isResolved()) return this;
@@ -167,6 +169,9 @@ Node* CallExpression::resolve(Resolver* resolver){
 					return resolver->resolve(copyProperties(new AssignmentExpression( new FieldAccessExpression(*t->begin(),func->getField()) , *(t->begin()+1) )));
 				}
 				return resolver->resolve(copyProperties(new FieldAccessExpression(arg,func->getField())));
+			} else if(func->isIntrinsicOperation() && arg->isConst()){
+				//return 
+				return resolver->resolve(evaluateConstantOperation(func->getOperation(),arg));
 			}
 			object = resolver->resolve(new FunctionReference(func));
 			resolver->markResolved(this);
@@ -866,9 +871,7 @@ Node* Function::resolve(Resolver* resolver){
 	if(isIntrinsic()){
 		debug("INTRINSIC MAP %s",label());
 		//map to implementation!
-		if(auto binder = getIntrinsicFunctionBinder(this)){
-			intrinsicCTFEbinder = binder;
-		}
+		getIntrinsicFunctionBinder(this);
 	}
 	else analyze(&body,this);
 	return this;

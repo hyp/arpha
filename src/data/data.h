@@ -12,12 +12,45 @@ namespace data {
 	};
 
 	namespace ast {
+
 		enum VisibilityMode {
 			PUBLIC,PRIVATE
 		};
+
 		namespace Function {
 			enum CallConvention {
 				ARPHA,CCALL,STDCALL
+			};
+		}
+
+		//intrinsic operations
+		namespace Operations {
+			enum Kind {
+				NEGATION,//inverse on booleans
+
+				ADDITION,
+				SUBTRACTION,
+				MULTIPLICATION,
+				DIVISION,
+				REMAINDER,
+
+				BIT_NOT,
+				BIT_AND,
+				BIT_OR,
+				BIT_XOR,
+
+				LEFT_SHIFT,
+				RIGHT_SHIFT,//Do we need seperate logical right shift?
+
+
+				EQUALITY_COMPARISON,
+				LESS_COMPARISON,
+				GREATER_COMPARISON,
+				LESS_EQUALS_COMPARISON,
+				GREATER_EQUALS_COMPARISON,
+
+				LOGIC_AND,
+				LOGIC_OR,
 			};
 		}
 	}

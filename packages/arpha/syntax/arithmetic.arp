@@ -6,12 +6,6 @@
 
 import qualified precedence
 
-constraint Negatable(T) = true #TODO
-
-# Unary operators
-macro minus(expression Negatable) = ast.newUnaryOperation(1,expression)
-macro plus (expression Negatable) = expression
-
 macro - 
 {
 	var expr = parser.parse(precedence.unary)
@@ -25,15 +19,6 @@ macro +
 }
 
 # Binary operators
-constraint Addable(T)      = true # TODO
-constraint Multipliable(T) = true #TODO
-
-macro add     (x T: Addable,y T) = ast.newBinaryOperation(5,x,y)
-macro subtract(x T: Addable,y T) = ast.newBinaryOperation(6,x,y)
-
-macro multiply(x T: Multipliable,y T) = ast.newBinaryOperation(7,x,y)
-macro divide  (x T: Multipliable,y T) = ast.newBinaryOperation(8,x,y)
-macro mod     (x T: Multipliable,y T) = ast.newBinaryOperation(9,x,y)
 
 use precedence: precedence.term
 macro (x) + 

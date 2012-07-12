@@ -176,6 +176,8 @@ struct Function: public PrefixDefinition {
 		IS_EXTERNAL = 0x1000,
 
 		FIELD_ACCESS_FUNCTION = 0x2000, //optimization
+
+		IS_INTRINSIC_OPERATION = 0x4000,
 	};
 
 	Function(SymbolID name,Location& location);
@@ -213,6 +215,10 @@ struct Function: public PrefixDefinition {
 	inline bool isFieldAccessMacro(){ return isFlagSet(FIELD_ACCESS_FUNCTION); }
 	int  getField() const;
 
+	void makeIntrinsicOperation(data::ast::Operations::Kind op);
+	inline bool isIntrinsicOperation() const { return isFlagSet(IS_INTRINSIC_OPERATION); }
+	inline data::ast::Operations::Kind getOperation() const { return (data::ast::Operations::Kind)ctfeRegisterCount; }
+
 
 	std::vector<Argument*> arguments;
 	TypePatternUnresolvedExpression _returnType;
@@ -228,7 +234,7 @@ struct Function: public PrefixDefinition {
 	CTFE_Binder intrinsicCTFEbinder;
 
 	//Bindings to compile time evaluator
-	static CTFE_Binder getIntrinsicFunctionBinder(Function* function);
+	static void getIntrinsicFunctionBinder(Function* function);
 
 	//generated functions
 	Function* generatedFunctionParent;

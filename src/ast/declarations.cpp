@@ -214,6 +214,10 @@ void Function::makeFieldAccess(int fieldId) {
 int  Function::getField() const {
 	return ctfeRegisterCount;
 }
+void Function::makeIntrinsicOperation(data::ast::Operations::Kind op){
+	setFlag(IS_INTRINSIC_OPERATION);
+	ctfeRegisterCount = op;
+}
 
 Node*  Function::duplicate(DuplicationModifiers* mods) const{
 	return const_cast<Function*>(this)->reallyDuplicate(mods);

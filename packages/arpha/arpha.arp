@@ -15,6 +15,9 @@ import export syntax.comparison
 import export syntax.arithmetic
 import export syntax.misc
 
+import export functionality.operations.integer
+import export functionality.operations.floating_point
+
 import export functionality.bounded_pointer
 import export functionality.misc
 
