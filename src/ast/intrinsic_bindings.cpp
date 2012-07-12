@@ -154,7 +154,9 @@ std::string mangleArgType(Type* type,bool nat){
 	else if(type->isInteger()){
 		if(nat && type->isSame(intrinsics::types::natural)) return "natural";
 		else {
-			return std::string(type->bits<0?"int":"uint");
+			std::stringstream str;
+			str<<(type->bits<0?"int":"uint")<<std::abs(type->bits);
+			return str.str();
 		}
 	}
 	else if(type->isPointer()){

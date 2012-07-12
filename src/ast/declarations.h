@@ -44,7 +44,9 @@ struct Variable : PrefixDefinition  {
 		// e.g. macro foo(x) = x  , x will be _ pattern on declaration, but really it is a *ast.Expression
 		HIDDEN_TYPE = 0x4 ,
 
-		CONSTANT_SUBSTITUTE = 0x8,//def a = 1 => an occurence of a will be replaced by 1. Make sure value is set before setting this flag.
+		IS_IMMUTABLE = 0x8,//def
+
+		CONSTANT_SUBSTITUTE = 0x10,//def a = 1 => an occurence of a will be replaced by 1. Make sure value is set before setting this flag.
 
 	};
 	Variable(SymbolID name,Location& location);
@@ -72,7 +74,6 @@ struct Variable : PrefixDefinition  {
 
 	TypePatternUnresolvedExpression type;
 	Node* value;    // = nullptr // if it's immutable, place the assigned value here
-	bool isMutable; // = true
 	Scope* _owner;  // set at resolving
 	uint16 ctfeRegisterID;
 

@@ -97,10 +97,14 @@ struct Type {
 
 	static Type* getIntegerType(int bits,bool isSigned);
 	static Type* getIntegerLiteralType();
+	bool   doesLiteralFit(IntegerLiteral* node); // type must be integer or character
+
 	static Type* getFloatType(int bits);
 	static Type* getFloatLiteralType();
+
 	static Type* getCharType (int bits);
 	static Type* getCharLiteralType();
+	bool   doesLiteralFit(CharacterLiteral* node); // type must be character
 	
 
 	//

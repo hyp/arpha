@@ -28,3 +28,16 @@ describe "A 'var' expression" {
 		(var x = false) should be false
 	}
 }
+
+describe "An immutable variable expanded at compile time" {
+	it "should be defined with 'def'" {
+		def pi = 3.14
+		pi should be 3.14
+		def life arpha.literal.integer = 42
+		life should be 42
+	}
+	it "should return a constant with a literal type when referenced" {
+		def foo = 2.71
+		foo should be 2.71
+	}
+}

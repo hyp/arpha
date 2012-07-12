@@ -286,6 +286,18 @@ Node* accessingAnonymousRecordField(AccessExpression* node){
 
 // TODO tuple destructuring
 // TODO anonymous records a.foo
+
+void inferVariablesType(Variable* variable,AssignmentExpression* assignment,Type* valuesType){
+	if(variable->asArgument()) return;
+	auto value = assignment->value;
+
+	if(!variable->deduceType(valuesType)){
+		error(assignment,"Failed to deduce variable's type -\n\tA variable '%s' is expected to have a type matching a pattern %s, which the type '%s' derived from the expression %s doesn't match!",
+			variable->label(),variable->type.pattern,valuesType,assignment->value);
+	}
+	debug("Inferred type for %s",variable);
+}
+
 Node* AssignmentExpression::resolve(Resolver* resolver){
 
 	struct Splitter {
@@ -334,43 +346,24 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 	//Assigning values to variables
 	if(variable){
 		//type inferring
-		if(!variable->asArgument() && variable->type.isPattern()){
-			if(!variable->deduceType(valuesType)){
-				error(this,"Failed to deduce variable's type -\n\tA variable '%s' is expected to have a type matching a pattern %s, which the type '%s' derived from the expression %s doesn't match!",
-					variable->label(),variable->type.pattern,valuesType,value);
-			}
-			debug("Inferred type for %s",variable);
-			if(variable->isMutable){
-				resolver->markResolved(this);
-				return this;
-			}
-		}
+		if(variable->type.isPattern()) inferVariablesType(variable,this,valuesType);
 		
-		if(variable->type.isResolved()){
-			if(variable->type.type()->hasConstSemantics()){
-				//If variable has a constant type, assign only at place of declaration
-				if(this->isInitializingAssignment){
-					if(!variable->value)
-						variable->setImmutableValue(value);
-				}else{
-					error(value,"Can't assign %s to a constant variable %s!",value,object);
-				}
+		if(!variable->type.isResolved()) return this;
+
+		//def - dissallow assignments to references
+		if(variable->isFlagSet(Variable::IS_IMMUTABLE)){
+			if(!object->asVariable()) error(value,"Can't assign %s to a constant variable %s!",value,object);
+		}
+
+		//perform the actual assignment
+		if(auto canBeAssigned = variable->type.type()->assignableFrom(value,valuesType)){
+			value = resolver->resolve(canBeAssigned);
+			if(variable->isFlagSet(Variable::IS_IMMUTABLE) && value->isConst()){
+				variable->setImmutableValue(value);
 			}
-			if(auto canBeAssigned = variable->type.type()->assignableFrom(value,valuesType)){
-				if(!variable->isMutable) {
-					//If variable has a constant type, assign only at place of declaration
-					if(this->isInitializingAssignment){
-						if(!variable->value)
-							variable->setImmutableValue(value);
-					}
-					else{
-						error(value,"Can't assign %s to %s - immutable variables can only be assigned at declaration!",value,object);
-					}
-				}
-				value = resolver->resolve(canBeAssigned);
-				resolver->markResolved(this);
-			}
-			else error(value,"Can't assign %s to %s - the types don't match!",value,object);
+			resolver->markResolved(this);
+		} else {
+			error(value,"Can't assign %s to %s - the types don't match!",value,object);
 		}
 	}
 	else if(auto access = object->asAccessExpression()){
@@ -1088,7 +1081,6 @@ Argument* Argument::specializedDuplicate(Function* dest,DuplicationModifiers* mo
 		dup->type.specify(specializedType);
 	}
 	else dup->type = type.duplicate(mods);
-	dup->isMutable = isMutable;
 	//dup->ctfeRegisterID = ctfeRegisterID; //NB: no need, since original argument won't be analyzed yet. 
 	dup->_defaultValue  = _defaultValue ? _defaultValue->duplicate(mods) : nullptr;
 	dup->_hiddenType    = _hiddenType;

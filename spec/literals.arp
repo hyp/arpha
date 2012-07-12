@@ -1,0 +1,41 @@
+import spec
+
+#TODO need to define literal types first
+describe "Assigning literals to other literals" {
+	it "should be possible to assign a literal integer to a literal real number" {	
+	}
+	it "should be possible to assign a literal integer to a literal character" {
+	}
+	it "should be possible to assign a literal character to a literal integer" {
+	}
+}
+
+describe "Assigning literals to non-literals" {
+	it "should be possible to assign a literal integer to a non-literal integer, when the non-literal type can store it" {
+		def a int8 = 35
+		a should be 35
+	}
+	it "should be possible to assign a literal integer to a non-literal floating point" {
+		def foo float = 1
+		foo should be 1.0
+	}
+	it "should be possible to assign a literal integer to a non-literal character, when the non-literal type can store it" {
+		def c char8 = 65
+		c should be 'A'
+	}
+	
+	it "should be possible to assign a literal real number to a non-literal floating point number" { 
+		def f float = 3.14
+		f should be 3.14
+	}
+
+	it "should be possible to assign a literal character to a non-literal character, when the non-literal type can store it" {
+		def a char8 ='b'
+		a should be 'b'
+	}
+	it "should be possible to assign a literal character to a non-literal integer, when the non-literal type can store it" {
+		def a int16 = 'A'
+		a should be 65
+	}
+}
+

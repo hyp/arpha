@@ -18,13 +18,13 @@ IntrinsicInfixMacro::IntrinsicInfixMacro(SymbolID name,int stickiness) : InfixDe
 }
 
 //variable
-Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location),value(nullptr),isMutable(true) {
+Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location),value(nullptr) {
 	_owner = nullptr;
 }
-Variable::Variable(SymbolID name,Location& location,Scope* owner,Node* value) : PrefixDefinition(name,location),isMutable(false) {
+Variable::Variable(SymbolID name,Location& location,Scope* owner,Node* value) : PrefixDefinition(name,location){
 	_owner = owner;
-	this->value = value;
 	specifyType(value->returnType());
+	setFlag(IS_IMMUTABLE);
 	setImmutableValue(value);
 }
 bool Variable::applyProperty(SymbolID name,Node* value){
@@ -53,23 +53,19 @@ bool Variable::deduceType(Type* givenType){
 	return false;
 }
 void Variable::setImmutableValue(Node* value){
-	assert(isMutable == false);
+	assert(isFlagSet(IS_IMMUTABLE));
 	assert(value->isResolved() && value->isConst());
+	assert(!this->value);
 	this->value = value;
-	/*if(value->asIntegerLiteral()){
-		assert(type.type()->isInteger());
-		this->value->asIntegerLiteral()->_type = type.type()->asInteger(); //def a int8 = 1 -> make the 1 explicitly int8
-	}*/
 	setFlag(CONSTANT_SUBSTITUTE);
 
-	debug("Setting value %s to variable %s - %s",value,label(),isFlagSet(CONSTANT_SUBSTITUTE));
+	debug("Setting value %s to variable %s",value,label());
 }
 
 Node* Variable::duplicate(DuplicationModifiers* mods) const {
 	auto duplicatedReplacement = new Variable(label(),location());
 	duplicatedReplacement->type = type.duplicate(mods);
 	duplicatedReplacement->_owner = mods->target;
-	duplicatedReplacement->isMutable = isMutable;
 	duplicatedReplacement->ctfeRegisterID = ctfeRegisterID;
 	mods->duplicateDefinition(const_cast<Variable*>(this),duplicatedReplacement);
 	return copyProperties(duplicatedReplacement);
@@ -103,7 +99,6 @@ bool Argument::expandAtCompileTime() const {
 Argument* Argument::reallyDuplicate(Function* dest,DuplicationModifiers* mods) const {
 	Argument* dup = new Argument(label(),location(),dest);
 	dup->type = type.duplicate(mods);
-	dup->isMutable = isMutable;
 	dup->ctfeRegisterID = ctfeRegisterID;
 	dup->_defaultValue = _defaultValue ? _defaultValue->duplicate(mods) : nullptr;
 	dup->_hiddenType = _hiddenType;

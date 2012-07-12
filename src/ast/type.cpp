@@ -188,7 +188,7 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 	for(auto i= introducedDefinitions.begin();i!=introducedDefinitions.end();i++){
 		auto var = new Variable((*i).name,(*i).location);
 		var->_owner = container;
-		var->isMutable = false;
+		var->setFlag(Variable::IS_IMMUTABLE);
 		if((*i).value){
 			var->specifyType((*i).value->returnType());
 			var->setImmutableValue((*i).value);
@@ -351,22 +351,148 @@ Node* Type::generatedArgument(size_t i) const {
 }
 
 enum {
-	LITERAL_CONVERSION = 4,
+	LITERAL_TYPE_SPECIFICATION = 4, //Untyped literal to typed
+	LITERAL_CONVERSION,      //Untyped literal to another untyped literal
 	RECORD_SUBTYPE,
 	EXACT
 };
 
+inline Node* int2float(IntegerLiteral* node,Type* t){
+	return new FloatingPointLiteral((double)node->integer.u64,t);
+}
+inline Node* int2char(IntegerLiteral* node,Type* t){
+	return new CharacterLiteral((UnicodeChar)node->integer.u64,t);
+}
+inline Node* char2int(CharacterLiteral* node,Type* t){
+	return new IntegerLiteral((uint64)node->value,t);
+}
+
+inline bool characterFits(int bits,uint32 value){
+	if(value < 256) return true;
+	if(bits == 16 && value <= std::numeric_limits<uint16>::max() ) return true;//TODO is this correct???
+	return value <= 0x10FFFF? true:false; //UNICODE_MAX
+}
+
+bool integerFits(int bits,uint64 value,bool isNegative){
+	if(isNegative && bits>0) return false;
+
+	int64 min;
+	uint64 max;
+#define RANGE(T) { min = std::numeric_limits<T>::min() ; max = std::numeric_limits<T>::max() ; }
+	if(bits == 32)       RANGE(uint32)
+	else if(bits == 64)  RANGE(uint64)
+	else if(bits == -32) RANGE(int)
+	else if(bits == 16)  RANGE(uint16)
+	else if(bits == -16) RANGE(short)
+	else if(bits == 8)   RANGE(unsigned char)
+	else if(bits == -8)  RANGE(signed char)
+	else if(bits == -64) RANGE(int64);
+	
+	if(bits > 0) return value <= max;
+	else return ((int64)value) >= min && value <= max;
+#undef RANGE
+}
+
+bool   Type::doesLiteralFit(IntegerLiteral* node){
+	if(isInteger()){
+		return integerFits(bits,node->integer.u64,node->integer.isNegative());
+	}
+	else {
+		assert(isChar());
+		if(node->integer.isNegative()) return false;
+		return characterFits(bits,node->integer.u64);
+	}
+}
+
+inline bool doesIntegerLiteralFitInLiteralChar(IntegerLiteral* node){
+	return node->integer.isPositive() && node->integer.u64 <= 0x10FFFF;
+}
+
+bool   Type::doesLiteralFit(CharacterLiteral* node){
+	if(isInteger()){
+		return integerFits(bits,node->value,false);
+	}
+	else {
+		assert(isChar());
+		return characterFits(bits,node->value);
+	}
+}
+
+
+
+/*
+//given literalNodeType is literal
+Scenarios:
+  def a = 1 :: literal.integer                => 1 :: literal.integer
+  def a int32 = 1 :: literal.integer          => 1 :: int32
+  def a literal.float = 1 :: literal.integer  => 1.0 :: literal.float
+  def a float = 1 :: literal.integer          => 1.0 :: float
+  def c literal.char = 1 :: literal.integer   => '\x01' :: literal.char
+  def c char32 = 65 :: literal.integer       => 'A' :: char32
+
+  def f float = 2.71 :: literal.float         => 2.71 :: float
+
+  def c char32 = 'A' :: literal.char          => 'A' :: char32
+  def c literal.integer = 'A' :: literal.char => 65 :: literal.integer
+  def c int32  = 'A' :: literal.char          => 65 :: int32
+
+  TODO: def s LinearSequence(char8) = "foo" :: literal.string => (&"foo",3) :: LinearSequence(char8)
+*/
+int literalTypeAssignment(Type* givenType,Node** literalNode,Type* literalNodeType,bool doTransform){
+	auto expression = *literalNode;
+
+	assert(literalNodeType->isLiteral());
+	if( auto integerLiteral = expression->asIntegerLiteral() ){
+		// a int32 = 1
+		if(givenType->isInteger() && givenType->doesLiteralFit(integerLiteral)){
+			if(doTransform) integerLiteral->explicitType = givenType;
+			return LITERAL_TYPE_SPECIFICATION;
+		}
+		// a float = 1
+		else if(givenType->type == Type::LITERAL_FLOAT || givenType->isFloat()){
+			if(doTransform) *literalNode = int2float(integerLiteral,givenType);
+			return givenType->type == Type::LITERAL_FLOAT? LITERAL_CONVERSION : LITERAL_TYPE_SPECIFICATION;
+		}
+		// a char = 1
+		else if( (givenType->type == Type::LITERAL_CHAR && doesIntegerLiteralFitInLiteralChar(integerLiteral) ) 
+			|| (givenType->isChar() && givenType->doesLiteralFit(integerLiteral)) ){
+			if(doTransform) *literalNode = int2char(integerLiteral,givenType);
+			return givenType->type == Type::LITERAL_CHAR? LITERAL_CONVERSION : LITERAL_TYPE_SPECIFICATION;
+		}
+	}
+	else if( auto floatingLiteral = expression->asFloatingPointLiteral() ){
+		//a float = 1.0
+		if(givenType->isFloat()){
+			if(doTransform) floatingLiteral->explicitType = givenType;
+			return LITERAL_TYPE_SPECIFICATION;
+		}
+	}
+	else if( auto characterLiteral = expression->asCharacterLiteral() ){
+		//a char32 = 'A'
+		if(givenType->isChar() && givenType->doesLiteralFit(characterLiteral) ){
+			if(doTransform) characterLiteral->explicitType = givenType;
+			return LITERAL_TYPE_SPECIFICATION;
+		}
+		//a int32 = 'A'
+		else if( givenType->type == Type::LITERAL_INTEGER || (givenType->isInteger() && givenType->doesLiteralFit(characterLiteral)) ){
+			if(doTransform) *literalNode = char2int(characterLiteral,givenType);
+			return givenType->type == Type::LITERAL_INTEGER? LITERAL_CONVERSION : LITERAL_TYPE_SPECIFICATION;
+		}
+	}
+	else if( auto stringLiteral = expression->asStringLiteral() ){
+		//TODO a LinearSequence(char8) = "fooo"
+	}
+
+	return -1;
+}
+
 int   Type::canAssignFrom(Node* expression,Type* type){
 	if(this->isSame(type)) return EXACT;
 
-	/*else if(this->type == INTEGER && type->type == INTEGER){
-		//literal integer constants.. check to see if the type can accept it's value
-		if(auto intConst = expression->asIntegerLiteral()){
-			//literal match
-			if(!intConst->_type && this->integer->isValid(intConst->integer)) return LITERAL_CONVERSION;
-		}
-		if(type->integer->isSubset(this->integer)) return RECORD_SUBTYPE;
-	}*/else if(type->type == RECORD){
+	if(type->isLiteral()){
+		return literalTypeAssignment(this,&expression,type,false);
+	}
+	else if(type->type == RECORD){
 		auto record = static_cast<Record*>(type);
 		//Extenders fields
 		for(size_t i = 0;i < record->fields.size();i++){
@@ -401,17 +527,14 @@ int   Type::canAssignFrom(Node* expression,Type* type){
 }
 Node* Type::assignableFrom(Node* expression,Type* type) {
 	if(this->isSame(type)) return expression;//like a baws
+	int assigns;
 
-	/*else if(this->type == INTEGER && type->type == INTEGER){
-		//literal integer constants.. check to see if the type can accept it's value
-		if(auto intConst = expression->asIntegerLiteral()){
-			if(!intConst->_type && this->integer->isValid(intConst->integer)){
-				intConst->_type = this->integer;
-				return expression;
-			}
+	if(type->isLiteral()){
+		if( (assigns = literalTypeAssignment(this,&expression,type,true)) != -1){
+			return expression;
 		}
-		if(type->integer->isSubset(this->integer)) return expression;
-	}*/else if(type->type == RECORD){
+	}
+	else if(type->type == RECORD){
 		//Extenders fields
 		auto record = static_cast<Record*>(type);
 		for(size_t i = 0;i < record->fields.size();i++){

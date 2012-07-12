@@ -231,7 +231,7 @@ struct VarParser: IntrinsicPrefixMacro {
 		std::vector<Variable*> vars;
 
 		auto var = new Variable(first,parser->previousLocation());
-		var->isMutable = isMutable;
+		if(!isMutable) var->setFlag(Variable::IS_IMMUTABLE);
 		parser->applyProperties(var);
 		if(!isMutable && parser->compilationUnit()->moduleBody->scope->importsArphaIntrinsic) var->applyProperty("intrinsic",nullptr);
 		parser->introduceDefinition(var);
@@ -239,7 +239,7 @@ struct VarParser: IntrinsicPrefixMacro {
 		while(parser->match(",")){
 			auto name = parser->expectName();
 			var = new Variable(name,parser->previousLocation());
-			var->isMutable = isMutable;
+			if(!isMutable) var->setFlag(Variable::IS_IMMUTABLE);
 			parser->applyProperties(var);
 			parser->introduceDefinition(var);
 			vars.push_back(var);
