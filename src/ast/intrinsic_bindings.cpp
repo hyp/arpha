@@ -114,6 +114,10 @@ void mapStandartOperations(Type* t){
 	else if(t->isFloat() || t->type == Type::LITERAL_FLOAT){
 		mapRealOperations(s.c_str());
 	}
+	else if(t->isBool()){
+		MAPOP("not(bool)",data::ast::Operations::NEGATION);
+		MAPOP("equals(bool,bool)",data::ast::Operations::EQUALITY_COMPARISON);
+	}
 }
 
 /**
@@ -227,6 +231,8 @@ static void initMapping(){
 	mapStandartOperations(Type::getFloatLiteralType());
 	mapStandartOperations(Type::getFloatType(32));
 	mapStandartOperations(Type::getFloatType(64));
+
+	mapStandartOperations(intrinsics::types::boolean);
 
 	/**
 	* arpha.functionality.bounded_pointer

@@ -6,12 +6,6 @@
 
 import qualified precedence
 
-constraint Comparable(T) = true #TODO...
-
-macro equals  (x T:Comparable,y T) = ast.newBinaryOperation(2,x,y)
-macro less    (x T:Comparable,y T) = ast.newBinaryOperation(3,x,y)
-macro greater (x T:Comparable,y T) = ast.newBinaryOperation(4,x,y)
-
 constraint ImplementsEquals(T)  = true
 constraint ImplementsGreater(T) = true
 constraint ImplementsLess(T)    = true

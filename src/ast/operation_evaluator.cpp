@@ -106,6 +106,18 @@ bool doComparison(data::ast::Operations::Kind op,double operand1,double operand2
 	DO_COMPARISONS
 }
 
+void doBooleanOperation(data::ast::Operations::Kind op,bool& operand1,bool operand2){
+	switch(op){
+	case NEGATION:
+		operand1 = !operand1;
+		break;
+	
+	case EQUALITY_COMPARISON:
+		operand1 = operand1 == operand2;
+		break;
+	}
+}
+
 inline bool isCalculationOperation(data::ast::Operations::Kind op){
 	return op >= NEGATION && op <= RIGHT_SHIFT;
 }
@@ -145,6 +157,10 @@ Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
 			auto value = doComparison(op,operand1,params[1]->asFloatingPointLiteral()->value); 
 			return new BoolExpression(value); 
 		}
+	}
+	else if(ret->isBool()){
+		bool& operand1 = params[0]->asBoolExpression()->value; 
+		doBooleanOperation(op,operand1,op==NEGATION? operand1 : params[1]->asBoolExpression()->value);
 	}
 
 	return params[0];
