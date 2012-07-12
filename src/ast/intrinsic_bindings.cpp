@@ -139,7 +139,7 @@ static void initMapping(){
 	MAP_PROP("offsetof(_)",Function::MACRO_FUNCTION,{
 		auto node = invocation->getNodeParameter(0);
 		if(auto field= node->asFieldAccessExpression()){
-			invocation->ret(new IntegerLiteral(BigInt((uint64)0)));
+			invocation->ret(new IntegerLiteral(BigInt((uint64)0),intrinsics::types::natural));
 		} else {
 			invocation->retError("The parameter to the function 'offsetof' must be a valid field access expression!");
 		}
@@ -152,12 +152,19 @@ std::string mangleArgType(Type* type,bool nat){
 	else if(type->isBool()) return "bool";
 	else if(type->isNodePointer()) return "Expression";
 	else if(type->isInteger()){
-		 return nat && type->isSame(intrinsics::types::natural) ? "natural" :type->asInteger()->id.ptr();
+		if(nat && type->isSame(intrinsics::types::natural)) return "natural";
+		else {
+			return std::string(type->bits<0?"int":"uint");
+		}
 	}
 	else if(type->isPointer()){
 		return std::string("*")+mangleArgType(type->next(),nat);
 	} else if(type->isBoundedPointer()){
 		return std::string("[]")+mangleArgType(type->next(),nat);
+	}
+	else if(type->isLiteral()){
+		std::string result = "literal.";
+		return result;
 	}
 	return "";
 }

@@ -204,10 +204,6 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 * The type
 */
 Type::Type(int kind) : type(kind),flags(0) {
-	assert(kind == VOID || kind == TYPE || kind == BOOL || kind == RECORD || kind == VARIANT || kind == ANONYMOUS_RECORD || kind== ANONYMOUS_VARIANT || kind == LITERAL_STRING || kind == LITERAL_CHAR);
-}
-Type::Type(IntegerType* integer) : type(INTEGER),flags(0) {
-	this->integer = integer;
 }
 Type::Type(int kind,Type* next) : type(kind),flags(0) {
 	assert(kind == POINTER || kind == POINTER_BOUNDED || kind == LINEAR_SEQUENCE);
@@ -226,6 +222,12 @@ Type::Type(int kind,int subtype) : type(kind),flags(0) {
 	nodeSubtype = subtype;
 }
 
+Type* Type::getIntegerType(int bits,bool isSigned){
+	return new Type(INTEGER,isSigned? -bits:bits);
+}
+Type* Type::getIntegerLiteralType(){
+	return new Type(LITERAL_INTEGER);
+}
 Type* Type::getFloatType(int bits){
 	return new Type(FLOAT,bits);
 }
@@ -283,7 +285,7 @@ bool Type::isSame(Type* other){
 		case RECORD :
 		case VARIANT:
 			return this == other;
-		case INTEGER: return integer == other->integer;
+		case INTEGER:
 		case FLOAT:
 		case CHAR:  
 			return bits == other->bits;
@@ -298,6 +300,7 @@ bool Type::isSame(Type* other){
 			return static_cast<AnonymousAggregate*>(this)->types  == static_cast<AnonymousAggregate*>(other)->types &&
 				   static_cast<AnonymousAggregate*>(this)->fields == static_cast<AnonymousAggregate*>(other)->fields;
 		case LINEAR_SEQUENCE: return argument->isSame(other->argument);
+		case LITERAL_INTEGER:
 		case LITERAL_FLOAT :
 		case LITERAL_CHAR  :
 		case LITERAL_STRING:  return true;
@@ -340,7 +343,7 @@ Node* Type::generatedArgument(size_t i) const {
 	//case RECORD: return record->generatedArgument(i);
 	case STATIC_ARRAY: 
 	case POINTER_BOUNDED_CONSTANT:
-		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)N);
+		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)N,intrinsics::types::natural);
 	default:
 		throw std::runtime_error("TypeExpression generatedArgument failed");	
 		return nullptr;
@@ -356,14 +359,14 @@ enum {
 int   Type::canAssignFrom(Node* expression,Type* type){
 	if(this->isSame(type)) return EXACT;
 
-	else if(this->type == INTEGER && type->type == INTEGER){
+	/*else if(this->type == INTEGER && type->type == INTEGER){
 		//literal integer constants.. check to see if the type can accept it's value
 		if(auto intConst = expression->asIntegerLiteral()){
 			//literal match
 			if(!intConst->_type && this->integer->isValid(intConst->integer)) return LITERAL_CONVERSION;
 		}
 		if(type->integer->isSubset(this->integer)) return RECORD_SUBTYPE;
-	}else if(type->type == RECORD){
+	}*/else if(type->type == RECORD){
 		auto record = static_cast<Record*>(type);
 		//Extenders fields
 		for(size_t i = 0;i < record->fields.size();i++){
@@ -399,7 +402,7 @@ int   Type::canAssignFrom(Node* expression,Type* type){
 Node* Type::assignableFrom(Node* expression,Type* type) {
 	if(this->isSame(type)) return expression;//like a baws
 
-	else if(this->type == INTEGER && type->type == INTEGER){
+	/*else if(this->type == INTEGER && type->type == INTEGER){
 		//literal integer constants.. check to see if the type can accept it's value
 		if(auto intConst = expression->asIntegerLiteral()){
 			if(!intConst->_type && this->integer->isValid(intConst->integer)){
@@ -408,7 +411,7 @@ Node* Type::assignableFrom(Node* expression,Type* type) {
 			}
 		}
 		if(type->integer->isSubset(this->integer)) return expression;
-	}else if(type->type == RECORD){
+	}*/else if(type->type == RECORD){
 		//Extenders fields
 		auto record = static_cast<Record*>(type);
 		for(size_t i = 0;i < record->fields.size();i++){

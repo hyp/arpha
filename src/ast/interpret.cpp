@@ -294,10 +294,10 @@ void CTFEintrinsicInvocation::ret(SymbolID symbolAsString){
 	_result = new StringLiteral(symbolAsString);
 }
 void CTFEintrinsicInvocation::retNatural(size_t value){
-	_result = new IntegerLiteral((uint64)value);
+	_result = new IntegerLiteral((uint64)value,intrinsics::types::natural);
 }
 void CTFEintrinsicInvocation::retNaturalNatural(size_t a,size_t b){
-	_result = new TupleExpression(new IntegerLiteral((uint64)a),new IntegerLiteral((uint64)b));
+	_result = new TupleExpression(new IntegerLiteral((uint64)a,intrinsics::types::natural),new IntegerLiteral((uint64)b,intrinsics::types::natural));
 }
 void CTFEintrinsicInvocation::retError(const char* err){
 	auto noderef = _params[0]->asNodeReference();

@@ -107,6 +107,7 @@ struct LLVMgenerator: NodeVisitor {
 
 	//
 	Node* visit(IntegerLiteral* node);
+	Node* visit(CharacterLiteral* node);
 	Node* visit(BoolExpression* node);
 	Node* visit(VariableReference* node);
 	Node* visit(UnaryOperation* node);
@@ -186,7 +187,7 @@ llvm::Type* generatePointerType(LLVMgenerator* generator,Type* next){
 // { T* ptr,natural length }
 llvm::Type* generateLinearSequence(LLVMgenerator* generator,Type* next){
 	llvm::Type* fields[2] = { generatePointerType(generator,next),coreTypes[GEN_TYPE_SIZE_T] };
-	return llvm::StructType::get(generator->context,fields,true);//NB: packed
+	return llvm::StructType::get(generator->context,fields,false);
 }
 
 Node* LLVMgenerator::visit(TypeDeclaration* node){
@@ -200,6 +201,11 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 	case Type::BOOL: return llvm::Type::getInt8Ty(context);
 	case Type::RECORD:
 		return getRecordDeclaration(this,static_cast<Record*>(type));
+	case Type::INTEGER:
+		{
+		auto bits = std::abs(type->bits);
+		return coreTypes[bits == 32? GEN_TYPE_I32 : (bits == 16? GEN_TYPE_I16 : (bits == 64? GEN_TYPE_I64 : GEN_TYPE_I8))];
+		}
 	case Type::FLOAT:
 		return type->bits == 32? llvm::Type::getFloatTy(context) : llvm::Type::getDoubleTy(context);
 	case Type::CHAR:
@@ -213,6 +219,10 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 		return generateAnonymousRecord(this,static_cast<AnonymousAggregate*>(type));
 	case Type::LINEAR_SEQUENCE:
 		return generateLinearSequence(this,type->next());
+
+	case Type::LITERAL_INTEGER:
+	case Type::LITERAL_FLOAT:
+	case Type::LITERAL_CHAR:
 	case Type::LITERAL_STRING:
 		assert(false); break;
 	}
@@ -237,7 +247,7 @@ Node* LLVMgenerator::visit(IntegerLiteral* node){
 }
 
 Node* LLVMgenerator::visit(CharacterLiteral* node){
-	emitConstant(llvm::ConstantInt::get(generateType(node->returnType()),node->value,false));
+	emitConstant(llvm::ConstantInt::get(genType(node->returnType()),node->value,false));
 	return node;
 }
 
@@ -751,7 +761,7 @@ namespace gen {
 			llvm::Module& mod = *module;
 			llvm::TargetMachine& Target = *targetMachine;
 			llvm::TargetMachine::CodeGenFileType FileType = 
-				outputFormat == data::gen::native::ModuleOutputFormat::OBJECT ? llvm::TargetMachine::CodeGenFileType::CGFT_ObjectFile : llvm::TargetMachine::CodeGenFileType::CGFT_AssemblyFile;
+				outputFormat == data::gen::native::ModuleOutputFormat::OBJECT ? llvm::TargetMachine::CGFT_ObjectFile : llvm::TargetMachine::CGFT_AssemblyFile;
 			llvm::raw_fd_ostream& Out = out;
 
 			PassManager PM;

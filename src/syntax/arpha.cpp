@@ -488,7 +488,7 @@ struct MacroParser: IntrinsicPrefixMacro {
 				return func;
 			}
 		} else {
-			auto macro = new InfixMacro(func,new IntegerLiteral((uint64)0));
+			auto macro = new InfixMacro(func,new IntegerLiteral((uint64)0,Type::getIntegerLiteralType()));
 			parser->applyProperties(macro);
 			parser->introduceDefinition(macro);
 			return parser->compilationUnit()->resolver->resolveMacroAtParseStage(macro);

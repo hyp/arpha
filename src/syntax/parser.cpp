@@ -79,16 +79,16 @@ SymbolID Parser::expectName(){
 static Node* parseNotSymbol(Parser* parser){
 	Token& token = parser->lookedUpToken;
 	if(token.isUinteger()){
-		return new IntegerLiteral(BigInt(token.uinteger));
+		return new IntegerLiteral(BigInt(token.uinteger),Type::getIntegerLiteralType());
 	}
 	else if(token.isReal()){
-		return new FloatingPointLiteral(token.real);
+		return new FloatingPointLiteral(token.real,Type::getFloatLiteralType());
 	}
 	else if(token.isString()){
 		return new StringLiteral(token.string);
 	}
 	else if(token.isChar()){
-		return new CharacterLiteral(token.character);
+		return new CharacterLiteral(token.character,Type::getCharLiteralType());
 	}
 	else{
 		parser->syntaxError(format("Can't parse token %s!",token));

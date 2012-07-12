@@ -70,7 +70,7 @@ struct Type {
 		BOOL,
 		RECORD,
 		VARIANT,
-		INTEGER,
+		INTEGER,//(u)intX
 		FLOAT,//float32,float64
 		CHAR,//char8,char16,char32
 		FUNCTION,
@@ -83,18 +83,20 @@ struct Type {
 		ANONYMOUS_VARIANT,
 		LINEAR_SEQUENCE,//a range of elements = { T*,natural }
 
+		LITERAL_INTEGER,
 		LITERAL_FLOAT,//1.2
 		LITERAL_CHAR,//'A'
 		LITERAL_STRING,
 	};
 
 	Type(int kind);
-	Type(IntegerType* integer);
 	Type(int kind,Type* next);//ptr | bounded pointer
 	Type(Type* argument,Type* returns);//function
 	Type(int kind,Type* next,size_t N); //static array | bounded pointer constant length
 	Type(int kind,int subtype);//node
 
+	static Type* getIntegerType(int bits,bool isSigned);
+	static Type* getIntegerLiteralType();
 	static Type* getFloatType(int bits);
 	static Type* getFloatLiteralType();
 	static Type* getCharType (int bits);
@@ -117,12 +119,8 @@ struct Type {
 	inline bool isNodePointer() const { return type == POINTER && argument->type == NODE; }
 	inline bool isBoundedPointer() const { return type == POINTER_BOUNDED; }
 	inline bool isBoundedPointerConstantLength() const { return type == POINTER_BOUNDED_CONSTANT; }
+	inline bool isLiteral() const { return type>=LITERAL_INTEGER; }
 
-
-	
-
-	IntegerType* asInteger(){ return integer; }
-	const IntegerType* asInteger() const { return integer; }
 
 	Record* asRecord();
 	AnonymousAggregate* asAnonymousRecord();
@@ -172,7 +170,6 @@ public:
 	uint16 type;
 	uint16 flags;
 	union {
-		IntegerType* integer;
 		Type* argument;
 		Node* pattern;
 		int   nodeSubtype;//USE -1 for untyped note i.e. [> 1 <] returns untyped node, but new ast.IntegerLiteral returns typed node!

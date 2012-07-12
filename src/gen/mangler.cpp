@@ -37,11 +37,30 @@ void mangleNode(std::stringstream& stream,Node* node){
 	else stream<<blockComponentLength((uintptr_t)node)<<'_'<<((uintptr_t)node);
 }
 
+unittest(gg){
+
+}
+
 void Mangler::Element::mangle(Type* type){
 	switch(type->type){
 	case Type::VOID:     stream<<'n'; break;
 	case Type::BOOL:     stream<<'b'; break;
-	case Type::INTEGER:  stream<<'i'; break;//TODO
+	case Type::INTEGER:
+		{
+		auto isSigned = type->bits<0;
+		auto bits = isSigned?-type->bits:type->bits;
+		char c;
+		if(bits == 32)      c = (isSigned?'g':'h');
+		else if(bits == 64) c = (isSigned?'j':'k');
+		else if(bits == 8)  c = (isSigned?'o':'p');
+		else if(bits == 16) c = (isSigned?'q':'r');
+		else {
+			c = 0;
+			stream<<(isSigned?'i':'u')<<bits;
+		}
+		if(c!=0) stream<<c;
+		}
+		break;
 	case Type::FLOAT:    stream<<(type->bits == 32? 'f':'d'); break;
 	case Type::CHAR:     stream<<(type->bits == 8? 'x': type->bits == 32? 'y' : 'z'); break;
 	case Type::RECORD:   mangle(static_cast<Record*>(type)->declaration); break;
@@ -62,6 +81,10 @@ void Mangler::Element::mangle(Type* type){
 	}
 	break;
 	case Type::LINEAR_SEQUENCE: stream<<'S'; mangle(type->next()); break;
+	case Type::LITERAL_INTEGER: stream<<"li"; break;
+	case Type::LITERAL_FLOAT:   stream<<"lf"; break;
+	case Type::LITERAL_CHAR:    stream<<"lc"; break;
+	case Type::LITERAL_STRING:  stream<<"ls"; break;
 	default:
 		assert(false);
 	}

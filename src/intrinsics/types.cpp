@@ -41,26 +41,16 @@ namespace intrinsics {
 
 			NodePointer = new ::Type(::Type::POINTER,new ::Type(::Type::NODE,-1));
 
-			BigInt min;
-			BigInt max;
-#define DEF_INT_TYPE(n,t,s) \
-			min = std::numeric_limits<t>::min(); \
-			max = (::uint64)(std::numeric_limits<t>::max()); \
-			n = &IntegerType::make(min,max)->_type; \
-			n->integer->id = #n; n->integer->_size = s;
 
-			DEF_INT_TYPE(int8,signed char,1)
-			DEF_INT_TYPE(int16,signed short,2)
-			DEF_INT_TYPE(int32,signed int,4)
-			DEF_INT_TYPE(int64,::int64,8)
+			int8 = ::Type::getIntegerType (8,true);
+			int16 = ::Type::getIntegerType(16,true);
+			int32 = ::Type::getIntegerType(32,true);
+			int64 = ::Type::getIntegerType(64,true);
 
-			DEF_INT_TYPE(uint8,unsigned char,1)
-			DEF_INT_TYPE(uint16,unsigned short,2)
-			min = 0;
-			max = (::uint64)(std::numeric_limits<unsigned int>::max());
-			uint32 = &IntegerType::make(min,max)->_type;
-			uint32->integer->id = "uint32";uint32->integer->_size = 4;
-			DEF_INT_TYPE(uint64,::uint64,8)
+			uint8 = ::Type::getIntegerType (8,false);
+			uint16 = ::Type::getIntegerType(16,false);
+			uint32 = ::Type::getIntegerType(32,false);
+			uint64 = ::Type::getIntegerType(64,false);
 
 			natural = uint32;
 

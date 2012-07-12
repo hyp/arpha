@@ -56,10 +56,10 @@ void Variable::setImmutableValue(Node* value){
 	assert(isMutable == false);
 	assert(value->isResolved() && value->isConst());
 	this->value = value;
-	if(value->asIntegerLiteral()){
+	/*if(value->asIntegerLiteral()){
 		assert(type.type()->isInteger());
 		this->value->asIntegerLiteral()->_type = type.type()->asInteger(); //def a int8 = 1 -> make the 1 explicitly int8
-	}
+	}*/
 	setFlag(CONSTANT_SUBSTITUTE);
 
 	debug("Setting value %s to variable %s - %s",value,label(),isFlagSet(CONSTANT_SUBSTITUTE));
@@ -121,38 +121,6 @@ bool Argument::isDependent() const {
 	return false;
 }
 
-//integer type
-
-IntegerType::IntegerType(SymbolID name) : id(name),_type(this){
-}
-size_t IntegerType::size() const {
-	return _size;
-}
-bool IntegerType::isValid(BigInt& value) const {
-	return min<=value && value<=max;
-}
-bool IntegerType::isUnsigned() const {
-	return !(min<BigInt((uint64)0));
-}
-bool IntegerType::isSubset(IntegerType* other) const {
-	return (!(min<other->min)) && max<=other->max;
-}
-
-IntegerType* IntegerType::make(BigInt& min,BigInt& max){
-	for(auto i = expansions.begin();i!=expansions.end();i++){
-		if((*i)->min == min && (*i)->max == max) return *i;
-	}
-	std::ostringstream name;
-	name<<"int("<<min<<","<<max<<")";
-	auto t = new IntegerType(name.str().c_str());
-	t->min = min;
-	t->max = max;
-	expansions.push_back(t);
-	return t;
-}
-std::vector<IntegerType* > IntegerType::expansions;
-
-//type
 //Overload set
 
 Overloadset::Overloadset(Function* firstFunction) : PrefixDefinition(firstFunction->label(),firstFunction->location()) {

@@ -249,7 +249,7 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 		case Type::BOOL: stream<<"bool"; break;
 		case Type::RECORD:  stream<<static_cast<Record*>(type)->declaration->label(); break;
 		case Type::VARIANT: stream<<static_cast<Variant*>(type)->declaration->label(); break;
-		case Type::INTEGER: stream<<type->integer->id; break;
+		case Type::INTEGER: stream<<(type->bits<0?"int":"uint")<<(type->bits<0?-type->bits:type->bits); break;
 		case Type::FLOAT: stream<<(type->bits == 32? "float":"double"); break;
 		case Type::CHAR:  stream<<"char"<<type->bits; break;
 		case Type::POINTER: 
@@ -280,6 +280,8 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 			stream<<")";
 			}
 			break;
+		case Type::LITERAL_INTEGER:
+			stream<<"literal.integer"; break;
 		case Type::LITERAL_FLOAT:
 			stream<<"literal.real"; break;
 		case Type::LITERAL_CHAR:

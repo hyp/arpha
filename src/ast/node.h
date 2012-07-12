@@ -204,29 +204,25 @@ struct LiteralNode: Node {
 
 //(0..9)+ : integer
 struct IntegerLiteral : LiteralNode {
-	IntegerLiteral(const BigInt& integer);
+	IntegerLiteral(const BigInt& integer,Type* t);
 	Type* returnType() const;	
 	
 	BigInt integer;
-	IntegerType* _type;//optional
+	Type* explicitType;
 	DECLARE_NODE(IntegerLiteral);
 };
 
-//Either a float or a double
 struct FloatingPointLiteral : LiteralNode {
-	enum {
-		IS_FLOAT = 0x8,//is it a float(or a double)
-	};
-
-	FloatingPointLiteral(const double v);
+	FloatingPointLiteral(const double v,Type* t);
 	Type* returnType() const;
 
 	double value;
+	Type* explicitType;
 	DECLARE_NODE(FloatingPointLiteral);
 };
 
 struct CharacterLiteral: LiteralNode {
-	CharacterLiteral(UnicodeChar c);
+	CharacterLiteral(UnicodeChar c,Type* t);
 	Type* returnType() const;
 
 	UnicodeChar value ;

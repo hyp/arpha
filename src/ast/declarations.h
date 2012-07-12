@@ -112,28 +112,6 @@ private:
 	Node* _defaultValue;
 };
 
-//An integral type
-struct IntegerType {
-	SymbolID id;
-	Type _type;
-	Type* asType() { return &_type; }
-	const Type* asType() const { return &_type; }
-
-	size_t size() const;
-	bool   isValid(BigInt& value) const;
-	bool   isUnsigned() const;
-
-	bool isSubset(IntegerType* other) const;
-
-	static IntegerType* make(BigInt& min,BigInt& max);
-
-	BigInt max,min;
-	size_t _size;
-private:
-	IntegerType(SymbolID name);
-	static std::vector<IntegerType* > expansions;
-};
-
 //An overload set consists of function with the same name, whcih are defined in the same scope
 struct Overloadset: public PrefixDefinition {
 	enum {

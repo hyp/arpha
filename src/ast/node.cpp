@@ -87,15 +87,15 @@ Node* NodeList::duplicateChildren(NodeList* dest,DuplicationModifiers* mods) con
 }
 
 // Integer literals
-IntegerLiteral::IntegerLiteral(const BigInt& integer){
+IntegerLiteral::IntegerLiteral(const BigInt& integer,Type* t){
 	this->integer = integer;
-	_type = nullptr;
+	explicitType = t;
 }
 Type* IntegerLiteral::returnType() const{
-	if(_type) return _type->asType();
-	//TODO integers overflowing int64 max/min
+	return explicitType;
+	/*//TODO integers overflowing int64 max/min
 	if(integer.isNegative()){
-		if(/* >= */!(integer < intrinsics::types::int32->integer->min)) return intrinsics::types::int32;
+		if(>= !(integer < intrinsics::types::int32->integer->min)) return intrinsics::types::int32;
 		else return intrinsics::types::int64;
 	}
 	else{
@@ -103,30 +103,26 @@ Type* IntegerLiteral::returnType() const{
 		else if(integer <= intrinsics::types::uint32->integer->max) return intrinsics::types::uint32;
 		else if(integer <= intrinsics::types::int64->integer->max) return intrinsics::types::int64;
 		else return intrinsics::types::uint64;
-	}
+	}*/
 }
 Node* IntegerLiteral::duplicate(DuplicationModifiers* mods) const {
-	auto dup = new IntegerLiteral(integer);
-	dup->_type = _type;
-	return copyProperties(dup);
+	return copyProperties(new IntegerLiteral(integer,explicitType));
 }
 
-FloatingPointLiteral::FloatingPointLiteral(const double v): value(v) {}
+FloatingPointLiteral::FloatingPointLiteral(const double v,Type* t): value(v),explicitType(t) {}
 Type* FloatingPointLiteral::returnType() const {
-	return intrinsics::types::int32;//TODO
+	return explicitType;
 }
 Node* FloatingPointLiteral::duplicate(DuplicationModifiers* mods) const {
-	return copyProperties(new FloatingPointLiteral(value));
+	return copyProperties(new FloatingPointLiteral(value,explicitType));
 }
 
-CharacterLiteral::CharacterLiteral(UnicodeChar c) : value(c),explicitType(nullptr) {}
+CharacterLiteral::CharacterLiteral(UnicodeChar c,Type* t) : value(c),explicitType(t) {}
 Type* CharacterLiteral::returnType() const {
-	return explicitType? explicitType: Type::getCharLiteralType();
+	return explicitType;
 }
 Node* CharacterLiteral::duplicate(DuplicationModifiers* mods) const {
-	auto dup = new CharacterLiteral(value);
-	dup->explicitType = explicitType;
-	return copyProperties(dup);
+	return copyProperties(new CharacterLiteral(value,explicitType));
 }
 
 BoolExpression::BoolExpression(const bool v) : value(v) { }
