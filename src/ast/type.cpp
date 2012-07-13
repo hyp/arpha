@@ -517,6 +517,8 @@ int literalTypeAssignment(Type* givenType,Node** literalNode,Type* literalNodeTy
 }
 
 /**
+TODO: adjust conversion weights
+
 Scenarios:
   def x uint64 = uint8,uint16,uint32
         uint32 = uint8,uint16
@@ -525,6 +527,8 @@ Scenarios:
 		int64  = (u)int8,(u)int16,(u)int32
 		int32  = (u)int8,(u)int16
 		int16  = (u)int8,(u)int16
+
+		natural = uint16,uint32,(m64: uint64)
 
   def x float  = (u)intX
         double = (u)intX
@@ -550,6 +554,13 @@ int automaticTypeCast(Type* givenType,Node** node,Type* nodeType,bool doTransfor
 			weight = LITERAL_CONVERSION;
 		else if(nodeType->isInteger())
 			weight = LITERAL_TYPE_SPECIFICATION;
+	}
+	else if(givenType->isPlatformInteger()){
+		//natural = uintX
+		if(nodeType->isInteger()){
+			if(nodeType->bits > 0 && nodeType->bits < givenType->bits)
+				weight = LITERAL_CONVERSION;
+		}
 	}
 
 	if(weight != -1 && doTransform) *node = new CastExpression(*node,givenType);
