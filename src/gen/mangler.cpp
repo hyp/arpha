@@ -37,10 +37,6 @@ void mangleNode(std::stringstream& stream,Node* node){
 	else stream<<blockComponentLength((uintptr_t)node)<<'_'<<((uintptr_t)node);
 }
 
-unittest(gg){
-
-}
-
 void Mangler::Element::mangle(Type* type){
 	switch(type->type){
 	case Type::VOID:     stream<<'n'; break;
@@ -63,12 +59,16 @@ void Mangler::Element::mangle(Type* type){
 		break;
 	case Type::FLOAT:    stream<<(type->bits == 32? 'f':'d'); break;
 	case Type::CHAR:     stream<<(type->bits == 8? 'x': type->bits == 32? 'y' : 'z'); break;
-	case Type::NATURAL:  stream<<'s';
-	case Type::UINTPTRT: stream<<'l';
+	case Type::NATURAL:  stream<<'s'; break;
+	case Type::UINTPTRT: stream<<'l'; break;
 	case Type::RECORD:   mangle(static_cast<Record*>(type)->declaration); break;
 	case Type::VARIANT:  mangle(static_cast<Variant*>(type)->declaration); break;
+
 	case Type::POINTER:  stream<<'P'; mangle(type->next()); break;
+	case Type::LINEAR_SEQUENCE: stream<<'S'; mangle(type->next()); break;
+
 	case Type::FUNCTION: stream<<'C'; break;
+
 	case Type::ANONYMOUS_RECORD:
 	case Type::ANONYMOUS_VARIANT:
 		{
@@ -82,7 +82,7 @@ void Mangler::Element::mangle(Type* type){
 		}
 	}
 	break;
-	case Type::LINEAR_SEQUENCE: stream<<'S'; mangle(type->next()); break;
+	
 	case Type::LITERAL_INTEGER: stream<<"li"; break;
 	case Type::LITERAL_FLOAT:   stream<<"lf"; break;
 	case Type::LITERAL_CHAR:    stream<<"lc"; break;

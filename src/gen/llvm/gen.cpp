@@ -110,11 +110,10 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(CharacterLiteral* node);
 	Node* visit(BoolExpression* node);
 	Node* visit(VariableReference* node);
-	Node* visit(UnaryOperation* node);
-	Node* visit(BinaryOperation* node);
 	Node* visit(AssignmentExpression* node);
 	Node* visit(FieldAccessExpression* node);
 	Node* visit(CallExpression* node);
+	Node* visit(LogicalOperation* node);
 	Node* visit(PointerOperation* node);
 	Node* visit(ReturnExpression* node);
 	Node* visit(IfExpression* node);
@@ -206,19 +205,24 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 		auto bits = std::abs(type->bits);
 		return coreTypes[bits == 32? GEN_TYPE_I32 : (bits == 16? GEN_TYPE_I16 : (bits == 64? GEN_TYPE_I64 : GEN_TYPE_I8))];
 		}
+	case Type::NATURAL: 
+		return coreTypes[GEN_TYPE_SIZE_T];
+	case Type::UINTPTRT:
+		return coreTypes[GEN_TYPE_SIZE_T];//TODO
 	case Type::FLOAT:
 		return type->bits == 32? llvm::Type::getFloatTy(context) : llvm::Type::getDoubleTy(context);
 	case Type::CHAR:
 		return coreTypes[type->bits == 8? GEN_TYPE_I8 : (type->bits == 32? GEN_TYPE_I32 : GEN_TYPE_I16)];
+	
 	case Type::POINTER:
-	case Type::POINTER_BOUNDED:
-	case Type::POINTER_BOUNDED_CONSTANT:
 		return generatePointerType(this,type->next());
+	case Type::LINEAR_SEQUENCE:
+		return generateLinearSequence(this,type->next());
+
 	case Type::NODE: assert(false); break;
 	case Type::ANONYMOUS_RECORD:
 		return generateAnonymousRecord(this,static_cast<AnonymousAggregate*>(type));
-	case Type::LINEAR_SEQUENCE:
-		return generateLinearSequence(this,type->next());
+
 
 	case Type::LITERAL_INTEGER:
 	case Type::LITERAL_FLOAT:
@@ -261,6 +265,20 @@ Node* LLVMgenerator::visit(VariableReference* node){
 	return node;
 }
 
+//ptr + 0
+llvm::Value* genDereference(LLVMgenerator* generator,PointerOperation* node){
+	auto ptr = generator->generateExpression(node->expression);
+	auto idx = llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],0,false);
+	return generator->builder.CreateGEP(ptr,idx);
+}
+//ptr + i
+llvm::Value* genPointerAddressing(LLVMgenerator* generator,Node* object,Node* index){
+	auto ptr = generator->generateExpression(object);
+	auto idx = generator->generateExpression(index);
+	return generator->builder.CreateGEP(ptr,idx);
+}
+
+/*
 Node* LLVMgenerator::visit(UnaryOperation* node){
 	auto value = generateExpression(node->expression);
 	llvm::Value* instr;
@@ -279,20 +297,6 @@ Node* LLVMgenerator::visit(UnaryOperation* node){
 	emit(instr);
 	return node;
 }
-
-//ptr + 0
-llvm::Value* genDereference(LLVMgenerator* generator,PointerOperation* node){
-	auto ptr = generator->generateExpression(node->expression);
-	auto idx = llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],0,false);
-	return generator->builder.CreateGEP(ptr,idx);
-}
-//ptr + i
-llvm::Value* genPointerAddressing(LLVMgenerator* generator,Node* object,Node* index){
-	auto ptr = generator->generateExpression(object);
-	auto idx = generator->generateExpression(index);
-	return generator->builder.CreateGEP(ptr,idx);
-}
-
 Node* LLVMgenerator::visit(BinaryOperation* node){
 	llvm::Value* instr;
 	if(node->kind() == BinaryOperation::BOUNDED_POINTER_ELEMENT){
@@ -330,7 +334,8 @@ Node* LLVMgenerator::visit(BinaryOperation* node){
 	}
 	emit(instr);
 	return node;
-};
+};*/
+
 Node* LLVMgenerator::visit(AssignmentExpression* node){
 	auto val = generateExpression(node->value);
 	assert(val);
@@ -416,6 +421,8 @@ Node* LLVMgenerator::visit(ReturnExpression* node){
 	}
 	return node;
 }
+
+
 Node* LLVMgenerator::visit(IfExpression* node){
 	bool returnsValue   = false;
 	bool isSelect = returnsValue && !node->consequence->asBlockExpression() && !node->alternative->asBlockExpression();
@@ -473,6 +480,14 @@ Node* LLVMgenerator::visit(IfExpression* node){
 	}
 	return node;
 }
+
+//TODO
+Node* LLVMgenerator::visit(LogicalOperation* node){
+	auto x = generateExpression(node->parameters[0]);
+	auto y = generateExpression(node->parameters[1]);
+	return node;
+}
+
 Node* LLVMgenerator::visit(ControlFlowExpression* node){
 	if(node->isBreak()){
 		builder.CreateBr(loopChain->after);
