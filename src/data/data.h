@@ -51,6 +51,15 @@ namespace data {
 
 				LOGIC_AND,
 				LOGIC_OR,
+
+				//trig
+				TRIG_SIN,
+				TRIG_COS,
+				TRIG_TAN,
+				TRIG_ASIN,
+				TRIG_ACOS,
+				TRIG_ATAN,
+				TRIG_ATAN2
 			};
 		}
 	}

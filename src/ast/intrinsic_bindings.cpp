@@ -104,6 +104,14 @@ void mapRealOperations(const char* t1){
 	MAPOP(std::string("greater")+base2,data::ast::Operations::GREATER_COMPARISON);
 	MAPOP(std::string("lessEquals")+base2,data::ast::Operations::LESS_EQUALS_COMPARISON);
 	MAPOP(std::string("greaterEquals")+base2,data::ast::Operations::GREATER_EQUALS_COMPARISON);
+
+	MAPOP(std::string("sin")+base1,data::ast::Operations::TRIG_SIN);
+	MAPOP(std::string("cos")+base1,data::ast::Operations::TRIG_COS);
+	MAPOP(std::string("tan")+base1,data::ast::Operations::TRIG_TAN);
+	MAPOP(std::string("asin")+base1,data::ast::Operations::TRIG_ASIN);
+	MAPOP(std::string("acos")+base1,data::ast::Operations::TRIG_ACOS);
+	MAPOP(std::string("atan")+base1,data::ast::Operations::TRIG_ATAN);
+	MAPOP(std::string("atan2")+base2,data::ast::Operations::TRIG_ATAN2);
 }
 
 void mapStandartOperations(Type* t){

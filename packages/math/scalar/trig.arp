@@ -1,0 +1,21 @@
+#
+	This module defines standart trigonometry functions for scalar floating point types.
+#
+import arpha.intrinsic
+
+macro defineTrigFunctions(T Type) = [>
+
+	def sin(x $T) $T
+	def cos(x $T) $T
+	def tan(x $T) $T
+	
+	def asin(x $T) $T
+	def acos(x $T) $T
+	def atan(x $T) $T
+	def atan2(x $T,y $T) $T
+<]
+
+defineTrigFunctions(arpha.literal.real)
+
+defineTrigFunctions(float)
+defineTrigFunctions(double)

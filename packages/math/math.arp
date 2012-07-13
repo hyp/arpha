@@ -9,16 +9,4 @@
 def pi = 3.141592653589793238462643
 def e  = 2.718281828458563411277850
 
-def sqrt(x float) float
-
-#
-#Functions TODO
-#for T in float,double {
-# Power and logarithmic functions
-#  def sqrt(x T) T
-# Trigonometric functions
-#  def sin(x T) T
-#  def cos(x T) T
-#  def tan(x T) T
-#}
-#
+import export scalar.trig

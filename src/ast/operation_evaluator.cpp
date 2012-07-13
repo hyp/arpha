@@ -89,6 +89,24 @@ void   doCalculation(data::ast::Operations::Kind op,double& operand1,double oper
 	}
 }
 
+
+double doOtherRealCalculation(data::ast::Operations::Kind op,double operand1){
+	switch(op){
+	case TRIG_SIN:
+		return sin(operand1);
+	case TRIG_COS:
+		return cos(operand1);
+	case TRIG_TAN:
+		return tan(operand1);
+	case TRIG_ASIN:
+		return asin(operand1);
+	case TRIG_ACOS:
+		return acos(operand1);
+	case TRIG_ATAN:
+		return atan(operand1);
+	}
+}
+
 //TODO
 #define DO_COMPARISONS \
 	switch(op){ \
@@ -127,6 +145,9 @@ inline int  calculationOperationNumberOfParameters(data::ast::Operations::Kind o
 inline bool isComparisonOperation(data::ast::Operations::Kind op){
 	return op >= EQUALITY_COMPARISON && op <= GREATER_EQUALS_COMPARISON;
 }
+inline bool isOtherRealCalculation(data::ast::Operations::Kind op){
+	return op>=TRIG_SIN && op<=TRIG_ATAN2;
+}
 
 Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
 	Node** params;
@@ -152,7 +173,11 @@ Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
 		double& operand1 = params[0]->asFloatingPointLiteral()->value; 
 		if(isCalculationOperation(op)){ 
 			doCalculation(op,operand1,calculationOperationNumberOfParameters(op) == 1? operand1 : params[1]->asFloatingPointLiteral()->value); 
-		} 
+		}
+		else if(isOtherRealCalculation(op)){
+			if(op == TRIG_ATAN2) operand1 = atan2(operand1,params[1]->asFloatingPointLiteral()->value);
+			else operand1 = doOtherRealCalculation(op,operand1);
+		}
 		else if(isComparisonOperation(op)){ 
 			auto value = doComparison(op,operand1,params[1]->asFloatingPointLiteral()->value); 
 			return new BoolExpression(value); 
