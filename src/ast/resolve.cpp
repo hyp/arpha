@@ -414,8 +414,7 @@ Node* CastExpression::resolve(Resolver* resolver){
 	if(object->isResolved()){
 		resolver->markResolved(this);
 		auto returns = object->returnType();
-		if(returns->isSame(type)) return object;
-		else if(!type->canCastTo(returns)){
+		if(type->canAssignFrom(object,returns) == -1 && !type->canCastTo(returns)){
 			error(this,"Can't cast %s to %s!",returns,type);
 			return ErrorExpression::getInstance();
 		}

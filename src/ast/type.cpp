@@ -389,7 +389,7 @@ inline Node* char2int(CharacterLiteral* node,Type* t){
 inline bool characterFits(int bits,uint32 value){
 	if(value < 256) return true;
 	if(bits == 16 && value <= std::numeric_limits<uint16>::max() ) return true;//TODO is this correct???
-	return value <= 0x10FFFF? true:false; //UNICODE_MAX
+	return bits == 32 && value <= 0x10FFFF? true:false; //UNICODE_MAX
 }
 
 bool Type::integerFits(uint64 value,bool isNegative){
@@ -695,6 +695,7 @@ bool  Type::canCastTo(Type* other){
 
 //TODO: proper int -x to uint x
 Node* evaluateConstantCast(Node* expression,Type* givenType){
+	if( auto assigns = givenType->assignableFrom(expression,expression->returnType()) ) return assigns;
 
 	if(auto integerLiteral = expression->asIntegerLiteral()){
 		if(givenType->isInteger() || givenType->isPlatformInteger() || givenType->isUintptr()){
