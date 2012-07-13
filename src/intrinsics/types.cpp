@@ -52,7 +52,7 @@ namespace intrinsics {
 			uint32 = ::Type::getIntegerType(32,false);
 			uint64 = ::Type::getIntegerType(64,false);
 
-			natural = uint32;
+			natural = ::Type::getNaturalType();
 
 		};
 
@@ -82,7 +82,6 @@ namespace intrinsics {
 			moduleScope->define(new Substitute("uint32",new TypeReference(uint32) ));
 			moduleScope->define(new Substitute("uint64",new TypeReference(uint64) ));
 
-			moduleScope->define(new Substitute("natural",new TypeReference(natural) ));
 
 			struct TypeRefCreator : IntrinsicPrefixMacro {
 				TypeRefCreator(SymbolID name,::Type* t) : IntrinsicPrefixMacro(name),type(t) {}
@@ -91,6 +90,9 @@ namespace intrinsics {
 				}
 				::Type* type;
 			};
+
+			moduleScope->define(new TypeRefCreator("natural",natural ) );
+			moduleScope->define(new TypeRefCreator("uintptr",::Type::getUintptrType() ) );
 
 			moduleScope->define(new TypeRefCreator("char8",::Type::getCharType(8)) );
 			moduleScope->define(new TypeRefCreator("char16",::Type::getCharType(16)) );

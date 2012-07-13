@@ -73,6 +73,8 @@ struct Type {
 		INTEGER,//(u)intX
 		FLOAT,//float32,float64
 		CHAR,//char8,char16,char32
+		NATURAL,// = size_t
+		UINTPTRT,//uintptr_t
 		FUNCTION,
 		POINTER,
 		STATIC_ARRAY,
@@ -109,6 +111,9 @@ struct Type {
 
 	static Type* getStringLiteralType();
 
+	static Type* getNaturalType();
+	static Type* getUintptrType();
+
 	
 
 	//
@@ -116,6 +121,8 @@ struct Type {
 	inline bool isType()     const { return type == TYPE;     }
 	inline bool isBool()     const { return type == BOOL;     }
 	inline bool isInteger()  const { return type == INTEGER;  }
+	inline bool isPlatformInteger() const { return type == NATURAL; }
+	inline bool isUintptr()  const { return type == UINTPTRT; }
 	inline bool isFloat()    const { return type == FLOAT;    }
 	inline bool isFloat32()  const { return type == FLOAT && bits == 32; }
 	inline bool isFloat64()  const { return type == FLOAT && bits == 64; }

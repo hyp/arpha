@@ -252,6 +252,8 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 		case Type::INTEGER: stream<<(type->bits<0?"int":"uint")<<(type->bits<0?-type->bits:type->bits); break;
 		case Type::FLOAT: stream<<(type->bits == 32? "float":"double"); break;
 		case Type::CHAR:  stream<<"char"<<type->bits; break;
+		case Type::NATURAL: stream<<"natural"; break;
+		case Type::UINTPTRT: stream<<"uintptr"; break;
 		case Type::POINTER: 
 			stream<<"Pointer("<<type->next()<<')'; break;
 		case Type::POINTER_BOUNDED:

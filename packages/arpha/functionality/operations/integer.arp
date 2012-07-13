@@ -38,3 +38,6 @@ defineIntegerOperations(uint8)
 defineIntegerOperations(uint16)
 defineIntegerOperations(uint32)
 defineIntegerOperations(uint64)
+
+defineIntegerOperations(natural)
+defineIntegerOperations(uintptr)

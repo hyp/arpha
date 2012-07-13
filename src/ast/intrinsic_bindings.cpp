@@ -38,22 +38,25 @@ bool mappingInitialized = false;
 
 
 
-std::string mangleArgType(Type* type,bool nat){
+std::string mangleArgType(Type* type){
 	if(type->isType()) return "Type";
 	else if(type->isBool()) return "bool";
 	else if(type->isNodePointer()) return "Expression";
 	else if(type->isInteger()){
-		if(nat && type->isSame(intrinsics::types::natural)) return "natural";
-		else {
-			std::stringstream str;
-			str<<(type->bits<0?"int":"uint")<<std::abs(type->bits);
-			return str.str();
-		}
+		std::stringstream str;
+		str<<(type->bits<0?"int":"uint")<<std::abs(type->bits);
+		return str.str();
+	}
+	else if(type->isPlatformInteger()){
+		return "natural";
+	}
+	else if(type->isUintptr()){
+		return "uintptr";
 	}
 	else if(type->isPointer()){
-		return std::string("*")+mangleArgType(type->next(),nat);
+		return std::string("*")+mangleArgType(type->next());
 	} else if(type->isBoundedPointer()){
-		return std::string("[]")+mangleArgType(type->next(),nat);
+		return std::string("[]")+mangleArgType(type->next());
 	}
 	else if(type->isLiteral()){
 		if(type->type == Type::LITERAL_INTEGER) return "literal.integer";
@@ -115,8 +118,8 @@ void mapRealOperations(const char* t1){
 }
 
 void mapStandartOperations(Type* t){
-	auto s =mangleArgType(t,false);
-	if(t->isInteger() || t->type == Type::LITERAL_INTEGER){
+	auto s =mangleArgType(t);
+	if(t->isInteger() || t->type == Type::LITERAL_INTEGER || t->isPlatformInteger() || t->isUintptr() ){
 		mapIntegerOperations(s.c_str());
 	}
 	else if(t->isFloat() || t->type == Type::LITERAL_FLOAT){
@@ -235,6 +238,8 @@ static void initMapping(){
 	mapStandartOperations(intrinsics::types::uint8);
 	mapStandartOperations(intrinsics::types::uint16);
 	mapStandartOperations(intrinsics::types::uint64);
+	mapStandartOperations(Type::getNaturalType());
+	mapStandartOperations(Type::getUintptrType());
 
 	mapStandartOperations(Type::getFloatLiteralType());
 	mapStandartOperations(Type::getFloatType(32));
@@ -279,7 +284,7 @@ static void initMapping(){
 }
 
 
-std::string intrinsicMangle(Function* function,bool argNames,bool nat = false){
+std::string intrinsicMangle(Function* function,bool argNames){
 	std::string result = function->label().ptr();
 	result += "(";
 	for(auto i = function->arguments.begin();i!=function->arguments.end();i++){
@@ -297,7 +302,7 @@ std::string intrinsicMangle(Function* function,bool argNames,bool nat = false){
 				}
 			}
 		}
-		else result += mangleArgType((*i)->type.type(),nat);
+		else result += mangleArgType((*i)->type.type());
 		if((i+1) != function->arguments.end()) result += ",";
 	}
 	result+=")";
@@ -316,14 +321,6 @@ void Function::getIntrinsicFunctionBinder(Function* function){
 	}
 
 	signature = intrinsicMangle(function,true);
-	value = functionMapping.find(signature);
-	if(value != functionMapping.end()){
-		(*value).second.bind(function);
-		return;
-	}
-
-	//uint32 => natural mangle
-	signature = intrinsicMangle(function,false,true);
 	value = functionMapping.find(signature);
 	if(value != functionMapping.end()){
 		(*value).second.bind(function);

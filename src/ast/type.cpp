@@ -243,6 +243,16 @@ Type* Type::getCharLiteralType(){
 Type* Type::getStringLiteralType(){
 	return new Type(LITERAL_STRING);
 }
+Type* Type::getNaturalType(){
+	auto t = new Type(NATURAL);
+	t->bits = 32;//TODO
+	return t;
+}
+Type* Type::getUintptrType(){
+	auto t = new Type(UINTPTRT);
+	t->bits = 32;//TODO
+	return t;
+}
 
 void Type::setFlag(uint16 flag){
 	flags |= flag;
@@ -292,6 +302,9 @@ bool Type::isSame(Type* other){
 		case FLOAT:
 		case CHAR:  
 			return bits == other->bits;
+		case NATURAL:
+		case UINTPTRT:
+			return true;
 		case POINTER: return argument->isSame(other->argument);
 		case FUNCTION: return argument->isSame(other->argument) && returns->isSame(other->returns);
 		case POINTER_BOUNDED: return argument->isSame(other->argument);
@@ -397,7 +410,7 @@ bool Type::integerFits(uint64 value,bool isNegative){
 }
 
 bool   Type::doesLiteralFit(IntegerLiteral* node){
-	if(isInteger()){
+	if(isInteger() ||  isPlatformInteger() || isUintptr()){
 		return integerFits(node->integer.u64,node->integer.isNegative());
 	}
 	else {
@@ -431,13 +444,17 @@ Scenarios:
   def a literal.float = 1 :: literal.integer  => 1.0 :: literal.float
   def a float = 1 :: literal.integer          => 1.0 :: float
   def c literal.char = 1 :: literal.integer   => '\x01' :: literal.char
-  def c char32 = 65 :: literal.integer       => 'A' :: char32
+  def c char32 = 65 :: literal.integer        => 'A' :: char32
+
+  def x natural = 65 :: literal.integer       => 65  :: natural
+  def x uintptr = 65 :: literal.integer       => 65  :: uintptr
 
   def f float = 2.71 :: literal.float         => 2.71 :: float
 
   def c char32 = 'A' :: literal.char          => 'A' :: char32
   def c literal.integer = 'A' :: literal.char => 65 :: literal.integer
   def c int32  = 'A' :: literal.char          => 65 :: int32
+  def x natural = 'A' :: literal.char         => 65 :: natural
 
   TODO: def s LinearSequence(char8) = "foo" :: literal.string => (&"foo",3) :: LinearSequence(char8)
 */
@@ -462,6 +479,11 @@ int literalTypeAssignment(Type* givenType,Node** literalNode,Type* literalNodeTy
 			if(doTransform) *literalNode = int2char(integerLiteral,givenType);
 			return givenType->type == Type::LITERAL_CHAR? LITERAL_CONVERSION : LITERAL_TYPE_SPECIFICATION;
 		}
+		// a natural/uintptr = 1
+		else if( (givenType->isPlatformInteger() || givenType->isUintptr()) && givenType->doesLiteralFit(integerLiteral)){
+			if(doTransform) integerLiteral->explicitType = givenType;
+			return LITERAL_TYPE_SPECIFICATION;
+		}
 	}
 	else if( auto floatingLiteral = expression->asFloatingPointLiteral() ){
 		//a float = 1.0
@@ -480,6 +502,11 @@ int literalTypeAssignment(Type* givenType,Node** literalNode,Type* literalNodeTy
 		else if( givenType->type == Type::LITERAL_INTEGER || (givenType->isInteger() && givenType->doesLiteralFit(characterLiteral)) ){
 			if(doTransform) *literalNode = char2int(characterLiteral,givenType);
 			return givenType->type == Type::LITERAL_INTEGER? LITERAL_CONVERSION : LITERAL_TYPE_SPECIFICATION;
+		}
+		// a natural = 'A'
+		else if(givenType->isPlatformInteger() /*NB: assume platform integers are >= char32 && givenType->doesLiteralFit(characterLiteral)*/){
+			if(doTransform) *literalNode = char2int(characterLiteral,givenType);
+			return LITERAL_TYPE_SPECIFICATION;
 		}
 	}
 	else if( auto stringLiteral = expression->asStringLiteral() ){

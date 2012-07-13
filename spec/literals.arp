@@ -14,6 +14,10 @@ describe "Assigning literals to non-literals" {
 	it "should be possible to assign a literal integer to a non-literal integer, when the non-literal type can store it" {
 		def a int8 = 35
 		a should be 35
+		def x natural = 42
+		x should be 42
+		def y uintptr = 0
+		y should be 0
 	}
 	it "should be possible to assign a literal integer to a non-literal floating point" {
 		def foo float = 1
@@ -36,6 +40,8 @@ describe "Assigning literals to non-literals" {
 	it "should be possible to assign a literal character to a non-literal integer, when the non-literal type can store it" {
 		def a int16 = 'A'
 		a should be 65
+		def x natural = 'B'
+		x should be 66
 	}
 }
 

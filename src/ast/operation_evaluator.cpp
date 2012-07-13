@@ -156,7 +156,7 @@ Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
 	
 	auto ret = params[0]->returnType();
 
-	if(ret->isInteger() || ret->type == Type::LITERAL_INTEGER){
+	if(ret->isInteger() || ret->type == Type::LITERAL_INTEGER || ret->isPlatformInteger() || ret->isUintptr()){
 		BigInt& operand1 = params[0]->asIntegerLiteral()->integer; 
 		if(isCalculationOperation(op)){ 
 			doCalculation(op,operand1,calculationOperationNumberOfParameters(op) == 1? operand1 : params[1]->asIntegerLiteral()->integer); 
