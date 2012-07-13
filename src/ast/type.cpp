@@ -440,7 +440,7 @@ bool   Type::doesLiteralFit(CharacterLiteral* node){
 
 
 /*
-//given literalNodeType is literal
+Given literalNodeType is literal
 Scenarios:
   def a = 1 :: literal.integer                => 1 :: literal.integer
   def a int32 = 1 :: literal.integer          => 1 :: int32
@@ -584,92 +584,76 @@ int automaticTypeCast(Type* givenType,Node** node,Type* nodeType,bool doTransfor
 	return weight;
 }
 
-int   Type::canAssignFrom(Node* expression,Type* type){
-	if(this->isSame(type)) return EXACT;
+/**
+Scenarios:
+  type Foo { extends var x int32 ; }
+  var foo Foo
 
-	int assigns;
+  var x int32 = foo , &foo
+      x int64 = foo , &foo
+  TODO:    x int8  = foo as int8 , &foo as int8
 
-	if(type->isLiteral()){
-		return literalTypeAssignment(this,&expression,type,false);
-	}
-	else if( (assigns = automaticTypeCast(this,&expression,type,false)) != -1 ){
-		return assigns;
-	}
-	else if(type->type == RECORD){
-		auto record = static_cast<Record*>(type);
-		//Extenders fields
-		for(size_t i = 0;i < record->fields.size();i++){
-			Record::Field* field = &record->fields[i];
-			if(field->isExtending && field->type.isResolved()){
-				auto dummyFieldAcess = new FieldAccessExpression(expression,i);
-				if(this->canAssignFrom(dummyFieldAcess,field->type.type()) != -1){
-					delete dummyFieldAcess;
-					return RECORD_SUBTYPE;
-				}
-				delete dummyFieldAcess;
-			}
+  TODO: NB: The weights are a bit dodgy now
+*/
+int recordSubtyping(Type* givenType,Node** node,Type* nodeType,bool doTransform){
+	Record* record = nodeType->asRecord();
+	if(!record){
+		if(nodeType->isPointer()){
+			record = nodeType->next()->asRecord();
+			if(!record) return -1;
 		}
+		else return -1;
 	}
-	else if(this->type == POINTER){
-		if(type->type == POINTER){		
-			//Extender records on pointers to records
-			if(type->argument->type == RECORD){
-				auto dummyDeref = new PointerOperation(expression,PointerOperation::DEREFERENCE);
-				dummyDeref->setFlag(Node::RESOLVED);
-				if(this->argument->canAssignFrom(dummyDeref,type->argument) != -1){
-					delete dummyDeref;
-					return RECORD_SUBTYPE;
+
+	for(auto field = record->fields.begin(); field != record->fields.end();++field){
+		if((*field).isExtending){
+			//NB: try to assign without transformations first
+			//NB: when transforming make sure to transform the field access as required
+			auto assigns = givenType->assignFrom(node,(*field).type.type(),false);
+			if(assigns != -1){
+				if(doTransform){
+					*node = new FieldAccessExpression(*node,(int)(field - record->fields.begin()));
+					givenType->assignFrom(node,(*field).type.type(),true);
 				}
-				delete dummyDeref;
+				return assigns == EXACT? RECORD_SUBTYPE : assigns;
 			}
-			//subnode upcasts to node
-			else if(next()->type == NODE && next()->nodeSubtype == -1 && type->next()->type == NODE) return RECORD_SUBTYPE;
 		}
 	}
 	return -1;
 }
-Node* Type::assignableFrom(Node* expression,Type* type) {
-	if(this->isSame(type)) return expression;//like a baws
+
+/**
+Implicit type conversion system.
+Returns the weight of the conversion or -1 if the conversion failed.
+Scenarios:
+	As per above literal,auto and record type casts
+	*ast.Call , etc => *ast.Node
+*/
+int Type::assignFrom(Node** expression,Type* type,bool doTransform){
+	if(this->isSame(type)) return EXACT;
 	int assigns;
 
 	if(type->isLiteral()){
-		if( (assigns = literalTypeAssignment(this,&expression,type,true)) != -1){
-			return expression;
-		}
+		return literalTypeAssignment(this,expression,type,doTransform);
 	}
-	else if( (assigns = automaticTypeCast(this,&expression,type,true)) != -1 ){
-		return expression;
+	else if( (assigns = automaticTypeCast(this,expression,type,doTransform)) != -1 ){
+		return assigns;
 	}
-	else if(type->type == RECORD){
-		//Extenders fields
-		auto record = static_cast<Record*>(type);
-		for(size_t i = 0;i < record->fields.size();i++){
-			Record::Field* field = &record->fields[i];
-			if(field->isExtending && field->type.isResolved()){
-				auto dummyFieldAcess = new FieldAccessExpression(expression,i);
-				if(auto assigns = this->assignableFrom(dummyFieldAcess,field->type.type())) return assigns;
-				delete dummyFieldAcess;
-			}
-		}
-	}else if(this->type == POINTER){
-		if(type->type == POINTER){
-			//TODO local semantics interaction
-			
-			//Extender records on pointers to records
-			if(type->argument->type == RECORD){
-				auto dummyDeref = new PointerOperation(expression,PointerOperation::DEREFERENCE);
-				dummyDeref->setFlag(Node::RESOLVED);
-				if(auto assigns = this->argument->assignableFrom(dummyDeref,type->argument)){
-					debug("YES for pointer exetnder records!");
-					return new PointerOperation(assigns,PointerOperation::ADDRESS);
-				}
-				delete dummyDeref;
-			}
-			//subnode upcasts to node
-			else if(next()->type == NODE && next()->nodeSubtype == -1 && type->next()->type == NODE) return expression;
-		}
+	else if( (assigns = recordSubtyping(this,expression,type,doTransform)) != -1){
+		return assigns;
+	}
+	else if( isNodePointer() && type->isNodePointer() ){
+		return RECORD_SUBTYPE;
 	}
 
+	return -1;
+}
+
+int   Type::canAssignFrom(Node* expression,Type* type){
+	return assignFrom(&expression,type,false);
+}
+Node* Type::assignableFrom(Node* expression,Type* type) {
+	if(assignFrom(&expression,type,true) != -1) return expression;
 	return nullptr;
 }
 

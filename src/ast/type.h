@@ -180,6 +180,7 @@ struct Type {
 	* If such an assignment is possible, it will return the resulting expression with possible conversions.
 	* If not, it will return null.
 	*/
+	int assignFrom(Node** expression,Type* type,bool doTransform);
 	Node* assignableFrom(Node* expression,Type* type);
 	int canAssignFrom(Node* expression,Type* type);
 public:
