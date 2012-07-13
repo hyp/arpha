@@ -85,7 +85,7 @@ static Node* parseNotSymbol(Parser* parser){
 		return new FloatingPointLiteral(token.real,Type::getFloatLiteralType());
 	}
 	else if(token.isString()){
-		return new StringLiteral(token.string);
+		return new StringLiteral(token.string,Type::getStringLiteralType());
 	}
 	else if(token.isChar()){
 		return new CharacterLiteral(token.character,Type::getCharLiteralType());

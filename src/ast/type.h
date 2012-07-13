@@ -127,6 +127,7 @@ struct Type {
 	inline bool isFloat32()  const { return type == FLOAT && bits == 32; }
 	inline bool isFloat64()  const { return type == FLOAT && bits == 64; }
 	inline bool isChar   ()  const { return type == CHAR;     }
+	inline bool isChar8  ()  const { return type == CHAR && bits == 8;     }
 	inline bool isPointer()  const { return type == POINTER;  }
 	inline bool isRecord()   const { return type == RECORD;   }
 	inline bool isVariant()  const { return type == VARIANT;  }
@@ -135,6 +136,7 @@ struct Type {
 	inline bool isBoundedPointer() const { return type == POINTER_BOUNDED; }
 	inline bool isBoundedPointerConstantLength() const { return type == POINTER_BOUNDED_CONSTANT; }
 	inline bool isLiteral() const { return type>=LITERAL_INTEGER; }
+	inline bool isLinearSequence() const { return type == LINEAR_SEQUENCE; }
 
 
 	Record* asRecord();

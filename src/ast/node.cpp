@@ -133,20 +133,22 @@ Node* BoolExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new BoolExpression(value));
 }
 
-StringLiteral::StringLiteral(memory::Block& block){
+StringLiteral::StringLiteral(memory::Block& block,Type* t) : explicitType(t){
 	this->block.aquire(block);
+	explicitType = new Type(Type::POINTER_BOUNDED,intrinsics::types::uint8);
 }
 
 StringLiteral::StringLiteral(SymbolID symbol){
 	if(!symbol.isNull())
 		block.construct(symbol.ptr(),symbol.length());
 	else block.construct("",0);
+	explicitType = new Type(Type::POINTER_BOUNDED,intrinsics::types::uint8);
 }
 Type* StringLiteral::returnType() const{
-	return new Type(Type::POINTER_BOUNDED,intrinsics::types::uint8);
+	return explicitType;
 }
 Node* StringLiteral::duplicate(DuplicationModifiers* mods) const {
-	return copyProperties(new StringLiteral(block.duplicate()));
+	return copyProperties(new StringLiteral(block.duplicate(),explicitType));
 }
 
 ArrayLiteral::ArrayLiteral(){}

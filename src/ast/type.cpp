@@ -456,7 +456,7 @@ Scenarios:
   def c int32  = 'A' :: literal.char          => 65 :: int32
   def x natural = 'A' :: literal.char         => 65 :: natural
 
-  TODO: def s LinearSequence(char8) = "foo" :: literal.string => (&"foo",3) :: LinearSequence(char8)
+  def s LinearSequence(char8) = "foo" :: literal.string => "foo" :: LinearSequence(char8)
 */
 int literalTypeAssignment(Type* givenType,Node** literalNode,Type* literalNodeType,bool doTransform){
 	auto expression = *literalNode;
@@ -510,7 +510,11 @@ int literalTypeAssignment(Type* givenType,Node** literalNode,Type* literalNodeTy
 		}
 	}
 	else if( auto stringLiteral = expression->asStringLiteral() ){
-		//TODO a LinearSequence(char8) = "fooo"
+		//a LinearSequence(char8) = "fooo"
+		if(givenType->isLinearSequence() && givenType->next()->isChar8()){
+			if(doTransform) stringLiteral->explicitType = givenType;
+			return LITERAL_TYPE_SPECIFICATION;
+		}
 	}
 
 	return -1;

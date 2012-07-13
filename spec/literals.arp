@@ -43,5 +43,10 @@ describe "Assigning literals to non-literals" {
 		def x natural = 'B'
 		x should be 66
 	}
+	
+	it "should be possible to assign a literal string to a LinearSequence of 8 bit characters" {
+		def str LinearSequence(char8) = "foo"
+		str.length should be 3
+	}
 }
 

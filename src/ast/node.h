@@ -240,11 +240,12 @@ struct BoolExpression: LiteralNode {
 };
 
 struct StringLiteral : LiteralNode {
-	StringLiteral(memory::Block& block);
+	StringLiteral(memory::Block& block,Type* t);
 	StringLiteral(SymbolID symbol);//<-- reuses the string, no duplication
 	Type* returnType() const;
 	
 	memory::Block block;
+	Type* explicitType;
 	DECLARE_NODE(StringLiteral);
 };
 
