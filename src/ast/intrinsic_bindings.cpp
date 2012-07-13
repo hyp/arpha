@@ -178,8 +178,7 @@ static void initMapping(){
 	MAP_NODETYPE("PointerOperation",PointerOperation);
 	MAP_NODETYPE("FieldAccess",FieldAccessExpression);
 	MAP_NODETYPE("Call",CallExpression);
-	MAP_NODETYPE("UnaryOperation",UnaryOperation);
-	MAP_NODETYPE("BinaryOperation",BinaryOperation);
+	MAP_NODETYPE("LogicalOperation",LogicalOperation);
 	MAP_NODETYPE("Cast",CastExpression);
 	MAP_NODETYPE("Assignment",AssignmentExpression);
 	MAP_NODETYPE("IfElse",IfExpression);
@@ -203,8 +202,8 @@ static void initMapping(){
 	MAP_PROP("newControlFlow(fallthrough:bool)",0,{ invocation->ret(new ControlFlowExpression(ControlFlowExpression::FALLTHROUGH)); });
 	MAP_PROP("newPointerOperation(expression:Expression,addressof:bool)",0,{ invocation->ret(new PointerOperation(invocation->getNodeParameter(0),PointerOperation::ADDRESS)); });
 	MAP_PROP("newPointerOperation(expression:Expression,dereference:bool)",0,{ invocation->ret(new PointerOperation(invocation->getNodeParameter(0),PointerOperation::DEREFERENCE)); });
-	MAP_PROP("newUnaryOperation(uint32,Expression)",0,{ invocation->ret(new UnaryOperation(invocation->getUint32Parameter(0),invocation->getNodeParameter(1))); });
-	MAP_PROP("newBinaryOperation(uint32,Expression,Expression)",0,{ invocation->ret(new BinaryOperation(invocation->getUint32Parameter(0),invocation->getNodeParameter(1),invocation->getNodeParameter(2))); });
+	MAP_PROP("newLogicalOperation(a:Expression,b:Expression,and:bool)",0,{ invocation->ret(new LogicalOperation(invocation->getNodeParameter(0),invocation->getNodeParameter(1),false)); });
+	MAP_PROP("newLogicalOperation(a:Expression,b:Expression,or:bool)",0,{ invocation->ret(new LogicalOperation(invocation->getNodeParameter(0),invocation->getNodeParameter(1),true)); });
 	
 	/**
 	* arpha.syntax.parser

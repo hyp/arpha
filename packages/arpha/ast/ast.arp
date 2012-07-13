@@ -30,8 +30,7 @@ def VariableReference    Type
 def PointerOperation     Type
 def FieldAccess          Type
 def Call                 Type
-def UnaryOperation       Type
-def BinaryOperation      Type
+def LogicalOperation     Type
 def Cast                 Type
 def Assignment           Type
 def IfElse               Type
@@ -54,6 +53,7 @@ def newControlFlow(break bool)       Pointer(ControlFlow)
 def newControlFlow(fallthrough bool) Pointer(ControlFlow)
 def newPointerOperation(expression Pointer(Expression),addressof bool) Pointer(PointerOperation)
 def newPointerOperation(expression Pointer(Expression),dereference bool) Pointer(PointerOperation)
-def newUnaryOperation(kind uint32,expression Pointer(Expression)) Pointer(UnaryOperation)
-def newBinaryOperation(kind uint32,a Pointer(Expression),b Pointer(Expression)) Pointer(BinaryOperation)
+def newLogicalOperation(a Pointer(Expression),b Pointer(Expression),and bool) Pointer(LogicalOperation)
+def newLogicalOperation(a Pointer(Expression),b Pointer(Expression),or bool) Pointer(LogicalOperation)
+
 #def newCast(expression Pointer(Expression),type Pointer(Expression)) Pointer(Cast)

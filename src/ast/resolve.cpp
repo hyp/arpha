@@ -205,6 +205,16 @@ Node* CallExpression::resolve(Resolver* resolver){
 	return this;
 }
 
+Node* LogicalOperation::resolve(Resolver* resolver){
+	parameters[0] = resolver->resolve(parameters[0]);
+	parameters[1] = resolver->resolve(parameters[1]);
+	if(parameters[0]->isResolved() && parameters[1]->isResolved()){
+		resolver->markResolved(this); 
+	}
+	return this;
+}
+
+
 bool isComparable(Type* type){
 	return true;
 }

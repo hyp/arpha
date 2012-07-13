@@ -80,6 +80,11 @@ struct NodeToString: NodeVisitor {
 		stream<<"call "<<node->object<<" with "<<node->arg;
 		return node;
 	}
+	Node* visit(LogicalOperation* node){
+		stream<<node->parameters[0]<<(node->isOr()?" || ":" && ")<<node->parameters[1];
+		return node;
+	}
+
 	const char* unaryOp(int kind){
 		switch(kind){
 		case UnaryOperation::BOOL_NOT: return "!";

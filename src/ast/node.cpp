@@ -356,6 +356,18 @@ Node* CallExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(e);
 }
 
+LogicalOperation::LogicalOperation(Node* x,Node* y,bool isOr){
+	parameters[0] =x;parameters[1] = y;
+	if(isOr) setFlag(IS_OR);
+}
+LogicalOperation::LogicalOperation(Node* x,Node* y){
+	parameters[0] =x;parameters[1] = y;
+}
+Type* LogicalOperation::returnType() const { return intrinsics::types::boolean; }
+Node* LogicalOperation::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new LogicalOperation(parameters[0]->duplicate(mods),parameters[1]->duplicate(mods)));
+}
+
 VariantNode::VariantNode(uint32 kind) : _kind(kind) {}
 uint32 VariantNode::kind() const {
 	return _kind;

@@ -58,6 +58,7 @@ struct Argument;
 	X(FunctionReference)     \
 	X(TupleExpression)       \
 	X(CallExpression)        \
+	X(LogicalOperation)      \
 	X(UnaryOperation) \
 	X(BinaryOperation) \
 	X(FieldAccessExpression) \
@@ -362,6 +363,24 @@ struct CallExpression : Node {
 	Node* object;
 	Node* arg;
 	DECLARE_NODE(CallExpression);
+};
+
+//&& or ||
+struct LogicalOperation: Node {
+	LogicalOperation(Node* x,Node* y,bool isOr);
+	Type* returnType() const;
+	Node* resolve(Resolver* resolver);
+
+	inline bool isAnd() const { return !isFlagSet(IS_OR); }
+	inline bool isOr()  const { return isFlagSet(IS_OR); }
+
+	Node* parameters[2];
+	DECLARE_NODE(LogicalOperation);
+private:
+	LogicalOperation(Node* x,Node* y);
+	enum {
+		IS_OR = 0x4
+	};
 };
 
 //this is an expression which has multiple variants

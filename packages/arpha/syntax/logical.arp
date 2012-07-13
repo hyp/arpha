@@ -9,19 +9,19 @@ import qualified precedence
 macro ! 
 {
 	var expression = parser.parse(precedence.logical_not)
-	return ast.newUnaryOperation(0, [> $expression.isTrue <] )
+	return [> not($expression.isTrue) <]
 }
 
 use precedence:precedence.logical_and
 macro (x) && 
 {
 	var y = parser.parse(precedence.logical_and)
-	return ast.newBinaryOperation(0, [> $x.isTrue <] , [> $y.isTrue <] )
+	return ast.newLogicalOperation( [> $x.isTrue <] , [> $y.isTrue <] , and: true )
 }
 
 use precedence:precedence.logical_or
 macro (x) || 
 {
 	var y = parser.parse(precedence.logical_or)
-	return ast.newBinaryOperation(1, [> $x.isTrue <] , [> $y.isTrue <] )
+	return ast.newLogicalOperation( [> $x.isTrue <] , [> $y.isTrue <] , or: true )
 }
