@@ -1,0 +1,16 @@
+import spec
+
+describe "An instance of a type which extends other type" {
+	type Foo { extends var x int32 }
+	
+	it "should be assignable to an instance of the other type" {
+		var foo Foo
+		var y int32 = foo
+		y = &foo
+	}
+	it "should be assignable to an instance of some type which the other type can assign to" {
+		var foo Foo
+		var y int64 = foo
+		y = &foo
+	}
+}
