@@ -9,7 +9,7 @@
 #
 	Core types such as:
 		Nothing, Type and bool,
-		Pointer(_), Range(_) and Function(_,_) 
+		Pointer(_), LinearSequence(_) and Function(_,_) 
 	are defined by the implementation.
 	The constant values true and false are also defined by the implementation.
 #

@@ -17,7 +17,6 @@ macro *
 }
 macro derefOrPtrType(T Type)                 = [> Pointer($T) <]
 macro derefOrPtrType(expr Pointer(_))        = ast.newPointerOperation(expr,dereference: true)
-macro derefOrPtrType(expr BoundedPointer(_)) = ast.newPointerOperation(expr,dereference: true) 
 
 # Indexing operator.
 use precedence: precedence.index

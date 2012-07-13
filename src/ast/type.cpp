@@ -206,7 +206,7 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 Type::Type(int kind) : type(kind),flags(0) {
 }
 Type::Type(int kind,Type* next) : type(kind),flags(0) {
-	assert(kind == POINTER || kind == POINTER_BOUNDED || kind == LINEAR_SEQUENCE);
+	assert(kind == POINTER || kind == LINEAR_SEQUENCE);
 	this->argument = next;
 }
 Type::Type(Type* argument,Type* returns) : type(FUNCTION),flags(0) {
@@ -214,7 +214,7 @@ Type::Type(Type* argument,Type* returns) : type(FUNCTION),flags(0) {
 	this->returns = returns;
 }
 Type::Type(int kind,Type* T,size_t N) : type(kind),flags(0) {
-	assert(kind == STATIC_ARRAY || kind == POINTER_BOUNDED_CONSTANT);
+	assert(kind == STATIC_ARRAY);
 	argument = T;
 	this->N  = N;
 }
@@ -253,6 +253,9 @@ Type* Type::getUintptrType(){
 	t->bits = 32;//TODO
 	return t;
 }
+Type* Type::getLinearSequence(Type* next){
+	return new Type(LINEAR_SEQUENCE,next);
+}
 
 void Type::setFlag(uint16 flag){
 	flags |= flag;
@@ -271,8 +274,7 @@ bool Type::isResolved() const {
 		case RECORD:  return isFlagSet(IS_RESOLVED);
 		case VARIANT: return isFlagSet(IS_RESOLVED);
 		case POINTER:
-		case POINTER_BOUNDED:
-		case POINTER_BOUNDED_CONSTANT:
+		case LINEAR_SEQUENCE:
 		case STATIC_ARRAY:
 			return argument->isResolved();
 		case FUNCTION:
@@ -305,17 +307,21 @@ bool Type::isSame(Type* other){
 		case NATURAL:
 		case UINTPTRT:
 			return true;
-		case POINTER: return argument->isSame(other->argument);
-		case FUNCTION: return argument->isSame(other->argument) && returns->isSame(other->returns);
-		case POINTER_BOUNDED: return argument->isSame(other->argument);
-		case POINTER_BOUNDED_CONSTANT: return argument->isSame(other->argument) && N == other->N;
+		
+		case POINTER: 
+		case LINEAR_SEQUENCE:
+			return argument->isSame(other->argument);
 		case STATIC_ARRAY: return argument->isSame(other->argument) && N == other->N;
+		
+		case FUNCTION: return argument->isSame(other->argument) && returns->isSame(other->returns);
+		
 		case NODE: return nodeSubtype == other->nodeSubtype;
+		
 		case ANONYMOUS_RECORD:
 		case ANONYMOUS_VARIANT:
 			return static_cast<AnonymousAggregate*>(this)->types  == static_cast<AnonymousAggregate*>(other)->types &&
 				   static_cast<AnonymousAggregate*>(this)->fields == static_cast<AnonymousAggregate*>(other)->fields;
-		case LINEAR_SEQUENCE: return argument->isSame(other->argument);
+
 		case LITERAL_INTEGER:
 		case LITERAL_FLOAT :
 		case LITERAL_CHAR  :
@@ -328,23 +334,21 @@ bool Type::isSame(Type* other){
 bool Type::wasGenerated() const {
 	switch(type){
 	case POINTER: return true;
+	case LINEAR_SEQUENCE: return true;
+	case STATIC_ARRAY: return true;
 	case FUNCTION: return true;
 	//case RECORD: return record->wasGenerated();
-	case POINTER_BOUNDED: return true;
-	case POINTER_BOUNDED_CONSTANT: return true;
-	case STATIC_ARRAY: return true;
-	case LINEAR_SEQUENCE: return true;
 	default: return false;
 	}
 }
 bool Type::wasGeneratedBy(Function* function) const {
 	switch(type){
-	case POINTER: return function == intrinsics::types::PointerTypeGenerator;
-	case FUNCTION: return function == intrinsics::types::FunctionTypeGenerator;
+	case POINTER:         return function == intrinsics::types::PointerTypeGenerator;
+	case LINEAR_SEQUENCE: return function == intrinsics::types::LinearSequenceTypeGenerator;
+	case STATIC_ARRAY:    return function == intrinsics::types::StaticArrayTypeGenerator;
+	case FUNCTION:        return function == intrinsics::types::FunctionTypeGenerator;
 	//case RECORD: return record->wasGeneratedBy(function);
-	case STATIC_ARRAY: return function == intrinsics::types::StaticArrayTypeGenerator;
-	case POINTER_BOUNDED: return function == intrinsics::types::BoundedPointerTypeGenerator;
-	case POINTER_BOUNDED_CONSTANT: return function == intrinsics::types::BoundedConstantLengthPointerTypeGenerator;
+
 	default:
 		return false;
 	}
@@ -352,14 +356,13 @@ bool Type::wasGeneratedBy(Function* function) const {
 Node* Type::generatedArgument(size_t i) const {
 	switch(type){
 	case POINTER:
-	case POINTER_BOUNDED:
 	case LINEAR_SEQUENCE:
 		return new TypeReference(argument);
+	case STATIC_ARRAY: 
+		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)N,intrinsics::types::natural);
 	case FUNCTION: return new TypeReference(i == 0 ? argument : returns);
 	//case RECORD: return record->generatedArgument(i);
-	case STATIC_ARRAY: 
-	case POINTER_BOUNDED_CONSTANT:
-		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)N,intrinsics::types::natural);
+
 	default:
 		throw std::runtime_error("TypeExpression generatedArgument failed");	
 		return nullptr;
@@ -655,8 +658,6 @@ Node* Type::assignableFrom(Node* expression,Type* type) {
 			//subnode upcasts to node
 			else if(next()->type == NODE && next()->nodeSubtype == -1 && type->next()->type == NODE) return expression;
 		}
-	} else if(this->type == POINTER_BOUNDED && type->type == POINTER_BOUNDED_CONSTANT && this->next() == type->next()){
-		return new CastExpression(expression,this); // auto cast
 	}
 
 	return nullptr;

@@ -75,15 +75,18 @@ struct Type {
 		CHAR,//char8,char16,char32
 		NATURAL,// = size_t
 		UINTPTRT,//uintptr_t
-		FUNCTION,
+		
 		POINTER,
+		LINEAR_SEQUENCE,//a range of elements = { T*,natural }
 		STATIC_ARRAY,
-		POINTER_BOUNDED_CONSTANT, //[2]int32
-		POINTER_BOUNDED, //[]int32
+
+		FUNCTION,
+
 		NODE, //i.e. *ast.Expression, uses nodeSubtype to determine the type
+
 		ANONYMOUS_RECORD,
 		ANONYMOUS_VARIANT,
-		LINEAR_SEQUENCE,//a range of elements = { T*,natural }
+		
 
 		LITERAL_INTEGER,
 		LITERAL_FLOAT,//1.2
@@ -110,6 +113,7 @@ struct Type {
 	bool   doesLiteralFit(CharacterLiteral* node); // type must be character
 
 	static Type* getStringLiteralType();
+	static Type* getLinearSequence(Type* next);
 
 	static Type* getNaturalType();
 	static Type* getUintptrType();
@@ -133,8 +137,6 @@ struct Type {
 	inline bool isVariant()  const { return type == VARIANT;  }
 	inline bool isFunction() const { return type == FUNCTION; }
 	inline bool isNodePointer() const { return type == POINTER && argument->type == NODE; }
-	inline bool isBoundedPointer() const { return type == POINTER_BOUNDED; }
-	inline bool isBoundedPointerConstantLength() const { return type == POINTER_BOUNDED_CONSTANT; }
 	inline bool isLiteral() const { return type>=LITERAL_INTEGER; }
 	inline bool isLinearSequence() const { return type == LINEAR_SEQUENCE; }
 

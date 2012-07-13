@@ -135,14 +135,13 @@ Node* BoolExpression::duplicate(DuplicationModifiers* mods) const {
 
 StringLiteral::StringLiteral(memory::Block& block,Type* t) : explicitType(t){
 	this->block.aquire(block);
-	explicitType = new Type(Type::POINTER_BOUNDED,intrinsics::types::uint8);
 }
 
 StringLiteral::StringLiteral(SymbolID symbol){
 	if(!symbol.isNull())
 		block.construct(symbol.ptr(),symbol.length());
 	else block.construct("",0);
-	explicitType = new Type(Type::POINTER_BOUNDED,intrinsics::types::uint8);
+	explicitType = Type::getLinearSequence(Type::getCharType(8));
 }
 Type* StringLiteral::returnType() const{
 	return explicitType;
@@ -153,7 +152,7 @@ Node* StringLiteral::duplicate(DuplicationModifiers* mods) const {
 
 ArrayLiteral::ArrayLiteral(){}
 Type* ArrayLiteral::returnType() const {
-	return new Type(Type::POINTER_BOUNDED,(*begin())->returnType(),size());
+	return intrinsics::types::Void;//TODO
 }
 Node* ArrayLiteral::duplicate(DuplicationModifiers* mods) const {
 	auto dup = new ArrayLiteral;

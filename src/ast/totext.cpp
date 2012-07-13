@@ -254,16 +254,17 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 		case Type::CHAR:  stream<<"char"<<type->bits; break;
 		case Type::NATURAL: stream<<"natural"; break;
 		case Type::UINTPTRT: stream<<"uintptr"; break;
+
 		case Type::POINTER: 
 			stream<<"Pointer("<<type->next()<<')'; break;
-		case Type::POINTER_BOUNDED:
-			stream<<"BoundedPointer("<<type->next()<<")"; break;
-		case Type::FUNCTION: 
-			stream<<"Function("<<type->argument<<"->"<<type->returns<<')'; break;
+		case Type::LINEAR_SEQUENCE:
+			stream<<"LinearSequence("<<type->next()<<")"; break;
 		case Type::STATIC_ARRAY:
 			stream<<"Array("<<type->next()<<","<<type->N<<')'; break;
-		case Type::POINTER_BOUNDED_CONSTANT:
-			stream<<"BoundedPointer("<<type->next()<<","<<type->N<<")"; break;
+
+		case Type::FUNCTION: 
+			stream<<"Function("<<type->argument<<"->"<<type->returns<<')'; break;
+
 		case Type::NODE:
 			stream<<"ast.Expression";
 			if(type->nodeSubtype != -1) stream<<"("<<type->nodeSubtype<<")"; 

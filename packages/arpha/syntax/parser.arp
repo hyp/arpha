@@ -9,7 +9,7 @@ import  arpha.intrinsic, arpha.ast
 
 def parse(precedence int32 = 0,ignoreNewlines bool = false) Pointer(Expression)
 
-def expect(symbol BoundedPointer(uint8),ignoreNewlines bool = false)
-def match (symbol BoundedPointer(uint8),ignoreNewlines bool = false) bool
+def expect(symbol LinearSequence(char8),ignoreNewlines bool = false)
+def match (symbol LinearSequence(char8),ignoreNewlines bool = false) bool
 
 #def currentBlock() Pointer(BlockExpression)

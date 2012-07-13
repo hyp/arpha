@@ -17,7 +17,7 @@ namespace intrinsics {
 		::Type *NodePointer;
 
 		Function* PointerTypeGenerator,*FunctionTypeGenerator,*RangeTypeGenerator,*StaticArrayTypeGenerator;
-		Function* BoundedPointerTypeGenerator,*BoundedConstantLengthPointerTypeGenerator;
+		Function *LinearSequenceTypeGenerator;
 
 		::Type* boolean = nullptr;
 		::Type* int8 = nullptr;
@@ -114,7 +114,7 @@ namespace intrinsics {
 							func->arguments[0]->specifyType(Type);
 							func->arguments.push_back(new Argument("max",Location(),func));
 							func->arguments[1]->specifyType(Type);
-						} else if(name == "Array" || name == "BoundedPointer"){
+						} else if(name == "Array"){
 							func->arguments.push_back(new Argument("T",Location(),func));
 							func->arguments[0]->specifyType(Type);
 							func->arguments.push_back(new Argument("N",Location(),func));
@@ -143,19 +143,15 @@ namespace intrinsics {
 				static void StaticArray(CTFEintrinsicInvocation* invocation){
 					invocation->ret(new ::Type(::Type::STATIC_ARRAY,invocation->getTypeParameter(0),(size_t)invocation->getInt32Parameter(1)));
 				}
-				static void BoundedPointer(CTFEintrinsicInvocation* invocation){
-					invocation->ret(new ::Type(::Type::POINTER_BOUNDED,invocation->getTypeParameter(0)));
-				}
-				static void BoundedPointerConstantLength(CTFEintrinsicInvocation* invocation){
-					invocation->ret(new ::Type(::Type::POINTER_BOUNDED_CONSTANT,invocation->getTypeParameter(0),(size_t)invocation->getInt32Parameter(1)));
+				static void LinearSequence(CTFEintrinsicInvocation* invocation){
+					invocation->ret(::Type::getLinearSequence(invocation->getTypeParameter(0)));
 				}
 			};
 			TypeFunc("Pointer",moduleScope,&PointerTypeGenerator,&TypeFunc::Pointer);
 			TypeFunc("Range",moduleScope,&RangeTypeGenerator,&TypeFunc::Pointer);
 			TypeFunc("Function",moduleScope,&FunctionTypeGenerator,&TypeFunc::FunctionType,2);
 			TypeFunc("Array",moduleScope,&StaticArrayTypeGenerator,&TypeFunc::StaticArray,2);
-			TypeFunc("BoundedPointer",moduleScope,&BoundedPointerTypeGenerator,&TypeFunc::BoundedPointer,1);
-			TypeFunc("BoundedPointer",moduleScope,&BoundedConstantLengthPointerTypeGenerator,&TypeFunc::BoundedPointerConstantLength,2);
+			TypeFunc("LinearSequence",moduleScope,&LinearSequenceTypeGenerator,&TypeFunc::LinearSequence,1);
 		}
 
 	}

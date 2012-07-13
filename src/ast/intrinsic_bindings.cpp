@@ -47,6 +47,9 @@ std::string mangleArgType(Type* type){
 		str<<(type->bits<0?"int":"uint")<<std::abs(type->bits);
 		return str.str();
 	}
+	else if(type->isChar()){
+		return "char8";
+	}
 	else if(type->isPlatformInteger()){
 		return "natural";
 	}
@@ -55,7 +58,7 @@ std::string mangleArgType(Type* type){
 	}
 	else if(type->isPointer()){
 		return std::string("*")+mangleArgType(type->next());
-	} else if(type->isBoundedPointer()){
+	} else if(type->isLinearSequence()){
 		return std::string("[]")+mangleArgType(type->next());
 	}
 	else if(type->isLiteral()){
@@ -211,13 +214,13 @@ static void initMapping(){
 		if(invocation->getBoolParameter(1)) parser->ignoreNewlines();
 		invocation->ret(parser->parse(invocation->getInt32Parameter(0))); 
 	});
-	MAP_PROP("expect([]uint8,bool)",Function::INTERPRET_ONLY_INSIDE,{
+	MAP_PROP("expect([]char8,bool)",Function::INTERPRET_ONLY_INSIDE,{
 		auto parser = invocation->getParser();
 		if(invocation->getBoolParameter(1)) parser->ignoreNewlines();
 		parser->expect(invocation->getStringParameterAsSymbol(0));
 		invocation->ret();
 	});
-	MAP_PROP("match([]uint8,bool)",Function::INTERPRET_ONLY_INSIDE,{
+	MAP_PROP("match([]char8,bool)",Function::INTERPRET_ONLY_INSIDE,{
 		auto parser = invocation->getParser();
 		Parser::NewlineIgnorer i(invocation->getBoolParameter(1),parser);
 		auto match = parser->match(invocation->getStringParameterAsSymbol(0));
@@ -246,19 +249,6 @@ static void initMapping(){
 	mapStandartOperations(Type::getFloatType(64));
 
 	mapStandartOperations(intrinsics::types::boolean);
-
-	/**
-	* arpha.functionality.bounded_pointer
-	*/
-	MAP_PROP("length(BoundedPointer)",Function::MACRO_FUNCTION,{
-		invocation->ret(new UnaryOperation(UnaryOperation::BOUNDED_POINTER_LENGTH,invocation->getNodeParameter(0)));
-	});
-	MAP_PROP("element(BoundedPointer,natural)",Function::MACRO_FUNCTION,{
-		invocation->ret(new BinaryOperation(BinaryOperation::BOUNDED_POINTER_ELEMENT,invocation->getNodeParameter(0),invocation->getNodeParameter(1)));
-	});
-	MAP_PROP("add(BoundedPointer,natural)",Function::MACRO_FUNCTION,{
-		invocation->ret(new BinaryOperation(BinaryOperation::ADD,invocation->getNodeParameter(0),invocation->getNodeParameter(1)));
-	});
 
 	/**
 	* arpha.functionality.misc

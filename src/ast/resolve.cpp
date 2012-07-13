@@ -222,7 +222,6 @@ bool  UnaryOperation::isValid() {
 	switch(kind()){
 	case BOOL_NOT: return ret->isBool();
 	case MINUS:    return isNegatable(ret);
-	case BOUNDED_POINTER_LENGTH: return ret->isBoundedPointer();
 	}
 	error(this,"The unary expression %s is invalid",this);
 	return false;
@@ -242,21 +241,7 @@ Node* UnaryOperation::resolve(Resolver* resolver){
 
 //TODO
 bool  BinaryOperation::isValid() {
-	auto aRet = a->returnType();
-	auto bRet = b->returnType();
-	switch(kind()){
-	case BOUNDED_POINTER_ELEMENT: 
-		return aRet->isBoundedPointer() && bRet->isSame(intrinsics::types::natural);
-	}
-	if(!aRet->isSame(b->returnType())) return false;
-	switch(kind()){
-	case BOOL_AND: case BOOL_OR: return aRet->isBool();
-	case EQUALS: case LESS: case GREATER: return isComparable(aRet);
-	case ADD: case SUBTRACT: return isAddable(aRet);
-	case MULTIPLY: case DIVIDE: case MOD: return isMultipliable(aRet);
-	}
-	error(this,"The binary expression %s is invalid",this);
-	return false;
+	return true;
 }
 
 Node* BinaryOperation::resolve(Resolver* resolver){
