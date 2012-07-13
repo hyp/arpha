@@ -161,17 +161,16 @@ Node* CallExpression::resolve(Resolver* resolver){
 			}
 			else if(func->isFlagSet(Function::TYPE_GENERATOR_FUNCTION) && !func->isIntrinsic()){
 				debug("Type generation functions booyah!");
-				return resolver->resolve(copyProperties(func->body.scope->prefixDefinitions.begin()->second->createReference()));
+				return resolver->resolve(copyLocationSymbol(func->body.scope->prefixDefinitions.begin()->second->createReference()));
 			}
 			else if(func->isFieldAccessMacro()){
 				if(auto t = arg->asTupleExpression()){
 					assert(t->size() == 2);
-					return resolver->resolve(copyProperties(new AssignmentExpression( new FieldAccessExpression(*t->begin(),func->getField()) , *(t->begin()+1) )));
+					return resolver->resolve(copyLocationSymbol(new AssignmentExpression( new FieldAccessExpression(*t->begin(),func->getField()) , *(t->begin()+1) )));
 				}
 				return resolver->resolve(copyProperties(new FieldAccessExpression(arg,func->getField())));
 			} else if(func->isIntrinsicOperation() && arg->isConst()){
-				//return 
-				return resolver->resolve(evaluateConstantOperation(func->getOperation(),arg));
+				return resolver->resolve(copyLocationSymbol(evaluateConstantOperation(func->getOperation(),arg)));
 			}
 			object = resolver->resolve(new FunctionReference(func));
 			resolver->markResolved(this);
@@ -408,7 +407,8 @@ Node* LoopExpression::resolve(Resolver* resolver){
 	return this;
 }
 
-//TODO const evaluation
+Node* evaluateConstantCast(Node* expression,Type* givenType);
+
 Node* CastExpression::resolve(Resolver* resolver){
 	object = resolver->resolve(object);
 	if(object->isResolved()){
@@ -419,6 +419,7 @@ Node* CastExpression::resolve(Resolver* resolver){
 			error(this,"Can't cast %s to %s!",returns,type);
 			return ErrorExpression::getInstance();
 		}
+		if(object->isConst()) return copyLocationSymbol(evaluateConstantCast(object,type));
 	}
 	return this;
 }

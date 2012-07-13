@@ -190,3 +190,4 @@ Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
 
 	return params[0];
 }
+

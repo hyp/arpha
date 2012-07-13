@@ -709,6 +709,26 @@ bool  Type::canCastTo(Type* other){
 	return false;
 }
 
+//TODO: proper int -x to uint x
+Node* evaluateConstantCast(Node* expression,Type* givenType){
+
+	if(auto integerLiteral = expression->asIntegerLiteral()){
+		if(givenType->isInteger() || givenType->isPlatformInteger() || givenType->isUintptr()){
+			integerLiteral->explicitType = givenType;
+		}
+	}
+	else if( auto floatingLiteral = expression->asFloatingPointLiteral() ){
+		if(givenType->isFloat()) floatingLiteral->explicitType = givenType;
+	}
+	else if( auto characterLiteral = expression->asCharacterLiteral() ){
+		if(givenType->isChar()) characterLiteral->explicitType = givenType;
+	}
+	else if( auto stringLiteral = expression->asStringLiteral() ){
+		if(givenType->isLinearSequence()) stringLiteral->explicitType = givenType;
+	}
+	return expression;
+}
+
 /**
 * Type validity checks
 */
