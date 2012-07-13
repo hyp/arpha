@@ -593,6 +593,8 @@ Scenarios:
       x int64 = foo , &foo
   TODO:    x int8  = foo as int8 , &foo as int8
 
+  TODO: type Foo : Bar {} ; def bar(x *Bar) ; var foo Foo ; foo.bar &foo.bar
+
   TODO: NB: The weights are a bit dodgy now
 */
 int recordSubtyping(Type* givenType,Node** node,Type* nodeType,bool doTransform){

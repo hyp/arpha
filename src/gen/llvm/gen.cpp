@@ -109,6 +109,8 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(IntegerLiteral* node);
 	Node* visit(CharacterLiteral* node);
 	Node* visit(BoolExpression* node);
+	Node* visit(FloatingPointLiteral* node);
+
 	Node* visit(VariableReference* node);
 	Node* visit(AssignmentExpression* node);
 	Node* visit(FieldAccessExpression* node);
@@ -246,12 +248,12 @@ llvm::GlobalValue::LinkageTypes LLVMgenerator::genLinkage(PrefixDefinition* def)
 
 
 Node* LLVMgenerator::visit(IntegerLiteral* node){
-	emitConstant(llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],node->integer.u64,false));
+	emitConstant(llvm::ConstantInt::get(genType(node->explicitType),node->integer.u64,false));
 	return node;
 }
 
 Node* LLVMgenerator::visit(CharacterLiteral* node){
-	emitConstant(llvm::ConstantInt::get(genType(node->returnType()),node->value,false));
+	emitConstant(llvm::ConstantInt::get(genType(node->explicitType),node->value,false));
 	return node;
 }
 
@@ -260,7 +262,14 @@ Node* LLVMgenerator::visit(BoolExpression* node){
 	return node;
 }
 
+
+Node* LLVMgenerator::visit(FloatingPointLiteral* node){
+	emitConstant(llvm::ConstantFP::get(genType(node->explicitType),node->value));
+	return node;
+}
+
 Node* LLVMgenerator::visit(VariableReference* node){
+	if(node->variable->type.type()->isLinearSequence()) emit(getVariable(node->variable));
 	emitLoad(getVariable(node->variable));
 	return node;
 }
@@ -397,7 +406,7 @@ llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Oper
 	using namespace data::ast::Operations;
 	switch(op){
 	case LENGTH:
-		return generator->builder.CreateStructGEP(operand1,1);
+		return generator->builder.CreateLoad(generator->builder.CreateStructGEP(operand1,1));
 	}
 
 	assert(false && "Invalid operation");
@@ -709,13 +718,6 @@ Node* LLVMgenerator::visit(Function* function){
 	return function;
 }
 
-
-/*void llvmGenIntegerConstant (LLVMgenerator* generator,int type,uint64 value,bool isSigned){
-	addExpr(generator,llvm::ConstantInt::get(LLVM_TYPE(type),value,isSigned));
-}
-void llvmGenFloatingConstant(LLVMgenerator* generator,int type,double value){
-	addExpr(generator,llvm::ConstantFP::get(LLVM_TYPE(type),value));
-}*/
 
 /**
 * LLVM backend implementation.
