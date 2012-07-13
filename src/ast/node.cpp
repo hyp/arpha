@@ -368,48 +368,6 @@ Node* LogicalOperation::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new LogicalOperation(parameters[0]->duplicate(mods),parameters[1]->duplicate(mods)));
 }
 
-VariantNode::VariantNode(uint32 kind) : _kind(kind) {}
-uint32 VariantNode::kind() const {
-	return _kind;
-}
-void VariantNode::mutate(uint32 newKind){
-	_kind = newKind;
-}
-
-UnaryOperation::UnaryOperation(uint32 kind,Node* expression) : VariantNode(kind) {
-	this->expression = expression;
-}
-Type* UnaryOperation::returnType() const {
-	switch(kind()){
-	case BOOL_NOT: intrinsics::types::boolean;
-	case MINUS: return expression->returnType();
-	case BOUNDED_POINTER_LENGTH: return intrinsics::types::natural;
-	}
-}
-Node* UnaryOperation::duplicate(DuplicationModifiers* mods) const {
-	return copyProperties(new UnaryOperation(kind(),expression->duplicate(mods)));
-}
-
-BinaryOperation::BinaryOperation(uint32 kind,Node* a,Node* b): VariantNode(kind) {
-	this->a = a;
-	this->b = b;
-}
-Type* BinaryOperation::returnType() const {
-	switch(kind()){
-	case BOOL_AND: case BOOL_OR: 
-	case EQUALS: case LESS: case GREATER:
-		return intrinsics::types::boolean;
-	case ADD: case SUBTRACT: case MULTIPLY: case DIVIDE: case MOD: 
-		return a->returnType();
-	case BOUNDED_POINTER_ELEMENT: 
-		return a->returnType()->next();
-	}
-	return nullptr;
-}
-Node* BinaryOperation::duplicate(DuplicationModifiers* mods) const {
-	return copyProperties(new BinaryOperation(kind(),a->duplicate(mods),b->duplicate(mods)));
-}
-
 //Loop expression
 LoopExpression::LoopExpression(Node* body){
 	this->body = body;

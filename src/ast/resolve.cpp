@@ -214,57 +214,6 @@ Node* LogicalOperation::resolve(Resolver* resolver){
 	return this;
 }
 
-
-bool isComparable(Type* type){
-	return true;
-}
-bool isNegatable(Type* type){
-	return true;
-}
-bool isAddable(Type* type){
-	return true;
-}
-bool isMultipliable(Type* type){
-	return true;
-}
-bool  UnaryOperation::isValid() {
-	auto ret = expression->returnType();
-	switch(kind()){
-	case BOOL_NOT: return ret->isBool();
-	case MINUS:    return isNegatable(ret);
-	}
-	error(this,"The unary expression %s is invalid",this);
-	return false;
-}
-
-Node* UnaryOperation::resolve(Resolver* resolver){
-	expression = resolver->resolve(expression);
-	if(expression->isResolved()){
-		resolver->markResolved(this);
-		if(!this->isValid()) return ErrorExpression::getInstance();
-		/*if(expression->isConst()){
-			return interpret();
-		}*/
-	}
-	return this;
-}
-
-//TODO
-bool  BinaryOperation::isValid() {
-	return true;
-}
-
-Node* BinaryOperation::resolve(Resolver* resolver){
-	a = resolver->resolve(a);
-	b = resolver->resolve(b);
-	if(a->isResolved() && b->isResolved()){
-		resolver->markResolved(this); 
-		if(!this->isValid()) return ErrorExpression::getInstance();
-		//if(a->isConst() && b->isConst()) return interpret();
-	}
-	return this;
-}
-
 /**
 * Maps Anonymous records directly to fields
 */
@@ -380,16 +329,6 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 			resolver->markResolved(this);
 		}
 		else error(value,"Can't assign %s to %s - the types don't match!",value,object);
-	}
-	else if( auto binop = object->asBinaryOperation()){
-		if(binop->kind() == BinaryOperation::BOUNDED_POINTER_ELEMENT){
-			if(auto canBeAssigned = binop->a->returnType()->next()->assignableFrom(value,valuesType)){
-				value = resolver->resolve(canBeAssigned);
-				resolver->markResolved(this);
-			}
-			else error(value,"Can't assign %s to %s - the types don't match!",value,object);
-		}
-		else error(object,"Can't perform an assignment to %s - only variables, fields and derefernced pointers are assignable!",object);
 	}
 	else if( object->asPointerOperation() && object->asPointerOperation()->kind == PointerOperation::DEREFERENCE){
 		if(auto canBeAssigned = object->returnType()->assignableFrom(value,valuesType)){

@@ -136,21 +136,6 @@ struct Analyzer : NodeVisitor {
 		return node;
 	}
 
-	Node* visit(UnaryOperation* node){
-		node->expression->accept(this);
-		if(!node->isValid()) markAsNotInterpretable(node);
-		addInliningWeight(4);
-		return node;
-	}
-
-	Node* visit(BinaryOperation* node){
-		node->a->accept(this);
-		node->b->accept(this);
-		if(!node->isValid()) markAsNotInterpretable(node);
-		addInliningWeight(5);
-		return node;
-	}
-
 	Node* visit(VariableReference* node){
 		if(node->variable->location().line() > node->location().line() && node->variable->location().column > node->location().column){
 			error(node,"Variable usage before declaration!");
@@ -261,6 +246,13 @@ struct Analyzer : NodeVisitor {
 			addInliningWeight(f->function->isIntrinsic() ? 2 : 6);
 		}
 		else addInliningWeight(10000);
+		return node;
+	}
+
+	Node* visit(LogicalOperation* node){
+		node->parameters[0]->accept(this);
+		node->parameters[1]->accept(this);
+		addInliningWeight(5);
 		return node;
 	}
 

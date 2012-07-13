@@ -59,8 +59,6 @@ struct Argument;
 	X(TupleExpression)       \
 	X(CallExpression)        \
 	X(LogicalOperation)      \
-	X(UnaryOperation) \
-	X(BinaryOperation) \
 	X(FieldAccessExpression) \
 	X(AccessExpression)      \
 	X(AssignmentExpression)  \
@@ -381,62 +379,6 @@ private:
 	enum {
 		IS_OR = 0x4
 	};
-};
-
-//this is an expression which has multiple variants
-struct VariantNode : Node {
-	VariantNode(uint32 kind);
-	uint32 kind() const;
-protected:
-	void mutate(uint32 newKind);
-private:
-	uint32 _kind;
-};
-
-struct UnaryOperation : VariantNode {
-	enum {
-		BOOL_NOT = 0, // ! true
-		MINUS, // - 
-		BOUNDED_POINTER_LENGTH,//ptr.length
-		MAX_VARIANT,
-	};
-	UnaryOperation(uint32 kind,Node* expression);
-
-	Type* returnType() const;
-	Node* resolve(Resolver* resolver);
-
-	bool  isValid() ;
-	Node* interpret() const;
-
-	Node* expression;
-	DECLARE_NODE(UnaryOperation);
-};
-
-struct BinaryOperation : VariantNode {
-	enum {
-		BOOL_AND = 0,//true && true
-		BOOL_OR,     //false || false
-		EQUALS,
-		LESS,
-		GREATER,
-		ADD,
-		SUBTRACT,
-		MULTIPLY,
-		DIVIDE,
-		MOD,
-		BOUNDED_POINTER_ELEMENT,//ptr[i]
-		MAX_VARIANT,
-	};
-	BinaryOperation(uint32 kind,Node* a,Node* b);
-
-	Type* returnType() const;
-	Node* resolve(Resolver* resolver);
-
-	bool  isValid() ;
-	Node* interpret() const;
-
-	Node* a,*b;
-	DECLARE_NODE(BinaryOperation);
 };
 
 // Record.field

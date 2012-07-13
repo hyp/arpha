@@ -10,24 +10,6 @@
 #include "interpret.h"
 #include "../intrinsics/types.h"
 
-Node* UnaryOperation::interpret() const{
-	switch(kind()){
-	case BOOL_NOT: return new BoolExpression(!expression->asBoolExpression()->value);
-	case MINUS:   return nullptr;
-	}
-	assert(false);
-	return nullptr;
-}
-
-Node* BinaryOperation::interpret() const{
-	switch(kind()){
-	case BOOL_AND: return new BoolExpression(a->asBoolExpression()->value && b->asBoolExpression()->value);
-	case BOOL_OR:  return new BoolExpression(a->asBoolExpression()->value || b->asBoolExpression()->value);
-	}
-	assert(false);
-	return nullptr;
-}
-
 /**
 * Walks the AST node and checks if the node can be interpreted at compile-time.
 * This checks all expressions in the AST node and doesn't account for branches that won't be reached when interpreting
@@ -80,18 +62,12 @@ struct Interpreter : NodeVisitor {
 		}
 		return false;
 	}
-	Node* visit(UnaryOperation* node){
-		auto expr = node->expression->accept(this);
+	Node* visit(LogicalOperation* node){
+		auto a = node->parameters[0]->accept(this);
+		auto b = node->parameters[1]->accept(this);
 		if(status == FAILURE) return nullptr;
-		if(isConst(expr)) ;
-		else return fail(node);
-	}
-	Node* visit(BinaryOperation* node){
-		auto a = node->a->accept(this);
-		auto b = node->b->accept(this);
-		if(status == FAILURE) return nullptr;
-		if(isConst(a) && isConst(b)) ;
-		else return fail(node);
+		//TODO
+		return fail(node);
 	}
 	Node* visit(VariableReference* node){
 		if(node->variable->functionOwner() == currentFunction) return registers[node->variable->ctfeRegisterID];

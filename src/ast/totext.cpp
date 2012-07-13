@@ -84,39 +84,6 @@ struct NodeToString: NodeVisitor {
 		stream<<node->parameters[0]<<(node->isOr()?" || ":" && ")<<node->parameters[1];
 		return node;
 	}
-
-	const char* unaryOp(int kind){
-		switch(kind){
-		case UnaryOperation::BOOL_NOT: return "!";
-		case UnaryOperation::MINUS: return "-";
-		}
-		return "op";
-	}
-	Node* visit(UnaryOperation* node){
-		if(node->kind() == UnaryOperation::BOUNDED_POINTER_LENGTH) stream<<node->expression<<".length";
-		else stream<<' '<<unaryOp(node->kind())<<' '<<node->expression;
-		return node;
-	}
-	const char* binaryOp(int kind){
-		switch(kind){
-		case BinaryOperation::BOOL_AND: return "&&";
-		case BinaryOperation::BOOL_OR: return "||";
-		case BinaryOperation::EQUALS: return "==";
-		case BinaryOperation::LESS: return "<";
-		case BinaryOperation::GREATER: return ">";
-		case BinaryOperation::ADD: return "+";
-		case BinaryOperation::SUBTRACT: return "-";
-		case BinaryOperation::MULTIPLY: return "*";
-		case BinaryOperation::DIVIDE: return "/";
-		case BinaryOperation::MOD: return "%";
-		}
-		return "op";
-	}
-	Node* visit(BinaryOperation* node){
-		if(node->kind() == BinaryOperation::BOUNDED_POINTER_ELEMENT) stream<<node->a<<"["<<node->b<<"]";
-		else stream<<node->a<<' '<<binaryOp(node->kind())<<' '<<node->b;
-		return node;
-	}
 	Node* visit(FieldAccessExpression* node){
 		stream<<node->object<<" f. "<<node->fieldsName();
 		return node;
