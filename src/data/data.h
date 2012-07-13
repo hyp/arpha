@@ -59,7 +59,10 @@ namespace data {
 				TRIG_ASIN,
 				TRIG_ACOS,
 				TRIG_ATAN,
-				TRIG_ATAN2
+				TRIG_ATAN2,
+
+				//sequences
+				LENGTH,
 			};
 		}
 	}
