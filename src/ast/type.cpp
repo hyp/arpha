@@ -676,6 +676,7 @@ Node* Type::assignableFrom(Node* expression,Type* type) {
 inline bool isIntLike(Type* t){
 	return t->isInteger() || t->isPlatformInteger() || t->isUintptr() || t->isChar();
 }
+
 /**
 Scenarios:
   integers <=> integers
@@ -684,6 +685,7 @@ Scenarios:
   floats   <=> floats
   characters <=> characters
   integers <=> bool
+  Pointer => uintptr
 */
 bool  Type::canCastTo(Type* other){
 	auto thisIsIntLike  = isIntLike(this);
@@ -701,7 +703,9 @@ bool  Type::canCastTo(Type* other){
 	else if(this->isBool()){
 		if(otherIsIntLike) return true;
 	}
-
+	else if(this->isPointer()){
+		if(other->isUintptr()) return true;
+	}
 	return false;
 }
 

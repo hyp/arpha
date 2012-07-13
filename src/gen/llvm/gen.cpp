@@ -278,64 +278,6 @@ llvm::Value* genPointerAddressing(LLVMgenerator* generator,Node* object,Node* in
 	return generator->builder.CreateGEP(ptr,idx);
 }
 
-/*
-Node* LLVMgenerator::visit(UnaryOperation* node){
-	auto value = generateExpression(node->expression);
-	llvm::Value* instr;
-	switch(node->kind()){
-	case UnaryOperation::BOOL_NOT:
-		instr =builder.CreateXor(value,1);
-		break;
-	case UnaryOperation::MINUS:
-		//builder.CreateFNeg(value);
-		instr =builder.CreateNeg(value);
-		break;
-	case UnaryOperation::BOUNDED_POINTER_LENGTH:
-		//TODO 2nd field
-		break;
-	}
-	emit(instr);
-	return node;
-}
-Node* LLVMgenerator::visit(BinaryOperation* node){
-	llvm::Value* instr;
-	if(node->kind() == BinaryOperation::BOUNDED_POINTER_ELEMENT){
-		emitLoad(genPointerAddressing(this,node->a,node->b));//TODO first field from bp
-		return node;
-	}
-	bool isFloatOp = false;
-	auto lhs = generateExpression(node->a);
-	auto rhs = generateExpression(node->b);
-	switch(node->kind()){
-	case BinaryOperation::EQUALS:
-		if(!isFloatOp)
-			instr =builder.CreateICmpEQ(lhs,rhs);
-		else 
-			instr =builder.CreateFCmpOEQ(lhs,rhs);
-		break;
-	case BinaryOperation::ADD:
-		if(!isFloatOp)
-			instr =builder.CreateAdd(lhs,rhs);
-		else 
-			instr =builder.CreateFAdd(lhs,rhs);
-		break;
-	case BinaryOperation::SUBTRACT:
-		if(!isFloatOp)
-			instr =builder.CreateSub(lhs,rhs);
-		else 
-			instr =builder.CreateFSub(lhs,rhs);
-		break;
-	case BinaryOperation::MULTIPLY:
-		if(!isFloatOp)
-			instr =builder.CreateMul(lhs,rhs);
-		else 
-			instr =builder.CreateFMul(lhs,rhs);
-		break;
-	}
-	emit(instr);
-	return node;
-};*/
-
 Node* LLVMgenerator::visit(AssignmentExpression* node){
 	auto val = generateExpression(node->value);
 	assert(val);
@@ -359,6 +301,144 @@ Node* LLVMgenerator::visit(FieldAccessExpression* node){
 	return node;
 }
 
+
+inline bool isSignedInteger(Type* t){
+	return t->isInteger() && t->bits<0 ? true : false;
+}
+
+// TODO: comparisons
+llvm::Value* genIntegerOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Type* operand1Type,llvm::Value* operand1,llvm::Value* operand2){
+	using namespace data::ast::Operations;
+
+	switch(op){
+	case NEGATION:
+		return generator->builder.CreateNeg(operand1);
+
+	case ADDITION:
+		return generator->builder.CreateAdd(operand1,operand2);
+	case SUBTRACTION:
+		return generator->builder.CreateSub(operand1,operand2);
+	case MULTIPLICATION:
+		return generator->builder.CreateMul(operand1,operand2);
+	case DIVISION:
+		return isSignedInteger(operand1Type)? generator->builder.CreateSDiv(operand1,operand2) : generator->builder.CreateUDiv(operand1,operand2);
+	case REMAINDER:
+		return isSignedInteger(operand1Type)? generator->builder.CreateSRem(operand1,operand2) : generator->builder.CreateURem(operand1,operand2);
+
+	case BIT_NOT:
+		return generator->builder.CreateNot(operand1);
+	case BIT_AND:
+		return generator->builder.CreateAnd(operand1,operand2);
+	case BIT_OR:
+		return generator->builder.CreateOr(operand1,operand2);
+	case BIT_XOR:
+		return generator->builder.CreateXor(operand1,operand2);
+
+	case LEFT_SHIFT:
+		return generator->builder.CreateShl(operand1,operand2);
+	case RIGHT_SHIFT:
+		return isSignedInteger(operand1Type)? generator->builder.CreateAShr(operand1,operand2) : generator->builder.CreateLShr(operand1,operand2);
+
+	case EQUALITY_COMPARISON:
+	case LESS_COMPARISON:
+	case GREATER_COMPARISON:
+	case LESS_EQUALS_COMPARISON:
+	case GREATER_EQUALS_COMPARISON:
+		return generator->builder.CreateICmpEQ(operand1,operand2);
+	}
+
+	assert(false && "Invalid operation");
+}
+
+// TODO: comparisons
+llvm::Value* genRealOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2){
+	using namespace data::ast::Operations;
+
+	switch(op){
+	case NEGATION:
+		return generator->builder.CreateFNeg(operand1);
+
+	case ADDITION:
+		return generator->builder.CreateFAdd(operand1,operand2);
+	case SUBTRACTION:
+		return generator->builder.CreateFSub(operand1,operand2);
+	case MULTIPLICATION:
+		return generator->builder.CreateFMul(operand1,operand2);
+	case DIVISION:
+		return generator->builder.CreateFDiv(operand1,operand2);
+
+	case EQUALITY_COMPARISON:
+	case LESS_COMPARISON:
+	case GREATER_COMPARISON:
+	case LESS_EQUALS_COMPARISON:
+	case GREATER_EQUALS_COMPARISON:
+		return generator->builder.CreateFCmpOEQ(operand1,operand2);
+	}
+
+	assert(false && "Invalid operation");
+}
+
+llvm::Value* genBoolOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2){
+	using namespace data::ast::Operations;
+
+	switch(op){
+	case NEGATION:
+		return generator->builder.CreateXor(operand1,1);
+
+	case EQUALITY_COMPARISON:
+		return generator->builder.CreateICmpEQ(operand1,operand2);
+	}
+
+	assert(false && "Invalid operation");
+}
+
+// TODO: other shizz
+llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2,llvm::Value* operand3){
+	using namespace data::ast::Operations;
+	switch(op){
+	case LENGTH:
+		return generator->builder.CreateStructGEP(operand1,1);
+	}
+
+	assert(false && "Invalid operation");
+}
+
+// TODO: fix linear sequences
+llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Node* arg){
+	Type*  operand1Type;
+	llvm::Value* values[2];
+	if(auto tuple = arg->asTupleExpression()){
+		assert(tuple->size() == 2);
+
+		auto args = tuple->childrenPtr();
+		operand1Type = args[0]->returnType();
+		values[0] = generator->generateExpression(args[0]);
+		values[1] = generator->generateExpression(args[1]);
+	}
+	else {
+		operand1Type = arg->returnType();
+		values[0] = generator->generateExpression(arg);
+		values[1] = nullptr;
+	}
+
+	
+	if(operand1Type->isInteger() || operand1Type->isPlatformInteger() || operand1Type->isUintptr()){
+		return genIntegerOperation(generator,op,operand1Type,values[0],values[1]);
+	}
+	else if(operand1Type->isLinearSequence()){
+		return genLinearSequenceOperation(generator,op,values[0],values[1],nullptr);
+	}
+	else if(operand1Type->isFloat()){
+		return genRealOperation(generator,op,values[0],values[1]);
+	}
+	else if(operand1Type->isBool()){
+		return genBoolOperation(generator,op,values[0],values[1]);
+	}
+
+
+	assert(false && "Invalid operation");
+}
+
 //TODO cc for function pointers
 Node* LLVMgenerator::visit(CallExpression* node){
 	llvm::Value* callee;
@@ -366,6 +446,10 @@ Node* LLVMgenerator::visit(CallExpression* node){
 	const char* reg;
 
 	if(auto fcall = node->object->asFunctionReference()){
+		if(fcall->function->isIntrinsicOperation()){
+			emit(genOperation(this,fcall->function->getOperation(),node->arg));
+			return node;
+		}
 		reg = fcall->function->returns()->isVoid()? "" : "calltmp";
 		callee = getFunctionDeclaration(fcall->function);
 	}
