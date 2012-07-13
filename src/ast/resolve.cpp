@@ -408,14 +408,17 @@ Node* LoopExpression::resolve(Resolver* resolver){
 	return this;
 }
 
-// ToDO
+//TODO const evaluation
 Node* CastExpression::resolve(Resolver* resolver){
 	object = resolver->resolve(object);
 	if(object->isResolved()){
 		resolver->markResolved(this);
 		auto returns = object->returnType();
 		if(returns->isSame(type)) return object;
-		//TODO
+		else if(!type->canCastTo(returns)){
+			error(this,"Can't cast %s to %s!",returns,type);
+			return ErrorExpression::getInstance();
+		}
 	}
 	return this;
 }

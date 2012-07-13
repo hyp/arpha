@@ -540,6 +540,9 @@ Scenarios:
   def x float  = (u)intX
         double = (u)intX
 		double = float
+
+  def c char16 = char8
+      c char32 = char8,char16
 */
 int automaticTypeCast(Type* givenType,Node** node,Type* nodeType,bool doTransform){
 	int weight = -1;
@@ -566,6 +569,13 @@ int automaticTypeCast(Type* givenType,Node** node,Type* nodeType,bool doTransfor
 		//natural = uintX
 		if(nodeType->isInteger()){
 			if(nodeType->bits > 0 && nodeType->bits < givenType->bits)
+				weight = LITERAL_CONVERSION;
+		}
+	}
+	else if(givenType->isChar()){
+		//charX = char(X-1)
+		if(nodeType->isChar()){
+			if(nodeType->bits < givenType->bits)
 				weight = LITERAL_CONVERSION;
 		}
 	}
@@ -661,6 +671,38 @@ Node* Type::assignableFrom(Node* expression,Type* type) {
 	}
 
 	return nullptr;
+}
+
+inline bool isIntLike(Type* t){
+	return t->isInteger() || t->isPlatformInteger() || t->isUintptr() || t->isChar();
+}
+/**
+Scenarios:
+  integers <=> integers
+  integers <=> floats
+  integers <=> characters
+  floats   <=> floats
+  characters <=> characters
+  integers <=> bool
+*/
+bool  Type::canCastTo(Type* other){
+	auto thisIsIntLike  = isIntLike(this);
+	auto otherIsIntLike = isIntLike(other);
+
+	if(thisIsIntLike){
+		if(otherIsIntLike) return true;
+		else if(other->isBool()) return true;
+		else if(other->isFloat()) return true;
+	}
+	else if(this->isFloat()){
+		if(otherIsIntLike) return true;
+		else if(other->isFloat()) return true;
+	}
+	else if(this->isBool()){
+		if(otherIsIntLike) return true;
+	}
+
+	return false;
 }
 
 /**

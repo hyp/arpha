@@ -18,6 +18,16 @@ macro *
 macro derefOrPtrType(T Type)                 = [> Pointer($T) <]
 macro derefOrPtrType(expr Pointer(_))        = ast.newPointerOperation(expr,dereference: true)
 
+# Type casting
+use precedence: precedence.isas
+macro (expression) as
+{
+	var type = parser.parse(precedence.isas)
+	return [> as($expression,$type) <]
+}
+
+macro as(expression,T Type) = ast.newCast(expression,T)
+
 # Indexing operator.
 use precedence: precedence.index
 macro (sequence) [

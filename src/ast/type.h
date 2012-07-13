@@ -118,6 +118,8 @@ struct Type {
 	static Type* getNaturalType();
 	static Type* getUintptrType();
 
+	bool   canCastTo(Type* other);
+
 	
 
 	//

@@ -56,4 +56,4 @@ def newPointerOperation(expression Pointer(Expression),dereference bool) Pointer
 def newLogicalOperation(a Pointer(Expression),b Pointer(Expression),and bool) Pointer(LogicalOperation)
 def newLogicalOperation(a Pointer(Expression),b Pointer(Expression),or bool) Pointer(LogicalOperation)
 
-#def newCast(expression Pointer(Expression),type Pointer(Expression)) Pointer(Cast)
+def newCast(expression Pointer(Expression),type Pointer(Expression)) Pointer(Cast)
