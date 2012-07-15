@@ -695,6 +695,19 @@ bool  Type::canCastTo(Type* other){
 	return false;
 }
 
+inline Node* bool2int(BoolExpression* node,Type* givenType){
+	return new IntegerLiteral((uint64)node->value,givenType);
+}
+inline Node* char2float(CharacterLiteral* node,Type* givenType){
+	return new FloatingPointLiteral(node->value,givenType);
+}
+inline Node* float2int(FloatingPointLiteral* node,Type* givenType){
+	return new IntegerLiteral((uint64)node->value,givenType);
+}
+inline Node* float2char(FloatingPointLiteral* node,Type* givenType){
+	return new CharacterLiteral((UnicodeChar)node->value,givenType);
+}
+
 //TODO: proper int -x to uint x
 Node* evaluateConstantCast(Node* expression,Type* givenType){
 	if( auto assigns = givenType->assignableFrom(expression,expression->returnType()) ) return assigns;
@@ -703,15 +716,31 @@ Node* evaluateConstantCast(Node* expression,Type* givenType){
 		if(givenType->isInteger() || givenType->isPlatformInteger() || givenType->isUintptr()){
 			integerLiteral->explicitType = givenType;
 		}
+		else if(givenType->isFloat())
+			return int2float(integerLiteral,givenType);
+		else if(givenType->isChar())
+			return int2char(integerLiteral,givenType);
 	}
 	else if( auto floatingLiteral = expression->asFloatingPointLiteral() ){
 		if(givenType->isFloat()) floatingLiteral->explicitType = givenType;
+		else if(givenType->isInteger() || givenType->isPlatformInteger() || givenType->isUintptr())
+			return float2int(floatingLiteral,givenType);
+		else if(givenType->isChar())
+			return float2char(floatingLiteral,givenType);
 	}
 	else if( auto characterLiteral = expression->asCharacterLiteral() ){
 		if(givenType->isChar()) characterLiteral->explicitType = givenType;
+		else if(givenType->isInteger() || givenType->isPlatformInteger() || givenType->isUintptr())
+			return char2int(characterLiteral,givenType);
+		else if(givenType->isFloat())
+			return char2float(characterLiteral,givenType);
 	}
 	else if( auto stringLiteral = expression->asStringLiteral() ){
 		if(givenType->isLinearSequence()) stringLiteral->explicitType = givenType;
+	}
+	else if( auto boolLiteral = expression->asBoolExpression() ){
+		if(givenType->isInteger() || givenType->isPlatformInteger() || givenType->isUintptr())
+			return bool2int(boolLiteral,givenType);
 	}
 	return expression;
 }

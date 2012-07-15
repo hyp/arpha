@@ -185,9 +185,10 @@ llvm::Type* generatePointerType(LLVMgenerator* generator,Type* next){
 	return llvm::PointerType::get(generator->genType(next),0);
 }
 
-// { T* ptr,natural length }
+// { T* begin,T* end }
 llvm::Type* generateLinearSequence(LLVMgenerator* generator,Type* next){
-	llvm::Type* fields[2] = { generatePointerType(generator,next),coreTypes[GEN_TYPE_SIZE_T] };
+	auto type = llvm::PointerType::get(generator->genType(next),0);
+	llvm::Type* fields[2] = { type,type };
 	return llvm::StructType::get(generator->context,fields,false);
 }
 
@@ -269,7 +270,10 @@ Node* LLVMgenerator::visit(FloatingPointLiteral* node){
 }
 
 Node* LLVMgenerator::visit(VariableReference* node){
-	if(node->variable->type.type()->isLinearSequence()) emit(getVariable(node->variable));
+	if(node->variable->type.type()->isLinearSequence()){
+		emit(getVariable(node->variable));
+		return node;
+	}
 	emitLoad(getVariable(node->variable));
 	return node;
 }
@@ -359,9 +363,11 @@ llvm::Value* genIntegerOperation(LLVMgenerator* generator,data::ast::Operations:
 	assert(false && "Invalid operation");
 }
 
-// TODO: comparisons
 llvm::Value* genRealOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2){
 	using namespace data::ast::Operations;
+
+	static const llvm::FCmpInst::Predicate ocmp [] = 
+	{ llvm::FCmpInst::FCMP_OEQ,llvm::FCmpInst::FCMP_OLT,llvm::FCmpInst::FCMP_OGT,llvm::FCmpInst::FCMP_OLE,llvm::FCmpInst::FCMP_OGE };
 
 	switch(op){
 	case NEGATION:
@@ -381,7 +387,7 @@ llvm::Value* genRealOperation(LLVMgenerator* generator,data::ast::Operations::Ki
 	case GREATER_COMPARISON:
 	case LESS_EQUALS_COMPARISON:
 	case GREATER_EQUALS_COMPARISON:
-		return generator->builder.CreateFCmpOEQ(operand1,operand2);
+		return generator->builder.CreateFCmp(ocmp[op-EQUALITY_COMPARISON],operand1,operand2);
 	}
 
 	assert(false && "Invalid operation");
@@ -401,15 +407,52 @@ llvm::Value* genBoolOperation(LLVMgenerator* generator,data::ast::Operations::Ki
 	assert(false && "Invalid operation");
 }
 
-// TODO: other shizz
+// TODO: everything
 llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2,llvm::Value* operand3){
+
+#define LOAD_BEGIN generator->builder.CreateLoad(generator->builder.CreateStructGEP(operand1,0))
+#define LOAD_END   generator->builder.CreateLoad(generator->builder.CreateStructGEP(operand1,1))
+	
 	using namespace data::ast::Operations;
 	switch(op){
 	case LENGTH:
-		return generator->builder.CreateLoad(generator->builder.CreateStructGEP(operand1,1));
+		{
+		auto begin = LOAD_BEGIN;
+		auto end   = LOAD_END;
+		return generator->builder.CreatePtrDiff(end,begin);//TODO: cast to natural?
+		}
+
 	}
+	
+
+
+#undef LOAD_BEGIN
+#undef LOAD_END
 
 	assert(false && "Invalid operation");
+}
+
+/**
+Scenarios:
+  !(x == y) => x != y
+*/
+llvm::Value* optimize1ArgOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Type* argType,Node* arg){
+	using namespace data::ast::Operations;
+	
+	if(argType->isBool() && op == NEGATION){
+		auto call = arg->asCallExpression();
+		if(!call) return nullptr;
+		auto func = call->object->asFunctionReference();
+		if(!func) return nullptr;
+		if(func->function->isIntrinsicOperation()){
+			auto op2 = func->function->getOperation();
+			if(op2 == EQUALITY_COMPARISON){
+				//TODO
+			}
+		}
+	}
+
+	return nullptr;
 }
 
 // TODO: fix linear sequences
