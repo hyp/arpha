@@ -1,0 +1,8 @@
+#
+	This module defines standart operations on linear sequences
+#
+import arpha.intrinsic
+
+def length (self LinearSequence(_)) natural
+
+def element(self LinearSequence(T: _),i natural)  T
