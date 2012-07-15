@@ -178,6 +178,8 @@ struct Function: public PrefixDefinition {
 		FIELD_ACCESS_FUNCTION = 0x2000, //optimization
 
 		IS_INTRINSIC_OPERATION = 0x4000,
+
+		INTRINSIC_FUNCTION_RETURNS_PATTERNED_DEFINITION = 0x8000,
 	};
 
 	Function(SymbolID name,Location& location);
@@ -219,6 +221,8 @@ struct Function: public PrefixDefinition {
 	inline bool isIntrinsicOperation() const { return isFlagSet(IS_INTRINSIC_OPERATION); }
 	inline data::ast::Operations::Kind getOperation() const { return (data::ast::Operations::Kind)ctfeRegisterCount; }
 
+	void makeIntrinsicReturningPattern(int argID);
+	inline bool isIntrinsicReturningPattern() const { return isFlagSet(INTRINSIC_FUNCTION_RETURNS_PATTERNED_DEFINITION); }
 
 	std::vector<Argument*> arguments;
 	TypePatternUnresolvedExpression _returnType;

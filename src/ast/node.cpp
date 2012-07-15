@@ -302,7 +302,8 @@ FunctionReference::FunctionReference(Function* func) : function(func) {
 }
 Type* FunctionReference::returnType() const {
 	assert(isResolved());
-	return new Type(function->argumentType(),function->returns());
+	if(function->isIntrinsic()) return intrinsics::types::Void;//NB: hack for function reference totext printing
+	else return new Type(function->argumentType(),function->returns());
 }
 Node* FunctionReference::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new FunctionReference(function));
@@ -347,9 +348,24 @@ CallExpression::CallExpression(Node* object,Node* argument){
 Type* CallExpression::returnType() const {
 	assert(isResolved());
 	if( auto refFunc = object->asFunctionReference()){
-		return refFunc->function->_returnType.isResolved() ? refFunc->function->_returnType.type() : intrinsics::types::Void;//TODO fix when function has unresolved return type!
+		auto func = refFunc->function;
+		if(func->isIntrinsicReturningPattern()){
+			/**
+			*TODO: NB: This is very hacky now, tailored only for def foo(x Pointer | LinearSequence(T:_)) T
+			*/
+			if(auto tuple = arg->asTupleExpression()){
+				return (*tuple->begin())->returnType()->next();
+			}
+			else return arg->returnType()->next();
+		}
+		else return func->_returnType.type();
 	}
-	return intrinsics::types::Void;//TODO only allow functions?
+	else if( auto vref = object->asVariableReference()){
+		return vref->variable->type.type();//TODO function pointer type returns
+	}
+
+	assert(false && "Invalid call expression - can't calculate the return type");
+	return intrinsics::types::Void;
 }
 Node* CallExpression::duplicate(DuplicationModifiers* mods) const {
 	auto e = new CallExpression(object->duplicate(mods),arg->duplicate(mods));

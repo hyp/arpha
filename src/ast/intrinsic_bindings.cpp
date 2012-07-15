@@ -252,6 +252,7 @@ static void initMapping(){
 	mapStandartOperations(intrinsics::types::boolean);
 
 	MAPOP(std::string("length(LinearSequence)"),data::ast::Operations::LENGTH);
+	MAPOP(std::string("element(LinearSequence,natural)"),data::ast::Operations::ELEMENT_GET);
 
 	/**
 	* arpha.functionality.misc

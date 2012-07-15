@@ -776,7 +776,16 @@ Node* Function::resolve(Resolver* resolver){
 	}
 
 	//resolve return type. (Don't quit yet because the body may infer it!)
-	//TODO def foo(x Pointer(T:_)) T {}
+	
+	//NB: special case for intrinsic def foo(x Pointer(T:_)) T
+	if(isIntrinsic() && arguments[0]->type.isPattern() && _returnType.kind == TypePatternUnresolvedExpression::UNRESOLVED){
+		if(auto sym = _returnType.unresolvedExpression->asUnresolvedSymbol()){
+			if(allArgMatcher.lookupDefinition(sym->symbol)){
+				makeIntrinsicReturningPattern(0);
+			}
+		}
+	}
+
 	if(!_returnType.isResolved() && !_returnType.isPattern()){
 		auto oldScope = resolver->currentScope();
 		resolver->currentScope(body.scope);

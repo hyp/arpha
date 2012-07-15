@@ -63,6 +63,8 @@ namespace data {
 
 				//sequences
 				LENGTH,
+				ELEMENT_GET,
+				ELEMENT_SET
 			};
 		}
 	}
