@@ -9,4 +9,5 @@
 def pi = 3.141592653589793238462643
 def e  = 2.718281828458563411277850
 
+import export scalar.math
 import export scalar.trig

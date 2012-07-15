@@ -1,0 +1,20 @@
+#
+	This module defines standart mathematical functions for scalar floating point types.
+#
+import arpha.intrinsic
+
+macro defineMathFunctions(T Type) = [>
+	def abs(x $T) $T
+	
+	def pow(x $T,y $T) $T
+	def sqrt(x $T) $T
+	
+	def exp(x $T) $T
+	def log(x $T) $T
+	
+<]
+
+defineMathFunctions(arpha.literal.real)
+
+defineMathFunctions(float)
+defineMathFunctions(double)

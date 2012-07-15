@@ -52,7 +52,14 @@ namespace data {
 				LOGIC_AND,
 				LOGIC_OR,
 
-				//trig
+				//math(fp only now)
+				MATH_ABS,
+				MATH_POW,
+				MATH_SQRT,
+				MATH_EXP,
+				MATH_LOG,
+
+				//trig(fp only)
 				TRIG_SIN,
 				TRIG_COS,
 				TRIG_TAN,
@@ -64,7 +71,8 @@ namespace data {
 				//sequences
 				LENGTH,
 				ELEMENT_GET,
-				ELEMENT_SET
+				ELEMENT_SET,
+				SEQUENCE_EMPTY
 			};
 		}
 	}

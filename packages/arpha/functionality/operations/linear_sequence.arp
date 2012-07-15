@@ -1,8 +1,13 @@
 #
 	This module defines standart operations on linear sequences
+	
+	Linear sequence is a contiguos sequence of elements. It is represented by a structure containing two pointers to the beggining and to the end of the sequence.
 #
 import arpha.intrinsic
 
 def length (self LinearSequence(_)) natural
 
-def element(self LinearSequence(T: _),i natural)  T
+def element(self LinearSequence(T: _),i natural) T
+def element(self LinearSequence(T: _),i natural,item T)
+
+def isEmpty(self LinearSequence(_)) bool

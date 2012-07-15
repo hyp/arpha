@@ -422,6 +422,12 @@ llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Oper
 		return generator->builder.CreatePtrDiff(end,begin);//TODO: cast to natural?
 		}
 
+	case ELEMENT_GET:
+
+	case ELEMENT_SET:
+
+	case SEQUENCE_EMPTY:
+		break;
 	}
 	
 

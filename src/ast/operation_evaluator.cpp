@@ -92,6 +92,15 @@ void   doCalculation(data::ast::Operations::Kind op,double& operand1,double oper
 
 double doOtherRealCalculation(data::ast::Operations::Kind op,double operand1){
 	switch(op){
+	case MATH_ABS:
+		return fabs(operand1);
+	case MATH_SQRT:
+		return sqrt(operand1);
+	case MATH_EXP:
+		return exp(operand1);
+	case MATH_LOG:
+		return log(operand1);
+
 	case TRIG_SIN:
 		return sin(operand1);
 	case TRIG_COS:
@@ -146,7 +155,7 @@ inline bool isComparisonOperation(data::ast::Operations::Kind op){
 	return op >= EQUALITY_COMPARISON && op <= GREATER_EQUALS_COMPARISON;
 }
 inline bool isOtherRealCalculation(data::ast::Operations::Kind op){
-	return op>=TRIG_SIN && op<=TRIG_ATAN2;
+	return op>=MATH_ABS && op<=TRIG_ATAN2;
 }
 
 Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
@@ -176,6 +185,7 @@ Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
 		}
 		else if(isOtherRealCalculation(op)){
 			if(op == TRIG_ATAN2) operand1 = atan2(operand1,params[1]->asFloatingPointLiteral()->value);
+			else if(op == MATH_POW) operand1 = pow(operand1,params[1]->asFloatingPointLiteral()->value);
 			else operand1 = doOtherRealCalculation(op,operand1);
 		}
 		else if(isComparisonOperation(op)){ 

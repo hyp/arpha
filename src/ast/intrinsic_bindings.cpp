@@ -111,6 +111,12 @@ void mapRealOperations(const char* t1){
 	MAPOP(std::string("lessEquals")+base2,data::ast::Operations::LESS_EQUALS_COMPARISON);
 	MAPOP(std::string("greaterEquals")+base2,data::ast::Operations::GREATER_EQUALS_COMPARISON);
 
+	MAPOP(std::string("abs")+base1,data::ast::Operations::MATH_ABS);
+	MAPOP(std::string("pow")+base2,data::ast::Operations::MATH_POW);
+	MAPOP(std::string("sqrt")+base1,data::ast::Operations::MATH_SQRT);
+	MAPOP(std::string("exp")+base1,data::ast::Operations::MATH_EXP);
+	MAPOP(std::string("log")+base1,data::ast::Operations::MATH_LOG);
+
 	MAPOP(std::string("sin")+base1,data::ast::Operations::TRIG_SIN);
 	MAPOP(std::string("cos")+base1,data::ast::Operations::TRIG_COS);
 	MAPOP(std::string("tan")+base1,data::ast::Operations::TRIG_TAN);
@@ -251,8 +257,11 @@ static void initMapping(){
 
 	mapStandartOperations(intrinsics::types::boolean);
 
-	MAPOP(std::string("length(LinearSequence)"),data::ast::Operations::LENGTH);
-	MAPOP(std::string("element(LinearSequence,natural)"),data::ast::Operations::ELEMENT_GET);
+	MAPOP("length(LinearSequence)",data::ast::Operations::LENGTH);
+	MAPOP("element(LinearSequence,natural)",data::ast::Operations::ELEMENT_GET);
+	MAPOP("element(LinearSequence,natural,)",data::ast::Operations::ELEMENT_SET);
+
+	MAPOP("isEmpty(LinearSequence)",data::ast::Operations::SEQUENCE_EMPTY);
 
 	/**
 	* arpha.functionality.misc
