@@ -23,107 +23,155 @@ Node* typecheck(Node* expression,Type* expectedType){
 	}
 }
 
+namespace overloads {
 
-/**
-  Represent a function overload.
-
-  Distance is the ditance from the given scope.
-*/
-struct Overload {
+struct SearchResult {
+	enum Kind{
+		OverloadNotFound,
+		OverloadFound,
+		MultipleOverloadsFound,
+		NotAllOverloadsResolved
+	};
+	Kind result;
 	Function* function;
-	int weight,distance;
 
-	Overload(Function* f,int dist) : function(f),weight(0),distance(dist) {}
+	SearchResult(Function* f) : result(OverloadFound),function(f) {}
+	SearchResult(Kind kind) : result(kind) {}
+	SearchResult(Kind kind,Function* f) : result(kind),function(f) {}
+
+	inline bool operator == (Kind kind) const { return result == kind; }
 };
 
 /**
-  Represents the list of function overloads.
+  This range iterates over all the possible overloads(as visible from the given scope) for the given function.
 */
-struct Overloads {
+struct OverloadRange {
 
-	bool get(Scope* scope,SymbolID function,bool dotSyntax);
-
+	OverloadRange(Scope* scope,SymbolID function,bool dotSyntax);
 private:
+	Function** funcCurr;
+	Function** funcEnd;
+	int distance;
+	Scope*  scope;
+	Scope*  prevScope;
+	Scope** importsCurr; //import iterators
+	Scope** importsEnd;
+	SymbolID functionName;
+	bool    dotSyntax;
 	
-	std::vector<Overload> overloads;
-
-	inline void add(Function* function,int distance){
-		overloads.push_back(Overload(function,distance));
-	}
+	void nextScope();
+	void getNextFuncIterators();
 public:
 
-	inline std::vector<Overload>::iterator begin(){ return overloads.begin(); }
-	inline std::vector<Overload>::iterator end()  { return overloads.end();   }
-	inline std::vector<Overload>::const_iterator begin() const { return overloads.begin(); }
-	inline std::vector<Overload>::const_iterator end()   const { return overloads.end();   }
-
+	inline bool isEmpty(){ return scope == nullptr; }
+	inline Function* currentFunction(){ return *funcCurr; }
+	void   advance();
+	inline int currentDistance(){ return distance; }
 };
 
-/**
-  Creates a list of all possible overloads for a given function.
-  Returns true if the list was created, or false if some functions in the list are still unresolved.
-*/
-bool Overloads::get(Scope* scope,SymbolID function,bool dotSyntax){
-	overloads.clear();
-
-	int currentDistance = 0;
-	Overloadset* overloads;
-	size_t numberOfOverloads;
-
-	Scope*  prevScope;
-	Scope** importsCurr = nullptr; //import iterators
-	Scope** importsEnd;
-
-
-	while(scope!=nullptr){
-		//check current scope
-		if(overloads = scope->containsOverloadset(function)){
-			for(auto i = overloads->functions.begin(); i != overloads->functions.end();++i){
-				if(!(*i)->isResolved()) return false;
-				this->add((*i),currentDistance);
-			}
-		}
-
-		if(!importsCurr){
-			currentDistance++;
-			//check imported scopes
-			if(!scope->imports.size()){
-				currentDistance++;
-				scope = scope->parent;
-				continue;
-			}
-			else {
-				importsCurr = scope->imports.begin()._Ptr;
-				importsEnd  = scope->imports.end()._Ptr;
-				prevScope = scope;
-				scope = *importsCurr;
-			}
+OverloadRange::OverloadRange(Scope* scope,SymbolID function,bool dotSyntax){
+	funcCurr        = nullptr;
+	distance = 0;
+	this->scope     = scope;
+	importsCurr     = nullptr;
+	this->functionName = function;
+	this->dotSyntax = dotSyntax;
+	getNextFuncIterators();
+}
+void OverloadRange::nextScope(){
+	if(!importsCurr){
+		distance++;
+		//check imported scopes
+		if(!scope->imports.size()){
+			distance++;
+			scope = scope->parent;
 		}
 		else {
-			importsCurr++;
-			if(importsCurr >= importsEnd){
-				currentDistance++;
-				scope = prevScope->parent;
-			}
-			else scope = *importsCurr;
+			importsCurr = scope->imports.begin()._Ptr;
+			importsEnd  = scope->imports.end()._Ptr;
+			prevScope = scope;
+			scope = *importsCurr;
 		}
 	}
-	return true;
+	else {
+		importsCurr++;
+		if(importsCurr >= importsEnd){
+			distance++;
+			scope = prevScope->parent;
+			importsCurr = nullptr;
+		}
+		else scope = *importsCurr;
+	}
+}
+void OverloadRange::getNextFuncIterators(){
+	do {
+		if(auto overloadset = scope->containsOverloadset(functionName)){
+			funcCurr = overloadset->functions.begin()._Ptr;
+			funcEnd  = overloadset->functions.end()._Ptr;
+			return;
+		}
+		nextScope();
+	} while(scope);
+}
+void OverloadRange::advance(){
+	funcCurr++;
+	if(funcCurr >= funcEnd){
+		nextScope();
+		if(scope) getNextFuncIterators();
+	}
 }
 
-Function* findFunctionByType(Overloads* overloads,FunctionPointer* type){
+/**
+  Tries to find a function that matches the pointer type from all the possible overloads from the perspective of a given scope.
+  Returns true if all overloads were resolved or false if not every overload was resolved.
+*/
+SearchResult findFunctionByType(Scope* scope,SymbolID name,FunctionPointer* type){
 	Function* match = nullptr;
-	for(auto i = overloads->begin();i != overloads->end();++i){
-		auto f = (*i).function;
-		if( f->argumentType()->isSame(type->parameter()) && f->returns()->isSame(type->returns()) && f->callingConvention() == type->callingConvention() ){
+	for(OverloadRange overloads(scope,name,true);!overloads.isEmpty();overloads.advance()){
+		auto f = overloads.currentFunction();
+		if(!f->isResolved()) return SearchResult(SearchResult::NotAllOverloadsResolved);
+
+		if( f->argumentType()->isSame(type->parameter()) &&
+			f->returns()->isSame(type->returns()) &&
+			f->callingConvention() == type->callingConvention() ){
+
 			if(match){
-				error(Location(),"Multiple overloads");
+				return SearchResult(SearchResult::MultipleOverloadsFound,match);
 			}
 			match = f;
 		}
 	}
+	return match? SearchResult(match) : SearchResult(SearchResult::OverloadNotFound);
+}
 
-	return match;
+
+}
+
+/**
+  Checks if a given type satisfies a certain trait from the perspective of a given scope.
+  Returns true if a type satisfies trait
+*/
+bool functionMatchesTraitsMethod(Function* function,Function* method){
+	if(function->arguments.size() == method->arguments.size()){
+		return true;
+	}
+	return false;
+}
+
+int typeSatisfiesTrait(Scope* scope,Type* type,Trait* trait){
+	for(auto i = trait->methods.begin();i!=trait->methods.end();i++){
+		bool matchFound = false;
+
+		for(overloads::OverloadRange overloads(scope,(*i)->label(),true);!overloads.isEmpty();overloads.advance()){
+			if(!overloads.currentFunction()->isResolved()) assert(false && "Trait sat: not all overloads resolved");
+			if(functionMatchesTraitsMethod(overloads.currentFunction(),(*i))){
+				matchFound = true;
+				break;
+			}
+		}
+		if(!matchFound) return false;
+	}
+	return true;
 }
 
 
