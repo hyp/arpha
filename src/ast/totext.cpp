@@ -234,8 +234,8 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 		case Type::STATIC_ARRAY:
 			stream<<"Array("<<type->next()<<","<<type->N<<')'; break;
 
-		case Type::FUNCTION: 
-			stream<<"Function("<<type->argument<<"->"<<type->returns<<')'; break;
+		case Type::FUNCTION_POINTER: 
+			stream<<"Function("<<type->argument<<" -> "<<static_cast<FunctionPointer*>(type)->returns()<<')'; break;
 
 		case Type::NODE:
 			stream<<"ast.Expression";

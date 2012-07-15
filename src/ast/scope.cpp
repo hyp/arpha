@@ -144,6 +144,13 @@ InfixDefinition* Scope::lookupInfix(SymbolID name){
 
 PrefixDefinition* Scope::containsPrefix(SymbolID name){ CONTAINS(prefixDefinitions); }
 InfixDefinition* Scope::containsInfix(SymbolID name)  { CONTAINS(infixDefinitions);  }
+Overloadset* Scope::containsOverloadset(SymbolID name){
+	auto var = prefixDefinitions.find(name);
+	if (var != prefixDefinitions.end()){
+		if(auto os = var->second->asOverloadset()) return os;
+	}
+	return nullptr;
+}
 
 void Scope::define(PrefixDefinition* definition){
 	auto id = definition->label();

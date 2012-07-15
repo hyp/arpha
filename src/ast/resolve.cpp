@@ -23,6 +23,110 @@ Node* typecheck(Node* expression,Type* expectedType){
 	}
 }
 
+
+/**
+  Represent a function overload.
+
+  Distance is the ditance from the given scope.
+*/
+struct Overload {
+	Function* function;
+	int weight,distance;
+
+	Overload(Function* f,int dist) : function(f),weight(0),distance(dist) {}
+};
+
+/**
+  Represents the list of function overloads.
+*/
+struct Overloads {
+
+	bool get(Scope* scope,SymbolID function,bool dotSyntax);
+
+private:
+	
+	std::vector<Overload> overloads;
+
+	inline void add(Function* function,int distance){
+		overloads.push_back(Overload(function,distance));
+	}
+public:
+
+	inline std::vector<Overload>::iterator begin(){ return overloads.begin(); }
+	inline std::vector<Overload>::iterator end()  { return overloads.end();   }
+	inline std::vector<Overload>::const_iterator begin() const { return overloads.begin(); }
+	inline std::vector<Overload>::const_iterator end()   const { return overloads.end();   }
+
+};
+
+/**
+  Creates a list of all possible overloads for a given function.
+  Returns true if the list was created, or false if some functions in the list are still unresolved.
+*/
+bool Overloads::get(Scope* scope,SymbolID function,bool dotSyntax){
+	overloads.clear();
+
+	int currentDistance = 0;
+	Overloadset* overloads;
+	size_t numberOfOverloads;
+
+	Scope*  prevScope;
+	Scope** importsCurr = nullptr; //import iterators
+	Scope** importsEnd;
+
+
+	while(scope!=nullptr){
+		//check current scope
+		if(overloads = scope->containsOverloadset(function)){
+			for(auto i = overloads->functions.begin(); i != overloads->functions.end();++i){
+				if(!(*i)->isResolved()) return false;
+				this->add((*i),currentDistance);
+			}
+		}
+
+		if(!importsCurr){
+			currentDistance++;
+			//check imported scopes
+			if(!scope->imports.size()){
+				currentDistance++;
+				scope = scope->parent;
+				continue;
+			}
+			else {
+				importsCurr = scope->imports.begin()._Ptr;
+				importsEnd  = scope->imports.end()._Ptr;
+				prevScope = scope;
+				scope = *importsCurr;
+			}
+		}
+		else {
+			importsCurr++;
+			if(importsCurr >= importsEnd){
+				currentDistance++;
+				scope = prevScope->parent;
+			}
+			else scope = *importsCurr;
+		}
+	}
+	return true;
+}
+
+Function* findFunctionByType(Overloads* overloads,FunctionPointer* type){
+	Function* match = nullptr;
+	for(auto i = overloads->begin();i != overloads->end();++i){
+		auto f = (*i).function;
+		if( f->argumentType()->isSame(type->parameter()) && f->returns()->isSame(type->returns()) && f->callingConvention() == type->callingConvention() ){
+			if(match){
+				error(Location(),"Multiple overloads");
+			}
+			match = f;
+		}
+	}
+
+	return match;
+}
+
+
 Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilationUnit),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr) {
 	unresolvedExpressions = 0;
 	treatUnresolvedTypesAsResolved = false;
@@ -147,6 +251,8 @@ Node* CallExpression::resolve(Resolver* resolver){
 	// symbol(arg)
 	if(auto callingOverloadSet = object->asUnresolvedSymbol()){
 		auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : resolver->currentScope());
+	
+
 		if(auto func =  resolver->resolveOverload(scope,callingOverloadSet->symbol,arg,isFlagSet(DOT_SYNTAX))){
 			arg = resolver->resolve(resolver->constructFittingArgument(&func,arg));
 			//macro
@@ -196,7 +302,7 @@ Node* CallExpression::resolve(Resolver* resolver){
 	else if(auto type = object->asTypeReference()){
 		resolver->markResolved(this);
 	}
-	else if(object->asVariableReference() && object->returnType()->isFunction()){
+	else if(object->asVariableReference() && object->returnType()->isFunctionPointer()){
 		resolver->markResolved(this);
 	}
 	else
@@ -929,7 +1035,7 @@ Node* mixinMacro(CTFEinvocation* invocation,Scope* scope){
 // Function overload resolving based on a function's type
 // TODO
 Function* Resolver::resolveOverload(Scope* scope,SymbolID function,Type* functionType){
-	assert(functionType->isFunction());
+	assert(functionType->isFunctionPointer());
 	return nullptr;
 }
 

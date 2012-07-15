@@ -38,6 +38,8 @@ struct Scope {
 	void define(PrefixDefinition* definition);
 	void remove(PrefixDefinition* definition);
 
+	Overloadset* containsOverloadset(SymbolID name);
+
 	InfixDefinition* lookupInfix(SymbolID name);
 	InfixDefinition* lookupImportedInfix(SymbolID name);
 	InfixDefinition* containsInfix(SymbolID name);

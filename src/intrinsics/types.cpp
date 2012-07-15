@@ -138,7 +138,7 @@ namespace intrinsics {
 					invocation->ret(new ::Type(Type::POINTER,invocation->getTypeParameter(0)));
 				}
 				static void FunctionType(CTFEintrinsicInvocation* invocation){
-					invocation->ret(new ::Type(invocation->getTypeParameter(0),invocation->getTypeParameter(1)));
+					invocation->ret(FunctionPointer::get(invocation->getTypeParameter(0),invocation->getTypeParameter(1)));
 				}
 				static void StaticArray(CTFEintrinsicInvocation* invocation){
 					invocation->ret(new ::Type(::Type::STATIC_ARRAY,invocation->getTypeParameter(0),(size_t)invocation->getInt32Parameter(1)));

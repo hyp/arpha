@@ -37,6 +37,13 @@ void mangleNode(std::stringstream& stream,Node* node){
 	else stream<<blockComponentLength((uintptr_t)node)<<'_'<<((uintptr_t)node);
 }
 
+char mangleCC(uint8 cc){
+	switch(cc){
+	case data::ast::Function::CCALL:   return 'C';
+	case data::ast::Function::STDCALL: return 'S';
+	}
+}
+
 void Mangler::Element::mangle(Type* type){
 	switch(type->type){
 	case Type::VOID:     stream<<'n'; break;
@@ -67,7 +74,18 @@ void Mangler::Element::mangle(Type* type){
 	case Type::POINTER:  stream<<'P'; mangle(type->next()); break;
 	case Type::LINEAR_SEQUENCE: stream<<'S'; mangle(type->next()); break;
 
-	case Type::FUNCTION: stream<<'C'; break;
+	case Type::FUNCTION_POINTER: 
+		{
+		auto fp = static_cast<FunctionPointer*>(type);
+		stream<<'C';
+		//properties
+		bool streamedProperties = false;
+		if(fp->callingConvention() != data::ast::Function::ARPHA){
+			if(!streamedProperties){ stream<<'_'; streamedProperties = true; }
+			stream<<'c'<<mangleCC(fp->callingConvention());
+		}
+		mangle(fp->parameter());mangle(fp->returns()); break;
+		}
 
 	case Type::ANONYMOUS_RECORD:
 	case Type::ANONYMOUS_VARIANT:
@@ -89,13 +107,6 @@ void Mangler::Element::mangle(Type* type){
 	case Type::LITERAL_STRING:  stream<<"ls"; break;
 	default:
 		assert(false);
-	}
-}
-
-char mangleCC(uint8 cc){
-	switch(cc){
-	case data::ast::Function::CCALL:   return 'C';
-	case data::ast::Function::STDCALL: return 'S';
 	}
 }
 

@@ -194,6 +194,11 @@ llvm::Type* generateLinearSequence(LLVMgenerator* generator,Type* next){
 	return llvm::StructType::get(generator->context,fields,false);
 }
 
+//TODO
+llvm::Type* generateFunctionPointerType(LLVMgenerator* generator,FunctionPointer* type){
+	return llvm::PointerType::get(generator->genType(next),0);
+}
+
 Node* LLVMgenerator::visit(TypeDeclaration* node){
 	return node;
 }
@@ -223,6 +228,9 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 		return generatePointerType(this,type->next());
 	case Type::LINEAR_SEQUENCE:
 		return generateLinearSequence(this,type->next());
+
+	case Type::FUNCTION_POINTER:
+		return generateFunctionPointerType(this,static_cast<FunctionPointer*>(type));
 
 	case Type::NODE: assert(false); break;
 	case Type::ANONYMOUS_RECORD:
@@ -539,11 +547,19 @@ llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind o
 	assert(false && "Invalid operation");
 }
 
-//TODO cc for function pointers
+llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention cc){
+	switch(cc){
+	case data::ast::Function::ARPHA:   return llvm::CallingConv::C;//Fast;
+	case data::ast::Function::CCALL:   return llvm::CallingConv::C;
+	case data::ast::Function::STDCALL: return llvm::CallingConv::X86_StdCall;
+	}
+}
+
 Node* LLVMgenerator::visit(CallExpression* node){
 	llvm::Value* callee;
 	llvm::CallInst* instr;
 	const char* reg;
+	bool  callingFP;
 
 	if(auto fcall = node->object->asFunctionReference()){
 		if(fcall->function->isIntrinsicOperation()){
@@ -552,10 +568,12 @@ Node* LLVMgenerator::visit(CallExpression* node){
 		}
 		reg = fcall->function->returns()->isVoid()? "" : "calltmp";
 		callee = getFunctionDeclaration(fcall->function);
+		callingFP = false;
 	}
 	else {
 		reg = "calltmp";
 		callee = generateExpression(node->object); //calling a function pointer
+		callingFP = true;
 	}
 	
 	llvm::Twine twine(reg);
@@ -578,7 +596,10 @@ Node* LLVMgenerator::visit(CallExpression* node){
 	else {
 		instr = builder.CreateCall(callee,generateExpression(node->arg),twine);
 	}
-	//TODO cc for function pointers: instr->setCallingConv();
+
+	if(callingFP){
+		instr->setCallingConv(genCallingConvention(node->object->returnType()->asFunctionPointer()->callingConvetion()));
+	}
 
 	emit(instr);
 	return node;
@@ -744,15 +765,6 @@ Node* LLVMgenerator::visit(Variable* variable){
 	}
 	return variable;
 }
-
-llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention cc){
-	switch(cc){
-	case data::ast::Function::ARPHA:   return llvm::CallingConv::C;//Fast;
-	case data::ast::Function::CCALL:   return llvm::CallingConv::C;
-	case data::ast::Function::STDCALL: return llvm::CallingConv::X86_StdCall;
-	}
-}
-
 
 
 llvm::Function* LLVMgenerator::getIntrinsicFunctionDeclaration(const char* name,llvm::ArrayRef<llvm::Type*> args,llvm::Type* ret){

@@ -60,6 +60,7 @@ std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& 
 
 
 struct AnonymousAggregate;
+struct FunctionPointer;
 
 //(type ...): intrinsics::types::Type
 struct Type {
@@ -80,7 +81,7 @@ struct Type {
 		LINEAR_SEQUENCE,//a range of elements = { T*,natural }
 		STATIC_ARRAY,
 
-		FUNCTION,
+		FUNCTION_POINTER,
 
 		NODE, //i.e. *ast.Expression, uses nodeSubtype to determine the type
 
@@ -96,7 +97,6 @@ struct Type {
 
 	Type(int kind);
 	Type(int kind,Type* next);//ptr | bounded pointer
-	Type(Type* argument,Type* returns);//function
 	Type(int kind,Type* next,size_t N); //static array | bounded pointer constant length
 	Type(int kind,int subtype);//node
 
@@ -137,7 +137,7 @@ struct Type {
 	inline bool isPointer()  const { return type == POINTER;  }
 	inline bool isRecord()   const { return type == RECORD;   }
 	inline bool isVariant()  const { return type == VARIANT;  }
-	inline bool isFunction() const { return type == FUNCTION; }
+	inline bool isFunctionPointer() const { return type == FUNCTION_POINTER; }
 	inline bool isNodePointer() const { return type == POINTER && argument->type == NODE; }
 	inline bool isLiteral() const { return type>=LITERAL_INTEGER; }
 	inline bool isLinearSequence() const { return type == LINEAR_SEQUENCE; }
@@ -145,6 +145,7 @@ struct Type {
 
 	Record* asRecord();
 	AnonymousAggregate* asAnonymousRecord();
+	FunctionPointer* asFunctionPointer();
 
 	inline Type* next(){ return argument; }
 	inline const Type* next() const { return argument; }
@@ -198,13 +199,29 @@ public:
 		int   bits;       //number of bits in an integer / character type
 	};
 	union {
-		Type* returns;
 		size_t N;
 	};
 	friend std::ostream& operator<< (std::ostream& stream,Type* node);
 };
 
 std::ostream& operator<< (std::ostream& stream,Type* type);
+
+/**
+* A function pointer type.
+*/
+struct FunctionPointer: public Type {
+private:
+	Type* _returns;
+	uint8 cc;
+
+	FunctionPointer() : Type(FUNCTION_POINTER) {}
+public:
+	inline Type* parameter() const { return argument; }
+	inline Type* returns()   const { return _returns; }
+	inline data::ast::Function::CallConvention callingConvention() const { return (data::ast::Function::CallConvention)cc; }
+
+	static FunctionPointer* get(Type* argument,Type* ret,data::ast::Function::CallConvention cc = data::ast::Function::ARPHA);
+};
 
 /*
 * Anonymous aggregate

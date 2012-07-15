@@ -303,7 +303,7 @@ FunctionReference::FunctionReference(Function* func) : function(func) {
 Type* FunctionReference::returnType() const {
 	assert(isResolved());
 	if(function->isIntrinsic()) return intrinsics::types::Void;//NB: hack for function reference totext printing
-	else return new Type(function->argumentType(),function->returns());
+	else return FunctionPointer::get(function->argumentType(),function->returns(),function->callingConvention());
 }
 Node* FunctionReference::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new FunctionReference(function));

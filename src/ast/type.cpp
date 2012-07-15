@@ -209,10 +209,6 @@ Type::Type(int kind,Type* next) : type(kind),flags(0) {
 	assert(kind == POINTER || kind == LINEAR_SEQUENCE);
 	this->argument = next;
 }
-Type::Type(Type* argument,Type* returns) : type(FUNCTION),flags(0) {
-	this->argument = argument;
-	this->returns = returns;
-}
 Type::Type(int kind,Type* T,size_t N) : type(kind),flags(0) {
 	assert(kind == STATIC_ARRAY);
 	argument = T;
@@ -277,8 +273,8 @@ bool Type::isResolved() const {
 		case LINEAR_SEQUENCE:
 		case STATIC_ARRAY:
 			return argument->isResolved();
-		case FUNCTION:
-			return argument->isResolved() && returns->isResolved();
+		case FUNCTION_POINTER:
+			return argument->isResolved() && static_cast<const FunctionPointer*>(this)->returns()->isResolved();
 		default:
 			return true;
 	}
@@ -313,7 +309,9 @@ bool Type::isSame(Type* other){
 			return argument->isSame(other->argument);
 		case STATIC_ARRAY: return argument->isSame(other->argument) && N == other->N;
 		
-		case FUNCTION: return argument->isSame(other->argument) && returns->isSame(other->returns);
+		case FUNCTION_POINTER: 
+			return argument->isSame(other->argument) && 
+				static_cast<FunctionPointer*>(this)->returns()->isSame(static_cast<FunctionPointer*>(other)->returns());
 		
 		case NODE: return nodeSubtype == other->nodeSubtype;
 		
@@ -336,7 +334,7 @@ bool Type::wasGenerated() const {
 	case POINTER: return true;
 	case LINEAR_SEQUENCE: return true;
 	case STATIC_ARRAY: return true;
-	case FUNCTION: return true;
+	case FUNCTION_POINTER: return true;
 	//case RECORD: return record->wasGenerated();
 	default: return false;
 	}
@@ -346,7 +344,7 @@ bool Type::wasGeneratedBy(Function* function) const {
 	case POINTER:         return function == intrinsics::types::PointerTypeGenerator;
 	case LINEAR_SEQUENCE: return function == intrinsics::types::LinearSequenceTypeGenerator;
 	case STATIC_ARRAY:    return function == intrinsics::types::StaticArrayTypeGenerator;
-	case FUNCTION:        return function == intrinsics::types::FunctionTypeGenerator;
+	case FUNCTION_POINTER:        return function == intrinsics::types::FunctionTypeGenerator;
 	//case RECORD: return record->wasGeneratedBy(function);
 
 	default:
@@ -360,7 +358,7 @@ Node* Type::generatedArgument(size_t i) const {
 		return new TypeReference(argument);
 	case STATIC_ARRAY: 
 		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)N,intrinsics::types::natural);
-	case FUNCTION: return new TypeReference(i == 0 ? argument : returns);
+	case FUNCTION_POINTER: return new TypeReference(i == 0 ? argument : static_cast<const FunctionPointer*>(this)->returns());
 	//case RECORD: return record->generatedArgument(i);
 
 	default:
@@ -771,6 +769,20 @@ bool Type::isValidTypeForField(){
 	if(type == VOID)      result = false;
 	else if(type == TYPE) result = false;
 	return result;
+}
+
+/**
+* Function pointer type
+*/
+FunctionPointer* FunctionPointer::get(Type* argument,Type* ret,data::ast::Function::CallConvention cc){
+	auto type = new FunctionPointer();
+	type->argument = argument;
+	type->_returns = ret;
+	type->cc = cc;
+	return type;
+}
+FunctionPointer* Type::asFunctionPointer(){
+	return type == FUNCTION_POINTER? static_cast<FunctionPointer*>(this) : nullptr;
 }
 
 /**
