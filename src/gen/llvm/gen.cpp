@@ -16,6 +16,7 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Intrinsics.h"
 
 #include "../../base/base.h"
 #include "../../base/symbol.h"
@@ -133,6 +134,7 @@ struct LLVMgenerator: NodeVisitor {
 		return variable->isLocal()? unmap(variable): getGlobalVariableDeclaration(variable);
 	}
 	llvm::Function* getFunctionDeclaration(Function* function);
+	llvm::Function* getIntrinsicFunctionDeclaration(const char* name,llvm::ArrayRef<llvm::Type*> args,llvm::Type* ret);
 };
 
 
@@ -360,7 +362,42 @@ llvm::Value* genIntegerOperation(LLVMgenerator* generator,data::ast::Operations:
 		return generator->builder.CreateICmpEQ(operand1,operand2);
 	}
 
-	assert(false && "Invalid operation");
+	assert(false && "Invalid int operation");
+	return nullptr;
+}
+
+//TODO fabs,tan, inverse trig
+llvm::Value* genIntrinsicRealOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2){
+	using namespace data::ast::Operations;
+
+	if(op <= TRIG_TAN){
+
+		static llvm::Intrinsic::ID intrinsicFunctions[] = 
+		{ llvm::Intrinsic::sin,
+		  llvm::Intrinsic::pow,
+		  llvm::Intrinsic::sqrt,
+		  llvm::Intrinsic::exp,
+		  llvm::Intrinsic::log,
+		  llvm::Intrinsic::sin,
+		  llvm::Intrinsic::cos,
+		  llvm::Intrinsic::sin 
+		};
+			
+		auto type = operand1->getType();
+		if(op == MATH_POW){
+			llvm::Type* args[2] = {type,type};
+			auto func = llvm::Intrinsic::getDeclaration(generator->module,intrinsicFunctions[op-MATH_ABS],args);
+			return generator->builder.CreateCall2(func,operand1,operand2,"calltmp");
+		}
+		else {
+			auto func = llvm::Intrinsic::getDeclaration(generator->module,intrinsicFunctions[op-MATH_ABS],type);
+			return generator->builder.CreateCall(func,operand1,"calltmp");
+		}
+		
+	}
+
+	assert(false && "Invalid real intrinsic operation");
+	return nullptr;
 }
 
 llvm::Value* genRealOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2){
@@ -368,6 +405,8 @@ llvm::Value* genRealOperation(LLVMgenerator* generator,data::ast::Operations::Ki
 
 	static const llvm::FCmpInst::Predicate ocmp [] = 
 	{ llvm::FCmpInst::FCMP_OEQ,llvm::FCmpInst::FCMP_OLT,llvm::FCmpInst::FCMP_OGT,llvm::FCmpInst::FCMP_OLE,llvm::FCmpInst::FCMP_OGE };
+
+	if(op>=MATH_ABS) return genIntrinsicRealOperation(generator,op,operand1,operand2);
 
 	switch(op){
 	case NEGATION:
@@ -388,9 +427,11 @@ llvm::Value* genRealOperation(LLVMgenerator* generator,data::ast::Operations::Ki
 	case LESS_EQUALS_COMPARISON:
 	case GREATER_EQUALS_COMPARISON:
 		return generator->builder.CreateFCmp(ocmp[op-EQUALITY_COMPARISON],operand1,operand2);
+
 	}
 
-	assert(false && "Invalid operation");
+	assert(false && "Invalid real operation");
+	return nullptr;
 }
 
 llvm::Value* genBoolOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2){
@@ -404,7 +445,8 @@ llvm::Value* genBoolOperation(LLVMgenerator* generator,data::ast::Operations::Ki
 		return generator->builder.CreateICmpEQ(operand1,operand2);
 	}
 
-	assert(false && "Invalid operation");
+	assert(false && "Invalid boolean operation");
+	return nullptr;
 }
 
 // TODO: everything
@@ -709,6 +751,14 @@ llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention c
 	case data::ast::Function::CCALL:   return llvm::CallingConv::C;
 	case data::ast::Function::STDCALL: return llvm::CallingConv::X86_StdCall;
 	}
+}
+
+
+
+llvm::Function* LLVMgenerator::getIntrinsicFunctionDeclaration(const char* name,llvm::ArrayRef<llvm::Type*> args,llvm::Type* ret){
+	auto func = llvm::Function::Create(llvm::FunctionType::get(ret,args,false),
+		llvm::GlobalValue::ExternalLinkage,name,module);
+	return func;
 }
 
 llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
