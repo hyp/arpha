@@ -26,20 +26,14 @@ Node* typecheck(Node* expression,Type* expectedType){
 namespace overloads {
 
 struct SearchResult {
-	enum Kind{
-		OverloadNotFound,
-		OverloadFound,
-		MultipleOverloadsFound,
-		NotAllOverloadsResolved
-	};
-	Kind result;
+	data::ast::Search::Result result;
 	Function* function;
 
-	SearchResult(Function* f) : result(OverloadFound),function(f) {}
-	SearchResult(Kind kind) : result(kind) {}
-	SearchResult(Kind kind,Function* f) : result(kind),function(f) {}
+	SearchResult(Function* f) : result(data::ast::Search::Found),function(f) {}
+	SearchResult(data::ast::Search::Result kind) : result(kind) {}
+	SearchResult(data::ast::Search::Result kind,Function* f) : result(kind),function(f) {}
 
-	inline bool operator == (Kind kind) const { return result == kind; }
+	inline bool operator == (data::ast::Search::Result kind) const { return result == kind; }
 };
 
 /**
@@ -123,25 +117,24 @@ void OverloadRange::advance(){
 
 /**
   Tries to find a function that matches the pointer type from all the possible overloads from the perspective of a given scope.
-  Returns true if all overloads were resolved or false if not every overload was resolved.
 */
 SearchResult findFunctionByType(Scope* scope,SymbolID name,FunctionPointer* type){
 	Function* match = nullptr;
-	for(OverloadRange overloads(scope,name,true);!overloads.isEmpty();overloads.advance()){
+	for(OverloadRange overloads(scope,name,false);!overloads.isEmpty();overloads.advance()){
 		auto f = overloads.currentFunction();
-		if(!f->isResolved()) return SearchResult(SearchResult::NotAllOverloadsResolved);
+		if(!f->isResolved()) return SearchResult(data::ast::Search::NotAllElementsResolved);
 
 		if( f->argumentType()->isSame(type->parameter()) &&
 			f->returns()->isSame(type->returns()) &&
 			f->callingConvention() == type->callingConvention() ){
 
 			if(match){
-				return SearchResult(SearchResult::MultipleOverloadsFound,match);
+				return SearchResult(data::ast::Search::FoundMultiple,match);
 			}
 			match = f;
 		}
 	}
-	return match? SearchResult(match) : SearchResult(SearchResult::OverloadNotFound);
+	return match? SearchResult(match) : SearchResult(data::ast::Search::NotFound);
 }
 
 
@@ -158,20 +151,21 @@ bool functionMatchesTraitsMethod(Function* function,Function* method){
 	return false;
 }
 
-int typeSatisfiesTrait(Scope* scope,Type* type,Trait* trait){
+//returns Found if the type satisfies trait
+data::ast::Search::Result typeSatisfiesTrait(Scope* scope,Type* type,Trait* trait){
 	for(auto i = trait->methods.begin();i!=trait->methods.end();i++){
 		bool matchFound = false;
 
 		for(overloads::OverloadRange overloads(scope,(*i)->label(),true);!overloads.isEmpty();overloads.advance()){
-			if(!overloads.currentFunction()->isResolved()) assert(false && "Trait sat: not all overloads resolved");
+			if(!overloads.currentFunction()->isResolved()) return data::ast::Search::NotAllElementsResolved;
 			if(functionMatchesTraitsMethod(overloads.currentFunction(),(*i))){
 				matchFound = true;
 				break;
 			}
 		}
-		if(!matchFound) return false;
+		if(!matchFound) return data::ast::Search::NotFound;
 	}
-	return true;
+	return data::ast::Search::Found;
 }
 
 

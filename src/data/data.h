@@ -23,6 +23,15 @@ namespace data {
 			};
 		}
 
+		namespace Search {
+			enum Result {
+				NotFound,
+				Found,
+				FoundMultiple,
+				NotAllElementsResolved
+			};
+		}
+
 		//intrinsic operations
 		namespace Operations {
 			enum Kind {
