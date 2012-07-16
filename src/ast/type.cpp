@@ -15,6 +15,39 @@ bool  typeSatistiesTrait(Type* type,Trait* trait,Scope* lookupScope){
 	return true;
 }
 
+/**
+  This range iterates over all the possible meanings of a given type( direct, subtyping, implicit conversions etc)
+*/
+struct TypeMeaningsRange {
+private:
+
+	void getLiteralTypesConversions(Type* type);
+	void getRecordSubtypes(Record* record);
+
+	void gatherMeanings(Type* type);
+
+	struct Match {
+		Type* type;
+		int   weight;
+	};
+	std::vector<Match> meanings;
+	std::vector<Match>::iterator currMeaning;
+
+	inline void add(Type* type,int weight){ Match m = { type,weight };meanings.push_back(m); }
+public:
+
+	TypeMeaningsRange(Type* type);
+
+	inline bool isEmpty()       { return currMeaning == meanings.end(); }
+	inline void advance()       { ++currMeaning; }
+	inline Type* currentType()  { return currMeaning->type; }
+	inline int   currentWeight(){ return currMeaning->weight; }
+};
+TypeMeaningsRange::TypeMeaningsRange(Type* type){
+	gatherMeanings(type);
+	currMeaning = meanings.begin();
+}
+
 Type* TypePatternUnresolvedExpression::type() const {
 	assert(kind == TYPE);
 	return  _type;
@@ -153,9 +186,11 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 			if(!ref->label().isNull()) introduceDefinition(ref->label(),ref->location(),typeRef);
 			return true;
 		}
-	} else if(auto call = pattern->asCallExpression()){
-		if(!type->wasGenerated()) return false;
+	} 
+	else if(auto call = pattern->asCallExpression()){
+		//TODO: NB: maybe check if a type has other meanings if(!type->wasGenerated()) return false;
 		bool matchedObject = false;
+		Type* matchedType = type;
 		//| Pointer(_)
 		if(auto callingUnresolvedFunction = call->object->asUnresolvedSymbol()){
 			auto def = container->lookupPrefix(callingUnresolvedFunction->symbol);
@@ -163,9 +198,20 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 			if(os && os->isFlagSet(Overloadset::TYPE_GENERATOR_SET)){//TODO better search?
 				for(auto i = os->functions.begin();i!=os->functions.end();i++){
 					if(type->wasGeneratedBy(*i)) matchedObject = true;
+					else {
+						for(TypeMeaningsRange meanings(type);!meanings.isEmpty();meanings.advance()){
+							if(meanings.currentType()->wasGeneratedBy(*i)){
+								matchedObject = true;
+								matchedType = meanings.currentType();
+								break;
+							}
+						}
+						
+					}
 				}
 			}
-		} else if(auto ref = call->object->asFunctionReference()){
+		} 
+		else if(auto ref = call->object->asFunctionReference()){
 			//Constraint (We can safely assume this is a constraint if check passed)
 			if(satisfiesConstraint(typeRef,ref->function,container)) matchedObject = true;
 		}
@@ -174,10 +220,10 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 			if(!call->label().isNull()) introduceDefinition(call->label(),call->location(),typeRef);
 			if(auto argTuple = call->arg->asTupleExpression()){
 				size_t j = 0;
-				for(auto i = argTuple->children.begin();i!=argTuple->children.end();i++,j++){ if(!match(type->generatedArgument(j),*i)) return false; }
+				for(auto i = argTuple->children.begin();i!=argTuple->children.end();i++,j++){ if(!match(matchedType->generatedArgument(j),*i)) return false; }
 				return true;
 			}
-			else return match(type->generatedArgument(0),call->arg);
+			else return match(matchedType->generatedArgument(0),call->arg);
 		}
 	} 
 	return false;
@@ -520,6 +566,19 @@ int literalTypeAssignment(Type* givenType,Node** literalNode,Type* literalNodeTy
 
 	return -1;
 }
+void TypeMeaningsRange::getLiteralTypesConversions(Type* type){
+	switch(type->type){
+	case Type::LITERAL_INTEGER:
+		break;
+	case Type::LITERAL_FLOAT:
+		break;
+	case Type::LITERAL_CHAR:
+		break;
+	case Type::LITERAL_STRING:
+		add(Type::getLinearSequence(Type::getCharType(8)),LITERAL_TYPE_SPECIFICATION);
+		break;
+	}
+}
 
 /**
 TODO: adjust conversion weights
@@ -621,6 +680,15 @@ int recordSubtyping(Type* givenType,Node** node,Type* nodeType,bool doTransform)
 	}
 	return -1;
 }
+void TypeMeaningsRange::getRecordSubtypes(Record* record){
+	for(auto field = record->fields.begin(); field != record->fields.end();++field){
+		if((*field).isExtending){
+			add((*field).type.type(),RECORD_SUBTYPE);
+			gatherMeanings((*field).type.type());
+		}
+	}
+}
+
 
 /**
 Implicit type conversion system.
@@ -648,6 +716,20 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform){
 
 	return -1;
 }
+void TypeMeaningsRange::gatherMeanings(Type* type){
+	if(type->isLiteral()) getLiteralTypesConversions(type);
+
+	Record* record = type->asRecord();
+	if(!record){
+		if(type->isPointer()){
+			record = type->next()->asRecord();
+			if(record) getRecordSubtypes(record);
+		}
+	}
+	else getRecordSubtypes(record);
+}
+
+
 
 int   Type::canAssignFrom(Node* expression,Type* type){
 	return assignFrom(&expression,type,false);
