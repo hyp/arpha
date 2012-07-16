@@ -111,6 +111,9 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(CharacterLiteral* node);
 	Node* visit(BoolExpression* node);
 	Node* visit(FloatingPointLiteral* node);
+	Node* visit(StringLiteral* node);
+
+	void emitCreateLinearSequence(llvm::Value* ptr,llvm::Value* length);
 
 	Node* visit(VariableReference* node);
 	Node* visit(AssignmentExpression* node);
@@ -124,6 +127,8 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(LoopExpression* node);
 	Node* visit(BlockExpression* node);
 	void  gen(BlockExpression* node);
+
+
 
 	Node* visit(Variable* var);
 	Node* visit(Function* func);
@@ -194,9 +199,23 @@ llvm::Type* generateLinearSequence(LLVMgenerator* generator,Type* next){
 	return llvm::StructType::get(generator->context,fields,false);
 }
 
-//TODO
 llvm::Type* generateFunctionPointerType(LLVMgenerator* generator,FunctionPointer* type){
-	return llvm::PointerType::get(generator->genType(next),0);
+	llvm::Type* result;
+	auto arg = type->parameter();
+	if(arg->isVoid()){
+		result= llvm::FunctionType::get(generator->genType(type->returns()),false);
+	}
+	else if(auto rec = arg->asAnonymousRecord()){
+		std::vector<llvm::Type*> types;
+		for(auto i =rec->types;i!=rec->types + rec->numberOfFields;i++){
+			types.push_back(generator->genType(*i));
+		}
+		result= llvm::FunctionType::get(generator->genType(type->returns()),types,false);
+	}
+	else {
+		result= llvm::FunctionType::get(generator->genType(type->returns()),generator->genType(arg),false);
+	}
+	return llvm::PointerType::get(result,0);
 }
 
 Node* LLVMgenerator::visit(TypeDeclaration* node){
@@ -207,7 +226,7 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 	switch(type->type){
 	case Type::VOID: return llvm::Type::getVoidTy(context);
 	case Type::TYPE: assert(false); break;
-	case Type::BOOL: return llvm::Type::getInt8Ty(context);
+	case Type::BOOL: return builder.getInt1Ty();
 	case Type::RECORD:
 		return getRecordDeclaration(this,static_cast<Record*>(type));
 	case Type::INTEGER:
@@ -254,36 +273,43 @@ llvm::Value* LLVMgenerator::generateExpression(Node* node){
 	return emmittedValue;
 }
 llvm::GlobalValue::LinkageTypes LLVMgenerator::genLinkage(PrefixDefinition* def){
-	return def->isPublic() ? llvm::GlobalValue::LinkageTypes::ExternalLinkage : llvm::GlobalValue::LinkageTypes::PrivateLinkage;
+	return def->isPublic() ? llvm::GlobalValue::ExternalLinkage : llvm::GlobalValue::PrivateLinkage;
 }
-
 
 Node* LLVMgenerator::visit(IntegerLiteral* node){
 	emitConstant(llvm::ConstantInt::get(genType(node->explicitType),node->integer.u64,false));
 	return node;
 }
-
 Node* LLVMgenerator::visit(CharacterLiteral* node){
 	emitConstant(llvm::ConstantInt::get(genType(node->explicitType),node->value,false));
 	return node;
 }
-
 Node* LLVMgenerator::visit(BoolExpression* node){
-	emitConstant(llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],node->value,false));
+	emitConstant(node->value? builder.getTrue() : builder.getFalse());
 	return node;
 }
-
-
 Node* LLVMgenerator::visit(FloatingPointLiteral* node){
 	emitConstant(llvm::ConstantFP::get(genType(node->explicitType),node->value));
 	return node;
 }
+//TODO make into a linear seq
+Node* LLVMgenerator::visit(StringLiteral* node){
+	emitCreateLinearSequence(builder.CreateGlobalString(node->block.ptr()),builder.getInt64(node->block.length()));
+	return node;
+}
+
+void LLVMgenerator::emitCreateLinearSequence(llvm::Value* ptr,llvm::Value* length){
+
+	auto end = builder.CreateGEP(ptr,length);
+
+	//auto lhs = builder.CreatePtrToInt(ptr, builder.getInt64Ty());
+    //auto sum = builder.CreateAdd(lhs, length);
+	//auto end = builder.CreateIntToPtr(sum,ptr->getType());
+}
 
 Node* LLVMgenerator::visit(VariableReference* node){
-	if(node->variable->type.type()->isLinearSequence()){
-		emit(getVariable(node->variable));
-		return node;
-	}
+	//if(node->variable->asArgument())
+	//	emit(unmap(node->variable));
 	emitLoad(getVariable(node->variable));
 	return node;
 }
@@ -333,6 +359,11 @@ inline bool isSignedInteger(Type* t){
 llvm::Value* genIntegerOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Type* operand1Type,llvm::Value* operand1,llvm::Value* operand2){
 	using namespace data::ast::Operations;
 
+	static const llvm::ICmpInst::Predicate ucmp [] = 
+	{ llvm::ICmpInst::ICMP_EQ,llvm::ICmpInst::ICMP_ULT,llvm::ICmpInst::ICMP_UGT,llvm::ICmpInst::ICMP_ULE,llvm::ICmpInst::ICMP_UGE };
+	static const llvm::ICmpInst::Predicate icmp [] = 
+	{ llvm::ICmpInst::ICMP_EQ,llvm::ICmpInst::ICMP_SLT,llvm::ICmpInst::ICMP_SGT,llvm::ICmpInst::ICMP_SLE,llvm::FCmpInst::ICMP_SGE };
+
 	switch(op){
 	case NEGATION:
 		return generator->builder.CreateNeg(operand1);
@@ -367,7 +398,7 @@ llvm::Value* genIntegerOperation(LLVMgenerator* generator,data::ast::Operations:
 	case GREATER_COMPARISON:
 	case LESS_EQUALS_COMPARISON:
 	case GREATER_EQUALS_COMPARISON:
-		return generator->builder.CreateICmpEQ(operand1,operand2);
+		return generator->builder.CreateICmp( (isSignedInteger(operand1Type)?icmp:ucmp)[op-EQUALITY_COMPARISON] ,operand1,operand2);
 	}
 
 	assert(false && "Invalid int operation");
@@ -571,7 +602,8 @@ Node* LLVMgenerator::visit(CallExpression* node){
 		callingFP = false;
 	}
 	else {
-		reg = "calltmp";
+		auto ret = node->object->returnType();
+		reg = ret->asFunctionPointer()->returns()->isVoid()? "" : "calltmp";
 		callee = generateExpression(node->object); //calling a function pointer
 		callingFP = true;
 	}
@@ -598,7 +630,7 @@ Node* LLVMgenerator::visit(CallExpression* node){
 	}
 
 	if(callingFP){
-		instr->setCallingConv(genCallingConvention(node->object->returnType()->asFunctionPointer()->callingConvetion()));
+		instr->setCallingConv(genCallingConvention(node->object->returnType()->asFunctionPointer()->callingConvention()));
 	}
 
 	emit(instr);
@@ -687,9 +719,44 @@ Node* LLVMgenerator::visit(IfExpression* node){
 }
 
 //TODO
+
+/**
+Scenarios: 
+  x && y => if(x) if(y) true else false else false
+  x || y => if(x) true  else if(y) true else false
+*/
 Node* LLVMgenerator::visit(LogicalOperation* node){
-	auto x = generateExpression(node->parameters[0]);
-	auto y = generateExpression(node->parameters[1]);
+	auto cond1 = generateExpression(node->parameters[0]);
+
+	auto f = builder.GetInsertBlock()->getParent();
+	auto consequenceBlock1 = llvm::BasicBlock::Create(context, "cond1true", f);
+	auto consequenceBlock2 = llvm::BasicBlock::Create(context, "cond2true");
+	auto alternativeBlock  = llvm::BasicBlock::Create(context,"condFalse");
+	auto mergingBlock      = llvm::BasicBlock::Create(context,"cont");
+
+	builder.CreateCondBr(cond1,consequenceBlock1,alternativeBlock);
+
+	builder.SetInsertPoint(consequenceBlock1);
+	auto cond2 = generateExpression(node->parameters[1]);
+	builder.CreateCondBr(cond2,consequenceBlock2,alternativeBlock);
+
+	f->getBasicBlockList().push_back(consequenceBlock2);
+	builder.SetInsertPoint(consequenceBlock2);
+	auto trueValue = builder.getTrue();
+	builder.CreateBr(mergingBlock);
+
+	f->getBasicBlockList().push_back(alternativeBlock);
+	builder.SetInsertPoint(alternativeBlock);
+	auto falseValue = builder.getFalse();
+	builder.CreateBr(mergingBlock);
+
+	f->getBasicBlockList().push_back(mergingBlock);
+	builder.SetInsertPoint(mergingBlock);
+	auto phi = builder.CreatePHI(builder.getInt1Ty(),2,"iftmp");
+	phi->addIncoming(trueValue,consequenceBlock2);
+	phi->addIncoming(falseValue,alternativeBlock);
+	emit(phi);
+
 	return node;
 }
 
@@ -805,22 +872,28 @@ Node* LLVMgenerator::visit(Function* function){
 
 	auto func = getFunctionDeclaration(function);
 
+	//generate body
+	llvm::BasicBlock *block = llvm::BasicBlock::Create(context, "entry", func);
+
 	// Initialize arguments
 	size_t i = 0;
 	for (llvm::Function::arg_iterator arg = func->arg_begin(); i != function->arguments.size(); ++arg, ++i) {
 		arg->setName(function->arguments[i]->label().ptr());
-		map(function->arguments[i],arg);
+		
+		//arguments to allocas
+		llvm::IRBuilder<> _builder(block,block->begin());
+		auto var = _builder.CreateAlloca(genType(function->arguments[i]->type.type()),nullptr,function->arguments[i]->label().ptr());
+		_builder.CreateStore(arg,var);
+		map(function->arguments[i],var);
 	}
 
-	//generate body
-	llvm::BasicBlock *block = llvm::BasicBlock::Create(context, "entry", func);
 	builder.SetInsertPoint(block);
 
 	auto oldFunction = functionOwner;
 	functionOwner = function;
 	gen(&function->body);
 	if(!function->isFlagSet(Function::CONTAINS_RETURN)) builder.CreateRetVoid();
-	if(llvm::verifyFunction(*func,llvm::VerifierFailureAction::PrintMessageAction)){
+	if(llvm::verifyFunction(*func,llvm::PrintMessageAction)){
 		//TODO
 	}
 	passManager->run(*func);
@@ -838,39 +911,39 @@ namespace gen {
 	static void createTargetTriple(LLVMBackend* backend,llvm::Triple *triple,data::gen::native::Target* target){
 		using namespace data::gen::native;
 
-		llvm::Triple::ArchType arch = llvm::Triple::ArchType::UnknownArch;
+		llvm::Triple::ArchType arch = llvm::Triple::UnknownArch;
 		switch(target->cpuArchitecture){
 		case Target::Arch::X86:
-			arch = llvm::Triple::ArchType::x86;
+			arch = llvm::Triple::x86;
 			break;
 		case Target::Arch::ARM:
-			arch = llvm::Triple::ArchType::arm;
+			arch = llvm::Triple::arm;
 			break;
 		}
 		triple->setArch(arch);
 		if(target->cpuMode == Target::Mode::M64){
 			*triple = triple->get64BitArchVariant();
-			if(triple->getArch() == llvm::Triple::ArchType::UnknownArch) backend->onFatalError("The 64 bit mode isn't supported for the selected architecture!");
+			if(triple->getArch() == llvm::Triple::UnknownArch) backend->onFatalError("The 64 bit mode isn't supported for the selected architecture!");
 		}
 
-		llvm::Triple::OSType os = llvm::Triple::OSType::UnknownOS;
-		llvm::Triple::VendorType vendor = llvm::Triple::VendorType::UnknownVendor;
+		llvm::Triple::OSType os = llvm::Triple::UnknownOS;
+		llvm::Triple::VendorType vendor = llvm::Triple::UnknownVendor;
 		switch(target->platform){
 		case Target::Platform::WINDOWS:
 		case Target::Platform::WINDOWS_RT:
-			os = llvm::Triple::OSType::Win32;
-			vendor = llvm::Triple::VendorType::PC;
+			os = llvm::Triple::Win32;
+			vendor = llvm::Triple::PC;
 			break;
 		case Target::Platform::WINDOWS_MINGW:
-			os = llvm::Triple::OSType::MinGW32;
-			vendor = llvm::Triple::VendorType::PC;
+			os = llvm::Triple::MinGW32;
+			vendor = llvm::Triple::PC;
 			break;
 		case Target::Platform::LINUX:
-			os = llvm::Triple::OSType::Linux;
+			os = llvm::Triple::Linux;
 			break;
 		case Target::Platform::MACOSX:
-			os = llvm::Triple::OSType::Darwin;
-			vendor = llvm::Triple::VendorType::Apple;
+			os = llvm::Triple::Darwin;
+			vendor = llvm::Triple::Apple;
 			break;
 		}
 		triple->setOS(os);
@@ -901,7 +974,7 @@ namespace gen {
 		}
 
 		auto MCPU = "";
-		auto CMModel = llvm::CodeModel::Model::Default;
+		auto CMModel = llvm::CodeModel::Default;
 		auto RelocModel = llvm::Reloc::Default;
 		//features
 		std::string FeaturesStr;
@@ -968,12 +1041,12 @@ namespace gen {
 			return;
 		}
 		//write instructions to file
-		if(outputFormat == data::gen::native::ModuleOutputFormat::OBJECT || outputFormat == data::gen::native::ModuleOutputFormat::ASSEMBLY){
+		if(outputFormat == data::gen::native::OBJECT || outputFormat == data::gen::native::ASSEMBLY){
 			using namespace llvm;
 			llvm::Module& mod = *module;
 			llvm::TargetMachine& Target = *targetMachine;
 			llvm::TargetMachine::CodeGenFileType FileType = 
-				outputFormat == data::gen::native::ModuleOutputFormat::OBJECT ? llvm::TargetMachine::CGFT_ObjectFile : llvm::TargetMachine::CGFT_AssemblyFile;
+				outputFormat == data::gen::native::OBJECT ? llvm::TargetMachine::CGFT_ObjectFile : llvm::TargetMachine::CGFT_AssemblyFile;
 			llvm::raw_fd_ostream& Out = out;
 
 			PassManager PM;
@@ -1034,8 +1107,8 @@ namespace gen {
 		//extension
 		const char* extension;
 		bool isWinMSVS = target->platform == data::gen::AbstractTarget::Platform::WINDOWS || target->platform == data::gen::AbstractTarget::Platform::WINDOWS_RT;
-		if(outputFormat == data::gen::native::ModuleOutputFormat::OBJECT)        extension =  isWinMSVS ? ".obj" : ".o";
-		else if(outputFormat == data::gen::native::ModuleOutputFormat::ASSEMBLY) extension =  isWinMSVS ? ".asm" : ".S";
+		if(outputFormat == data::gen::native::OBJECT)        extension =  isWinMSVS ? ".obj" : ".o";
+		else if(outputFormat == data::gen::native::ASSEMBLY) extension =  isWinMSVS ? ".asm" : ".S";
 		else extension = ".bc";
 		//
 		std::string path = std::string(outputDirectory) + "/" + moduleName + extension;

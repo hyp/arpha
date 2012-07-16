@@ -17,8 +17,8 @@
 
 #include "data/data.h"
 
-//#include "gen/llvm/gen.h"
-//#include "gen/linker.h"
+#include "gen/llvm/gen.h"
+#include "gen/linker.h"
 
 namespace arpha {
 	void defineCoreSyntax(Scope* scope);
@@ -374,7 +374,7 @@ int main(int argc, const char * argv[]){
 	}
 
 	//initialize backend and frontend
-	//gen::LLVMBackend backend(&target,&genOptions);
+	gen::LLVMBackend backend(&target,&genOptions);
 
 	//gen::Linker linker(&target,&genOptions);
 
@@ -394,7 +394,7 @@ int main(int argc, const char * argv[]){
 					debug("Generated functions - %s",compiler::generatedFunctions);
 				 }
 
-				 //auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src");
+				 auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src");
 				 //auto src = srcf.c_str();
 				 //linker.link(&src,1,"D:/Alex/projects/parser/build/src",data::gen::native::PackageLinkingFormat::EXECUTABLE);
 

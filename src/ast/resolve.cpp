@@ -1269,6 +1269,8 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 
 /**
 * Adjusting the argument
+TODO: rearranging args execution priority,
+      patterned args assingFrom
 */
 Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool dependentChecker,int* weight){
 	Function* func = *function;
@@ -1391,8 +1393,9 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 
 	if(!func->isFlagSet(Function::MACRO_FUNCTION) && !func->isIntrinsic() && !func->isFieldAccessMacro()){//Macro optimization, so that we dont duplicate unnecessary
 		//Determine the function?
-		if(determinedFunction || func->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS))
+		if(determinedFunction || func->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)){
 			*function = specializeFunction(matcher,func,determinedFunction ? &determinedArguments[0] : nullptr,&result[0]);
+		}
 	}
 
 	//Wrap all parameters in [> <] for macro functions

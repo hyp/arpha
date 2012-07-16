@@ -742,6 +742,9 @@ Node* Type::assignableFrom(Node* expression,Type* type) {
 inline bool isIntLike(Type* t){
 	return t->isInteger() || t->isPlatformInteger() || t->isUintptr() || t->isChar();
 }
+inline bool isIntOrChar(Type* t){
+	return t->isInteger() || t->isChar();
+}
 
 /**
 Scenarios:
@@ -752,6 +755,8 @@ Scenarios:
   characters <=> characters
   integers <=> bool
   Pointer => uintptr
+  Pointer|LinearSequence (uint8 <=> int8 <=> char8,uint16 <=> int16 <=> char16,uint32 <=> int32 <=> char32,uint64 <=> int64)
+  
 */
 bool  Type::canCastTo(Type* other){
 	auto thisIsIntLike  = isIntLike(this);
@@ -771,6 +776,16 @@ bool  Type::canCastTo(Type* other){
 	}
 	else if(this->isPointer()){
 		if(other->isUintptr()) return true;
+		if(other->isPointer() &&
+			isIntOrChar(next()) && isIntOrChar(other->next()) &&
+			std::abs(next()->bits) == std::abs(other->next()->bits)) return true;
+	}
+	else if(this->isLinearSequence()){
+		if(other->isUintptr()) return true;
+		if(other->isPointer() && next()->isSame(other->next())) return true;
+		if(other->isLinearSequence() &&
+			isIntOrChar(next()) && isIntOrChar(other->next()) &&
+			std::abs(next()->bits) == std::abs(other->next()->bits)) return true;
 	}
 	return false;
 }
