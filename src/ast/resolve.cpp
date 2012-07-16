@@ -675,8 +675,10 @@ Node* MatchResolver::resolve(Resolver* resolver){
 	return this;
 }
 
+#include "../base/system.h"
+
 // TODO better error reporting!
-void reportUnresolvedNode(Node* node){
+void Resolver::reportUnresolvedNode(Node* node){
 	if(!node->asBlockExpression() && !node->asErrorExpression() && !node->asTupleExpression()){
 		std::string error;
 		if(auto unr = node->asUnresolvedSymbol()){
@@ -687,6 +689,31 @@ void reportUnresolvedNode(Node* node){
 				if(call->isFlagSet(CallExpression::DOT_SYNTAX)) 
 					 error = format("Can't find the matching overload for the call %s.(%s)",unr->symbol,call->arg);
 				else error = format("Can't find the matching overload for the call %s(%s)",unr->symbol,call->arg);
+				compiler::subError(node->location(),error);
+				auto scope = (unr->explicitLookupScope ? unr->explicitLookupScope : currentScope());
+				
+
+				bool header = false;
+				for(overloads::OverloadRange overloads(scope,unr->symbol,call->isFlagSet(CallExpression::DOT_SYNTAX));!overloads.isEmpty();overloads.advance()){
+					if(!header){
+						System::print(format("\tThe available overloads for the function '%s' are:",unr->symbol));
+						header = true;
+					}
+					std::stringstream def;
+					auto f = overloads.currentFunction();
+					def<<"\n\t  def "<<f->label()<<"(";
+					for(auto i = f->arguments.begin();i!=f->arguments.end();++i){
+						def<<(*i)->label()<<" "<<(*i)->type;
+						if((*i)->defaultValue()) def<<" = "<<(*i)->defaultValue();
+						if((i+1) != f->arguments.end()) def<<",";
+					}
+					def<<") "<<f->_returnType;
+					System::print(def.str());
+				}
+				if(!header)
+					System::print(format("\tThere are no available overloads for the function '%s'! Perphaps you've misspelled the function?\n",unr->symbol));
+				else System::print("\n\n");
+				return;
 			}
 		} 
 		else if(auto var = node->asVariable()){

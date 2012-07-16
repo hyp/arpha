@@ -47,6 +47,8 @@ public:
 	//Function-like macro
 	Node* executeAndMixinMacro(Function* function,Node* arg);
 
+	void reportUnresolvedNode(Node* node);
+
 	inline Scope* currentScope() const        { return _currentScope;  }
 	inline void currentScope(Scope* scope)    { _currentScope = scope; }
 
