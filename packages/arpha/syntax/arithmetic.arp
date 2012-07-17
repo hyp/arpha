@@ -49,7 +49,7 @@ macro (x) /
 macro (x) % 
 {
 	var y = parser.parse(precedence.product,ignoreNewlines: true)
-	return [> $x.mod($y) <]
+	return [> $x.remainder($y) <]
 }
 
 # Assign modify

@@ -343,6 +343,10 @@ static Function* parseFunction(SymbolID name,Parser* parser){
 	auto func = new Function(name,parser->previousLocation());
 	//
 	if(parser->compilationUnit()->moduleBody->scope->importsArphaIntrinsic) func->applyProperty("intrinsic",nullptr);
+	else if(parser->compilationUnit()->moduleBody->scope->importsArphaExternal){
+		func->applyProperty("external",nullptr);
+		func->cc = data::ast::Function::CCALL;
+	}
 	parser->applyProperties(func);
 	parser->introduceDefinition(func);
 
@@ -354,7 +358,7 @@ static Function* parseFunction(SymbolID name,Parser* parser){
 	if(!isEndExpression(token) && !(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
 		func->_returnType.parse(parser,arpha::Precedence::Assignment);
 	}
-	parseFunctionBody(parser,func,func->isIntrinsic());
+	parseFunctionBody(parser,func,func->isIntrinsic() || func->isExternal());
 	parser->leaveBlock();
 
 	return func;
@@ -909,6 +913,9 @@ struct ImportParser: IntrinsicPrefixMacro {
 				*/
 				if(modulePath == "arpha/intrinsic"){
 					parser->currentScope()->importsArphaIntrinsic = true;
+				}
+				else if(modulePath == "arpha/external"){
+					parser->currentScope()->importsArphaExternal = true;
 				}
 				parser->currentScope()->import(moduleScope,modulePath.c_str(),qualified,exported);
 			}else{

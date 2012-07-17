@@ -1,0 +1,14 @@
+#
+	This package provides bindings to the C standart library
+	TODO: implement
+#
+
+import arpha.external
+#arpha.assemblies.load()
+
+def putchar(character int32) int32
+def getchar() int32
+
+def rand () int32
+def abort()
+def exit (code int32)

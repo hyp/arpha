@@ -195,6 +195,7 @@ struct Function: public PrefixDefinition {
 	void makeAllArgumentsExpendable(); //Makes all arguments to be expendable, essentialy making this function a template.
 
 	//Calling convention
+	bool isExternal() const;
 	bool isIntrinsic() const;
 	data::ast::Function::CallConvention callingConvention() const;
 

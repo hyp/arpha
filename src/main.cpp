@@ -17,8 +17,8 @@
 
 #include "data/data.h"
 
-#include "gen/llvm/gen.h"
-#include "gen/linker.h"
+//#include "gen/llvm/gen.h"
+//#include "gen/linker.h"
 
 namespace arpha {
 	void defineCoreSyntax(Scope* scope);
@@ -344,10 +344,11 @@ int main(int argc, const char * argv[]){
 
 	//command line
 	std::string operation;
+	std::vector<const char*> files;
 	if(argc >= 2){
 		operation = argv[1]; 
 		ClOptionApplier applier = {&options,&genOptions,&target};
-		std::vector<const char*> files;
+		
 
 		for(int i = 2;i<argc;i++){
 			if(argv[i][0]=='-'){
@@ -374,13 +375,23 @@ int main(int argc, const char * argv[]){
 	}
 
 	//initialize backend and frontend
-	gen::LLVMBackend backend(&target,&genOptions);
+	//gen::LLVMBackend backend(&target,&genOptions);
 
 	//gen::Linker linker(&target,&genOptions);
 
 	compiler::init(&options);
 	//runTests();
 	
+	if(operation == "build"){
+		auto mod = compiler::newModuleFromFile(files[0]);
+
+		auto dir = System::path::directory(files[0]);
+		auto name = System::path::filename(files[0]);
+
+		//auto srcf = backend.generateModule((*mod).second.body,dir.c_str(),name.c_str());
+		//auto src = srcf.c_str();
+		//linker.link(&src,1,files[0],data::gen::native::PackageLinkingFormat::EXECUTABLE);
+	}
 	if(argc < 2){
 		System::print("\nWelcome to arpha code console. Type in the code and press return twice to compile it!\n");
 		std::string source = "";//"import arpha.testing.testing\n";
@@ -394,9 +405,9 @@ int main(int argc, const char * argv[]){
 					debug("Generated functions - %s",compiler::generatedFunctions);
 				 }
 
-				 auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src");
+				 //auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src");
 				 //auto src = srcf.c_str();
-				 //linker.link(&src,1,"D:/Alex/projects/parser/build/src",data::gen::native::PackageLinkingFormat::EXECUTABLE);
+				 //.link(&src,1,"D:/Alex/projects/parser/build/src",data::gen::native::PackageLinkingFormat::EXECUTABLE);
 
 				 source = "";
 				 continue;

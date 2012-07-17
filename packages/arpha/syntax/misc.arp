@@ -26,6 +26,12 @@ macro (expression) as
 	return [> as($expression,$type) <]
 }
 
+macro (expression) is
+{
+	var something = parser.parse(precedence.isas)
+	return [> is($expression,$something) <]
+}
+
 macro as(expression,T Type) = ast.newCast(expression,T)
 
 # Indexing operator.
@@ -34,8 +40,11 @@ macro (sequence) [
 {
 	var i = parser.parse()
 	if(parser.match("..")){
-		var e = if(parser.match("]")) [> $sequence.length - 1 <] else parser.parse()
-		return [> $sequence.slice($i,$e) <]
+		if(parser.match("]")){
+			return [> $sequence.slice(from: $i) <]
+		}
+		var e = parser.parse()
+		return [> $sequence.slice(from: $i,to: $e) <]
 	}
 	parser.expect("]")
 	return [> $sequence.element($i) <]

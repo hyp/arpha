@@ -20,11 +20,11 @@ macro defineIntegerOperations(T Type) = [>
 	def shl(x $T,y $T) $T
 	def shr(x $T,y $T) $T
 	
-	def equals(x $T,y $T) $T
-	def less(x $T,y $T) $T
-	def greater(x $T,y $T) $T
-	def lessEquals(x $T,y $T) $T
-	def greaterEquals(x $T,y $T) $T
+	def equals(x $T,y $T) bool
+	def less(x $T,y $T) bool
+	def greater(x $T,y $T) bool
+	def lessEquals(x $T,y $T) bool
+	def greaterEquals(x $T,y $T) bool
 <]
 
 defineIntegerOperations(arpha.literal.integer)

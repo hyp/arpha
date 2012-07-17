@@ -1,0 +1,11 @@
+import cstdlib
+
+def foo(x int32) = x + 1
+
+def main(){
+	var x
+	loop {
+		x= getchar()
+		putchar(x.foo)
+	} until(x == '!')
+}

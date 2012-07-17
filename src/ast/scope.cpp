@@ -13,6 +13,7 @@ Scope::Scope(Scope* parent) : _functionOwner(parent ? parent->_functionOwner : n
 	this->parent = parent;
 	precedenceProperty = nullptr;
 	importsArphaIntrinsic = false;
+	importsArphaExternal = false;
 }
 void Scope::setParent(Scope* scope){
 	if(!_functionOwner) _functionOwner= scope ? scope->_functionOwner : nullptr;

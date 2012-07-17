@@ -66,6 +66,7 @@ struct Scope {
 	//definition modifier commands(visibility mode, etc)
 	Node* precedenceProperty;
 	bool importsArphaIntrinsic;
+	bool importsArphaExternal;
 private:
 	
 	std::vector<std::pair<Scope*,std::pair<SymbolID,bool> > > exportedImports;

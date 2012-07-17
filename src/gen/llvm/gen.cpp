@@ -692,19 +692,27 @@ Node* LLVMgenerator::visit(IfExpression* node){
 	//consequence
 	builder.SetInsertPoint(consequenceBlock);
 	if(returnsValue) consequenceValue = generateExpression(node->consequence);
+	else generateExpression(node->consequence);
 	consequenceBlock = builder.GetInsertBlock();//update consequence block
 	if(ifFallthrough){
 		assert(alternativeBlock);
 		builder.CreateBr(alternativeBlock);
 		ifFallthrough = false;
-	} else builder.CreateBr(mergingBlock);
+	} else {
+		if(!llvm::isa<llvm::BranchInst>(consequenceBlock->back()))
+			builder.CreateBr(mergingBlock);
+	}
 	//alternative
 	if(alternativeBlock){
 		f->getBasicBlockList().push_back(alternativeBlock);
 		builder.SetInsertPoint(alternativeBlock);
-		builder.CreateBr(mergingBlock);
+		
 		if(returnsValue) alternativeValue = generateExpression(node->alternative);
+		else generateExpression(node->alternative);
 		alternativeBlock = builder.GetInsertBlock();//update alternative block
+
+		if(!llvm::isa<llvm::BranchInst>(alternativeBlock->back()))
+			builder.CreateBr(mergingBlock);	
 	}
 	//merge
 	f->getBasicBlockList().push_back(mergingBlock);
@@ -786,6 +794,7 @@ Node* LLVMgenerator::visit(LoopExpression* node){
 	} else generateExpression(node->body);
 	loopChain = loopNode.prev;
 
+	builder.CreateBr(loopBlock);
 	//merge
 	preBlock->getParent()->getBasicBlockList().push_back(afterBlock);
 	builder.SetInsertPoint(afterBlock);
@@ -860,15 +869,14 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 		t = llvm::FunctionType::get(genType(function->_returnType.type()),args,false);
 	}
 
-	auto func = llvm::Function::Create(t,genLinkage(function),mangler.stream.str(),module);
+	auto func = llvm::Function::Create(t,genLinkage(function),function->label().ptr()/*mangler.stream.str()*/,module);
 	func->setCallingConv(genCallingConvention(function->callingConvention()));
 	map(function,func);
 	return func;
 }
 
 Node* LLVMgenerator::visit(Function* function){
-	bool isExtern = function->label() == SymbolID("putchar");//ffiC;
-	if(isExtern || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro()) return function;
+	if(function->isExternal() || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro()) return function;
 
 	auto func = getFunctionDeclaration(function);
 

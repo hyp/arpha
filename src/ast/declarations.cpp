@@ -157,6 +157,9 @@ bool   Function::applyProperty(SymbolID name,Node* value){
 bool   Function::isIntrinsic() const {
 	return isFlagSet(IS_INTRINSIC);
 }
+bool   Function::isExternal() const {
+	return isFlagSet(IS_EXTERNAL);
+}
 data::ast::Function::CallConvention Function::callingConvention() const {
 	return (data::ast::Function::CallConvention)cc;
 }

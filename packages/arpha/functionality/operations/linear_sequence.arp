@@ -10,4 +10,13 @@ def length (self LinearSequence(_)) natural
 def element(self LinearSequence(T: _),i natural) T
 def element(self LinearSequence(T: _),i natural,item T)
 
+#
+TODO:
+def slice(self LinearSequence(T: _),from natural)            LinearSequence(T)
+def slice(self LinearSequence(T: _),to   natural)            LinearSequence(T)
+def slice(self LinearSequence(T: _),from natural,to natural) LinearSequence(T)
+#
+
 def isEmpty(self LinearSequence(_)) bool
+#def getElementAndAdvance(self LinearSequence(T: _)) T
+
