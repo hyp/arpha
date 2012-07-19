@@ -12,15 +12,16 @@ macro !
 	return [> not($expression.isTrue) <]
 }
 
-use precedence:precedence.logical_and
-macro (x) && 
+
+macro (x) &&
+uses precedence:precedence.logical_and
 {
 	var y = parser.parse(precedence.logical_and)
 	return ast.newLogicalOperation( [> $x.isTrue <] , [> $y.isTrue <] , and: true )
 }
 
-use precedence:precedence.logical_or
-macro (x) || 
+macro (x) ||
+uses precedence:precedence.logical_or
 {
 	var y = parser.parse(precedence.logical_or)
 	return ast.newLogicalOperation( [> $x.isTrue <] , [> $y.isTrue <] , or: true )

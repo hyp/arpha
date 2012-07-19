@@ -276,6 +276,20 @@ struct VarParser: IntrinsicPrefixMacro {
 	}
 };
 
+void parseProperties(Parser* parser,Node* applicant){
+	Parser::NewlineIgnorer i(true,parser);
+	if(!parser->match("uses")){
+		i.rollback();
+		return;
+	}
+	do {
+		auto prop = parser->expectName();
+		Node* value = nullptr;
+		if(parser->match(":")) value = parser->parse(arpha::Precedence::Tuple);
+		applicant->applyProperty(prop,value);
+	} while(parser->match(","));
+}
+
 /// param     ::= <name> [Type] [ '=' defaultValue ]
 /// paramList ::= param ',' paramList | param
 /// params    ::= '(' paramList ')' | '(' ')'
@@ -355,9 +369,10 @@ static Function* parseFunction(SymbolID name,Parser* parser){
 	parseFunctionParameters(parser,func);
 	//return type & body
 	auto token = parser->peek();
-	if(!isEndExpression(token) && !(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
+	if(!isEndExpression(token) && !(token.isSymbol() && (token.symbol == "=" || token.symbol == "{" || token.symbol == "uses"))){
 		func->_returnType.parse(parser,arpha::Precedence::Assignment);
 	}
+	parseProperties(parser,func);
 	parseFunctionBody(parser,func,func->isIntrinsic() || func->isExternal());
 	parser->leaveBlock();
 
@@ -408,24 +423,12 @@ static void parseTypeInvariant(Parser* parser,TypeDeclaration* typeDecl){
 	parser->syntaxError(format("Invariants aren't supported yet"));
 }
 
-void parseProperties(Parser* parser){
-	do {
-		auto prop = parser->expectName();
-		Node* value = nullptr;
-		if(parser->match(":")) value = parser->parse(arpha::Precedence::Tuple);
-		//if(value) parser->useProperty(prop,value);
-		//else parser->useProperty(prop);
-	} while(parser->match(","));
-	parser->expect(")");
-}
-
 /// constant  ::= 'def' names  '=' [Newlines] initializers
 /// function  ::= 'def' <name> params [returnType] functionBody
 struct DefParser: IntrinsicPrefixMacro {
 	DefParser(): IntrinsicPrefixMacro("def") {  }
 
 	Node* parse(Parser* parser){
-		if(parser->match("(")) parseProperties(parser);
 		auto name = parser->expectName();
 		Node* result;
 		if(parser->match("(")) result = parseFunction(name,parser);
@@ -447,6 +450,7 @@ struct MacroParser: IntrinsicPrefixMacro {
 			setOuterScope = true;
 		}
 		Function* func;
+		PrefixMacro* pmacro;InfixMacro* imacro;Node* macro;
 
 		//infix?
 		if(parser->match("(")){
@@ -464,14 +468,26 @@ struct MacroParser: IntrinsicPrefixMacro {
 
 		//Function like?
 		bool functionLike = false;
-		if(!infix && parser->match("(")){
-			functionLike = true;//Function on the outside, but macro lays within!
-			parseFunctionParameters(parser,func);
-			for(auto i = func->arguments.begin();i!=func->arguments.end();i++){
-				(*i)->hideType(intrinsics::types::NodePointer);
+		if(!infix){
+			if(parser->match("(")){
+				functionLike = true;//Function on the outside, but macro lays within!
+				parseFunctionParameters(parser,func);
+				for(auto i = func->arguments.begin();i!=func->arguments.end();i++){
+					(*i)->hideType(intrinsics::types::NodePointer);
+				}
+				macro = func;
+			}
+			else {
+				pmacro = new PrefixMacro(func);
+				macro = pmacro;
 			}
 		}
+		else {
+			imacro = new InfixMacro(func,new IntegerLiteral((uint64)0,Type::getIntegerLiteralType()));
+			macro = imacro;
+		}
 		
+		parseProperties(parser,macro);
 		//import defaults.
 		func->body.scope->import(compiler::findModule("arpha/ast"),"ast",true,false);
 		if(!functionLike) func->body.scope->import(compiler::findModule("arpha/syntax/parser"),"parser",true,false);
@@ -482,9 +498,9 @@ struct MacroParser: IntrinsicPrefixMacro {
 		//Create the actual macro
 		if(!infix){
 			if(!functionLike){
-				auto macro = new PrefixMacro(func);
+				//auto macro = new PrefixMacro(func);
 				parser->applyProperties(macro);
-				parser->introduceDefinition(macro);
+				parser->introduceDefinition(pmacro);
 				return parser->compilationUnit()->resolver->resolveMacroAtParseStage(macro);
 			} 
 			else {
@@ -492,13 +508,60 @@ struct MacroParser: IntrinsicPrefixMacro {
 				return func;
 			}
 		} else {
-			auto macro = new InfixMacro(func,new IntegerLiteral((uint64)0,Type::getIntegerLiteralType()));
+			//auto macro = new InfixMacro(func,new IntegerLiteral((uint64)0,Type::getIntegerLiteralType()));
 			parser->applyProperties(macro);
-			parser->introduceDefinition(macro);
+			parser->introduceDefinition(imacro);
 			return parser->compilationUnit()->resolver->resolveMacroAtParseStage(macro);
 		}
 	}
 };
+
+
+
+/// trait     ::= 'trait' | 'constraint' <name> '(' <derivedType> [derivedTypeParams] ')' [ Newlines 'requires' traitRequirementBlock ] 
+void parseTrait(Parser* parser,bool isConstraint){
+
+struct TraitBodyParser {
+	Trait* trait;
+	TraitBodyParser(Trait* _trait) : trait(_trait) {}
+	bool operator()(Parser* parser){
+		auto  cmd = parser->expectName();
+		if(cmd == "def"){
+			auto func = parseMethod(parser,trait,parser->expectName(),MethodContextTrait);
+			if(func) trait->methods.push_back(func);
+		}
+		else if(cmd == "invariant") 
+			parseTypeInvariant(parser,trait->declaration);
+		else{
+			parser->syntaxError(format("Can't parse a command '%s' inside trait requirement declaration",cmd));
+			return false;
+		}
+		return true;
+	}
+};
+
+	auto name = parser->expectName();
+	auto type = new Trait();
+
+	parser->expect("(");
+	auto typeName = parser->expectName();
+	if(parser->match("(")){
+		parser->syntaxError(format("parametrization to derived traits not implemented yet!"));
+		parser->expect(")");
+	}
+	parser->expect(")");
+
+	parser->ignoreNewlines();
+	if(parser->match("requires")){
+#ifdef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
+		parser->ignoreNewlines();
+#endif
+		parser->expect("{");
+		blockParser->body(parser,TraitBodyParser(type));
+	}
+
+	
+}
 
 //TODO remove?
 struct ConstraintParser: IntrinsicPrefixMacro {
@@ -764,8 +827,11 @@ struct VariantParser: IntrinsicPrefixMacro {
 
 	Node* parse(Parser* parser){
 		auto name      = parser->expectName();
+		int  optionID  = 0;
+		auto variant     = new Variant();
+		auto declaration = new TypeDeclaration(variant,name);
+		bool hasStructs = false;
 
-		auto variant = new Variant();
 #ifdef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
 		parser->ignoreNewlines();
 #endif
@@ -773,22 +839,48 @@ struct VariantParser: IntrinsicPrefixMacro {
 		parser->ignoreNewlines();
 		parser->expect("|");
 		do {
-			Variant::Field field = { parser->expectName(),-1 };
+			auto option = parser->expectName();
+			
 #ifdef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
 			parser->ignoreNewlines();
 #endif
+			DeclaredType* type;
 			if(parser->match("{")){
 				parser->expect("}");
 				parser->ignoreNewlines();
+				type = new VariantOption(variant,optionID);//TODO
+				hasStructs = true;
 			}
-			variant->add(field);
+			else {
+				type = new VariantOption(variant,optionID);
+			}
+			optionID++;
+
+			auto decl = new TypeDeclaration(type,option);
+			if(declaration->optionalStaticBlock){
+				parser->introduceDefinition(decl);
+				declaration->optionalStaticBlock->addChild(decl);
+			}
+			else {
+				declaration->optionalStaticBlock = new BlockExpression();
+				parser->enterBlock(declaration->optionalStaticBlock);
+				parser->introduceDefinition(decl);
+				declaration->optionalStaticBlock->addChild(decl);
+			}
+
+			//variant->add(field);
 #ifndef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
-			else parser->ignoreNewlines();
+			parser->ignoreNewlines();
 #endif
 		} while(parser->match("|"));
 		parser->expect("}");
+		if(declaration->optionalStaticBlock) parser->leaveBlock();
+		
+		variant->numberOfOptions = optionID;
+		if(!hasStructs) variant->setFlag(Variant::NO_INNER_STRUCTURES);
 
-		return new TypeDeclaration(variant,name);
+		parser->introduceDefinition(declaration);
+		return declaration;
 	}
 };
 
@@ -1033,7 +1125,7 @@ void defineCoreSyntax(Scope* scope){
 
 	scope->define(new ReturnParser);
 
-	scope->define(new UseParser);
+	//scope->define(new UseParser);
 
 	scope->define(new CaptureParser);
 }

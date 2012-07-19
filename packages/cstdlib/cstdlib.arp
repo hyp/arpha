@@ -9,6 +9,8 @@ import arpha.external
 def putchar(character int32) int32
 def getchar() int32
 
+def srand(seed uint32)
 def rand () int32
-def abort()
-def exit (code int32)
+
+def abort ()
+def exit  (code int32)

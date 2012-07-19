@@ -366,6 +366,9 @@ bool Type::isSame(Type* other){
 			return static_cast<AnonymousAggregate*>(this)->types  == static_cast<AnonymousAggregate*>(other)->types &&
 				   static_cast<AnonymousAggregate*>(this)->fields == static_cast<AnonymousAggregate*>(other)->fields;
 
+		case VARIANT_OPTION:
+			return optionID == other->optionID;
+
 		case LITERAL_INTEGER:
 		case LITERAL_FLOAT :
 		case LITERAL_CHAR  :
@@ -1013,21 +1016,31 @@ DeclaredType* Trait::duplicate(DuplicationModifiers* mods) const {
 */
 Variant::Variant() : DeclaredType(Type::VARIANT) {
 }
-int Variant::lookupField(const SymbolID fieldName) const {
-	for(size_t i = 0;i<fields.size();i++){
-		if( fields[i].name == fieldName ) return int(i);
-	}
-	return -1;
-}
-void Variant::add(const Field& field) {
-	assert(!isResolved());
-	fields.push_back(field);
+Variant* Type::asVariant(){
+	return type == VARIANT? static_cast<Variant*>(this) : nullptr;
 }
 DeclaredType* Variant::duplicate(DuplicationModifiers* mods) const{
 	auto dup = new Variant();
 	dup->flags = flags;
+	dup->numberOfOptions = numberOfOptions;
 	return dup;
 }
+
+/**
+* Variant option
+*/
+VariantOption::VariantOption(Variant* variant,int id) : DeclaredType(VARIANT_OPTION) {
+	this->owner  = variant;
+	this->optionID = id;
+	setFlag(IS_RESOLVED);
+}
+DeclaredType* VariantOption::duplicate(DuplicationModifiers* mods) const{
+	return const_cast<VariantOption*>(this);
+}
+DeclaredType* VariantOption::resolve(Resolver* resolver) {
+	return this;
+}
+
 
 /**
 * Type declaration node

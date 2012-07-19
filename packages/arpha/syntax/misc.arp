@@ -19,14 +19,15 @@ macro derefOrPtrType(T Type)                 = [> Pointer($T) <]
 macro derefOrPtrType(expr Pointer(_))        = ast.newPointerOperation(expr,dereference: true)
 
 # Type casting
-use precedence: precedence.isas
 macro (expression) as
+uses precedence: precedence.isas
 {
 	var type = parser.parse(precedence.isas)
 	return [> as($expression,$type) <]
 }
 
 macro (expression) is
+uses precedence: precedence.isas
 {
 	var something = parser.parse(precedence.isas)
 	return [> is($expression,$something) <]
@@ -35,8 +36,8 @@ macro (expression) is
 macro as(expression,T Type) = ast.newCast(expression,T)
 
 # Indexing operator.
-use precedence: precedence.index
 macro (sequence) [
+uses precedence: precedence.index
 {
 	var i = parser.parse()
 	if(parser.match("..")){

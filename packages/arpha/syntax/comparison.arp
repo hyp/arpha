@@ -14,36 +14,45 @@ macro notEquals     (x T:ImplementsEquals ,y T) = [> ! $x.equals ($y) <]
 macro lessEquals    (x T:ImplementsGreater,y T) = [> ! $x.greater($y) <]
 macro greaterEquals (x T:ImplementsLess   ,y T) = [> ! $x.less   ($y) <]
 
-use precedence: precedence.equality
-
-macro (x) ==  {
+macro (x) ==  
+uses precedence: precedence.equality
+{
 	var y = parser.parse(precedence.equality,ignoreNewlines:true)
 	return [> $x.equals($y) <]
 }
 
-macro (x) !=  {
+macro (x) !=
+uses precedence: precedence.equality
+{
 	var y = parser.parse(precedence.equality,ignoreNewlines:true)
 	return [> $x.notEquals($y) <]
 }
 
-use precedence: precedence.comparison
-
-macro (x) <  {
+macro (x) <
+uses precedence: precedence.comparison  
+{
 	var y = parser.parse(precedence.comparison,ignoreNewlines:true)
 	return [> $x.less($y) <]
 }
 
-macro (x) >  {
+macro (x) >
+uses precedence: precedence.comparison  
+{
 	var y = parser.parse(precedence.comparison,ignoreNewlines:true)
 	return [> $x.greater($y) <]
 }
 
-macro (x) <= {
+macro (x) <=  
+uses precedence: precedence.comparison  
+{
 	var y = parser.parse(precedence.comparison,ignoreNewlines:true)
 	return [> $x.lessEquals($y) <]
 }
 
-macro (x) >= {
+macro (x) >=
+uses precedence: precedence.comparison  
+{
 	var y = parser.parse(precedence.comparison,ignoreNewlines:true)
 	return [> $x.greaterEquals($y) <]
 }
+

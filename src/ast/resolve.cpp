@@ -562,7 +562,7 @@ Node* CastExpression::resolve(Resolver* resolver){
 	if(object->isResolved()){
 		resolver->markResolved(this);
 		auto returns = object->returnType();
-		if(type->canAssignFrom(object,returns) == -1 && !type->canCastTo(returns)){
+		if(type->canAssignFrom(object,returns) == -1 && !returns->canCastTo(type)){
 			error(this,"Can't cast %s to %s!",returns,type);
 			return ErrorExpression::getInstance();
 		}
@@ -606,6 +606,16 @@ Node* UnresolvedSymbol::resolve(Resolver* resolver){
 Node* AccessExpression::resolve(Resolver* resolver){
 	object = resolver->resolve(object);
 	if(object->isResolved()){
+		if(auto tref = object->asTypeReference()){
+			if(auto variant = tref->type->asVariant()){
+				auto decl   = variant->declaration;
+				if(decl->optionalStaticBlock){
+					if(auto def = decl->optionalStaticBlock->scope->containsPrefix(symbol)){
+						return resolver->resolve(copyLocationSymbol(def->createReference()));
+					}
+				}
+			}
+		}
 		if(auto f = accessingAnonymousRecordField(this)){
 			return resolver->resolve(copyLocationSymbol(f));
 		}
@@ -894,7 +904,12 @@ Node* TypeDeclaration::resolve(Resolver* resolver){
 
 	if(optionalStaticBlock){
 		optionalStaticBlock->scope->setParent(resolver->currentScope());
-		if(!optionalStaticBlock->isResolved()) optionalStaticBlock->resolve(resolver);
+		if(!optionalStaticBlock->isResolved()){
+			auto oldParent = resolver->currentParentNode();
+			resolver->currentParentNode(this);
+			optionalStaticBlock->resolve(resolver);
+			resolver->currentParentNode(oldParent);
+		}
 	}
 	if(!_type->isResolved())
 		_type = _type->resolve(resolver);
@@ -953,7 +968,7 @@ Node* Function::resolve(Resolver* resolver){
 	//resolve return type. (Don't quit yet because the body may infer it!)
 	
 	//NB: special case for intrinsic def foo(x Pointer(T:_)) T
-	if(isIntrinsic() && arguments[0]->type.isPattern() && _returnType.kind == TypePatternUnresolvedExpression::UNRESOLVED){
+	if(isIntrinsic() && arguments.size() && arguments[0]->type.isPattern() && _returnType.kind == TypePatternUnresolvedExpression::UNRESOLVED){
 		if(auto sym = _returnType.unresolvedExpression->asUnresolvedSymbol()){
 			if(allArgMatcher.lookupDefinition(sym->symbol)){
 				makeIntrinsicReturningPattern(0);

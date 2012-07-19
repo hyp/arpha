@@ -20,33 +20,37 @@ macro +
 
 # Binary operators
 
-use precedence: precedence.term
-macro (x) + 
+
+macro (x) +
+uses precedence: precedence.term
 {
 	var y = parser.parse(precedence.term,ignoreNewlines: true)
 	return [> $x.add($y) <]
 }
 
-macro (x) - 
+macro (x) -
+uses precedence: precedence.term 
 {
 	var y = parser.parse(precedence.term,ignoreNewlines: true)
 	return [> $x.subtract($y) <]
 }
 
-use precedence: precedence.product
-macro (x) * 
+macro (x) *
+uses precedence: precedence.product 
 {
 	var y = parser.parse(precedence.product,ignoreNewlines: true)
 	return [> $x.multiply($y) <]
 }
 
-macro (x) / 
+macro (x) /
+uses precedence: precedence.product 
 {
 	var y = parser.parse(precedence.product,ignoreNewlines: true)
 	return [> $x.divide($y) <]
 }
 
 macro (x) % 
+uses precedence: precedence.product 
 {
 	var y = parser.parse(precedence.product,ignoreNewlines: true)
 	return [> $x.remainder($y) <]
@@ -54,32 +58,37 @@ macro (x) %
 
 # Assign modify
 # TODO possible folding into addAssign etc
-use precedence: precedence.assignment
-macro (x) += 
+
+macro (x) +=
+uses precedence: precedence.assignment
 {
 	var y = parser.parse(precedence.assignment,ignoreNewlines: true)
 	return [> $x = $x + $y <]
 }
 
-macro (x) -= 
+macro (x) -=
+uses precedence: precedence.assignment 
 {
 	var y = parser.parse(precedence.assignment,ignoreNewlines: true)
 	return [> $x = $x - $y <]
 }
 
-macro (x) *= 
+macro (x) *=
+uses precedence: precedence.assignment
 {
 	var y = parser.parse(precedence.assignment,ignoreNewlines: true)
 	return [> $x = $x * $y <]
 }
 
-macro (x) /= 
+macro (x) /=
+uses precedence: precedence.assignment
 {
 	var y = parser.parse(precedence.assignment,ignoreNewlines: true)
 	return [> $x = $x / $y <]
 }
 
-macro (x) %= 
+macro (x) %=
+uses precedence: precedence.assignment
 {
 	var y = parser.parse(precedence.assignment,ignoreNewlines: true)
 	return [> $x = $x % $y <]

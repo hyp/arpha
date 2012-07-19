@@ -61,6 +61,7 @@ std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& 
 
 struct AnonymousAggregate;
 struct FunctionPointer;
+struct Variant;
 
 //(type ...): intrinsics::types::Type
 struct Type {
@@ -87,6 +88,8 @@ struct Type {
 
 		ANONYMOUS_RECORD,
 		ANONYMOUS_VARIANT,
+
+		VARIANT_OPTION,
 		
 
 		LITERAL_INTEGER,
@@ -118,6 +121,8 @@ struct Type {
 	static Type* getNaturalType();
 	static Type* getUintptrType();
 
+	static Type* getVariantOption(int optionID);
+
 	bool   canCastTo(Type* other);
 
 	
@@ -141,9 +146,11 @@ struct Type {
 	inline bool isNodePointer() const { return type == POINTER && argument->type == NODE; }
 	inline bool isLiteral() const { return type>=LITERAL_INTEGER; }
 	inline bool isLinearSequence() const { return type == LINEAR_SEQUENCE; }
+	inline bool isVariantOption() const  { return type == VARIANT_OPTION; }
 
 
 	Record* asRecord();
+	Variant* asVariant();
 	AnonymousAggregate* asAnonymousRecord();
 	FunctionPointer* asFunctionPointer();
 
@@ -195,6 +202,7 @@ public:
 	union {
 		Type* argument;
 		Node* pattern;
+		int   optionID;
 		int   nodeSubtype;//USE -1 for untyped note i.e. [> 1 <] returns untyped node, but new ast.IntegerLiteral returns typed node!
 		int   bits;       //number of bits in an integer / character type
 	};
@@ -270,22 +278,37 @@ struct Trait: public DeclaredType {
 	std::vector<Function*> methods;
 };
 
+
 struct Variant: public DeclaredType {
+	enum {
+		NO_INNER_STRUCTURES = 0x10,//plain variant
+	};
+
 	Variant();
 
-	struct Field {
-		SymbolID name;
-		int      associatedType;//-1 for not type
-	};
-	// Returns -1 if field isn't found
-	int lookupField(const SymbolID fieldName) const;
-	// Adds a field to an unresolved variant.
-	void add(const Field& field);
+	inline bool hasNoStructuredOptions(){ return isFlagSet(NO_INNER_STRUCTURES); }
 
 	DeclaredType* duplicate(DuplicationModifiers* mods) const;
 	DeclaredType* resolve(Resolver* resolver);
 
-	std::vector<Field> fields;
+	size_t numberOfOptions;
+};
+
+/**
+* A variant option (without additional structure load).
+*/
+struct VariantOption: public DeclaredType {
+private:
+	Variant* owner;
+	
+public:
+	VariantOption(Variant* variant,int id);
+
+	DeclaredType* duplicate(DuplicationModifiers* mods) const;
+	DeclaredType* resolve(Resolver* resolver);
+
+	inline Variant* variant(){ return owner;    }
+	inline int id()          { return optionID; }
 };
 
 struct Record: public DeclaredType {

@@ -178,6 +178,10 @@ struct NodeToString: NodeVisitor {
 		else {
 			stream<<"variant "<<decl->label();
 		}
+
+		if(decl->optionalStaticBlock){
+			stream<<decl->optionalStaticBlock;
+		}
 		//newline();
 		return decl;
 	}
@@ -255,6 +259,9 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 			stream<<")";
 			}
 			break;
+		case Type::VARIANT_OPTION:
+			stream<<(static_cast<VariantOption*>(type)->declaration->label()); break;
+
 		case Type::LITERAL_INTEGER:
 			stream<<"literal.integer"; break;
 		case Type::LITERAL_FLOAT:
