@@ -404,7 +404,12 @@ Type *BlockExpression::returnType() const {
 	if(isFlagSet(RETURNS_LAST_EXPRESSION) && size()>0) return (*(end()-1))->returnType();
 	return intrinsics::types::Void;
 }
-
+void BlockExpression::addChildPotentiallyDisturbingIteration(Node* child){
+	if(isFlagSet(ITERATING)){
+		setFlag(ITERATION_MODIFIED_CHILDREN);
+	}
+	addChild(child);
+}
 void BlockExpression::_duplicate(BlockExpression* dest,DuplicationModifiers* mods) const {
 	copyProperties(duplicateChildren(dest,mods));
 }

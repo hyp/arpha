@@ -18,6 +18,18 @@ describe "A type's field" {
 	}
 }
 
+describe "A parametrized type's field" {
+	type ParametrizedType(T) {
+		var field T
+	}
+	
+	it "behaves exactly as a field from a non-parametrized type" {
+		var foo ParametrizedType(int32)
+		foo.field = 12
+		foo.field should be 12
+	}
+}
+
 describe "An anonymous record's field" {
 	it "can be accessed through '.'" {
 		var version major: natural,minor: natural = 1,2

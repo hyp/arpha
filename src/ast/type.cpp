@@ -989,6 +989,8 @@ Record::Field Record::Field::duplicate(DuplicationModifiers* mods) const{
 	result.name = name;
 	result.type = type.duplicate(mods);
 	result.isExtending = isExtending;
+	result.isPrivate   = isPrivate;
+	result.isReadonly  = isReadonly;
 	result.initializer = initializer;
 	return result;
 }
@@ -1047,9 +1049,6 @@ DeclaredType* VariantOption::resolve(Resolver* resolver) {
 */
 TypeDeclaration::TypeDeclaration(DeclaredType* type,SymbolID name) : PrefixDefinition(name,Location()), _type(type),optionalStaticBlock(nullptr) { 
 	_type->declaration = this; 
-}
-Type*  TypeDeclaration::type()  const { 
-	return _type; 
 }
 Node*  TypeDeclaration::createReference(){
 	return new TypeReference(_type);

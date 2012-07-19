@@ -227,6 +227,14 @@ void Function::makeIntrinsicReturningPattern(int argID){
 	_returnType.kind =  TypePatternUnresolvedExpression::TYPE;
 	_returnType._type = intrinsics::types::Void;
 }
+void Function::makeTypeTemplate(TypeDeclaration* node){
+	makeAllArgumentsExpendable();
+	setFlag(TYPE_GENERATOR_FUNCTION);
+	body.addChild(node);
+}
+TypeDeclaration* Function::getTemplateTypeDeclaration(){
+	return (*body.begin())->asTypeDeclaration();
+}
 
 Node*  Function::duplicate(DuplicationModifiers* mods) const{
 	return const_cast<Function*>(this)->reallyDuplicate(mods);

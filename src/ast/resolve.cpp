@@ -307,9 +307,9 @@ Node* CallExpression::resolve(Resolver* resolver){
 				}
 				else return resolver->executeAndMixinMacro(func,arg);
 			}
-			else if(func->isFlagSet(Function::TYPE_GENERATOR_FUNCTION) && !func->isIntrinsic()){
+			else if(func->isTypeTemplate() && !func->isIntrinsic()){
 				debug("Type generation functions booyah!");
-				return resolver->resolve(copyLocationSymbol(func->body.scope->prefixDefinitions.begin()->second->createReference()));
+				return resolver->resolve(copyLocationSymbol(func->getTemplateTypeDeclaration()->createReference()));
 			}
 			else if(func->isFieldAccessMacro()){
 				if(auto t = arg->asTupleExpression()){
@@ -574,17 +574,26 @@ Node* CastExpression::resolve(Resolver* resolver){
 Node* BlockExpression::resolve(Resolver* resolver){
 	scope->_functionOwner = resolver->currentFunction;
 	parentNode = resolver->currentParentNode();
+	
 
 	auto oldScope = resolver->currentScope();
 	resolver->currentScope(scope);
 	auto oldParent = resolver->currentParentNode();
 	resolver->currentParentNode(this);
 
+	setFlag(ITERATING);
 	bool allResolved = true;
-	for(auto i = begin();i!=end();i++){
-		*i = resolver->resolve(*i);
-		if(!(*i)->isResolved()) allResolved = false;
+	size_t size = this->size();
+	for(size_t i = 0;i<size;i++){
+		children[i] = resolver->resolve(children[i]);
+		if(!children[i]->isResolved()) allResolved = false;
+		//Uglyness in it's glory :(
+		if(isFlagSet(ITERATION_MODIFIED_CHILDREN)){
+			size = this->size();
+			flags &= (~ITERATION_MODIFIED_CHILDREN);
+		}
 	}
+	flags &= (~ITERATING);
 
 	if(allResolved) resolver->markResolved(this); 
 	resolver->currentParentNode(oldParent);
@@ -875,6 +884,46 @@ DeclaredType* Record::resolve(Resolver* resolver){
 	debug("Successfully resolved record type %s",declaration->label());
 	return this;
 }
+// TODO getter self pointer type const and local, setter self pointer type local
+std::pair<Function*,Function*> Record::createFieldGetterSetter(Location location,int fieldID){
+	auto field = fields.begin() + fieldID;
+
+	//getter
+	auto getter = new Function(field->name,location);
+	auto gthis = new Argument("self",location,getter);
+	gthis->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,this));
+	gthis->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
+	getter->addArgument(gthis);
+	getter->makeFieldAccess(fieldID);
+	
+	//setter
+	auto setter = new Function(field->name,location);
+	auto sthis  = new Argument("self",location,setter);
+	sthis->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,this));
+	sthis->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
+	setter->addArgument(sthis);
+	auto value = new Argument("value",location,setter);
+	setter->addArgument(value);
+	setter->makeFieldAccess(fieldID);
+
+	if(field->isPrivate)                      getter->visibilityMode(data::ast::PRIVATE);
+	if(field->isPrivate || field->isReadonly) setter->visibilityMode(data::ast::PRIVATE);
+
+	return std::make_pair(getter,setter);
+}
+void Record::onTemplateSpecialization(Resolver* resolver){
+	//introduce field getters and setters!
+	auto block = resolver->currentParentNode()->asBlockExpression();
+
+	for(size_t i =0;i < fields.size();i++){
+		auto f = createFieldGetterSetter(this->declaration->location(),i);
+
+		block->addChildPotentiallyDisturbingIteration(f.first);
+		block->addChildPotentiallyDisturbingIteration(f.second);
+		block->scope->defineFunction(f.first);
+		block->scope->defineFunction(f.second);
+	}
+}
 
 void generateDestructorBody(Record* type,Variable* selfObject,BlockExpression* body){
 	auto size= type->fields.size();
@@ -1040,7 +1089,6 @@ Node* InfixMacro::resolve(Resolver* resolver){
 * Misc
 */
 Node* Resolver::multipassResolve(Node* node){
-	_currentParent = nullptr;
 
 	size_t prevUnresolvedExpressions;
 	unresolvedExpressions = 0xDEADBEEF;
@@ -1083,6 +1131,7 @@ void  Resolver::resolveModule(BlockExpression* module){
 Node* Resolver::resolveMacroAtParseStage(Node* macro){
 	assert(_compilationUnit->parser);
 	currentScope(_compilationUnit->parser->currentScope());
+	currentParentNode(nullptr);
 	return multipassResolve(macro);
 }
 
@@ -1256,6 +1305,26 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 	size_t numberOfParameters = original->arguments.size();
 	assert(original->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || original->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS));	
 	
+	/**
+	* Type templates - they need to be placed back to the defining scope.
+	*/
+	if(original->isTypeTemplate()){
+		if(auto exists = original->specializationExists(specializedParameters,passedExpressions,nullptr)) return exists;
+
+		DuplicationModifiers mods(original->owner());
+		auto specialization = original->specializedDuplicate(&mods,specializedParameters,passedExpressions);
+		//TODO better stuff here
+		auto oldScope  = currentScope();
+		auto oldParent = currentParentNode();
+		currentScope(original->owner());
+		currentParentNode(original->parentNode);
+		multipassResolve(specialization);
+		original->parentNode->asBlockExpression()->addChildPotentiallyDisturbingIteration(specialization);
+		specialization->getTemplateTypeDeclaration()->type()->onTemplateSpecialization(this);
+		currentScope(oldScope);
+		currentParentNode(oldParent);		
+		return specialization;
+	}
 	Scope* usageScope;
 	if(original->owner()->moduleScope() != this->compilationUnit()->moduleBody->scope) usageScope = this->compilationUnit()->moduleBody->scope;
 	else usageScope = nullptr;

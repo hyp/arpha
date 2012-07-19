@@ -594,8 +594,6 @@ Function* parseTypeTemplateDeclaration(SymbolID name,Parser* parser){
 	auto func = new Function(name,parser->previousLocation());
 	parser->enterBlock(&func->body);
 	parseFunctionParameters(parser,func,intrinsics::types::Type);
-	func->setFlag(Function::TYPE_GENERATOR_FUNCTION);
-	func->makeAllArgumentsExpendable();
 	return func;
 }
 
@@ -652,31 +650,10 @@ struct InterfaceParser: IntrinsicPrefixMacro {
 };
 
 // TODO getter self pointer type const and local, setter self pointer type local
-void createFieldGettersSetters(Parser* parser,Type* thisType,SymbolID field,int fieldID,bool isPrivate,bool isReadonly){
-	auto location = parser->previousLocation();
-	//getter
-	auto getter = new Function(field,location);
-	auto gthis = new Argument("self",location,getter);
-	gthis->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,thisType));
-	gthis->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
-	getter->addArgument(gthis);
-	getter->makeFieldAccess(fieldID);
-	
-	//setter
-	auto setter = new Function(field,location);
-	auto sthis  = new Argument("self",location,setter);
-	sthis->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,thisType));
-	sthis->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
-	setter->addArgument(sthis);
-	auto value = new Argument("value",location,setter);
-	setter->addArgument(value);
-	setter->makeFieldAccess(fieldID);
-
-	if(isPrivate) getter->visibilityMode(data::ast::PRIVATE);
-	if(isPrivate || isReadonly) setter->visibilityMode(data::ast::PRIVATE);
-
-	parser->mixinedExpressions.push_back(getter);
-	parser->mixinedExpressions.push_back(setter);
+void createFieldGettersSetters(Parser* parser,Record* thisType,int fieldID){
+	auto funcs = thisType->createFieldGetterSetter(parser->previousLocation(),fieldID);
+	parser->mixinedExpressions.push_back(funcs.first);
+	parser->mixinedExpressions.push_back(funcs.second);
 }
 
 /// fields       ::= ['private'] 'var'|'def' names (type | type '=' [Newlines] initializers)
@@ -690,7 +667,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 	TypeParser(): IntrinsicPrefixMacro("type") {  }
 
 	/// fields ::= ['private'] ['extends'] 'var' | 'def' names [ type ] '=' [Newlines] initializers
-	enum { FIELDS_EXT = 0x1,FIELDS_DEF = 0x2,FIELDS_PRIVATE = 0x4 };
+	enum { FIELDS_EXT = 0x1,FIELDS_DEF = 0x2,FIELDS_PRIVATE = 0x4,TEMPLATED_TYPE = 0x8 };
 	static void fields(SymbolID first,Parser* parser,Record* record,int flags = 0){
 		size_t i = record->fields.size();
 		const bool isExtending = (flags & FIELDS_EXT)!=0;
@@ -699,13 +676,17 @@ struct TypeParser: IntrinsicPrefixMacro {
 
 		auto field = Record::Field(first,intrinsics::types::Void);
 		field.isExtending = isExtending;
+		field.isPrivate   = isPrivate;
+		field.isReadonly  = isReadonly;
 		record->add(field);
-		createFieldGettersSetters(parser,record,field.name,record->fields.size()-1,isPrivate,isReadonly);
+		if((flags & TEMPLATED_TYPE) == 0) createFieldGettersSetters(parser,record,record->fields.size()-1);
 		while(parser->match(",")) {
 			auto field = Record::Field(parser->expectName(),intrinsics::types::Void);
 			field.isExtending = isExtending;
+			field.isPrivate   = isPrivate;
+			field.isReadonly  = isReadonly;
 			record->add(field);
-			createFieldGettersSetters(parser,record,field.name,record->fields.size()-1,isPrivate,isReadonly);
+			if((flags & TEMPLATED_TYPE) == 0) createFieldGettersSetters(parser,record,record->fields.size()-1);
 		}
 		
 		TypePatternUnresolvedExpression type;
@@ -747,10 +728,11 @@ struct TypeParser: IntrinsicPrefixMacro {
 	// body ::= '{' fields ';' fields ... '}'
 	struct BodyParser {
 		Record* record;
-		BodyParser(Record* _record) : record(_record) {}
+		bool hasTemplate;
+		BodyParser(Record* _record,Function* templateDeclaration) : record(_record),hasTemplate(templateDeclaration != nullptr) {}
 		bool operator()(Parser* parser){
 			auto  cmd = parser->expectName();
-			int flags = 0;
+			int flags = hasTemplate?TEMPLATED_TYPE:0;
 			if(cmd == "private"){
 				flags |= FIELDS_PRIVATE;
 				cmd = parser->expectName();
@@ -790,7 +772,10 @@ struct TypeParser: IntrinsicPrefixMacro {
 	Node* parse(Parser* parser){
 		auto name      = parser->expectName();
 
-		//if(parser->match("(")) typeGenerationFunction = parseTypeTemplateDeclaration(name,parser);
+		Function* templateDeclaration = nullptr;
+		if(parser->match("(")){
+			templateDeclaration = parseTypeTemplateDeclaration(name,parser);
+		}
 		
 		/*if(parser->match("=")){
 			parser->syntaxError(format("NOT ALLOWED >_<!"));
@@ -801,20 +786,18 @@ struct TypeParser: IntrinsicPrefixMacro {
 		parser->expect("{");
 		//record
 		auto record = new Record();
-		blockParser->body(parser,BodyParser(record));
+		blockParser->body(parser,BodyParser(record,templateDeclaration));
 
 		auto decl = new TypeDeclaration(record,name);
 		parser->introduceDefinition(decl);
-		return decl;
-		/*if(typeGenerationFunction){
-			record->setFlag(Record::GENERATED);
-			record->_owner = typeGenerationFunction->body.scope;
-			typeGenerationFunction->body.addChild(record);
+		if(templateDeclaration){
+			templateDeclaration->makeTypeTemplate(decl);
 			parser->leaveBlock();
-			parser->introduceDefinition(typeGenerationFunction);
-			return typeGenerationFunction;
+			parser->introduceDefinition(templateDeclaration);
+			return templateDeclaration;
 		}
-		else*/
+
+		return decl;
 	}
 };
 

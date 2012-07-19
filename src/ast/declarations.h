@@ -222,6 +222,10 @@ struct Function: public PrefixDefinition {
 	inline bool isIntrinsicOperation() const { return isFlagSet(IS_INTRINSIC_OPERATION); }
 	inline data::ast::Operations::Kind getOperation() const { return (data::ast::Operations::Kind)ctfeRegisterCount; }
 
+	inline bool isTypeTemplate() const { return isFlagSet(TYPE_GENERATOR_FUNCTION); }
+	void makeTypeTemplate(TypeDeclaration* node);
+	TypeDeclaration* getTemplateTypeDeclaration();
+
 	void makeIntrinsicReturningPattern(int argID);
 	inline bool isIntrinsicReturningPattern() const { return isFlagSet(INTRINSIC_FUNCTION_RETURNS_PATTERNED_DEFINITION); }
 

@@ -260,7 +260,10 @@ struct DeclaredType: public Type {
 
 	virtual DeclaredType* duplicate(DuplicationModifiers* mods) const = 0;
 	virtual DeclaredType* resolve(Resolver* resolver) = 0;
+	virtual void  onTemplateSpecialization(Resolver* resolver){}
 	inline  bool  isResolved() const { return isFlagSet(IS_RESOLVED); }
+
+	
 
 	TypeDeclaration* declaration;
 	void* generatorData;
@@ -317,8 +320,10 @@ struct Record: public DeclaredType {
 		TypePatternUnresolvedExpression type;
 		Node* initializer;
 		bool isExtending; //a field aliased as this
+		bool isPrivate;
+		bool isReadonly;
 
-		Field(SymbolID id,Type* typ) : name(id),type(typ),isExtending(false) {}
+		Field(SymbolID id,Type* typ) : name(id),type(typ),isExtending(false),isPrivate(false),isReadonly(false) {}
 		Field duplicate(DuplicationModifiers* mods) const;
 	private:
 		Field(){}
@@ -334,6 +339,8 @@ struct Record: public DeclaredType {
 
 	DeclaredType* duplicate(DuplicationModifiers* mods) const;
 	DeclaredType* resolve(Resolver* resolver);
+	void onTemplateSpecialization(Resolver* resolver);
+	std::pair<Function*,Function*> createFieldGetterSetter(Location location,int fieldID);
 
 	std::vector<Field> fields;
 };
@@ -341,8 +348,6 @@ struct Record: public DeclaredType {
 // an actual declaration of a type which is added to the expression list
 struct TypeDeclaration: PrefixDefinition {
 	TypeDeclaration(DeclaredType* type,SymbolID name);
-
-	Type*  type()  const;
 
 	//Type reference creation
 	Node* parse(Parser* parser);
@@ -354,6 +359,8 @@ struct TypeDeclaration: PrefixDefinition {
 private:
 	DeclaredType*  _type;
 	DECLARE_NODE(TypeDeclaration);
+public:
+	inline DeclaredType*  type()  const { return _type; }
 };
 
 #endif

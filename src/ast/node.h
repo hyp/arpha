@@ -482,10 +482,17 @@ struct BlockExpression : NodeList {
 
 	BlockExpression* duplicateMixin(DuplicationModifiers* mods) const;
 
+	/// lame...
+	void addChildPotentiallyDisturbingIteration(Node* child);
+
 	Scope* scope;
 	Node* parentNode;
 	DECLARE_NODE(BlockExpression);
 private:
+	enum {
+		ITERATING = 0x100,
+		ITERATION_MODIFIED_CHILDREN = 0x200,
+	};
 	BlockExpression(Scope* scope);
 };
 
