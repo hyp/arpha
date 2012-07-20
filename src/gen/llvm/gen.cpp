@@ -64,6 +64,7 @@ struct LLVMgenerator: NodeVisitor {
 	Function* functionOwner;
 	std::vector<Node*> moduleInitializerBody;
 	int currentGeneratingRound;
+	bool needsPointer;
 
 	/**
 	* Control flow chains
@@ -86,6 +87,7 @@ struct LLVMgenerator: NodeVisitor {
 	void emitConstant(llvm::Constant* value);
 	inline void emit(llvm::Value* value){ emmittedValue = value; }
 	llvm::Value* generateExpression(Node* node);
+	llvm::Value* generatePointerExpression(Node* node);
 	static llvm::GlobalValue::LinkageTypes genLinkage(PrefixDefinition* def);
 
 	inline void map(DefinitionNode* def,llvm::Value* value){
@@ -163,6 +165,7 @@ LLVMgenerator::LLVMgenerator(
 	loopChain = nullptr;
 	ifFallthrough = false;
 	currentGeneratingRound = round;
+	needsPointer = false;
 
 	//create a module initializer
 
@@ -278,6 +281,14 @@ llvm::Value* LLVMgenerator::generateExpression(Node* node){
 	node->accept(this);
 	return emmittedValue;
 }
+llvm::Value* LLVMgenerator::generatePointerExpression(Node* node){
+	auto old= needsPointer;
+	needsPointer = true;
+	emmittedValue = nullptr;
+	node->accept(this);
+	needsPointer = old;
+	return emmittedValue;
+}
 llvm::GlobalValue::LinkageTypes LLVMgenerator::genLinkage(PrefixDefinition* def){
 	return def->isPublic() ? llvm::GlobalValue::ExternalLinkage : llvm::GlobalValue::PrivateLinkage;
 }
@@ -316,7 +327,8 @@ void LLVMgenerator::emitCreateLinearSequence(llvm::Value* ptr,llvm::Value* lengt
 Node* LLVMgenerator::visit(VariableReference* node){
 	//if(node->variable->asArgument())
 	//	emit(unmap(node->variable));
-	emitLoad(getVariable(node->variable));
+	if(needsPointer) emit(getVariable(node->variable));
+	else emitLoad(getVariable(node->variable));
 	return node;
 }
 
@@ -336,23 +348,16 @@ llvm::Value* genPointerAddressing(LLVMgenerator* generator,Node* object,Node* in
 Node* LLVMgenerator::visit(AssignmentExpression* node){
 	auto val = generateExpression(node->value);
 	assert(val);
-	if(auto var = node->object->asVariableReference()){
-		emitStore(getVariable(var->variable),val);
-	} else if(auto field = node->object->asFieldAccessExpression()){
-		if(auto vref = field->object->asVariableReference()){
-			auto variable = unmap(vref->variable);
-			auto fieldPtr = builder.CreateStructGEP(variable,field->field);
-			emitStore(fieldPtr,val);
-		}
-	}
+	auto ptr = generatePointerExpression(node->object);
+	emitStore(ptr,val);
 	return node;
 }
 Node* LLVMgenerator::visit(FieldAccessExpression* node){
-	if(auto vref = node->object->asVariableReference()){
-		auto variable = unmap(vref->variable);
-		auto fieldPtr = builder.CreateStructGEP(variable,node->field);
-		emitLoad(fieldPtr);
-	}
+	auto ptr = generatePointerExpression(node->object);
+	auto fieldPtr = builder.CreateStructGEP(ptr,node->field);
+	if(needsPointer) emit(fieldPtr); 
+	else emitLoad(fieldPtr);
+
 	return node;
 }
 
@@ -883,7 +888,7 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 
 Node* LLVMgenerator::visit(Function* function){
 	if(function->isExternal() || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro() || 
-		function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return function;
+		function->isTypeTemplate() || function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return function;
 
 	auto func = getFunctionDeclaration(function);
 

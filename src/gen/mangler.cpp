@@ -23,6 +23,9 @@ void Mangler::Element::mangleModule(BlockExpression* root){
 void Mangler::Element::mangleComponents(Node* component){
 	if(auto block = component->asBlockExpression()){ 
 		if(block->parentNode == nullptr) mangleModule(block);
+		else if(auto func = block->parentNode->asFunction()){
+			mangle(func);
+		}
 		else {
 			mangleComponents(block->parentNode);
 			if(!block->label().isNull()) stream<<block->label().length()<<block->label();
