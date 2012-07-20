@@ -63,6 +63,7 @@ struct LLVMgenerator: NodeVisitor {
 	gen::Mangler*      moduleMangler;
 	Function* functionOwner;
 	std::vector<Node*> moduleInitializerBody;
+	int currentGeneratingRound;
 
 	/**
 	* Control flow chains
@@ -80,17 +81,20 @@ struct LLVMgenerator: NodeVisitor {
 
 	llvm::FunctionPassManager* passManager;
 
-	LLVMgenerator(llvm::LLVMContext& _context,Node* root,llvm::Module* module,llvm::FunctionPassManager* passManager);
+	LLVMgenerator(llvm::LLVMContext& _context,Node* root,llvm::Module* module,llvm::FunctionPassManager* passManager,int round);
 	llvm::Type* genType(Type* type);
 	void emitConstant(llvm::Constant* value);
 	inline void emit(llvm::Value* value){ emmittedValue = value; }
 	llvm::Value* generateExpression(Node* node);
 	static llvm::GlobalValue::LinkageTypes genLinkage(PrefixDefinition* def);
 
-	inline static void map(DefinitionNode* def,llvm::Value* value){
+	inline void map(DefinitionNode* def,llvm::Value* value){
 		def->generatorData = value;
+		def->generatorDataRound = currentGeneratingRound;
 	}
-	inline static llvm::Value* unmap(DefinitionNode* def){
+	inline llvm::Value* unmap(DefinitionNode* def){
+		auto round = def->generatorDataRound;
+		if(round != currentGeneratingRound) return nullptr;
 		return reinterpret_cast<llvm::Value*>(def->generatorData);
 	}
 	inline static void map(DeclaredType* type,llvm::Type* value){
@@ -146,7 +150,8 @@ struct LLVMgenerator: NodeVisitor {
 LLVMgenerator::LLVMgenerator(
 	llvm::LLVMContext& _context,
 	Node* root,llvm::Module* module,
-	llvm::FunctionPassManager* passManager) : 
+	llvm::FunctionPassManager* passManager,
+	int round) : 
 	context(_context),
 	builder(_context) 
 {
@@ -157,6 +162,7 @@ LLVMgenerator::LLVMgenerator(
 	functionOwner = nullptr;
 	loopChain = nullptr;
 	ifFallthrough = false;
+	currentGeneratingRound = round;
 
 	//create a module initializer
 
@@ -814,7 +820,7 @@ Node* LLVMgenerator::visit(BlockExpression* node){
 }
 
 llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* variable){
-	if(variable->generatorData) return static_cast<llvm::GlobalVariable*>(unmap(variable));
+	if(auto unmapped = unmap(variable)) return static_cast<llvm::GlobalVariable*>(unmapped);
 
 	// mangle
 	gen::Mangler::Element mangler(moduleMangler);
@@ -850,7 +856,7 @@ llvm::Function* LLVMgenerator::getIntrinsicFunctionDeclaration(const char* name,
 }
 
 llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
-	if(function->generatorData) return static_cast<llvm::Function*>(unmap(function));
+	if(auto unmapped = unmap(function)) return static_cast<llvm::Function*>(unmapped);
 
 	// mangle
 	gen::Mangler::Element mangler(moduleMangler);
@@ -869,14 +875,15 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 		t = llvm::FunctionType::get(genType(function->_returnType.type()),args,false);
 	}
 
-	auto func = llvm::Function::Create(t,genLinkage(function),function->label().ptr()/*mangler.stream.str()*/,module);
+	auto func = llvm::Function::Create(t,genLinkage(function),function->isExternal()? function->label().ptr() : mangler.stream.str(),module);
 	func->setCallingConv(genCallingConvention(function->callingConvention()));
 	map(function,func);
 	return func;
 }
 
 Node* LLVMgenerator::visit(Function* function){
-	if(function->isExternal() || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro()) return function;
+	if(function->isExternal() || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro() || 
+		function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return function;
 
 	auto func = getFunctionDeclaration(function);
 
@@ -1038,6 +1045,7 @@ namespace gen {
 		coreTypes[GEN_TYPE_DOUBLE] = llvm::Type::getDoubleTy(context);
 	}
 
+	int round = 0;
 
 	//Generates a binary module
 	static void genModule(LLVMBackend* backend,int outputFormat,llvm::Module* module,std::string& dest){
@@ -1110,7 +1118,8 @@ namespace gen {
 		}
 		passManager->doInitialization();
 		
-		LLVMgenerator generator(getGlobalContext(),root,module,passManager);
+		LLVMgenerator generator(getGlobalContext(),root,module,passManager,round);
+		round++;
 		module->dump();
 		//extension
 		const char* extension;

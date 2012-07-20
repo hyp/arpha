@@ -1327,13 +1327,14 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 	}
 	Scope* usageScope;
 	if(original->owner()->moduleScope() != this->compilationUnit()->moduleBody->scope) usageScope = this->compilationUnit()->moduleBody->scope;
-	else usageScope = nullptr;
+	else usageScope = original->owner();
 
 	if(auto exists = original->specializationExists(specializedParameters,passedExpressions,usageScope)) return exists;
 	//Create a new block for specialization which will import the required scopes
 	auto specializationWrapper = new BlockExpression();
-	specializationWrapper->scope->import(original->owner()); //import the scope in which the original function was defined.
-	if(usageScope) specializationWrapper->scope->import(usageScope);//import the usage scope
+	//specializationWrapper->scope->import(original->owner()); //import the scope in which the original function was defined.
+	//if(usageScope) 
+	specializationWrapper->scope->setParent(usageScope);//import the usage scope
 	//duplicate the original
 	DuplicationModifiers mods(specializationWrapper->scope);
 	auto specialization = original->specializedDuplicate(&mods,specializedParameters,passedExpressions);
@@ -1344,7 +1345,13 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 		patternMatcher.defineIntroducedDefinitions();
 	}
 	//Resolve.. TODO error handling
-	this->multipassResolve(specialization);	
+	auto oldParent = currentParentNode();
+	currentParentNode(original->parentNode);
+	multipassResolve(specialization);
+	if(!specialization->isResolved()){
+		error(original,"Can't resolve the specialization for the function '%s'",original->label());
+	}
+	currentParentNode(oldParent);
 	assert(!(specialization->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS) || specialization->isFlagSet(Function::HAS_PATTERN_ARGUMENTS)));
 	//
 	compiler::addGeneratedExpression(specializationWrapper);

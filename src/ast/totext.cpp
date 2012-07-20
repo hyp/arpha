@@ -284,7 +284,7 @@ std::ostream& operator<< (std::ostream& stream,Node* node){
 	if(d) {
 		stream<<')';
 		stream<<"::";
-		if(node->isResolved()) stream<<node->returnType();
+		if(node->isResolved() && !node->asFunctionReference()) stream<<node->returnType();
 		else stream<<"?";
 	}
 	return stream;

@@ -170,6 +170,7 @@ struct DefinitionNode : Node {
 	void visibilityMode(uint8 mode);
 
 	void* generatorData; //extra data used by generator
+	int   generatorDataRound;
 	Node* parentNode;
 private:
 	bool isDefinitionNode(){ return true; }
