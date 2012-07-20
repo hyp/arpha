@@ -209,7 +209,8 @@ struct Function: public PrefixDefinition {
 
 	Function* reallyDuplicate(DuplicationModifiers* mods,bool redefine = true);
 
-	inline bool isNonthrow(){ return true; }
+	void setNonthrow();
+	inline bool isNonthrow(){ return (miscFlags & data::ast::Function::NONTHROW) != 0; }
 
 	//Returns -1 when an argument isn't found
 	int findArgument(Variable* var) const;
@@ -239,6 +240,9 @@ struct Function: public PrefixDefinition {
 	uint16 ctfeRegisterCount;
 	uint16 inliningWeight;
 	uint8  cc;
+	uint8  miscFlags;
+
+
 
 	typedef void (*CTFE_Binder)(CTFEintrinsicInvocation* invocation);
 

@@ -21,6 +21,9 @@ namespace data {
 			enum CallConvention {
 				ARPHA,CCALL,STDCALL
 			};
+			enum Flags {
+				NONTHROW = 0x1
+			};
 		}
 
 		namespace Search {

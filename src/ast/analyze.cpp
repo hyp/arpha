@@ -39,7 +39,9 @@ struct Analyzer : NodeVisitor {
 	bool cantCtfe;
 	bool mustCtfe;
 	bool hasThrows;
+	bool mustNotthrow;
 	bool reportedCtfeHeadError;
+	bool reportedNonthrowHeadError;
 	int inliningWeight;
 	//TODO return.. not all control path return
 	uint32 returnFlags;
@@ -53,7 +55,9 @@ struct Analyzer : NodeVisitor {
 		cantCtfe = false;		
 		mustCtfe = owner && owner->isFlagSet(Function::MACRO_FUNCTION | Function::CONSTRAINT_FUNCTION);
 		hasThrows = false;
+		mustNotthrow = owner && owner->isNonthrow();
 		reportedCtfeHeadError = false;
+		reportedNonthrowHeadError = false;
 		inliningWeight = 0;
 		returnFlags = 0;
 		mappingOffset = 0;
@@ -71,7 +75,7 @@ struct Analyzer : NodeVisitor {
 	void report(Node* node){
 		if(reportedCtfeHeadError ==  false){
 			compiler::headError(functionOwner->location(),
-			format("The %s %s isn't evaluatable at compile time:",functionOwner->isFlagSet(Function::MACRO_FUNCTION) ? "macro" :"constraint",functionOwner->label()));
+			format("The %s '%s' isn't evaluatable at compile time:",functionOwner->isFlagSet(Function::MACRO_FUNCTION) ? "macro" :"constraint",functionOwner->label()));
 			reportedCtfeHeadError = true;
 		}
 		const char* str = "";
@@ -84,6 +88,17 @@ struct Analyzer : NodeVisitor {
 		else str = "The call to this function can't be evaluated at compile time!";
 		compiler::subError(node->location(),str);
 	}
+	void reportNonThrow(Node* node){
+		if(reportedNonthrowHeadError ==  false){
+			compiler::headError(functionOwner->location(),
+			format("Non throw attribute can't be applied to the function '%s':",functionOwner->label()));
+			reportedCtfeHeadError = true;
+		}
+		const char* str = "";
+		if(node->asThrowExpression()) str = "It has a throw expression!";
+		else if(node->asCallExpression()) str = "It calls a function which might throw!";
+		compiler::subError(node->location(),str);
+	}
 	void markAsNotInterpretable(Node* node){
 		cantCtfe = true;
 		if(mustCtfe) report(node);
@@ -93,6 +108,7 @@ struct Analyzer : NodeVisitor {
 	}
 	void markThrow(Node* node){
 		hasThrows = true;
+		if(mustNotthrow) reportNonThrow(node);
 	}
 	inline bool insideUnreachableCode(){
 		return isDeadCode;
@@ -258,7 +274,10 @@ struct Analyzer : NodeVisitor {
 			if(!f->function->isNonthrow()) markThrow(node);
 			addInliningWeight(f->function->isIntrinsic() ? 2 : 6);
 		}
-		else addInliningWeight(10000);
+		else {
+			addInliningWeight(10000);
+			markThrow(node);
+		}
 		return node;
 	}
 
@@ -322,7 +341,7 @@ void analyze(Node* node,Function* owner){
 	if(owner){
 		if(visitor.isPureFunction) owner->setFlag(Function::PURE);
 		if(visitor.cantCtfe) owner->setFlag(Function::CANT_CTFE);
-		if(!visitor.hasThrows) ;//TODO;
+		if(!visitor.hasThrows) owner->setNonthrow();
 
 		owner->ctfeRegisterCount = (uint16)visitor.mappingOffset;
 		owner->inliningWeight = (uint16)std::min((int)(visitor.inliningWeight),(int)std::numeric_limits<uint16>::max());

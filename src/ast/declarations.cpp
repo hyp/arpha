@@ -143,6 +143,7 @@ Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,loc
 	generatedFunctionParent = nullptr;
 	body.scope->_functionOwner = this;
 	cc = data::ast::Function::ARPHA;
+	miscFlags = 0;
 }
 bool   Function::applyProperty(SymbolID name,Node* value){
 	if(name == "intrinsic"){
@@ -152,7 +153,8 @@ bool   Function::applyProperty(SymbolID name,Node* value){
 		setFlag(IS_EXTERNAL);
 		return true;
 	} else if(name == "nonthrow"){
-		//TODO
+		setNonthrow();
+		return true;
 	}
 	return false;
 }
@@ -164,6 +166,9 @@ bool   Function::isExternal() const {
 }
 data::ast::Function::CallConvention Function::callingConvention() const {
 	return (data::ast::Function::CallConvention)cc;
+}
+void Function::setNonthrow(){
+	miscFlags |= data::ast::Function::NONTHROW;
 }
 Scope* Function::owner() const {
 	return body.scope->parent;
@@ -265,6 +270,7 @@ Function* Function::duplicateReturnBody(DuplicationModifiers* mods,Function* fun
 	func->ctfeRegisterCount = ctfeRegisterCount;
 	func->inliningWeight = inliningWeight;
 	func->cc = cc;
+	func->miscFlags = miscFlags;
 	if(generatedFunctionParent) {
 		assert(false);
 	}
