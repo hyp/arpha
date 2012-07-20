@@ -64,6 +64,7 @@ struct Argument;
 	X(AssignmentExpression)  \
 	X(ReturnExpression)      \
 	X(ControlFlowExpression) \
+	X(ThrowExpression) \
 	X(PointerOperation)  \
 	X(IfExpression)      \
 	X(BlockExpression)   \
@@ -432,6 +433,15 @@ struct ControlFlowExpression: Node {
 	SymbolID labeledJump;//For future
 	int kind;
 	DECLARE_NODE(ControlFlowExpression);
+};
+
+struct ThrowExpression: Node {
+	ThrowExpression(Node* node);
+
+	Node* resolve(Resolver* resolver);
+
+	Node* expression;
+	DECLARE_NODE(ThrowExpression);
 };
 
 //A unary expression, which is either an adress or a dereference

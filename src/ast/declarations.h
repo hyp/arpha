@@ -209,6 +209,8 @@ struct Function: public PrefixDefinition {
 
 	Function* reallyDuplicate(DuplicationModifiers* mods,bool redefine = true);
 
+	inline bool isNonthrow(){ return true; }
+
 	//Returns -1 when an argument isn't found
 	int findArgument(Variable* var) const;
 	void addArgument(Argument* arg);

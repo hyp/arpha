@@ -101,6 +101,10 @@ struct NodeToString: NodeVisitor {
 		stream<<(node->isContinue() ? "continue" : (node->isBreak() ? "break" : "fallthrough"));
 		return node;
 	}
+	Node* visit(ThrowExpression* node){
+		stream<<"throw "<<node->expression;
+		return node;
+	}
 	Node* visit(PointerOperation* node){
 		stream<<(node->isAddress()?'&':'*')<<node->expression;
 		return node;

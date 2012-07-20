@@ -122,6 +122,10 @@ void Mangler::Element::mangle(Function* function){
 		if(!streamedProperties){ stream<<'_'; streamedProperties = true; }
 		stream<<'c'<<mangleCC(function->callingConvention());
 	}
+	if(function->isNonthrow()){
+		if(!streamedProperties){ stream<<'_'; streamedProperties = true; }
+		stream<<'n';
+	}
 
 	mangleNode(stream,function);
 	stream<<function->arguments.size()<<'_';

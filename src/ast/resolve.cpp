@@ -528,6 +528,12 @@ Node* ReturnExpression::resolve(Resolver* resolver){
 	return this;
 }
 
+Node* ThrowExpression::resolve(Resolver* resolver){
+	expression = expression->resolve(resolver);
+	if(expression->isResolved()) resolver->markResolved(this);
+	return this;
+}
+
 // { 1 } => 1
 static Node* simplifyBlock(BlockExpression* block){
 	if(block->size() == 1 && block->scope->numberOfDefinitions() == 0) return *(block->begin());

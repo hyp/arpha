@@ -151,6 +151,8 @@ bool   Function::applyProperty(SymbolID name,Node* value){
 	} else if(name == "external"){
 		setFlag(IS_EXTERNAL);
 		return true;
+	} else if(name == "nonthrow"){
+		//TODO
 	}
 	return false;
 }

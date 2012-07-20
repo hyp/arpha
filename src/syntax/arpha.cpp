@@ -955,8 +955,7 @@ struct CatchParser: IntrinsicPrefixMacro {
 struct ThrowParser: IntrinsicPrefixMacro {
 	ThrowParser(): IntrinsicPrefixMacro("throw") {}
 	Node* parse(Parser* parser){
-		auto expr = parser->parse();
-		return new UnitExpression();
+		return new ThrowExpression(parser->parse());
 	}
 };
 

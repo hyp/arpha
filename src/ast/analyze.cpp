@@ -38,6 +38,7 @@ struct Analyzer : NodeVisitor {
 	bool isPureFunction;
 	bool cantCtfe;
 	bool mustCtfe;
+	bool hasThrows;
 	bool reportedCtfeHeadError;
 	int inliningWeight;
 	//TODO return.. not all control path return
@@ -49,8 +50,9 @@ struct Analyzer : NodeVisitor {
 		lastIfExpression = nullptr;
 		isDeadCode = false;
 		isPureFunction = true;
-		cantCtfe = false;
+		cantCtfe = false;		
 		mustCtfe = owner && owner->isFlagSet(Function::MACRO_FUNCTION | Function::CONSTRAINT_FUNCTION);
+		hasThrows = false;
 		reportedCtfeHeadError = false;
 		inliningWeight = 0;
 		returnFlags = 0;
@@ -88,6 +90,9 @@ struct Analyzer : NodeVisitor {
 	}
 	void markImpure(Node* node){
 		isPureFunction = false;
+	}
+	void markThrow(Node* node){
+		hasThrows = true;
 	}
 	inline bool insideUnreachableCode(){
 		return isDeadCode;
@@ -237,12 +242,20 @@ struct Analyzer : NodeVisitor {
 		return node;
 	}
 
+	Node* visit(ThrowExpression* node){
+		node->expression->accept(this);
+		markThrow(node);
+		addInliningWeight(10);
+		return node;
+	}
+
 	Node* visit(CallExpression* node){
 		node->object->accept(this);
 		node->arg->accept(this);
 		if(auto f = node->object->asFunctionReference()){
 			if(f->function->isFlagSet(Function::CANT_CTFE)) markAsNotInterpretable(node);
 			if(!f->function->isFlagSet(Function::PURE)) markImpure(node);
+			if(!f->function->isNonthrow()) markThrow(node);
 			addInliningWeight(f->function->isIntrinsic() ? 2 : 6);
 		}
 		else addInliningWeight(10000);
@@ -309,6 +322,7 @@ void analyze(Node* node,Function* owner){
 	if(owner){
 		if(visitor.isPureFunction) owner->setFlag(Function::PURE);
 		if(visitor.cantCtfe) owner->setFlag(Function::CANT_CTFE);
+		if(!visitor.hasThrows) ;//TODO;
 
 		owner->ctfeRegisterCount = (uint16)visitor.mappingOffset;
 		owner->inliningWeight = (uint16)std::min((int)(visitor.inliningWeight),(int)std::numeric_limits<uint16>::max());
@@ -325,6 +339,6 @@ void analyze(Node* node,Function* owner){
 				owner->setFlag(Function::CANT_CTFE);
 			}
 		}
-		debug("Function %s analysis finished - isPure: %s, cant ctfe:%s, iw:%s, regs:%s",owner->label(),visitor.isPureFunction,visitor.cantCtfe,owner->inliningWeight,owner->ctfeRegisterCount);
+		debug("Function %s analysis finished - isPure: %s,throws: %s, cant ctfe:%s, iw:%s, regs:%s",owner->label(),visitor.isPureFunction,visitor.hasThrows,visitor.cantCtfe,owner->inliningWeight,owner->ctfeRegisterCount);
 	}
 }

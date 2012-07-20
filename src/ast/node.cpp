@@ -264,6 +264,12 @@ Node* ControlFlowExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new ControlFlowExpression(kind));
 }
 
+ThrowExpression::ThrowExpression(Node* node) : expression(node) {}
+Node* ThrowExpression::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new ThrowExpression(expression->duplicate(mods)));
+}
+
+
 //Pointer operation
 PointerOperation::PointerOperation(Node* expression,int type){
 	this->expression = expression;

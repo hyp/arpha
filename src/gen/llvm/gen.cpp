@@ -882,6 +882,9 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 
 	auto func = llvm::Function::Create(t,genLinkage(function),function->isExternal()? function->label().ptr() : mangler.stream.str(),module);
 	func->setCallingConv(genCallingConvention(function->callingConvention()));
+	if(function->isNonthrow()){
+		func->setDoesNotThrow(true);
+	}
 	map(function,func);
 	return func;
 }
