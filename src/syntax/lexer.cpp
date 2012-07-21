@@ -222,7 +222,6 @@ Token Lexer::consume(){
 		token.type = Token::Line;
 	}
 	//Number literal
-	else if( isDigit(*ptr) ) lexDecimal(token);
 	else if( *ptr == '0' ){
 		ptr++;
 		if(*ptr == 'x' && isHexDigit(*(ptr+1))) lexHex(token);
@@ -235,6 +234,7 @@ Token Lexer::consume(){
 			token.uinteger = 0;
 		}
 	}
+	else if( isDigit(*ptr) ) lexDecimal(token);
 	else if(*ptr == '"')  lexString(token);
 	else if(*ptr == '.' && isDigit(*(ptr+1)) ){
 		token.uinteger = 0;

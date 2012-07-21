@@ -85,7 +85,7 @@ static void visualStudioLinkerDriver(Target* target,data::gen::Options* options,
 	}
 	//target
 	using namespace data::gen::native;
-	const char* machine;
+	const char* machine = "QUANTUM_COMPUTER";
 	if(target->cpuArchitecture == Target::X86){
 		if(target->cpuMode == Target::M32) machine = "X86";
 		else machine = "X64";
