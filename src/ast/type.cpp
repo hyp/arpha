@@ -419,7 +419,8 @@ Node* Type::generatedArgument(size_t i) const {
 enum {
 	LITERAL_TYPE_SPECIFICATION = 4, //Untyped literal to typed
 	LITERAL_CONVERSION,      //Untyped literal to another untyped literal
-	RECORD_SUBTYPE,
+	ADDRESSOF,
+	RECORD_SUBTYPE,	
 	EXACT
 };
 
@@ -692,6 +693,18 @@ void TypeMeaningsRange::getRecordSubtypes(Record* record){
 	}
 }
 
+int referenceOf(Type* givenType, Node** node, Type* nodeType,bool doTransform){
+	Type ptrType(Type::POINTER,nodeType);
+	int weight = givenType->assignFrom(node,&ptrType,doTransform);
+	if(weight != -1){
+		if(doTransform){
+			*node = new PointerOperation(*node,PointerOperation::ADDRESS);
+		}
+		return ADDRESSOF;
+	}
+	return -1;
+}
+
 
 /**
 Implicit type conversion system.
@@ -699,6 +712,7 @@ Returns the weight of the conversion or -1 if the conversion failed.
 Scenarios:
 	As per above literal,auto and record type casts
 	*ast.Call , etc => *ast.Node
+	x :: int32  => &x :: *int32
 */
 int Type::assignFrom(Node** expression,Type* type,bool doTransform){
 	if(this->isSame(type)) return EXACT;
@@ -716,6 +730,9 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform){
 	else if( isNodePointer() && type->isNodePointer() ){
 		return RECORD_SUBTYPE;
 	}
+	else if( isPointer() && !type->isPointer() && ((assigns = referenceOf(this,expression,type,doTransform)) != -1) ){
+		return assigns;
+	}
 
 	return -1;
 }
@@ -730,6 +747,8 @@ void TypeMeaningsRange::gatherMeanings(Type* type){
 		}
 	}
 	else getRecordSubtypes(record);
+
+	if(!type->isPointer()) add(new Type(Type::POINTER,type),ADDRESSOF);
 }
 
 

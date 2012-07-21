@@ -260,6 +260,7 @@ struct Analyzer : NodeVisitor {
 
 	Node* visit(ThrowExpression* node){
 		node->expression->accept(this);
+		//TODO check type
 		markThrow(node);
 		addInliningWeight(10);
 		return node;
