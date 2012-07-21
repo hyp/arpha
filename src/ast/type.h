@@ -347,7 +347,7 @@ struct Record: public DeclaredType {
 
 // an actual declaration of a type which is added to the expression list
 struct TypeDeclaration: PrefixDefinition {
-	TypeDeclaration(DeclaredType* type,SymbolID name);
+	TypeDeclaration(DeclaredType* type,SymbolID name,bool isParametrized = false);
 
 	//Type reference creation
 	Node* parse(Parser* parser);
@@ -357,10 +357,16 @@ struct TypeDeclaration: PrefixDefinition {
 
 	BlockExpression* optionalStaticBlock;//can be used for static members i.e. type as a namespace kinda thingy
 private:
+	enum {
+		PARAMETRIZED = 0x8
+	};
+
 	DeclaredType*  _type;
 	DECLARE_NODE(TypeDeclaration);
 public:
 	inline DeclaredType*  type()  const { return _type; }
+	inline bool isParametrized()  const { return isFlagSet(PARAMETRIZED); }
+	Function* parametrization()   const;
 };
 
 #endif

@@ -380,21 +380,25 @@ bool Type::isSame(Type* other){
 }
 bool Type::wasGenerated() const {
 	switch(type){
-	case POINTER: return true;
-	case LINEAR_SEQUENCE: return true;
-	case STATIC_ARRAY: return true;
+	case RECORD:  return static_cast<const Record* >(this)->declaration->isParametrized();
+	case VARIANT: return static_cast<const Variant*>(this)->declaration->isParametrized();
+
+	case POINTER:          return true;
+	case LINEAR_SEQUENCE:  return true;
+	case STATIC_ARRAY:     return true;
 	case FUNCTION_POINTER: return true;
-	//case RECORD: return record->wasGenerated();
+	
 	default: return false;
 	}
 }
 bool Type::wasGeneratedBy(Function* function) const {
 	switch(type){
+	case RECORD: return static_cast<const Record*>(this)->declaration->parametrization()->generatedFunctionParent == function;
+
 	case POINTER:         return function == intrinsics::types::PointerTypeGenerator;
 	case LINEAR_SEQUENCE: return function == intrinsics::types::LinearSequenceTypeGenerator;
 	case STATIC_ARRAY:    return function == intrinsics::types::StaticArrayTypeGenerator;
 	case FUNCTION_POINTER:        return function == intrinsics::types::FunctionTypeGenerator;
-	//case RECORD: return record->wasGeneratedBy(function);
 
 	default:
 		return false;
@@ -402,13 +406,14 @@ bool Type::wasGeneratedBy(Function* function) const {
 }
 Node* Type::generatedArgument(size_t i) const {
 	switch(type){
+	case RECORD: return static_cast<const Record*>(this)->declaration->parametrization()->expandedArguments[i];
+
 	case POINTER:
 	case LINEAR_SEQUENCE:
 		return new TypeReference(argument);
 	case STATIC_ARRAY: 
 		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)N,intrinsics::types::natural);
 	case FUNCTION_POINTER: return new TypeReference(i == 0 ? argument : static_cast<const FunctionPointer*>(this)->returns());
-	//case RECORD: return record->generatedArgument(i);
 
 	default:
 		throw std::runtime_error("TypeExpression generatedArgument failed");	
@@ -1066,8 +1071,9 @@ DeclaredType* VariantOption::resolve(Resolver* resolver) {
 /**
 * Type declaration node
 */
-TypeDeclaration::TypeDeclaration(DeclaredType* type,SymbolID name) : PrefixDefinition(name,Location()), _type(type),optionalStaticBlock(nullptr) { 
+TypeDeclaration::TypeDeclaration(DeclaredType* type,SymbolID name,bool isParametrized) : PrefixDefinition(name,Location()), _type(type),optionalStaticBlock(nullptr) { 
 	_type->declaration = this; 
+	if(isParametrized) setFlag(PARAMETRIZED);
 }
 Node*  TypeDeclaration::createReference(){
 	return new TypeReference(_type);
@@ -1078,4 +1084,7 @@ Node*  TypeDeclaration::duplicate(DuplicationModifiers* mods) const {
 	dup->optionalStaticBlock = sb;
 	mods->duplicateDefinition(const_cast<TypeDeclaration*>(this),dup);
 	return copyProperties(dup);
+}
+Function* TypeDeclaration::parametrization() const { 
+	return parentNode->asBlockExpression()->scope->functionOwner(); 
 }

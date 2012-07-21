@@ -788,7 +788,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 		auto record = new Record();
 		blockParser->body(parser,BodyParser(record,templateDeclaration));
 
-		auto decl = new TypeDeclaration(record,name);
+		auto decl = new TypeDeclaration(record,name,templateDeclaration != nullptr);
 		parser->introduceDefinition(decl);
 		if(templateDeclaration){
 			templateDeclaration->makeTypeTemplate(decl);
