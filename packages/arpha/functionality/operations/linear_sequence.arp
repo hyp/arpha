@@ -5,10 +5,10 @@
 #
 import arpha.intrinsic
 
-def length (self LinearSequence(_)) natural
+def length (self Pointer(LinearSequence(_))) natural
 
-def element(self LinearSequence(T: _),i natural) T
-def element(self LinearSequence(T: _),i natural,item T)
+def element(self Pointer(LinearSequence(T: _)),i natural) Pointer(T)
+def element(self Pointer(LinearSequence(T: _)),i natural,item Pointer(T))
 
 #
 TODO:
@@ -17,6 +17,7 @@ def slice(self LinearSequence(T: _),to   natural)            LinearSequence(T)
 def slice(self LinearSequence(T: _),from natural,to natural) LinearSequence(T)
 #
 
-def isEmpty(self LinearSequence(_)) bool
-#def getElementAndAdvance(self LinearSequence(T: _)) T
+def isEmpty (self Pointer(LinearSequence(_))) bool
+macro current(self Pointer(LinearSequence(_))) = [> self.element(0) <]
+def moveNext(self Pointer(LinearSequence(_)))
 

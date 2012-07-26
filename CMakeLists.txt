@@ -11,7 +11,7 @@ set(GEN_FILES  src/gen/gen.cpp src/gen/linker.cpp src/gen/mangler.cpp src/gen/ll
 set(TEST_FILES src/testing/tests.cpp)
 
 project (arpha)
-add_executable(arpha src/main.cpp ${BASE_FILES} ${LANG_FILES} ${TEST_FILES})
+#add_executable(arpha src/main.cpp ${BASE_FILES} ${LANG_FILES} ${TEST_FILES})
 
-# add_executable(arpha src/main.cpp ${BASE_FILES} ${LANG_FILES} ${TEST_FILES} ${GEN_FILES})
-# target_link_libraries(arpha ${LLVM_LIBRARIES})
+add_executable(arpha src/main.cpp ${BASE_FILES} ${LANG_FILES} ${TEST_FILES} ${GEN_FILES})
+target_link_libraries(arpha ${LLVM_LIBRARIES})

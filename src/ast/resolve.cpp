@@ -1029,9 +1029,16 @@ Node* Function::resolve(Resolver* resolver){
 				makeIntrinsicReturningPattern(0);
 			}
 		}
+		else if(auto call = _returnType.unresolvedExpression->asCallExpression()){
+			if(auto sym = call->arg->asUnresolvedSymbol()){
+				if(allArgMatcher.lookupDefinition(sym->symbol)){
+					makeIntrinsicReturningPattern(0);
+				}
+			}
+		}
 	}
 
-	if(!_returnType.isResolved() && !_returnType.isPattern()){
+	if(!this->isIntrinsicReturningPattern() && !_returnType.isResolved() && !_returnType.isPattern()){
 		auto oldScope = resolver->currentScope();
 		resolver->currentScope(body.scope);
 		_returnType.resolve(resolver);
@@ -1049,7 +1056,7 @@ Node* Function::resolve(Resolver* resolver){
 	//Body has no return expression => return void
 	if(!isFlagSet(CONTAINS_RETURN) && _returnType.isPattern() && _returnType.pattern == nullptr) _returnType.specify(intrinsics::types::Void);
 	
-	if(!_returnType.isResolved()){
+	if(!this->isIntrinsicReturningPattern() && !_returnType.isResolved()){
 		if(_returnType.isPattern() && isIntrinsic()){
 			debug("Pattern return intrinsic!");
 		}

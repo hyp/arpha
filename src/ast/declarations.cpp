@@ -231,8 +231,8 @@ void Function::makeIntrinsicOperation(data::ast::Operations::Kind op){
 void Function::makeIntrinsicReturningPattern(int argID){
 	setFlag(INTRINSIC_FUNCTION_RETURNS_PATTERNED_DEFINITION);
 	inliningWeight = argID;
-	_returnType.kind =  TypePatternUnresolvedExpression::TYPE;
-	_returnType._type = intrinsics::types::Void;
+	//_returnType.kind =  TypePatternUnresolvedExpression::TYPE;
+	//_returnType._type = intrinsics::types::Void;
 }
 void Function::makeTypeTemplate(TypeDeclaration* node){
 	makeAllArgumentsExpendable();

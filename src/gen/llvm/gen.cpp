@@ -88,6 +88,7 @@ struct LLVMgenerator: NodeVisitor {
 	inline void emit(llvm::Value* value){ emmittedValue = value; }
 	llvm::Value* generateExpression(Node* node);
 	llvm::Value* generatePointerExpression(Node* node);
+	std::pair<llvm::Value*,llvm::Value*> generateLinearSequencePair(Node* node);
 	static llvm::GlobalValue::LinkageTypes genLinkage(PrefixDefinition* def);
 
 	inline void map(DefinitionNode* def,llvm::Value* value){
@@ -125,6 +126,7 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(AssignmentExpression* node);
 	Node* visit(FieldAccessExpression* node);
 	Node* visit(CallExpression* node);
+	Node* visit(CastExpression* node);
 	Node* visit(LogicalOperation* node);
 	Node* visit(PointerOperation* node);
 	Node* visit(ReturnExpression* node);
@@ -289,6 +291,7 @@ llvm::Value* LLVMgenerator::generatePointerExpression(Node* node){
 	needsPointer = old;
 	return emmittedValue;
 }
+
 llvm::GlobalValue::LinkageTypes LLVMgenerator::genLinkage(PrefixDefinition* def){
 	return def->isPublic() ? llvm::GlobalValue::ExternalLinkage : llvm::GlobalValue::PrivateLinkage;
 }
@@ -319,9 +322,10 @@ void LLVMgenerator::emitCreateLinearSequence(llvm::Value* ptr,llvm::Value* lengt
 
 	auto end = builder.CreateGEP(ptr,length);
 
-	//auto lhs = builder.CreatePtrToInt(ptr, builder.getInt64Ty());
-    //auto sum = builder.CreateAdd(lhs, length);
-	//auto end = builder.CreateIntToPtr(sum,ptr->getType());
+	//auto block = builder.GetInsertBlock();
+	//llvm::IRBuilder<> _builder(block,block->begin());
+	//auto var = _builder.CreateAlloca(generateLinearSequence(this,),nullptr,"seqtmp");
+	//emit(var);
 }
 
 Node* LLVMgenerator::visit(VariableReference* node){
@@ -332,12 +336,6 @@ Node* LLVMgenerator::visit(VariableReference* node){
 	return node;
 }
 
-//ptr + 0
-llvm::Value* genDereference(LLVMgenerator* generator,PointerOperation* node){
-	auto ptr = generator->generateExpression(node->expression);
-	auto idx = llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],0,false);
-	return generator->builder.CreateGEP(ptr,idx);
-}
 //ptr + i
 llvm::Value* genPointerAddressing(LLVMgenerator* generator,Node* object,Node* index){
 	auto ptr = generator->generateExpression(object);
@@ -358,6 +356,14 @@ Node* LLVMgenerator::visit(FieldAccessExpression* node){
 	if(needsPointer) emit(fieldPtr); 
 	else emitLoad(fieldPtr);
 
+	return node;
+}
+
+//TODO
+Node* LLVMgenerator::visit(CastExpression* node){
+	auto obj = generateExpression(node->object);
+	auto t   = genType(node->type);
+	emit(builder.CreateCast(llvm::Instruction::ZExt,obj,t));
 	return node;
 }
 
@@ -499,35 +505,70 @@ llvm::Value* genBoolOperation(LLVMgenerator* generator,data::ast::Operations::Ki
 	return nullptr;
 }
 
-// TODO: everything
-llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2,llvm::Value* operand3){
+// TODO: bounds checking, slicing
 
-#define LOAD_BEGIN generator->builder.CreateLoad(generator->builder.CreateStructGEP(operand1,0))
-#define LOAD_END   generator->builder.CreateLoad(generator->builder.CreateStructGEP(operand1,1))
-	
+struct LinearSequenceValues {
+	llvm::Value *beginptr,*begin;
+	llvm::Value *end;
+};
+
+void loadLinearSequence(LLVMgenerator* generator,llvm::Value* operand1,LinearSequenceValues& sequence,bool loadBegin = true,bool loadEnd = true){
+	sequence.beginptr = generator->builder.CreateStructGEP(operand1,0);
+	if(loadBegin) sequence.begin =  generator->builder.CreateLoad(sequence.beginptr);
+	if(loadEnd)   sequence.end   =  generator->builder.CreateLoad(generator->builder.CreateStructGEP(operand1,1));
+}
+std::pair<llvm::Value*,llvm::Value*> LLVMgenerator::generateLinearSequencePair(Node* node){
+	llvm::Value *begin,*end;
+	if(auto str = node->asStringLiteral()){
+		begin = builder.CreateGlobalStringPtr(str->block.ptr());
+		end   = builder.CreateGEP(begin,builder.getInt64(str->block.length()));
+	}
+	else {
+		auto sequence = generatePointerExpression(node);
+		begin = builder.CreateLoad(builder.CreateStructGEP(sequence,0));
+		end   = builder.CreateLoad(builder.CreateStructGEP(sequence,1));
+	}
+	return std::make_pair(begin,end);
+}
+
+llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2,llvm::Value* operand3){
+	LinearSequenceValues sequence;
+
 	using namespace data::ast::Operations;
 	switch(op){
+	// (natural) ( (end - begin) / sizeof(*begin) )
 	case LENGTH:
-		{
-		auto begin = LOAD_BEGIN;
-		auto end   = LOAD_END;
-		return generator->builder.CreatePtrDiff(end,begin);//TODO: cast to natural?
-		}
-
-	case ELEMENT_GET:
-
-	case ELEMENT_SET:
-
-	case SEQUENCE_EMPTY:
-		break;
-	}
+		loadLinearSequence(generator,operand1,sequence,true,true);
+		return generator->builder.CreateCast(llvm::Instruction::Trunc,generator->builder.CreatePtrDiff(sequence.end,sequence.begin),coreTypes[GEN_TYPE_SIZE_T]);
 	
+	// begin + i
+	case ELEMENT_GET:
+		loadLinearSequence(generator,operand1,sequence,true,false);
+		return generator->builder.CreateGEP(sequence.begin,operand2);
+	
+	// *(begin + i) = v
+	case ELEMENT_SET:
+		loadLinearSequence(generator,operand1,sequence,true,false);
+		generator->builder.CreateStore(operand3,generator->builder.CreateGEP(sequence.begin,operand2));
+	
+	// begin >= end
+	case SEQUENCE_EMPTY:
+		loadLinearSequence(generator,operand1,sequence,true,true);
+		return generator->builder.CreateICmpUGE(
+			generator->builder.CreatePtrToInt(sequence.begin,llvm::Type::getInt64Ty(generator->context)),
+			generator->builder.CreatePtrToInt(sequence.end,llvm::Type::getInt64Ty(generator->context))
+			);
 
+	// begin++
+	case SEQUENCE_MOVENEXT:
+		loadLinearSequence(generator,operand1,sequence,true,false);
+		return generator->builder.CreateStore(
+			generator->builder.CreateGEP(sequence.begin,llvm::ConstantInt::get(llvm::Type::getInt64Ty(generator->context),1,false)),
+			sequence.beginptr);
 
-#undef LOAD_BEGIN
-#undef LOAD_END
+	}
 
-	assert(false && "Invalid operation");
+	assert(false && "Invalid sequence operation");
 }
 
 /**
@@ -556,27 +597,30 @@ llvm::Value* optimize1ArgOperation(LLVMgenerator* generator,data::ast::Operation
 // TODO: fix linear sequences
 llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Node* arg){
 	Type*  operand1Type;
-	llvm::Value* values[2];
+	llvm::Value* values[3];
 	if(auto tuple = arg->asTupleExpression()){
-		assert(tuple->size() == 2);
+		assert(tuple->size() < 4);
 
 		auto args = tuple->childrenPtr();
 		operand1Type = args[0]->returnType();
 		values[0] = generator->generateExpression(args[0]);
 		values[1] = generator->generateExpression(args[1]);
+		if(tuple->size() == 3) 
+			values[2] = generator->generateExpression(args[2]);
+		else values[2] = nullptr;
 	}
 	else {
 		operand1Type = arg->returnType();
 		values[0] = generator->generateExpression(arg);
 		values[1] = nullptr;
+		values[2] = nullptr;
 	}
 
-	
-	if(operand1Type->isInteger() || operand1Type->isPlatformInteger() || operand1Type->isUintptr()){
-		return genIntegerOperation(generator,op,operand1Type,values[0],values[1]);
+	if(operand1Type->isPointer() && operand1Type->next()->isLinearSequence()){
+		return genLinearSequenceOperation(generator,op,values[0],values[1],values[2]);
 	}
-	else if(operand1Type->isLinearSequence()){
-		return genLinearSequenceOperation(generator,op,values[0],values[1],nullptr);
+	else if(operand1Type->isInteger() || operand1Type->isPlatformInteger() || operand1Type->isUintptr()){
+		return genIntegerOperation(generator,op,operand1Type,values[0],values[1]);
 	}
 	else if(operand1Type->isFloat()){
 		return genRealOperation(generator,op,values[0],values[1]);
@@ -626,7 +670,21 @@ Node* LLVMgenerator::visit(CallExpression* node){
 	else if(auto tuple = node->arg->asTupleExpression()) {
 		auto argCount = tuple->size();
 		if(argCount == 2){
-			instr = builder.CreateCall2(callee,generateExpression(*(tuple->begin())),generateExpression(*(tuple->begin()+1)),twine);
+			auto arg1 = *(tuple->begin());
+			auto arg2 = *(tuple->begin() + 1);
+			if(arg1->returnType()->isLinearSequence()){
+				auto sequence1 = generateLinearSequencePair(arg1);
+				if(arg2->returnType()->isLinearSequence()){
+					auto sequence2 = generateLinearSequencePair(arg2);
+					instr = builder.CreateCall4(callee,sequence1.first,sequence1.second,sequence2.first,sequence2.second,twine);
+				}
+				else instr = builder.CreateCall3(callee,sequence1.first,sequence1.second,generateExpression(arg2),twine);
+			}
+			else if(arg2->returnType()->isLinearSequence()){
+				auto sequence2 = generateLinearSequencePair(arg2);
+				instr = builder.CreateCall3(callee,generateExpression(arg1),sequence2.first,sequence2.second,twine);
+			}
+			else instr = builder.CreateCall2(callee,generateExpression(*(tuple->begin())),generateExpression(*(tuple->begin()+1)),twine);
 		} else {
 			std::vector<llvm::Value*> args;
 			args.reserve(argCount);
@@ -637,7 +695,11 @@ Node* LLVMgenerator::visit(CallExpression* node){
 		}
 	}
 	else {
-		instr = builder.CreateCall(callee,generateExpression(node->arg),twine);
+		if(node->arg->returnType()->isLinearSequence()){
+			auto sequence = generateLinearSequencePair(node->arg);
+			instr = builder.CreateCall2(callee,sequence.first,sequence.second,twine);
+		}
+		else instr = builder.CreateCall(callee,generateExpression(node->arg),twine);
 	}
 
 	if(callingFP){
@@ -650,12 +712,10 @@ Node* LLVMgenerator::visit(CallExpression* node){
 
 Node* LLVMgenerator::visit(PointerOperation* node){
 	if(node->isAddress()){
-		auto expr = node->expression;
-		if(auto var = expr->asVariableReference()){
-			emit(unmap(var->variable));
-		}
+		emit(generatePointerExpression(node->expression));
 	} else {
-		emitLoad(genDereference(this,node));
+		if(this->needsPointer) emit(generateExpression(node->expression));
+		else emitLoad(generateExpression(node->expression));
 	}
 	return node;
 }
@@ -670,6 +730,15 @@ Node* LLVMgenerator::visit(ReturnExpression* node){
 	return node;
 }
 
+ControlFlowExpression* isBreakContinue(Node* node){
+	if(auto block = node->asBlockExpression()){
+		if(block->size() == 1) node = *block->begin();
+	}
+	if(auto flow = node->asControlFlowExpression()){
+		if(flow->isBreak() || flow->isContinue()) return flow;
+	}
+	return nullptr;
+}
 
 Node* LLVMgenerator::visit(IfExpression* node){
 	bool returnsValue   = false;
@@ -696,22 +765,34 @@ Node* LLVMgenerator::visit(IfExpression* node){
 		alternativeBlock = llvm::BasicBlock::Create(context,"else");
 		builder.CreateCondBr(cond,consequenceBlock,alternativeBlock);
 	}
-	else builder.CreateCondBr(cond,consequenceBlock,mergingBlock);
+	else {
+		/**
+		* Optimize : loop { if(condition) break | continue; ... }
+		*/
+		if(auto flow = isBreakContinue(node->consequence)){
+			f->getBasicBlockList().pop_back();
+			consequenceBlock = nullptr;
+			builder.CreateCondBr(cond,flow->isBreak()? loopChain->after : loopChain->body,mergingBlock);
+		}
+		else builder.CreateCondBr(cond,consequenceBlock,mergingBlock);
+	}
 
 	ifFallthrough = false;
 
 	//consequence
-	builder.SetInsertPoint(consequenceBlock);
-	if(returnsValue) consequenceValue = generateExpression(node->consequence);
-	else generateExpression(node->consequence);
-	consequenceBlock = builder.GetInsertBlock();//update consequence block
-	if(ifFallthrough){
-		assert(alternativeBlock);
-		builder.CreateBr(alternativeBlock);
-		ifFallthrough = false;
-	} else {
-		if(!llvm::isa<llvm::BranchInst>(consequenceBlock->back()))
-			builder.CreateBr(mergingBlock);
+	if(consequenceBlock){
+		builder.SetInsertPoint(consequenceBlock);
+		if(returnsValue) consequenceValue = generateExpression(node->consequence);
+		else generateExpression(node->consequence);
+		consequenceBlock = builder.GetInsertBlock();//update consequence block
+		if(ifFallthrough){
+			assert(alternativeBlock);
+			builder.CreateBr(alternativeBlock);
+			ifFallthrough = false;
+		} else {
+			if(!llvm::isa<llvm::BranchInst>(consequenceBlock->back()))
+				builder.CreateBr(mergingBlock);
+		}
 	}
 	//alternative
 	if(alternativeBlock){
@@ -869,18 +950,24 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 
 	//create the actual declaration
 	llvm::FunctionType* t;
+	bool optimizeSequences = function->arguments.size() < 3;
 	if(function->arguments.size() == 0){
 		t = llvm::FunctionType::get(genType(function->_returnType.type()),false);
 	} else {
 		std::vector<llvm::Type*> args;
 		args.reserve(function->arguments.size());
 		for(auto i = function->arguments.begin();i!=function->arguments.end();i++){
-			args.push_back(genType((*i)->type.type()));
+			if(optimizeSequences && (*i)->type.type()->isLinearSequence()){
+				auto pt = generatePointerType(this, (*i)->type.type()->next());
+				args.push_back(pt);
+				args.push_back(pt);
+			}
+			else args.push_back(genType((*i)->type.type()));
 		}
 		t = llvm::FunctionType::get(genType(function->_returnType.type()),args,false);
 	}
 
-	auto func = llvm::Function::Create(t,genLinkage(function),function->isExternal()? function->label().ptr() : mangler.stream.str(),module);
+	auto func = llvm::Function::Create(t,genLinkage(function),function->isExternal() || function->label() == "main" ? function->label().ptr() : mangler.stream.str(),module);
 	func->setCallingConv(genCallingConvention(function->callingConvention()));
 	if(function->isNonthrow()){
 		func->setDoesNotThrow(true);
@@ -900,14 +987,31 @@ Node* LLVMgenerator::visit(Function* function){
 
 	// Initialize arguments
 	size_t i = 0;
+	bool optimizeSequences = function->arguments.size() < 3;
 	for (llvm::Function::arg_iterator arg = func->arg_begin(); i != function->arguments.size(); ++arg, ++i) {
-		arg->setName(function->arguments[i]->label().ptr());
+		if(optimizeSequences && function->arguments[i]->type.type()->isLinearSequence()){
+			std::string n = function->arguments[i]->label().ptr();
+
+			arg->setName(n + "_begin");
+			llvm::IRBuilder<> _builder(block,block->begin());
+			auto var = _builder.CreateAlloca(genType(function->arguments[i]->type.type()),nullptr,function->arguments[i]->label().ptr());
+			_builder.CreateStore(arg,_builder.CreateStructGEP(var,0));
+
+			++arg;
+			arg->setName(n + "_end");
+			_builder.CreateStore(arg,_builder.CreateStructGEP(var,1));
+
+			map(function->arguments[i],var);
+		}
+		else {
+			arg->setName(function->arguments[i]->label().ptr());
 		
-		//arguments to allocas
-		llvm::IRBuilder<> _builder(block,block->begin());
-		auto var = _builder.CreateAlloca(genType(function->arguments[i]->type.type()),nullptr,function->arguments[i]->label().ptr());
-		_builder.CreateStore(arg,var);
-		map(function->arguments[i],var);
+			//arguments to allocas
+			llvm::IRBuilder<> _builder(block,block->begin());
+			auto var = _builder.CreateAlloca(genType(function->arguments[i]->type.type()),nullptr,function->arguments[i]->label().ptr());
+			_builder.CreateStore(arg,var);
+			map(function->arguments[i],var);
+		}
 	}
 
 	builder.SetInsertPoint(block);

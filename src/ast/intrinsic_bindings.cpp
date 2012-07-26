@@ -257,11 +257,12 @@ static void initMapping(){
 
 	mapStandartOperations(intrinsics::types::boolean);
 
-	MAPOP("length(LinearSequence)",data::ast::Operations::LENGTH);
-	MAPOP("element(LinearSequence,natural)",data::ast::Operations::ELEMENT_GET);
-	MAPOP("element(LinearSequence,natural,)",data::ast::Operations::ELEMENT_SET);
+	MAPOP("length(Pointer(LinearSequence))",data::ast::Operations::LENGTH);
+	MAPOP("element(Pointer(LinearSequence),natural)",data::ast::Operations::ELEMENT_GET);
+	MAPOP("element(Pointer(LinearSequence),natural,Pointer)",data::ast::Operations::ELEMENT_SET);
 
-	MAPOP("isEmpty(LinearSequence)",data::ast::Operations::SEQUENCE_EMPTY);
+	MAPOP("isEmpty(Pointer(LinearSequence))",data::ast::Operations::SEQUENCE_EMPTY);
+	MAPOP("moveNext(Pointer(LinearSequence))",data::ast::Operations::SEQUENCE_MOVENEXT);
 
 	/**
 	* arpha.functionality.misc
@@ -302,6 +303,9 @@ std::string intrinsicMangle(Function* function,bool argNames){
 				auto pattern = (*i)->type.pattern;
 				if(auto call = pattern->asCallExpression()){
 					result+=call->object->asUnresolvedSymbol()->symbol.ptr();
+					if(auto call2 = call->arg->asCallExpression()){
+						result+=std::string("(")+call2->object->asUnresolvedSymbol()->symbol.ptr()+")";
+					}
 				}
 			}
 		}
@@ -330,7 +334,7 @@ void Function::getIntrinsicFunctionBinder(Function* function){
 		return;
 	}
 	
-	compiler::intrinsicFatalError(function->location(),format(" Intrinsic binding failure - The function '%s' isn't intrinsic!\nPlease don't use the intrinsic property on it!",function->label()));
+	compiler::intrinsicFatalError(function->location(),format(" Intrinsic binding failure - The function '%s' isn't intrinsic(man: %s)!\nPlease don't use the intrinsic property on it!",function->label(),signature));
 }
 
 Node* Variable::getIntrinsicValue(Variable* variable){

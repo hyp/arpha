@@ -84,7 +84,8 @@ namespace data {
 				LENGTH,
 				ELEMENT_GET,
 				ELEMENT_SET,
-				SEQUENCE_EMPTY
+				SEQUENCE_EMPTY,
+				SEQUENCE_MOVENEXT,
 			};
 		}
 	}

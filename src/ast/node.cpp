@@ -359,10 +359,16 @@ Type* CallExpression::returnType() const {
 			/**
 			*TODO: NB: This is very hacky now, tailored only for def foo(x Pointer | LinearSequence(T:_)) T
 			*/
+			Type* result;
+
 			if(auto tuple = arg->asTupleExpression()){
-				return (*tuple->begin())->returnType()->next();
+				result = (*tuple->begin())->returnType()->next()->next();
 			}
-			else return arg->returnType()->next();
+			else result = arg->returnType()->next()->next();
+			if(auto call = func->_returnType.pattern->asCallExpression()){
+				result = new Type(Type::POINTER,result);
+			}
+			return result;
 		}
 		else return func->_returnType.type();
 	}
