@@ -2,7 +2,7 @@ import cstdlib
 
 def print(string LinearSequence(char8)){
 	until((&string).isEmpty){
-		putchar( * (&string).element(0) as int32 )
+		putchar( * (&string).current as int32 )
 		(&string).moveNext()
 	}
 }

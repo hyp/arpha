@@ -17,7 +17,8 @@ def slice(self LinearSequence(T: _),to   natural)            LinearSequence(T)
 def slice(self LinearSequence(T: _),from natural,to natural) LinearSequence(T)
 #
 
+# Range interface
 def isEmpty (self Pointer(LinearSequence(_))) bool
-macro current(self Pointer(LinearSequence(_))) = [> self.element(0) <]
+macro current(self Pointer(LinearSequence(_))) = [> $self.element(0) <]
 def moveNext(self Pointer(LinearSequence(_)))
 

@@ -119,7 +119,7 @@ int System::execute(const char* file,const char* param,const char* dir){
 		PROCESS_INFORMATION pi;
 		ZeroMemory( &pi, sizeof(pi) );
 		if(!CreateProcessW(wfile,(LPWSTR)(LPCWSTR)wparam,nullptr,nullptr,
-			false,0,nullptr,dir?wdir:nullptr,&si,&pi)){
+			false,0,nullptr,dir?wdir.operator const U16Char *():nullptr,&si,&pi)){
 				print("Couldn't execute process!");
 		}
 

@@ -12,7 +12,7 @@ namespace gen {
 	struct Linker {
 		Linker(data::gen::native::Target* target,data::gen::Options* options);
 
-		void link(const char** files,size_t fileCount,const char* outputFile,data::gen::native::PackageLinkingFormat outputFormat);
+		std::string link(const char** files,size_t fileCount,const char* outputFile,data::gen::native::PackageLinkingFormat outputFormat);
 	private:
 		data::gen::native::Target* target;
 		data::gen::Options* options;

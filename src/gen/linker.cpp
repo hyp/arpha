@@ -156,7 +156,7 @@ Linker::Linker(data::gen::native::Target* target,data::gen::Options* options){
 	this->target  = target;
 	this->options = options;
 }
-void Linker::link(const char** files,size_t fileCount,const char* outputFile,data::gen::native::PackageLinkingFormat outputFormat){
+std::string Linker::link(const char** files,size_t fileCount,const char* outputFile,data::gen::native::PackageLinkingFormat outputFormat){
 #ifdef _WIN32
 	const char* extensions[] = { ".exe" , this->target->platform != data::gen::native::Target::WINDOWS_MINGW ? ".lib" : ".a" , ".dll" };
 #else
@@ -175,4 +175,5 @@ void Linker::link(const char** files,size_t fileCount,const char* outputFile,dat
 #else
 	gccLinkerDriver(files,fileCount,fullOutputName.c_str(),outputFormat);
 #endif
+	return fullOutputName;
 }

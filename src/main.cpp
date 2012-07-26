@@ -280,7 +280,7 @@ unittest(cl){
 	assert(stringsEqualAnyCase("foo1","FoO1"));
 }
 
-ClOption clOptions[]={ClOption("m32","m64"),ClOption("m64","m32"),ClOption("arch",1)};
+ClOption clOptions[]={ClOption("m32","m64"),ClOption("m64","m32"),ClOption("arch",1),ClOption("run")};
 ClOption* findOption(const char* cl){
 	auto end = clOptions+ (sizeof(clOptions) / sizeof(ClOption));
 	for(auto i = clOptions;i!=end;i++){
@@ -322,6 +322,8 @@ struct ClOptionApplier {
 			else if(stringsEqualAnyCase(param,"arm")) nativeTarget->cpuArchitecture = native::Target::ARM;
 			else paramError(option,param,"x86 or arm");
 		}
+		else if(stringsEqualAnyCase(option,"run")) genOptions->run = true;
+
 	}
 };
 
@@ -338,6 +340,7 @@ int main(int argc, const char * argv[]){
 	data::gen::Options genOptions;
 	genOptions.optimizationLevel = -1;
 	genOptions.generate = true;
+	genOptions.run = false;
 
 	data::gen::native::Target target;
 	createDefaultTarget(target);
@@ -390,7 +393,10 @@ int main(int argc, const char * argv[]){
 
 		auto srcf = backend.generateModule((*mod).second.body,dir.c_str(),name.c_str());
 		auto src = srcf.c_str();
-		linker.link(&src,1,files[0],data::gen::native::PackageLinkingFormat::EXECUTABLE);
+		auto executable = linker.link(&src,1,files[0],data::gen::native::PackageLinkingFormat::EXECUTABLE);
+		
+		if(genOptions.run)
+			System::execute(executable.c_str(),"");
 	}
 	if(argc < 2){
 		System::print("\nWelcome to arpha code console. Type in the code and press return twice to compile it!\n");
@@ -405,6 +411,7 @@ int main(int argc, const char * argv[]){
 					debug("Generated functions - %s",compiler::generatedFunctions);
 				 }
 
+				 
 				 auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src");
 				 if(compiler::generatedFunctions){
 					backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen");

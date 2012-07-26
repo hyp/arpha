@@ -101,7 +101,7 @@ namespace UTF16 {
 	//Converts normal utf8 string to wide utf16 string.
 	StringBuffer::StringBuffer(const char* str){
 		size_t i =0;
-		const size_t limit = BufferSize - 3;
+		const size_t limit = BufferSize - 3;	
 		auto u8str = (const U8Char*) str;
 		while(*u8str){
 			i+=UTF16::encode(UTF8::decode(&u8str),buffer + i);
