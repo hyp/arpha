@@ -255,6 +255,7 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 * The type
 */
 Type::Type(int kind) : type(kind),flags(0) {
+	if(kind == BOOL) bits = 1;
 }
 Type::Type(int kind,Type* next) : type(kind),flags(0) {
 	assert(kind == POINTER || kind == LINEAR_SEQUENCE);
@@ -771,10 +772,10 @@ Node* Type::assignableFrom(Node* expression,Type* type) {
 	return nullptr;
 }
 
-inline bool isIntLike(Type* t){
+static inline bool isIntLike(Type* t){
 	return t->isInteger() || t->isPlatformInteger() || t->isUintptr() || t->isChar();
 }
-inline bool isIntOrChar(Type* t){
+static inline bool isIntOrChar(Type* t){
 	return t->isInteger() || t->isChar();
 }
 

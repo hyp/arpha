@@ -359,15 +359,6 @@ Node* LLVMgenerator::visit(FieldAccessExpression* node){
 	return node;
 }
 
-//TODO
-Node* LLVMgenerator::visit(CastExpression* node){
-	auto obj = generateExpression(node->object);
-	auto t   = genType(node->type);
-	emit(builder.CreateCast(llvm::Instruction::ZExt,obj,t));
-	return node;
-}
-
-
 inline bool isSignedInteger(Type* t){
 	return t->isInteger() && t->bits<0 ? true : false;
 }
@@ -530,6 +521,11 @@ std::pair<llvm::Value*,llvm::Value*> LLVMgenerator::generateLinearSequencePair(N
 	}
 	return std::make_pair(begin,end);
 }
+llvm::Value* generateLinearSequenceBegin(LLVMgenerator* generator,Node* node){
+	auto sequence = generator->generatePointerExpression(node);
+	auto begin = generator->builder.CreateLoad(generator->builder.CreateStructGEP(sequence,0));
+	return begin;
+}
 
 llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2,llvm::Value* operand3){
 	LinearSequenceValues sequence;
@@ -544,6 +540,9 @@ llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Oper
 	// begin + i
 	case ELEMENT_GET:
 		loadLinearSequence(generator,operand1,sequence,true,false);
+		if(auto cnst = llvm::dyn_cast<llvm::ConstantInt>(operand2)){
+			if(cnst->getValue() == 0) return sequence.begin;
+		}
 		return generator->builder.CreateGEP(sequence.begin,operand2);
 	
 	// *(begin + i) = v
@@ -719,6 +718,59 @@ Node* LLVMgenerator::visit(PointerOperation* node){
 	}
 	return node;
 }
+
+
+static inline bool isIntLike(Type* t){
+	return t->isInteger() || t->isPlatformInteger() || t->isUintptr() || t->isChar() || t->isBool();
+}
+
+Node* LLVMgenerator::visit(CastExpression* node){
+	auto src = node->object->returnType();
+	auto dest = node->type;
+	int  cast = -1;
+
+	if(isIntLike(src)){
+		auto srcBits = std::abs(src->bits);
+		if(isIntLike(dest)){
+			auto destBits = std::abs(dest->bits);
+			if(srcBits < destBits){
+				if(src->bits < 0 && dest->bits < 0) cast = llvm::Instruction::SExt;
+				else cast = llvm::Instruction::ZExt;
+			}
+			else cast = llvm::Instruction::Trunc;
+		}
+		else if(dest->isFloat()){
+			cast = src->bits<0? llvm::Instruction::SIToFP : llvm::Instruction::UIToFP;
+		}
+	}
+	else if(src->isFloat()){
+		if(dest->isFloat())
+			cast = src->bits < dest->bits? llvm::Instruction::FPExt : llvm::Instruction::FPTrunc;
+		else if(isIntLike(dest))
+			cast = dest->bits < 0 ? llvm::Instruction::FPToSI : llvm::Instruction::FPToUI;
+	}
+	else if(src->isPointer()){
+		if(dest->isUintptr())      cast = llvm::Instruction::PtrToInt;
+		else if(dest->isPointer()) cast = llvm::Instruction::BitCast;
+	}
+	else if(src->isLinearSequence()){
+		if(dest->isLinearSequence()) cast = llvm::Instruction::BitCast;
+		else if(dest->isUintptr() || dest->isPointer()){
+			auto begin = generateLinearSequenceBegin(this,node->object);
+			emit(dest->isPointer()? begin : builder.CreateCast(llvm::Instruction::PtrToInt,begin,llvm::Type::getInt64Ty(context)));
+			return node;
+		}
+	}
+
+	if(cast != -1){
+		auto obj = generateExpression(node->object);
+		auto t   = genType(node->type);
+		emit(builder.CreateCast(llvm::Instruction::CastOps(cast),obj,t));
+	}
+	else assert(false && "Invalid cast!");
+	return node;
+}
+
 Node* LLVMgenerator::visit(ReturnExpression* node){
 	if(!functionOwner->_returnType.type()->isVoid()){
 		builder.CreateRet(generateExpression(node->expression));
