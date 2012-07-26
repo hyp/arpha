@@ -412,12 +412,13 @@ int main(int argc, const char * argv[]){
 				 }
 
 				 
-				 auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src");
+				 /*auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src");
 				 if(compiler::generatedFunctions){
 					backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen");
 				 }
 				 auto src = srcf.c_str();
 				 linker.link(&src,1,"D:/Alex/projects/parser/build/src",data::gen::native::PackageLinkingFormat::EXECUTABLE);
+				 */
 
 				 source = "";
 				 continue;

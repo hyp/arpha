@@ -1,9 +1,9 @@
 import cstdlib
 
 def print(string LinearSequence(char8)){
-	until((&string).isEmpty){
-		putchar( * (&string).current as int32 )
-		(&string).moveNext()
+	until(string.isEmpty){
+		putchar( (*string.current) as int32 )
+		string.moveNext()
 	}
 }
 

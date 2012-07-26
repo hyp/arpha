@@ -146,9 +146,13 @@ bool satisfiesConstraint(Node* arg,Function* constraint,Scope* expansionScope){
 }
 bool TypePatternUnresolvedExpression::PatternMatcher::match(Type* type,Node* pattern){
 	auto ref = new TypeReference(type);
-	return match(ref,pattern);
+	topMatchedType = nullptr;
+	auto result = match(ref,pattern);
+	if(!topMatchedType) topMatchedType = type;
+	return result;
 }
 bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* pattern){
+
 	auto typeRef = object->asTypeReference();
 	auto type = typeRef ? typeRef->type : nullptr;
 	//_ | T
@@ -216,6 +220,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 			if(satisfiesConstraint(typeRef,ref->function,container)) matchedObject = true;
 		}
 		if(matchedObject){
+			if(!topMatchedType) topMatchedType = matchedType;
 			//Match parameters..
 			if(!call->label().isNull()) introduceDefinition(call->label(),call->location(),typeRef);
 			if(auto argTuple = call->arg->asTupleExpression()){

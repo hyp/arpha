@@ -1441,12 +1441,19 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 			result[currentArg] = exprBegin[currentExpr];
 		}
 		else if( func->arguments[currentArg]->type.isPattern() ){
-			result[currentArg] = exprBegin[currentExpr];
-			if(auto pattern = func->arguments[currentArg]->type.pattern) matcher.match(exprBegin[currentExpr]->returnType(),pattern);
+			
+			if(auto pattern = func->arguments[currentArg]->type.pattern){
+				matcher.match(exprBegin[currentExpr]->returnType(),pattern);
+				result[currentArg] = resolve(matcher.topMatchedType->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType()));
+			}
+			else {
+				result[currentArg] = resolve(exprBegin[currentExpr]);
+			}
 			if(!determinedFunction){
 				determinedFunction = true;
 				determinedArguments.resize(argsCount,nullptr);
 			}
+			
 			determinedArguments[currentArg] = result[currentArg]->returnType();
 		}
 		else {
