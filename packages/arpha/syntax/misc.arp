@@ -35,6 +35,12 @@ uses precedence: precedence.isas
 
 macro as(expression,T Type) = ast.newCast(expression,T)
 
+macro []
+{
+	var next = parser.parse(precedence.unary)
+	return [> LinearSequence($next) <]
+}
+
 # Indexing operator.
 macro (sequence) [
 uses precedence: precedence.index

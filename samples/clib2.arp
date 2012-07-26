@@ -1,6 +1,6 @@
 import cstdlib
 
-def print(string LinearSequence(char8)){
+def print(string []char8){
 	until(string.isEmpty){
 		putchar( (*string.current) as int32 )
 		string.moveNext()
