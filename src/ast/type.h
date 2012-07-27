@@ -228,6 +228,7 @@ public:
 	inline Type* parameter() const { return argument; }
 	inline Type* returns()   const { return _returns; }
 	inline data::ast::Function::CallConvention callingConvention() const { return (data::ast::Function::CallConvention)cc; }
+	inline bool isNonthrow() const { return true;    }//TODO
 
 	static FunctionPointer* get(Type* argument,Type* ret,data::ast::Function::CallConvention cc = data::ast::Function::ARPHA);
 };

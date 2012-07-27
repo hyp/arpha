@@ -199,6 +199,20 @@ llvm::Type* getRecordDeclaration(LLVMgenerator* generator,Record* record){
 	return t;
 }
 
+//TODO
+llvm::Type* generateAnonymousVariant(LLVMgenerator* generator,AnonymousAggregate* type){
+	std::vector<llvm::Type*> fields(type->numberOfFields);
+	for(size_t i = 0;i<type->numberOfFields;i++){
+		fields[i] = generator->genType(type->types[i]);
+	}
+	return llvm::StructType::get(generator->context,fields,false);
+}
+
+//TODO
+llvm::Type* getVariantDeclaration(LLVMgenerator* generator,Variant* variant){
+	return llvm::Type::getInt32Ty(generator->context);
+}
+
 llvm::Type* generatePointerType(LLVMgenerator* generator,Type* next){
 	return llvm::PointerType::get(generator->genType(next),0);
 }
@@ -240,6 +254,8 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 	case Type::BOOL: return builder.getInt1Ty();
 	case Type::RECORD:
 		return getRecordDeclaration(this,static_cast<Record*>(type));
+	case Type::VARIANT:
+		return getVariantDeclaration(this,static_cast<Variant*>(type));
 	case Type::INTEGER:
 		{
 		auto bits = std::abs(type->bits);
@@ -262,9 +278,12 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 	case Type::FUNCTION_POINTER:
 		return generateFunctionPointerType(this,static_cast<FunctionPointer*>(type));
 
-	case Type::NODE: assert(false); break;
+	case Type::NODE: 
+		assert(false); break;
 	case Type::ANONYMOUS_RECORD:
 		return generateAnonymousRecord(this,static_cast<AnonymousAggregate*>(type));
+	case Type::ANONYMOUS_VARIANT:
+		return generateAnonymousVariant(this,static_cast<AnonymousAggregate*>(type));
 
 
 	case Type::LITERAL_INTEGER:
@@ -312,7 +331,6 @@ Node* LLVMgenerator::visit(FloatingPointLiteral* node){
 	emitConstant(llvm::ConstantFP::get(genType(node->explicitType),node->value));
 	return node;
 }
-//TODO make into a linear seq
 Node* LLVMgenerator::visit(StringLiteral* node){
 	emitCreateLinearSequence(builder.CreateGlobalStringPtr(node->block.ptr()),builder.getInt64(node->block.length()),Type::getCharType(8));
 	return node;
@@ -338,14 +356,6 @@ Node* LLVMgenerator::visit(VariableReference* node){
 	else emitLoad(getVariable(node->variable));
 	return node;
 }
-
-//ptr + i
-llvm::Value* genPointerAddressing(LLVMgenerator* generator,Node* object,Node* index){
-	auto ptr = generator->generateExpression(object);
-	auto idx = generator->generateExpression(index);
-	return generator->builder.CreateGEP(ptr,idx);
-}
-
 
 Node* LLVMgenerator::visit(FieldAccessExpression* node){
 	auto ptr = generatePointerExpression(node->object);
@@ -652,22 +662,22 @@ Node* LLVMgenerator::visit(CallExpression* node){
 	llvm::Value* callee;
 	llvm::CallInst* instr;
 	const char* reg;
-	bool  callingFP;
+	Function* function;
 
 	if(auto fcall = node->object->asFunctionReference()){
 		if(fcall->function->isIntrinsicOperation()){
 			emit(genOperation(this,fcall->function->getOperation(),node->arg));
 			return node;
 		}
-		reg = fcall->function->returns()->isVoid()? "" : "calltmp";
-		callee = getFunctionDeclaration(fcall->function);
-		callingFP = false;
+		function = fcall->function;
+		reg = function->returns()->isVoid()? "" : "calltmp";
+		callee = getFunctionDeclaration(function);
 	}
 	else {
 		auto ret = node->object->returnType();
 		reg = ret->asFunctionPointer()->returns()->isVoid()? "" : "calltmp";
 		callee = generateExpression(node->object); //calling a function pointer
-		callingFP = true;
+		function = nullptr;
 	}
 	
 	llvm::Twine twine(reg);
@@ -709,8 +719,14 @@ Node* LLVMgenerator::visit(CallExpression* node){
 		else instr = builder.CreateCall(callee,generateExpression(node->arg),twine);
 	}
 
-	if(callingFP){
-		instr->setCallingConv(genCallingConvention(node->object->returnType()->asFunctionPointer()->callingConvention()));
+	if(function){
+		instr->setCallingConv(genCallingConvention(function->callingConvention()));
+		if(function->isNonthrow()) instr->setDoesNotThrow(true);
+	}
+	else {
+		auto fpType = node->object->returnType()->asFunctionPointer();
+		instr->setCallingConv(genCallingConvention(fpType->callingConvention()));
+		if(fpType->isNonthrow()) instr->setDoesNotThrow(true);
 	}
 
 	emit(instr);
