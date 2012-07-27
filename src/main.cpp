@@ -412,7 +412,7 @@ int main(int argc, const char * argv[]){
 				 }
 
 				 
-				 auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src");
+				 auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src",data::gen::native::ASSEMBLY);
 				 if(compiler::generatedFunctions){
 					backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen");
 				 }

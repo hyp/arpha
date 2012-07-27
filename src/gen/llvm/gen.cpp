@@ -120,7 +120,7 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(FloatingPointLiteral* node);
 	Node* visit(StringLiteral* node);
 
-	void emitCreateLinearSequence(llvm::Value* ptr,llvm::Value* length);
+	void emitCreateLinearSequence(llvm::Value* ptr,llvm::Value* length,Type* next);
 
 	Node* visit(VariableReference* node);
 	Node* visit(AssignmentExpression* node);
@@ -314,18 +314,21 @@ Node* LLVMgenerator::visit(FloatingPointLiteral* node){
 }
 //TODO make into a linear seq
 Node* LLVMgenerator::visit(StringLiteral* node){
-	emitCreateLinearSequence(builder.CreateGlobalString(node->block.ptr()),builder.getInt64(node->block.length()));
+	emitCreateLinearSequence(builder.CreateGlobalStringPtr(node->block.ptr()),builder.getInt64(node->block.length()),Type::getCharType(8));
 	return node;
 }
 
-void LLVMgenerator::emitCreateLinearSequence(llvm::Value* ptr,llvm::Value* length){
+//Create a temporary stack variable for unoptimized transfer
+void LLVMgenerator::emitCreateLinearSequence(llvm::Value* begin,llvm::Value* length,Type* next){
+	auto block = builder.GetInsertBlock();
+	llvm::IRBuilder<> _builder(block,block->begin());
+	auto var = _builder.CreateAlloca(generateLinearSequence(this,next),nullptr,"seqtmp");
+	
+	builder.CreateStore(begin,builder.CreateStructGEP(var,0));
+	builder.CreateStore(builder.CreateGEP(begin,length),builder.CreateStructGEP(var,1));
 
-	auto end = builder.CreateGEP(ptr,length);
-
-	//auto block = builder.GetInsertBlock();
-	//llvm::IRBuilder<> _builder(block,block->begin());
-	//auto var = _builder.CreateAlloca(generateLinearSequence(this,),nullptr,"seqtmp");
-	//emit(var);
+	if(needsPointer) emit(var);
+	else emitLoad(var);
 }
 
 Node* LLVMgenerator::visit(VariableReference* node){
@@ -343,13 +346,7 @@ llvm::Value* genPointerAddressing(LLVMgenerator* generator,Node* object,Node* in
 	return generator->builder.CreateGEP(ptr,idx);
 }
 
-Node* LLVMgenerator::visit(AssignmentExpression* node){
-	auto val = generateExpression(node->value);
-	assert(val);
-	auto ptr = generatePointerExpression(node->object);
-	emitStore(ptr,val);
-	return node;
-}
+
 Node* LLVMgenerator::visit(FieldAccessExpression* node){
 	auto ptr = generatePointerExpression(node->object);
 	auto fieldPtr = builder.CreateStructGEP(ptr,node->field);
@@ -526,6 +523,17 @@ llvm::Value* generateLinearSequenceBegin(LLVMgenerator* generator,Node* node){
 	auto begin = generator->builder.CreateLoad(generator->builder.CreateStructGEP(sequence,0));
 	return begin;
 }
+bool optimizeLinearSequenceAssignment(LLVMgenerator* generator,Node* src,Node* dest){
+	if(auto str = src->asStringLiteral()){
+		auto begin = generator->builder.CreateGlobalStringPtr(str->block.ptr());
+		auto ptr   = generator->generatePointerExpression(dest);
+		generator->builder.CreateStore(begin,generator->builder.CreateStructGEP(ptr,0));
+		auto end   = generator->builder.CreateGEP(begin,generator->builder.getInt64(str->block.length()));
+		generator->builder.CreateStore(end,generator->builder.CreateStructGEP(ptr,1));
+		return true;
+	}
+	return false;
+}
 
 llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2,llvm::Value* operand3){
 	LinearSequenceValues sequence;
@@ -634,7 +642,7 @@ llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind o
 
 llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention cc){
 	switch(cc){
-	case data::ast::Function::ARPHA:   return llvm::CallingConv::C;//Fast;
+	case data::ast::Function::ARPHA:   return llvm::CallingConv::Fast;
 	case data::ast::Function::CCALL:   return llvm::CallingConv::C;
 	case data::ast::Function::STDCALL: return llvm::CallingConv::X86_StdCall;
 	}
@@ -719,6 +727,18 @@ Node* LLVMgenerator::visit(PointerOperation* node){
 	return node;
 }
 
+Node* LLVMgenerator::visit(AssignmentExpression* node){
+	auto objType= node->object->asVariable()? node->object->asVariable()->type.type() : node->object->returnType();
+	if(objType->isLinearSequence() && optimizeLinearSequenceAssignment(this,node->value,node->object)){
+		return node;
+	}
+
+	auto val = generateExpression(node->value);
+	assert(val);
+	auto ptr = generatePointerExpression(node->object);
+	emitStore(ptr,val);
+	return node;
+}
 
 static inline bool isIntLike(Type* t){
 	return t->isInteger() || t->isPlatformInteger() || t->isUintptr() || t->isChar() || t->isBool();
@@ -977,11 +997,15 @@ llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* var
 Node* LLVMgenerator::visit(Variable* variable){
 	if(!functionOwner){
 		auto var = getGlobalVariableDeclaration(variable);
+
+		if(needsPointer) emit(var);
 	} else {
 		auto block = builder.GetInsertBlock();
 		llvm::IRBuilder<> _builder(block,block->begin());
 		auto var = _builder.CreateAlloca(genType(variable->type.type()),nullptr,variable->label().ptr());
 		map(variable,var);
+
+		if(needsPointer) emit(var);
 	}
 	return variable;
 }
@@ -1020,7 +1044,7 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 	}
 
 	auto func = llvm::Function::Create(t,genLinkage(function),function->isExternal() || function->label() == "main" ? function->label().ptr() : mangler.stream.str(),module);
-	func->setCallingConv(genCallingConvention(function->callingConvention()));
+	func->setCallingConv(genCallingConvention(function->label() == "main"? data::ast::Function::CCALL : function->callingConvention()));
 	if(function->isNonthrow()){
 		func->setDoesNotThrow(true);
 	}
