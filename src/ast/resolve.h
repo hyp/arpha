@@ -70,6 +70,36 @@ public:
 
 };
 
+namespace overloads {
+/**
+  This range iterates over all the possible overloads(as visible from the given scope) for the given function.
+*/
+struct OverloadRange {
+
+	OverloadRange(Scope* scope,SymbolID function,bool dotSyntax);
+private:
+	Function** funcCurr;
+	Function** funcEnd;
+	int distance;
+	Scope*  scope;
+	Scope*  prevScope;
+	Scope** importsCurr; //import iterators
+	Scope** importsEnd;
+	SymbolID functionName;
+	bool    dotSyntax;
+	
+	void nextScope();
+	void getNextFuncIterators();
+public:
+
+	inline bool isEmpty(){ return scope == nullptr; }
+	inline Function* currentFunction(){ return *funcCurr; }
+	void   advance();
+	inline int currentDistance(){ return distance; }
+};
+
+}
+
 Node* mixinMacro(CTFEinvocation* invocation,Scope* scope);
 
 #endif

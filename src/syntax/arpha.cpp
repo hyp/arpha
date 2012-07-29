@@ -531,53 +531,6 @@ struct MacroParser: IntrinsicPrefixMacro {
 	}
 };
 
-
-
-/// trait     ::= 'trait' | 'constraint' <name> '(' <derivedType> [derivedTypeParams] ')' [ Newlines 'requires' traitRequirementBlock ] 
-void parseTrait(Parser* parser,bool isConstraint){
-
-struct TraitBodyParser {
-	Trait* trait;
-	TraitBodyParser(Trait* _trait) : trait(_trait) {}
-	bool operator()(Parser* parser){
-		auto  cmd = parser->expectName();
-		if(cmd == "def"){
-			auto func = parseMethod(parser,trait,parser->expectName(),MethodContextTrait);
-			if(func) trait->methods.push_back(func);
-		}
-		else if(cmd == "invariant") 
-			parseTypeInvariant(parser,trait->declaration);
-		else{
-			parser->syntaxError(format("Can't parse a command '%s' inside trait requirement declaration",cmd));
-			return false;
-		}
-		return true;
-	}
-};
-
-	auto name = parser->expectName();
-	auto type = new Trait();
-
-	parser->expect("(");
-	auto typeName = parser->expectName();
-	if(parser->match("(")){
-		parser->syntaxError(format("parametrization to derived traits not implemented yet!"));
-		parser->expect(")");
-	}
-	parser->expect(")");
-
-	parser->ignoreNewlines();
-	if(parser->match("requires")){
-#ifdef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
-		parser->ignoreNewlines();
-#endif
-		parser->expect("{");
-		blockParser->body(parser,TraitBodyParser(type));
-	}
-
-	
-}
-
 //TODO remove?
 struct ConstraintParser: IntrinsicPrefixMacro {
 	ConstraintParser(): IntrinsicPrefixMacro("constraint") {}
@@ -612,6 +565,30 @@ Function* parseTypeTemplateDeclaration(SymbolID name,Parser* parser){
 	return func;
 }
 
+static Function* parseTraitMethod(Parser* parser,ParameterTypeSuggestion* suggestions,size_t numberOfSuggestions){
+	auto name = parser->expectName();
+	auto func = new Function(name,parser->previousLocation());
+
+	parser->enterBlock(&func->body);
+	//parse arguments
+	parser->expect("(");
+	parseFunctionParameters(parser,func,nullptr,suggestions,numberOfSuggestions);
+	//return type & body
+	auto token = parser->peek();
+	if(!isEndExpression(token) && !(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
+		func->_returnType.parse(parser,arpha::Precedence::Assignment);
+	}
+	//special handling for body
+	auto hasBody = parseFunctionBody(parser,func,true);
+	parser->leaveBlock();
+
+	if(hasBody){
+		parser->mixinedExpressions.push_back(func);
+		return nullptr;
+	}
+	return func;
+}
+
 /// requirement    ::= 'def' <name> params [returnType]
 /// implementation ::= 'def' <name> params [returnType] functionBody
 /// declaration    ::= requirement | implementation | invariant
@@ -627,11 +604,9 @@ struct ConceptParser: IntrinsicPrefixMacro {
 		bool operator()(Parser* parser){
 			auto  cmd = parser->expectName();
 			if(cmd == "def"){
-				auto func = parseMethod(parser,trait,parser->expectName(),MethodContextTrait);
+				auto func = parseTraitMethod(parser,nullptr,0);
 				if(func) trait->methods.push_back(func);
 			}
-			else if(cmd == "invariant") 
-				parseTypeInvariant(parser,trait->declaration);
 			else{
 				parser->syntaxError(format("Can't parse a command '%s' inside trait declaration",cmd));
 				return false;
@@ -769,10 +744,6 @@ struct TypeParser: IntrinsicPrefixMacro {
 				flags |= FIELDS_PRIVATE;
 				cmd = parser->expectName();
 			}
-			if(cmd == "type"){
-				//parse type..
-				return true;
-			}
 			if(cmd == "extends"){
 				flags |= FIELDS_EXT;
 				cmd = parser->expectName();
@@ -787,8 +758,8 @@ struct TypeParser: IntrinsicPrefixMacro {
 				if(!templateDeclaration){
 					self.expression = new TypeReference(new Type(Type::POINTER,record));
 				}
-				else self.expression = new CallExpression(new UnresolvedSymbol(parser->previousLocation(),"Pointer"),
-					new CallExpression(new UnresolvedSymbol(parser->previousLocation(),templateDeclaration->label()),new UnresolvedSymbol(parser->previousLocation(),"_")));
+				//TODO
+				else self.expression = new CallExpression(new UnresolvedSymbol(parser->previousLocation(),"Pointer"),new UnresolvedSymbol(parser->previousLocation(),templateDeclaration->label()));
 				
 				auto func = parseTypeMethod(parser,&self,1);
 				if(flags & FIELDS_PRIVATE) func->visibilityMode(data::ast::PRIVATE);
