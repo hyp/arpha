@@ -138,7 +138,7 @@ void Overloadset::push_back(Function* function){
 
 //Function
 
-Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,location), body(), allArgMatcher(body.scope) {
+Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,location), body(), allArgMatcher(body.scope,nullptr) {
 	intrinsicCTFEbinder = nullptr;
 	generatedFunctionParent = nullptr;
 	body.scope->_functionOwner = this;

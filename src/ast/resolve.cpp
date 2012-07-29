@@ -238,8 +238,15 @@ Node* CallExpression::resolve(Resolver* resolver){
 	// symbol(arg)
 	if(auto callingOverloadSet = object->asUnresolvedSymbol()){
 		auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : resolver->currentScope());
-	
-
+		
+		if(auto os = scope->lookupPrefix(callingOverloadSet->symbol)){
+			if(auto decl = os->asTypeDeclaration()){
+				object= callingOverloadSet->copyLocationSymbol(resolver->resolve(decl->createReference()));
+				resolver->markResolved(this);
+				return this;
+			}
+			else assert(os->asOverloadset());
+		}
 		if(auto func =  resolver->resolveOverload(scope,callingOverloadSet->symbol,arg,isFlagSet(DOT_SYNTAX))){
 			arg = resolver->resolve(resolver->constructFittingArgument(&func,arg));
 			//macro
@@ -616,7 +623,7 @@ Node* MatchResolver::resolve(Resolver* resolver){
 				bool matches = pattern.isResolved() ? pattern.type()->isSame(type->type) : false;
 				if(pattern.isPattern()){
 					auto scope = (*(i+1))->asBlockExpression()->scope;
-					TypePatternUnresolvedExpression::PatternMatcher matcher(scope);
+					TypePatternUnresolvedExpression::PatternMatcher matcher(scope,resolver);
 					if(matcher.match(type->type,pattern.pattern)){
 						matches = true;
 						matcher.defineIntroducedDefinitions();
@@ -743,7 +750,7 @@ bool TypePatternUnresolvedExpression::resolve(Resolver* resolver,PatternMatcher*
 			} else if(oldSize != patternMatcher->introducedDefinitions.size()) 
 				patternMatcher->introducedDefinitions.erase(patternMatcher->introducedDefinitions.begin() + oldSize,patternMatcher->introducedDefinitions.end());
 		} else {
-			PatternMatcher matcher(resolver->currentScope());
+			PatternMatcher matcher(resolver->currentScope(),resolver);
 			if(matcher.check(unresolvedExpression)){
 				kind = PATTERN;
 				pattern = unresolvedExpression; //NB: not really necessary because they are in one union together
@@ -1384,7 +1391,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 	bool determinedFunction = false;
 	std::vector<Type* > determinedArguments;//Boolean to indicate whether the argument was expanded at compile time and is no longer needed
 
-	TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);//need to match the second time round to inject introduced definitions..
+	TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope,this);//need to match the second time round to inject introduced definitions..
 
 	//..
 	size_t currentArg = 0;
@@ -1565,7 +1572,7 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 
 	//dependent args
 	bool hasDependentArg = false;
-	TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);
+	TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope,evaluator);
 
 	//
 	std::vector<bool> checked;
@@ -1595,7 +1602,7 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 			bool matches = false;
 			if(func->arguments[argsCount-1]->isVararg() && func->arguments[argsCount-1]->type.isPattern()){
 				if(auto pattern = func->arguments[argsCount-1]->type.pattern){
-					TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope);
+					TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope,evaluator);
 					//construct a record from the tailed parameters
 					std::vector<AnonymousAggregate::Field> fields;
 					for(auto i = argsCount - 1;i < expressionCount;i++){

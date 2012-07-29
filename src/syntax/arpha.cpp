@@ -600,14 +600,11 @@ struct ConceptParser: IntrinsicPrefixMacro {
 
 	struct BodyParser {
 		Trait* trait;
-		BodyParser(Trait* _trait,Function* templateDecl) : trait(_trait) {}
+		BodyParser(Trait* _trait) : trait(_trait) {}
 		bool operator()(Parser* parser){
 			auto  cmd = parser->expectName();
 			if(cmd == "def"){
-				ParameterTypeSuggestion self = { "self",nullptr };
-				//if(!templateDeclaration){
-					self.expression = new TraitReference(trait);
-				//}
+				ParameterTypeSuggestion self = { "self",new TraitReference(trait) };
 				if(auto func = parseTraitMethod(parser,&self,1)) trait->methods.push_back(func);
 			}
 			else{
@@ -632,7 +629,7 @@ struct ConceptParser: IntrinsicPrefixMacro {
 #endif
 		parser->expect("{");
 		auto trait = new Trait();
-		blockParser->body(parser,BodyParser(trait,templateDeclaration));
+		blockParser->body(parser,BodyParser(trait));
 
 		auto decl = new TypeDeclaration(trait,name,templateDeclaration != nullptr);
 		parser->introduceDefinition(decl);
@@ -641,7 +638,7 @@ struct ConceptParser: IntrinsicPrefixMacro {
 			parser->leaveBlock();
 			parser->introduceDefinition(templateDeclaration);
 			return templateDeclaration;
-		}
+		}		
 
 		return decl;
 	}

@@ -67,12 +67,14 @@ void TypePatternUnresolvedExpression::specify(Type* givenType){
 	kind = TYPE;
 	_type = givenType;
 }
+
+//TODO do this shit properly!
 bool TypePatternUnresolvedExpression::deduce(Type* givenType,Scope* container){
 	assert(isPattern());
 	assert(givenType->isResolved());
 
 	if(pattern){
-		PatternMatcher matcher(container);
+		PatternMatcher matcher(container,nullptr);//TODO
 		if(!matcher.match(givenType,pattern)) return false;
 	}
 	kind  = TYPE;
@@ -93,12 +95,16 @@ void TypePatternUnresolvedExpression::PatternMatcher::introduceDefinition(Symbol
 }
 
 bool checkPatternedTypeDeclaration(Scope* scope,SymbolID name){
-
-	for(::overloads::OverloadRange overloads(scope,name,false);!overloads.isEmpty();overloads.advance()){
-		if(overloads.currentFunction()->isTypeTemplate()){
-			return true;
+	if(auto def = scope->lookupPrefix(name)){
+		if(def->asOverloadset()) {
+			for(::overloads::OverloadRange overloads(scope,name,false);!overloads.isEmpty();overloads.advance()){
+				if(overloads.currentFunction()->isTypeTemplate()){
+					return true;
+				}
+			}
 		}
 	}
+
 	return false;
 }
 
@@ -159,7 +165,8 @@ bool satisfiesConstraint(Node* arg,Function* constraint,Scope* expansionScope){
 	error(arg,"Can't evaluate constraint %s with argument %s at compile time:\n\tCan't evaluate expression %s!",constraint->label(),arg,i.result());
 	return false;
 }
-bool TypePatternUnresolvedExpression::PatternMatcher::match(Type* type,Node* pattern){
+bool TypePatternUnresolvedExpression::PatternMatcher::match(Type* type,Node* pattern,Scope* expansionScope){
+	this->expansionScope = expansionScope? expansionScope : container;
 	auto ref = new TypeReference(type);
 	topMatchedType = nullptr;
 	auto result = match(ref,pattern);
@@ -167,59 +174,71 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Type* type,Node* pat
 	return result;
 }
 
-Type* matchOnePatternedTypeDeclaration(Scope* scope,SymbolID name,Type* givenType){
+std::pair<Type*,Function*> matchOnePatternedTypeDeclaration(Scope* scope,SymbolID name,Type* givenType){
 	Type* matchedType = nullptr;
+	Function* matchedFunction = nullptr;
 	for(::overloads::OverloadRange overloads(scope,name,false);!overloads.isEmpty();overloads.advance()){
 		if(overloads.currentFunction()->isTypeTemplate()){
 			auto function = overloads.currentFunction();
-			if(givenType->wasGeneratedBy(function)){
+			if(function->getTemplateTypeDeclaration()->type()->isTrait() || givenType->wasGeneratedBy(function)){
 				if(matchedType){
 					error(Location(),"Type pattern ambiguity");
 				}
 				matchedType = givenType;
+				matchedFunction = function;
 			}
 			else {
 				for(TypeMeaningsRange meanings(givenType);!meanings.isEmpty();meanings.advance()){
-					if(meanings.currentType()->wasGeneratedBy(function)){
+					if(function->getTemplateTypeDeclaration()->type()->isTrait() || meanings.currentType()->wasGeneratedBy(function)){
 						if(matchedType){
 							error(Location(),"Type pattern ambiguity");
 						}
 						matchedType = meanings.currentType();
+						matchedFunction = function;
 					}
 				}	
 			}
 		}
 	}
-	return matchedType;
+	return std::make_pair(matchedType,matchedFunction);
 }
 
 /**
   Checks if a given type satisfies a certain trait from the perspective of a given scope.
   Returns true if a type satisfies trait
   Scenarios:
-  requires def foo(x int32) given def foo(x int32)
+  requires def foo(x int32) int32 given def foo(x int32) int32
+           def foo(x int32) int32 given def foo(x *int32) *int32
 
-  requires def foo(x Trait) given def foo(x TraitImplementation)
-                            given def foo(x *TraitImplementation)
+  requires def foo(x Trait) Trait given def foo(x TraitImplementation) TraitImplementation
+                                  given def foo(x *TraitImplementation) *TraitImplementation
 */
+bool match(Type* pattern,Type* given,bool strict){
+	return pattern->isSame(given) || (!strict && (given->isPointer() && pattern->isSame(given->next())) );
+}
+
 bool functionMatchesTraitsMethod(Type* type,Trait* trait,Function* function,Function* method){
+	bool strict = false;
+
 	if(function->arguments.size() == method->arguments.size()){
 		for(size_t i =0,s = function->arguments.size();i<s;++i){
 			if(method->arguments[i]->type.isResolved() && function->arguments[i]->type.isResolved()){
-				if(method->arguments[i]->type.type()->isSame(function->arguments[i]->type.type())){
+				if(match(method->arguments[i]->type.type(),function->arguments[i]->type.type(),strict))
 					continue;
-				}
 			}
 			else if(method->arguments[i]->type.isPattern()){
 				auto pattern = method->arguments[i]->type.pattern;
 				if(auto tref = pattern->asTraitReference()){
 					if(tref->trait == trait){
-						if(function->arguments[i]->type.type()->isSame(type) ||
-							(function->arguments[i]->type.type()->isPointer() && function->arguments[i]->type.type()->next()->isSame(type) ) ) continue;
+						if(match(type,function->arguments[i]->type.type(),strict)) continue;
 					}
 				}
 			}
 			return false;
+		}
+
+		if(method->_returnType.isPattern()){
+			
 		}
 		return true;
 	}
@@ -243,6 +262,16 @@ data::ast::Search::Result typeSatisfiesTrait(Scope* scope,Type* type,Trait* trai
 	return data::ast::Search::Found;
 }
 
+Node* TypePatternUnresolvedExpression::PatternMatcher::getPatternParameter(Node* pattern,Type* givenType){
+	if(auto unresolved = pattern->asUnresolvedSymbol()){
+		auto symbol = unresolved->symbol;
+		if(symbol == "_") {
+			if(givenType->wasGenerated()) return givenType->generatedArgument(0);
+		}
+		else if(auto def = lookupDefinition(symbol)) return def->value;
+	}
+	return nullptr;
+}
 
 bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* pattern){
 
@@ -262,7 +291,8 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 			else return false;
 		}
 		else if(type){
-			if(matchOnePatternedTypeDeclaration(container,symbol,type)) return true;
+			std::pair<Type*,Function*> match = matchOnePatternedTypeDeclaration(container,symbol,type);
+			if(match.first) return true;
 		}
 	} else if(auto var = pattern->asVariableReference()){ //shadowed T
 		if(auto def = lookupDefinition(var->variable->label())){
@@ -281,7 +311,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 	//Match(type)
 	if(auto type2 = pattern->asTypeReference()) return type->isSame(type2->type); //| int32
 	else if(auto tref  = pattern->asTraitReference()){
-		return typeSatisfiesTrait(container,type,tref->trait) == data::ast::Search::Found;
+		return typeSatisfiesTrait(expansionScope,type,tref->trait) == data::ast::Search::Found;
 	}
 	else if(auto ref = pattern->asFunctionReference()){
 		//Constraint (We can safely assume this is a constraint if check passed)
@@ -294,12 +324,14 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 		//TODO: NB: maybe check if a type has other meanings if(!type->wasGenerated()) return false;
 		bool matchedObject = false;
 		Type* matchedType = type;
+		Function* matchedFunction = nullptr;
 		//| Pointer(_)
 		if(auto callingUnresolvedFunction = call->object->asUnresolvedSymbol()){
-
-			if(auto t = matchOnePatternedTypeDeclaration(container,callingUnresolvedFunction->symbol,type)){
+			std::pair<Type*,Function*> match = matchOnePatternedTypeDeclaration(container,callingUnresolvedFunction->symbol,type);
+			if(match.first){
 				matchedObject = true;
-				matchedType = t;
+				matchedType = match.first;
+				matchedFunction = match.second;
 			}
 
 		} 
@@ -309,6 +341,21 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 		}
 		if(matchedObject){
 			if(!topMatchedType) topMatchedType = matchedType;
+
+			if(matchedFunction && matchedFunction->getTemplateTypeDeclaration()->type()->isTrait()){
+				assert(matchedFunction);
+				size_t args = 1;
+				if(auto argTuple = call->arg->asTupleExpression()) args = argTuple->size();
+				if(args != matchedFunction->arguments.size()) return false;
+
+				auto expandedParameter = getPatternParameter(call->arg,matchedType);
+				resolver->constructFittingArgument(&matchedFunction,expandedParameter);
+				assert(matchedFunction->isResolved());
+				return typeSatisfiesTrait(expansionScope,matchedType,matchedFunction->getTemplateTypeDeclaration()->type()->asTrait()) == data::ast::Search::Found;
+
+			}
+
+			
 			//Match parameters..
 			if(!call->label().isNull()) introduceDefinition(call->label(),call->location(),typeRef);
 			if(auto argTuple = call->arg->asTupleExpression()){
@@ -1137,6 +1184,7 @@ Trait* Type::asTrait(){
 DeclaredType* Trait::duplicate(DuplicationModifiers* mods) const {
 	auto dup = new Trait();
 	dup->flags = flags;
+	for(auto i = methods.begin();i!=methods.end();++i) dup->methods.push_back((*i)->reallyDuplicate(mods,false));
 	return dup;
 }
 
@@ -1179,7 +1227,7 @@ TypeDeclaration::TypeDeclaration(DeclaredType* type,SymbolID name,bool isParamet
 	if(isParametrized) setFlag(PARAMETRIZED);
 }
 Node*  TypeDeclaration::createReference(){
-	return new TypeReference(_type);
+	return _type->isTrait()? (Node*)new TraitReference(_type->asTrait()) : new TypeReference(_type);
 }
 Node*  TypeDeclaration::duplicate(DuplicationModifiers* mods) const {
 	BlockExpression* sb = optionalStaticBlock? optionalStaticBlock->duplicate(mods)->asBlockExpression() : nullptr;
