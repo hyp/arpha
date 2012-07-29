@@ -1,0 +1,19 @@
+#
+	The functions foo and goo can't be resolved yet when they are specialized.
+	The calling node must resolve the specializations by itself in the future passes.
+#
+
+type Bar(T) {
+	var x T
+	
+	def foo(self) = self.x
+}
+
+def goo(self Pointer(Bar)) = self.x
+
+def main(){
+	var bar Bar(int32)
+	bar.x = 12
+	bar.foo
+	bar.goo
+}
