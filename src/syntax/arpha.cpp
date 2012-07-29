@@ -290,10 +290,15 @@ void parseProperties(Parser* parser,Node* applicant){
 	} while(parser->match(","));
 }
 
+struct ParameterTypeSuggestion {
+	SymbolID name;
+	Node* expression;
+};
+
 /// param     ::= <name> [Type] [ '=' defaultValue ]
 /// paramList ::= param ',' paramList | param
 /// params    ::= '(' paramList ')' | '(' ')'
-void parseFunctionParameters(Parser* parser,Function* func,Type* defaultType = nullptr){
+void parseFunctionParameters(Parser* parser,Function* func,Type* defaultType = nullptr,ParameterTypeSuggestion* suggestions = nullptr,size_t numberOfSuggestions = 0){
 	if(!parser->match(")")){
 		while(1){
 			auto location = parser->currentLocation();
@@ -303,6 +308,14 @@ void parseFunctionParameters(Parser* parser,Function* func,Type* defaultType = n
 			auto next = parser->peek();
 			if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")" || next.symbol == "=")){
 				if(defaultType) param->type.specify(defaultType);
+				else if(suggestions){
+					for(ParameterTypeSuggestion* i = suggestions,*end = suggestions+numberOfSuggestions;i!=end;++i){
+						if((*i).name == argName){
+							param->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
+							param->type.unresolvedExpression = (*i).expression;
+						}
+					}
+				}
 			}else{
 				param->type.parse(parser,arpha::Precedence::Tuple);
 				next = parser->peek();
@@ -417,6 +430,8 @@ static Function* parseMethod(Parser* parser,Type* thisType,SymbolID name,MethodC
 
 	return func;	
 }
+
+
 
 // TODO
 static void parseTypeInvariant(Parser* parser,TypeDeclaration* typeDecl){
@@ -656,7 +671,30 @@ void createFieldGettersSetters(Parser* parser,Record* thisType,int fieldID){
 	parser->mixinedExpressions.push_back(funcs.second);
 }
 
-/// fields       ::= ['private'] 'var'|'def' names (type | type '=' [Newlines] initializers)
+
+
+static Function* parseTypeMethod(Parser* parser,ParameterTypeSuggestion* suggestions,size_t numberOfSuggestions){
+	auto name = parser->expectName();
+	auto func = new Function(name,parser->previousLocation());
+
+	parser->enterBlock(&func->body);
+	//parse arguments
+	parser->expect("(");
+	parseFunctionParameters(parser,func,nullptr,suggestions,numberOfSuggestions);
+	//return type & body
+	auto token = parser->peek();
+	if(!isEndExpression(token) && !(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
+		func->_returnType.parse(parser,arpha::Precedence::Assignment);
+	}
+	//special handling for body
+	parseFunctionBody(parser,func);
+	parser->leaveBlock();
+
+	parser->mixinedExpressions.push_back(func);
+	return func;
+}
+
+/// fields       ::= ['private'] 'var' names (type | type '=' [Newlines] initializers)
 /// method       ::= 'def' <name> params [returnType] functionBody
 /// declaration  ::= fields | method
 /// declarations ::= declaration (';'|Newlines) declarations | declaration
@@ -666,28 +704,22 @@ void createFieldGettersSetters(Parser* parser,Record* thisType,int fieldID){
 struct TypeParser: IntrinsicPrefixMacro {
 	TypeParser(): IntrinsicPrefixMacro("type") {  }
 
-	/// fields ::= ['private'] ['extends'] 'var' | 'def' names [ type ] '=' [Newlines] initializers
-	enum { FIELDS_EXT = 0x1,FIELDS_DEF = 0x2,FIELDS_PRIVATE = 0x4,TEMPLATED_TYPE = 0x8 };
-	static void fields(SymbolID first,Parser* parser,Record* record,int flags = 0){
+	/// fields ::= ['private'] ['extends'] 'var' names [ type ] '=' [Newlines] initializers
+	enum { FIELDS_EXT = 0x1,FIELDS_READONLY = 0x2,FIELDS_PRIVATE = 0x4,TEMPLATED_TYPE = 0x8 };
+	static void fields(Parser* parser,Record* record,int flags = 0){
 		size_t i = record->fields.size();
 		const bool isExtending = (flags & FIELDS_EXT)!=0;
 		const bool isPrivate   = (flags & FIELDS_PRIVATE)!=0;
-		const bool isReadonly  = (flags & FIELDS_DEF)!=0;
+		const bool isReadonly  = (flags & FIELDS_READONLY)!=0;
 
-		auto field = Record::Field(first,intrinsics::types::Void);
-		field.isExtending = isExtending;
-		field.isPrivate   = isPrivate;
-		field.isReadonly  = isReadonly;
-		record->add(field);
-		if((flags & TEMPLATED_TYPE) == 0) createFieldGettersSetters(parser,record,record->fields.size()-1);
-		while(parser->match(",")) {
+		do {
 			auto field = Record::Field(parser->expectName(),intrinsics::types::Void);
 			field.isExtending = isExtending;
 			field.isPrivate   = isPrivate;
 			field.isReadonly  = isReadonly;
 			record->add(field);
 			if((flags & TEMPLATED_TYPE) == 0) createFieldGettersSetters(parser,record,record->fields.size()-1);
-		}
+		} while(parser->match(","));
 		
 		TypePatternUnresolvedExpression type;
 		type.parse(parser,arpha::Precedence::Assignment);
@@ -728,11 +760,11 @@ struct TypeParser: IntrinsicPrefixMacro {
 	// body ::= '{' fields ';' fields ... '}'
 	struct BodyParser {
 		Record* record;
-		bool hasTemplate;
-		BodyParser(Record* _record,Function* templateDeclaration) : record(_record),hasTemplate(templateDeclaration != nullptr) {}
+		Function* templateDeclaration;
+		BodyParser(Record* _record,Function* templateDecl) : record(_record),templateDeclaration(templateDecl) {}
 		bool operator()(Parser* parser){
 			auto  cmd = parser->expectName();
-			int flags = hasTemplate?TEMPLATED_TYPE:0;
+			int flags = templateDeclaration != nullptr?TEMPLATED_TYPE:0;
 			if(cmd == "private"){
 				flags |= FIELDS_PRIVATE;
 				cmd = parser->expectName();
@@ -745,21 +777,22 @@ struct TypeParser: IntrinsicPrefixMacro {
 				flags |= FIELDS_EXT;
 				cmd = parser->expectName();
 			}
-			bool isDef = cmd == "def";
-			if(cmd == "var" || isDef){
-				auto name = parser->expectName(); //first field .. Need to check for '(' cause of def!
-				if(isDef){
-					if(parser->match("(")){
-						if(flags & FIELDS_EXT) parser->syntaxError(format("Can't use property 'extends' on a function declaration!"));
-						else {
-							auto func = parseMethod(parser,record,name,MethodContextType);
-							parser->mixinedExpressions.push_back(func);
-							return true;
-						}
-					}
-					flags |= FIELDS_DEF;
+			if(cmd == "var"){
+				fields(parser,record,flags);
+			}
+			else if(cmd == "def"){
+				if(flags & FIELDS_EXT) parser->syntaxError(format("Can't use property 'extends' on a function declaration!"));
+
+				ParameterTypeSuggestion self = { "self",nullptr };
+				if(!templateDeclaration){
+					self.expression = new TypeReference(new Type(Type::POINTER,record));
 				}
-				fields(name,parser,record,flags );
+				else self.expression = new CallExpression(new UnresolvedSymbol(parser->previousLocation(),"Pointer"),
+					new CallExpression(new UnresolvedSymbol(parser->previousLocation(),templateDeclaration->label()),new UnresolvedSymbol(parser->previousLocation(),"_")));
+				
+				auto func = parseTypeMethod(parser,&self,1);
+				if(flags & FIELDS_PRIVATE) func->visibilityMode(data::ast::PRIVATE);
+				return true;
 			}
 			else{
 				parser->syntaxError(format("Can't parse a command '%s' inside type declaration",cmd));

@@ -1,10 +1,10 @@
 import spec
 
 describe "A function declared inside a type" {
-	it "should be identical to the function declared outside the type with a first hidden pointer parameter 'self'" {
+	it "should be identical to the function declared outside the type where the parameter self is a pointer to type" {
 		type Foo {
 			var x int32
-			def foo() = 4
+			def foo(self) = 4
 		}
 		var obj Foo
 		obj.foo() should be 4
