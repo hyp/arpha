@@ -4,6 +4,8 @@
 #ifndef ARPHA_AST_TYPE_H
 #define ARPHA_AST_TYPE_H
 
+struct Trait;
+
 // This is either a type expression or a type pattern. 
 // It can also be an unresolved expression which is expected to resolve into a type or type pattern at a later stage.
 struct TypePatternUnresolvedExpression {
@@ -43,7 +45,7 @@ struct TypePatternUnresolvedExpression {
 		PatternMatcher(Scope* scope) : container(scope),topMatchedType(nullptr) {}
 		IntroducedDefinition* lookupDefinition(SymbolID name);
 		void introduceDefinition(SymbolID name,Location location,Node* value = nullptr);
-		bool check(Node* expression); //Returns true if a certain expression is a type pattern e.g. _
+		bool check(Node* expression,Trait* currentTrait = nullptr); //Returns true if a certain expression is a type pattern e.g. _
 		bool match(Type* type,Node* pattern);
 		Node* inverseMatch(Node* pattern);
 		void defineIntroducedDefinitions();
@@ -63,7 +65,6 @@ std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& 
 struct AnonymousAggregate;
 struct FunctionPointer;
 struct Variant;
-struct Trait;
 
 //(type ...): intrinsics::types::Type
 struct Type {

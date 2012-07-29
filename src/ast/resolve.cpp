@@ -117,7 +117,8 @@ Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilat
 	unresolvedExpressions = 0;
 	treatUnresolvedTypesAsResolved = false;
 	currentFunction = nullptr;
-	_currentParent = nullptr;
+	currentTrait    = nullptr;
+	_currentParent  = nullptr;
 }
 
 
@@ -265,6 +266,10 @@ Node* CallExpression::resolve(Resolver* resolver){
 				return resolver->resolve(copyLocationSymbol(evaluateConstantOperation(func->getOperation(),arg)));
 			}
 			object = resolver->resolve(new FunctionReference(func));
+			if(!func->isResolved()){
+				assert(func->generatedFunctionParent);
+				return this;
+			}
 			resolver->markResolved(this);
 			if(func->intrinsicCTFEbinder && !func->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && arg->isConst()){
 				CTFEintrinsicInvocation i(resolver->compilationUnit());
@@ -274,6 +279,18 @@ Node* CallExpression::resolve(Resolver* resolver){
 		}
 	} 
 	else if(auto callingFunc = object->asFunctionReference()){
+		if(!callingFunc->function->isResolved()){
+			/**
+			NB: given the situation:
+			    type Bar(T) { var x T; def foo(self) = self.x }
+			    var bar Bar(int32)
+			    bar.foo
+			where the expansion of foo(x *Bar(int32)) can't be resolved straight away, we resolve the function ourselves
+			*/
+			assert(callingFunc->function->generatedFunctionParent);
+			if(!resolver->resolveSpecialization(callingFunc->function))
+				return this;
+		}
 		resolver->markResolved(this);
 		auto func = callingFunc->function;
 		if(func->intrinsicCTFEbinder && !func->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && arg->isConst()){
@@ -719,7 +736,7 @@ bool TypePatternUnresolvedExpression::resolve(Resolver* resolver,PatternMatcher*
 		//pattern type?
 		if(patternMatcher){
 			auto oldSize = patternMatcher->introducedDefinitions.size();
-			if(patternMatcher->check(unresolvedExpression)){
+			if(patternMatcher->check(unresolvedExpression,resolver->currentTrait)){
 				kind = PATTERN;
 				pattern = unresolvedExpression;
 				return true;
@@ -884,7 +901,17 @@ void generateDestructorBody(Record* type,Variable* selfObject,BlockExpression* b
 }
 
 DeclaredType* Trait::resolve(Resolver* resolver){
-	if(!declaration->optionalStaticBlock || declaration->optionalStaticBlock->isResolved()){
+	bool allResolved = true;
+	resolver->currentTrait = this;
+	for(auto i = methods.begin();i!=methods.end();++i){
+		if(!(*i)->isResolved()){
+			(*i)->resolve(resolver);
+			if(!(*i)->isResolved()) allResolved = false;
+		}
+	}
+	resolver->currentTrait = nullptr;
+
+	if(allResolved && (declaration->optionalStaticBlock == nullptr || declaration->optionalStaticBlock->isResolved())){
 		setFlag(IS_RESOLVED);
 	}
 	return this;
@@ -1258,6 +1285,26 @@ Function* Function::specializedDuplicate(DuplicationModifiers* mods,Type** speci
 	return func;
 }
 
+/**
+NB: given the situation:
+	type Bar(T) { var x T; def foo(self) = self.x }
+	var bar Bar(int32)
+	bar.foo
+where the expansion of foo(x *Bar(int32)) can't be resolved straight away, resolve the function from the calling expression
+*/
+bool Resolver::resolveSpecialization(Function* function){
+	auto original = function->generatedFunctionParent;
+
+	auto oldScope = currentScope();
+	auto oldParent = currentParentNode();
+	currentScope(function->owner());
+	currentParentNode(original->parentNode);
+	resolve(function);
+	currentScope(oldScope);
+	currentParentNode(oldParent);
+	return function->isResolved();
+}
+
 Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternMatcher& patternMatcher,Function* original,Type** specializedParameters,Node** passedExpressions){
 	size_t numberOfParameters = original->arguments.size();
 	assert(original->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || original->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS));	
@@ -1283,8 +1330,12 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 		return specialization;
 	}
 	Scope* usageScope;
+	bool definedInSameModule = false;
 	if(original->owner()->moduleScope() != this->compilationUnit()->moduleBody->scope) usageScope = this->compilationUnit()->moduleBody->scope;
-	else usageScope = original->owner();
+	else {
+		usageScope = original->owner();
+		definedInSameModule = true;
+	}
 
 	if(auto exists = original->specializationExists(specializedParameters,passedExpressions,usageScope)) return exists;
 	//Create a new block for specialization which will import the required scopes
@@ -1295,6 +1346,7 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 	//duplicate the original
 	DuplicationModifiers mods(specializationWrapper->scope);
 	auto specialization = original->specializedDuplicate(&mods,specializedParameters,passedExpressions);
+	assert(specialization->owner() == specializationWrapper->scope);
 	specializationWrapper->addChild(specialization);
 	//bring in the T in def foo(x T:_) into the function
 	if(original->isFlagSet(Function::HAS_PATTERN_ARGUMENTS)){
@@ -1302,13 +1354,18 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 		patternMatcher.defineIntroducedDefinitions();
 	}
 	//Resolve.. TODO error handling
+
+	auto oldScope = currentScope();
 	auto oldParent = currentParentNode();
 	currentParentNode(original->parentNode);
+	currentScope(specializationWrapper->scope);
 	multipassResolve(specialization);
-	if(!specialization->isResolved()){
+	if(!specialization->isResolved() && !definedInSameModule){
 		error(original,"Can't resolve the specialization for the function '%s'",original->label());
 	}
+	currentScope(oldScope);
 	currentParentNode(oldParent);
+	
 	assert(!(specialization->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS) || specialization->isFlagSet(Function::HAS_PATTERN_ARGUMENTS)));
 	//
 	compiler::addGeneratedExpression(specializationWrapper);

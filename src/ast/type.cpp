@@ -102,12 +102,12 @@ bool checkPatternedTypeDeclaration(Scope* scope,SymbolID name){
 	return false;
 }
 
-bool TypePatternUnresolvedExpression::PatternMatcher::check(Node* expression){
+bool TypePatternUnresolvedExpression::PatternMatcher::check(Node* expression,Trait* currentTrait){
 	if(expression->asTypeReference()){ //| int32
 		return true;
 	}
-	else if(expression->asTraitReference()){
-		return true;
+	else if(auto tref = expression->asTraitReference()){
+		return currentTrait == tref->trait || tref->trait->isResolved();
 	}
 	else if(auto unresolved = expression->asUnresolvedSymbol()){
 		auto symbol = unresolved->symbol;
@@ -196,9 +196,31 @@ Type* matchOnePatternedTypeDeclaration(Scope* scope,SymbolID name,Type* givenTyp
 /**
   Checks if a given type satisfies a certain trait from the perspective of a given scope.
   Returns true if a type satisfies trait
+  Scenarios:
+  requires def foo(x int32) given def foo(x int32)
+
+  requires def foo(x Trait) given def foo(x TraitImplementation)
+                            given def foo(x *TraitImplementation)
 */
-bool functionMatchesTraitsMethod(Function* function,Function* method){
+bool functionMatchesTraitsMethod(Type* type,Trait* trait,Function* function,Function* method){
 	if(function->arguments.size() == method->arguments.size()){
+		for(size_t i =0,s = function->arguments.size();i<s;++i){
+			if(method->arguments[i]->type.isResolved() && function->arguments[i]->type.isResolved()){
+				if(method->arguments[i]->type.type()->isSame(function->arguments[i]->type.type())){
+					continue;
+				}
+			}
+			else if(method->arguments[i]->type.isPattern()){
+				auto pattern = method->arguments[i]->type.pattern;
+				if(auto tref = pattern->asTraitReference()){
+					if(tref->trait == trait){
+						if(function->arguments[i]->type.type()->isSame(type) ||
+							(function->arguments[i]->type.type()->isPointer() && function->arguments[i]->type.type()->next()->isSame(type) ) ) continue;
+					}
+				}
+			}
+			return false;
+		}
 		return true;
 	}
 	return false;
@@ -211,7 +233,7 @@ data::ast::Search::Result typeSatisfiesTrait(Scope* scope,Type* type,Trait* trai
 
 		for(::overloads::OverloadRange overloads(scope,(*i)->label(),true);!overloads.isEmpty();overloads.advance()){
 			if(!overloads.currentFunction()->isResolved()) return data::ast::Search::NotAllElementsResolved;
-			if(functionMatchesTraitsMethod(overloads.currentFunction(),(*i))){
+			if(functionMatchesTraitsMethod(type,trait,overloads.currentFunction(),(*i))){
 				matchFound = true;
 				break;
 			}
@@ -258,7 +280,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 	}
 	//Match(type)
 	if(auto type2 = pattern->asTypeReference()) return type->isSame(type2->type); //| int32
-	if(auto tref  = pattern->asTraitReference()){
+	else if(auto tref  = pattern->asTraitReference()){
 		return typeSatisfiesTrait(container,type,tref->trait) == data::ast::Search::Found;
 	}
 	else if(auto ref = pattern->asFunctionReference()){

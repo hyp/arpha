@@ -21,6 +21,7 @@ private:
 public:
 	bool treatUnresolvedTypesAsResolved; //Used to resolve circular type definitions or type definitions which depend on self
 	bool isRHS; // = false
+	Trait* currentTrait;       // Required for the trait prerequisuite.
 	Function* currentFunction; // The function we are currently resolving. Can be null.
 
 	// Sometimes we know that we want an expression of certain type at a given place e.g. var x Foo <- we expect Foo to be TypeExpression
@@ -63,7 +64,9 @@ public:
 	Function* resolveOverload(Scope* scope,SymbolID function,Type* functionType);
 	Function* resolveOverload(Scope* scope,SymbolID function,Node* arg,bool dotSyntax = false);
 
+	
 	Function* specializeFunction(TypePatternUnresolvedExpression::PatternMatcher& patternMatcher,Function* original,Type** specializedParameters,Node** passedExpressions);
+	bool resolveSpecialization(Function* function);
 	Node* constructFittingArgument(Function** function,Node *arg,bool dependentChecker = false,int* weight = nullptr);
 
 	void findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic = false);

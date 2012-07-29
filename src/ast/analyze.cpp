@@ -312,7 +312,7 @@ struct Analyzer : NodeVisitor {
 		for(auto i = node->children.begin();i!=node->children.end();i++){
 			(*i)->accept(this);
 			bool warn = (*i)->isConst() && !(*i)->isDefinitionNode() && !(*i)->asUnitExpression() ; //NB: definition nodes have const flag overriden
-			warn = warn ||( !(*i)->returnType()->isVoid() /*NB: GIVE WARNING FOR CALLS AS WELL! TO DISABLE USE: && !(*i)->asCallExpression()*/ );
+			warn = warn || ( !(*i)->returnType()->isVoid() /*NB: GIVE WARNING FOR CALLS AS WELL! TO DISABLE USE: && !(*i)->asCallExpression()*/ );
 			if(warn){
 				warning((*i)->location(),"Ignored expression: The value from this expression is not used for anything!");
 			}
