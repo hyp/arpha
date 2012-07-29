@@ -94,7 +94,7 @@ void TypePatternUnresolvedExpression::PatternMatcher::introduceDefinition(Symbol
 
 bool checkPatternedTypeDeclaration(Scope* scope,SymbolID name){
 
-	for(auto overloads = ::overloads::OverloadRange(scope,name,false);!overloads.isEmpty();overloads.advance()){
+	for(::overloads::OverloadRange overloads(scope,name,false);!overloads.isEmpty();overloads.advance()){
 		if(overloads.currentFunction()->isTypeTemplate()){
 			return true;
 		}
@@ -105,7 +105,11 @@ bool checkPatternedTypeDeclaration(Scope* scope,SymbolID name){
 bool TypePatternUnresolvedExpression::PatternMatcher::check(Node* expression){
 	if(expression->asTypeReference()){ //| int32
 		return true;
-	}else if(auto unresolved = expression->asUnresolvedSymbol()){
+	}
+	else if(expression->asTraitReference()){
+		return true;
+	}
+	else if(auto unresolved = expression->asUnresolvedSymbol()){
 		auto symbol = unresolved->symbol;
 		if(symbol == "_"){
 			if(!unresolved->label().isNull()) introduceDefinition(unresolved->label(),unresolved->location());
@@ -165,7 +169,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Type* type,Node* pat
 
 Type* matchOnePatternedTypeDeclaration(Scope* scope,SymbolID name,Type* givenType){
 	Type* matchedType = nullptr;
-	for(auto overloads = ::overloads::OverloadRange(scope,name,false);!overloads.isEmpty();overloads.advance()){
+	for(::overloads::OverloadRange overloads(scope,name,false);!overloads.isEmpty();overloads.advance()){
 		if(overloads.currentFunction()->isTypeTemplate()){
 			auto function = overloads.currentFunction();
 			if(givenType->wasGeneratedBy(function)){
@@ -187,6 +191,34 @@ Type* matchOnePatternedTypeDeclaration(Scope* scope,SymbolID name,Type* givenTyp
 		}
 	}
 	return matchedType;
+}
+
+/**
+  Checks if a given type satisfies a certain trait from the perspective of a given scope.
+  Returns true if a type satisfies trait
+*/
+bool functionMatchesTraitsMethod(Function* function,Function* method){
+	if(function->arguments.size() == method->arguments.size()){
+		return true;
+	}
+	return false;
+}
+
+//returns Found if the type satisfies trait
+data::ast::Search::Result typeSatisfiesTrait(Scope* scope,Type* type,Trait* trait){
+	for(auto i = trait->methods.begin();i!=trait->methods.end();i++){
+		bool matchFound = false;
+
+		for(::overloads::OverloadRange overloads(scope,(*i)->label(),true);!overloads.isEmpty();overloads.advance()){
+			if(!overloads.currentFunction()->isResolved()) return data::ast::Search::NotAllElementsResolved;
+			if(functionMatchesTraitsMethod(overloads.currentFunction(),(*i))){
+				matchFound = true;
+				break;
+			}
+		}
+		if(!matchFound) return data::ast::Search::NotFound;
+	}
+	return data::ast::Search::Found;
 }
 
 
@@ -226,6 +258,9 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 	}
 	//Match(type)
 	if(auto type2 = pattern->asTypeReference()) return type->isSame(type2->type); //| int32
+	if(auto tref  = pattern->asTraitReference()){
+		return typeSatisfiesTrait(container,type,tref->trait) == data::ast::Search::Found;
+	}
 	else if(auto ref = pattern->asFunctionReference()){
 		//Constraint (We can safely assume this is a constraint if check passed)
 		if(satisfiesConstraint(typeRef,ref->function,container)){
@@ -358,6 +393,8 @@ bool Type::isResolved() const {
 			return argument->isResolved();
 		case FUNCTION_POINTER:
 			return argument->isResolved() && static_cast<const FunctionPointer*>(this)->returns()->isResolved();
+		case TRAIT:
+			return false;
 		default:
 			return true;
 	}
@@ -405,6 +442,9 @@ bool Type::isSame(Type* other){
 
 		case VARIANT_OPTION:
 			return optionID == other->optionID;
+
+		case TRAIT:
+			return this == other;
 
 		case LITERAL_INTEGER:
 		case LITERAL_FLOAT :
@@ -909,6 +949,7 @@ Node* evaluateConstantCast(Node* expression,Type* givenType){
 */
 bool isValidType(Type* type){
 	if(type->type == Type::NODE) return false;
+	if(type->isTrait()) return false;
 	return true;
 }
 bool Type::isValidTypeForVariable(){
@@ -1066,7 +1107,10 @@ DeclaredType* Record::duplicate(DuplicationModifiers* mods) const {
 /**
 * Trait(concept like) type
 */
-Trait::Trait() : DeclaredType(Type::VARIANT) {
+Trait::Trait() : DeclaredType(Type::TRAIT) {
+}
+Trait* Type::asTrait(){
+	return type == TRAIT? static_cast<Trait*>(this) : nullptr;
 }
 DeclaredType* Trait::duplicate(DuplicationModifiers* mods) const {
 	auto dup = new Trait();

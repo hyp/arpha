@@ -67,6 +67,10 @@ struct NodeToString: NodeVisitor {
 		stream<<node->type;
 		return node;
 	}
+	Node* visit(TraitReference* node){
+		stream<<node->trait;
+		return node;
+	}
 	Node* visit(VariableReference* node){
 		stream<<"variable "<<node->variable->label()<<"["<<(void*)node->variable<<"]";
 		return node;
@@ -179,8 +183,11 @@ struct NodeToString: NodeVisitor {
 			newline();
 			stream<<"}";
 		}
-		else {
+		else if(auto variant = type->asVariant()){
 			stream<<"variant "<<decl->label();
+		}
+		else {
+			stream<<"trait "<<decl->label();
 		}
 
 		if(decl->optionalStaticBlock){
@@ -265,6 +272,9 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 			break;
 		case Type::VARIANT_OPTION:
 			stream<<(static_cast<VariantOption*>(type)->declaration->label()); break;
+
+		case Type::TRAIT:
+			stream<<(static_cast<Trait*>(type)->declaration->label()); break;
 
 		case Type::LITERAL_INTEGER:
 			stream<<"literal.integer"; break;

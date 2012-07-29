@@ -600,12 +600,15 @@ struct ConceptParser: IntrinsicPrefixMacro {
 
 	struct BodyParser {
 		Trait* trait;
-		BodyParser(Trait* _trait) : trait(_trait) {}
+		BodyParser(Trait* _trait,Function* templateDecl) : trait(_trait) {}
 		bool operator()(Parser* parser){
 			auto  cmd = parser->expectName();
 			if(cmd == "def"){
-				auto func = parseTraitMethod(parser,nullptr,0);
-				if(func) trait->methods.push_back(func);
+				ParameterTypeSuggestion self = { "self",nullptr };
+				//if(!templateDeclaration){
+					self.expression = new TraitReference(trait);
+				//}
+				if(auto func = parseTraitMethod(parser,&self,1)) trait->methods.push_back(func);
 			}
 			else{
 				parser->syntaxError(format("Can't parse a command '%s' inside trait declaration",cmd));
@@ -616,13 +619,30 @@ struct ConceptParser: IntrinsicPrefixMacro {
 	};
 
 	Node* parse(Parser* parser){
-		auto trait = new Trait();
-		auto decl  = new TypeDeclaration(trait,parser->expectName());
+
+		auto name      = parser->expectName();
+
+		Function* templateDeclaration = nullptr;
+		if(parser->match("(")){
+			templateDeclaration = parseTypeTemplateDeclaration(name,parser);
+		}
+		
 #ifdef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
 		parser->ignoreNewlines();
 #endif
 		parser->expect("{");
-		blockParser->body(parser,BodyParser(trait));
+		auto trait = new Trait();
+		blockParser->body(parser,BodyParser(trait,templateDeclaration));
+
+		auto decl = new TypeDeclaration(trait,name,templateDeclaration != nullptr);
+		parser->introduceDefinition(decl);
+		if(templateDeclaration){
+			templateDeclaration->makeTypeTemplate(decl);
+			parser->leaveBlock();
+			parser->introduceDefinition(templateDeclaration);
+			return templateDeclaration;
+		}
+
 		return decl;
 	}
 };

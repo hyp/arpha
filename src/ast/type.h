@@ -63,6 +63,7 @@ std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& 
 struct AnonymousAggregate;
 struct FunctionPointer;
 struct Variant;
+struct Trait;
 
 //(type ...): intrinsics::types::Type
 struct Type {
@@ -91,6 +92,7 @@ struct Type {
 		ANONYMOUS_VARIANT,
 
 		VARIANT_OPTION,
+		TRAIT,
 		
 
 		LITERAL_INTEGER,
@@ -148,12 +150,14 @@ struct Type {
 	inline bool isLiteral() const { return type>=LITERAL_INTEGER; }
 	inline bool isLinearSequence() const { return type == LINEAR_SEQUENCE; }
 	inline bool isVariantOption() const  { return type == VARIANT_OPTION; }
+	inline bool isTrait() const { return type == TRAIT; }
 
 
 	Record* asRecord();
 	Variant* asVariant();
 	AnonymousAggregate* asAnonymousRecord();
 	FunctionPointer* asFunctionPointer();
+	Trait* asTrait();
 
 	inline Type* next(){ return argument; }
 	inline const Type* next() const { return argument; }

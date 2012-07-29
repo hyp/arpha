@@ -286,6 +286,7 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 		return generateAnonymousVariant(this,static_cast<AnonymousAggregate*>(type));
 
 
+	case Type::TRAIT:
 	case Type::LITERAL_INTEGER:
 	case Type::LITERAL_FLOAT:
 	case Type::LITERAL_CHAR:

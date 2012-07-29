@@ -113,35 +113,6 @@ SearchResult findFunctionByType(Scope* scope,SymbolID name,FunctionPointer* type
 
 }
 
-/**
-  Checks if a given type satisfies a certain trait from the perspective of a given scope.
-  Returns true if a type satisfies trait
-*/
-bool functionMatchesTraitsMethod(Function* function,Function* method){
-	if(function->arguments.size() == method->arguments.size()){
-		return true;
-	}
-	return false;
-}
-
-//returns Found if the type satisfies trait
-data::ast::Search::Result typeSatisfiesTrait(Scope* scope,Type* type,Trait* trait){
-	for(auto i = trait->methods.begin();i!=trait->methods.end();i++){
-		bool matchFound = false;
-
-		for(overloads::OverloadRange overloads(scope,(*i)->label(),true);!overloads.isEmpty();overloads.advance()){
-			if(!overloads.currentFunction()->isResolved()) return data::ast::Search::NotAllElementsResolved;
-			if(functionMatchesTraitsMethod(overloads.currentFunction(),(*i))){
-				matchFound = true;
-				break;
-			}
-		}
-		if(!matchFound) return data::ast::Search::NotFound;
-	}
-	return data::ast::Search::Found;
-}
-
-
 Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilationUnit),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr) {
 	unresolvedExpressions = 0;
 	treatUnresolvedTypesAsResolved = false;

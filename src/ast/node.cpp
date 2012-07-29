@@ -480,6 +480,12 @@ Node* TypeReference::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new TypeReference(type));
 }
 
+TraitReference::TraitReference(Trait* trait){
+	this->trait = trait;
+}
+Node* TraitReference::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new TraitReference(trait));
+}
 //Other,temporary nodes
 
 ExpressionVerifier::ExpressionVerifier(const Location& loc,Node* child,Type* typeExpected) : expression(child),expectedType(typeExpected) {
