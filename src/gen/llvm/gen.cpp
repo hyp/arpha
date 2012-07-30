@@ -359,9 +359,11 @@ Node* LLVMgenerator::visit(VariableReference* node){
 }
 
 Node* LLVMgenerator::visit(FieldAccessExpression* node){
+	auto neededPointer = needsPointer;
+	if(neededPointer) needsPointer = false;
 	auto ptr = node->object->returnType()->isPointer()? generateExpression(node->object) : generatePointerExpression(node->object);
 	auto fieldPtr = builder.CreateStructGEP(ptr,node->field);
-	if(needsPointer) emit(fieldPtr); 
+	if(neededPointer) emit(fieldPtr); 
 	else emitLoad(fieldPtr);
 
 	return node;

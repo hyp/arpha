@@ -681,15 +681,6 @@ struct InterfaceParser: IntrinsicPrefixMacro {
 	}
 };
 
-// TODO getter self pointer type const and local, setter self pointer type local
-void createFieldGettersSetters(Parser* parser,Record* thisType,int fieldID){
-	auto funcs = thisType->createFieldGetterSetter(parser->previousLocation(),fieldID);
-	parser->mixinedExpressions.push_back(funcs.first);
-	parser->mixinedExpressions.push_back(funcs.second);
-}
-
-
-
 static Function* parseTypeMethod(Parser* parser,ParameterTypeSuggestion* suggestions,size_t numberOfSuggestions){
 	auto name = parser->expectName();
 	auto func = new Function(name,parser->previousLocation());
@@ -706,8 +697,6 @@ static Function* parseTypeMethod(Parser* parser,ParameterTypeSuggestion* suggest
 	//special handling for body
 	parseFunctionBody(parser,func);
 	parser->leaveBlock();
-
-	parser->mixinedExpressions.push_back(func);
 	return func;
 }
 
@@ -723,7 +712,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 
 	/// fields ::= ['private'] ['extends'] 'var' names [ type ] '=' [Newlines] initializers
 	enum { FIELDS_EXT = 0x1,FIELDS_READONLY = 0x2,FIELDS_PRIVATE = 0x4,TEMPLATED_TYPE = 0x8 };
-	static void fields(Parser* parser,Record* record,int flags = 0){
+	static void fields(Parser* parser,Record* record,std::vector<Node*>& mixinedExpressions,int flags = 0){
 		size_t i = record->fields.size();
 		const bool isExtending = (flags & FIELDS_EXT)!=0;
 		const bool isPrivate   = (flags & FIELDS_PRIVATE)!=0;
@@ -735,7 +724,11 @@ struct TypeParser: IntrinsicPrefixMacro {
 			field.isPrivate   = isPrivate;
 			field.isReadonly  = isReadonly;
 			record->add(field);
-			if((flags & TEMPLATED_TYPE) == 0) createFieldGettersSetters(parser,record,record->fields.size()-1);
+			if((flags & TEMPLATED_TYPE) == 0){
+				auto funcs = record->createFieldGetterSetter(parser->previousLocation(),record->fields.size()-1);
+				mixinedExpressions.push_back(funcs.first);
+				mixinedExpressions.push_back(funcs.second);
+			}
 		} while(parser->match(","));
 		
 		TypePatternUnresolvedExpression type;
@@ -778,7 +771,9 @@ struct TypeParser: IntrinsicPrefixMacro {
 	struct BodyParser {
 		Record* record;
 		Function* templateDeclaration;
-		BodyParser(Record* _record,Function* templateDecl) : record(_record),templateDeclaration(templateDecl) {}
+		std::vector<Node*>& mixinedExpressions;
+
+		BodyParser(Record* _record,Function* templateDecl,std::vector<Node*>& mixins) : record(_record),templateDeclaration(templateDecl),mixinedExpressions(mixins) {}
 		bool operator()(Parser* parser){
 			auto  cmd = parser->expectName();
 			int flags = templateDeclaration != nullptr?TEMPLATED_TYPE:0;
@@ -791,7 +786,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 				cmd = parser->expectName();
 			}
 			if(cmd == "var"){
-				fields(parser,record,flags);
+				fields(parser,record,mixinedExpressions,flags);
 			}
 			else if(cmd == "def"){
 				if(flags & FIELDS_EXT) parser->syntaxError(format("Can't use property 'extends' on a function declaration!"));
@@ -805,6 +800,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 				
 				auto func = parseTypeMethod(parser,&self,1);
 				if(flags & FIELDS_PRIVATE) func->visibilityMode(data::ast::PRIVATE);
+				mixinedExpressions.push_back(func);
 				return true;
 			}
 			else{
@@ -832,7 +828,8 @@ struct TypeParser: IntrinsicPrefixMacro {
 		parser->expect("{");
 		//record
 		auto record = new Record();
-		blockParser->body(parser,BodyParser(record,templateDeclaration));
+		std::vector<Node*> mixinedExpressions;
+		blockParser->body(parser,BodyParser(record,templateDeclaration,mixinedExpressions));
 
 		auto decl = new TypeDeclaration(record,name,templateDeclaration != nullptr);
 		parser->introduceDefinition(decl);
@@ -842,6 +839,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 			parser->introduceDefinition(templateDeclaration);
 			return templateDeclaration;
 		}
+		parser->mixinedExpressions = mixinedExpressions;
 
 		return decl;
 	}

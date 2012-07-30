@@ -16,6 +16,24 @@
 
 
 #
+	This trait describes a type which can be iterated in a sequential fashion.
+	TODO: moveNext *Sequence
+#
+trait Sequence(T) 
+{
+	def empty   (self) bool
+	def current (self) T
+	def moveNext(self Sequence)
+}
+
+trait InfiniteSequence(T)
+{
+	def current (self) T
+	def moveNext(self InfiniteSequence)
+}
+
+
+#
 	Type operations.
 	
 	isParametrized returns true if a type is parametrize e.g. Pointer(int32) is parametrized by int32

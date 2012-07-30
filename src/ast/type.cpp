@@ -240,24 +240,37 @@ bool matchTraitParameter(Node** pattern,Type* given,bool strict){
 	}
 }
 
+bool matchPatternedTraitParameter(Scope* scope,Node* pattern,Type* given,bool strict){
+	TypePatternUnresolvedExpression::PatternMatcher matcher(scope,nullptr);
+	if(matcher.match(given,pattern)) return true;
+	else if(!strict && matcher.match(new Type(Type::POINTER,given),pattern)) return true;
+	return false;
+}
+
 bool functionMatchesTraitsMethod(Type* type,Trait* trait,Function* function,Function* method,std::vector<Node*>* traitExpansions){
 	bool strict = false;
 
 	if(function->arguments.size() == method->arguments.size()){
 		for(size_t i =0,s = function->arguments.size();i<s;++i){
-			if(method->arguments[i]->type.isResolved() && function->arguments[i]->type.isResolved()){
-				if(method->arguments[i]->type.type()->isSame(function->arguments[i]->type.type()))
-					continue;
+			if(method->arguments[i]->type.isResolved()){
+				if(function->arguments[i]->type.isResolved() && method->arguments[i]->type.type()->isSame(function->arguments[i]->type.type())){
+						continue;
+				}
 			}
 			else if(method->arguments[i]->type.isPattern()){
-				auto pattern = method->arguments[i]->type.pattern;
-				if(auto tref = pattern->asTraitReference()){
-					if(tref->trait == trait){
-						if(match(type,function->arguments[i]->type.type(),strict)) continue;
+				if(function->arguments[i]->type.isResolved()){
+					auto pattern = method->arguments[i]->type.pattern;
+					if(auto tref = pattern->asTraitReference()){
+						if(tref->trait == trait){
+							if(match(type,function->arguments[i]->type.type(),strict)) continue;
+						}
+					}
+					else if(auto p = pattern->asTraitParameterReference()){
+						return matchTraitParameter((traitExpansions->begin() + p->index)._Ptr,function->arguments[i]->type.type(),strict);
 					}
 				}
-				else if(auto p = pattern->asTraitParameterReference()){
-					return matchTraitParameter((traitExpansions->begin() + p->index)._Ptr,function->arguments[i]->type.type(),strict);
+				else if(function->arguments[i]->type.isPattern()){
+					if(matchPatternedTraitParameter(function->parameterPatternMatchingScope(),function->arguments[i]->type.pattern,type,strict)) continue;
 				}
 			}
 			return false;

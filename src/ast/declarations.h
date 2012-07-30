@@ -202,6 +202,7 @@ struct Function: public PrefixDefinition {
 	Type* argumentType();
 	Type* returns() const;
 	Scope* owner() const;
+	Scope* parameterPatternMatchingScope() const;
 
 	//Used to specialise a function with type pattern and/or expandable parameters
 	Function* specializationExists(Type** specializedParameters,Node** passedExpressions,Scope* usageScope);

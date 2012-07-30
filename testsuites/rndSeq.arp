@@ -1,0 +1,24 @@
+#
+	Testing out implicit sequences..
+#
+
+trait Seq(T) 
+{
+	def empty(self) bool
+	def current(self) T
+	def moveNext(self)
+}
+type RandomGenerator 
+{
+	var x int32
+	
+	def empty   (self) = false
+	def current (self) = self.x
+	def moveNext(self) = self.x++
+}
+def main(){
+	match(RandomGenerator) 
+	{ 	| Seq => true 
+		| _   => false 
+	}
+}

@@ -173,6 +173,9 @@ void Function::setNonthrow(){
 Scope* Function::owner() const {
 	return body.scope->parent;
 }
+Scope* Function::parameterPatternMatchingScope() const {
+	return body.scope;
+}
 void   Function::addArgument(Argument* arg){
 	assert(!isResolved());
 	arguments.push_back(arg);

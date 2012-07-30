@@ -1328,6 +1328,12 @@ bool Resolver::resolveSpecialization(Function* function){
 	return function->isResolved();
 }
 
+
+Scope* getSpecializationScope(Function* original,Resolver* resolver){
+	if(original->owner()->moduleScope() != resolver->compilationUnit()->moduleBody->scope) return resolver->compilationUnit()->moduleBody->scope;
+	else return original->owner();
+}
+
 Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternMatcher& patternMatcher,Function* original,Type** specializedParameters,Node** passedExpressions){
 	size_t numberOfParameters = original->arguments.size();
 	assert(original->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || original->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS));	
@@ -1467,7 +1473,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 		else if( func->arguments[currentArg]->type.isPattern() ){
 			
 			if(auto pattern = func->arguments[currentArg]->type.pattern){
-				auto topMatchedType = matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern);
+				auto topMatchedType = matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern,getSpecializationScope(func,this));
 				result[currentArg] = resolve(topMatchedType->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType()));
 			}
 			else {
@@ -1665,7 +1671,7 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 		}
 		else if( func->arguments[currentArg]->type.isPattern() ){
 			if(auto pattern = func->arguments[currentArg]->type.pattern){
-				if(!matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern)) return false;
+				if(!matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern,getSpecializationScope(func,evaluator))) return false;
 				weight += WILDCARD + 1;
 			}
 			else weight += WILDCARD;
