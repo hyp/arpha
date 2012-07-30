@@ -565,8 +565,32 @@ Function* parseTypeTemplateDeclaration(SymbolID name,Parser* parser){
 	return func;
 }
 
+
+
+void parseTraitTemplateDeclaration(Parser* parser,Scope* scope){
+	struct Substitute: IntrinsicPrefixMacro {
+	public:
+		Substitute(SymbolID name,size_t index) : IntrinsicPrefixMacro(name) { this->index = index; }
+		Node* parse(Parser* parser){ return new TraitParameterReference(index); }
+		Node* createReference()    { return new TraitParameterReference(index); }
+		size_t index;
+	};
+
+	size_t i = 0;
+	while(1){
+		auto argName  = parser->expectName();
+
+		scope->define(new Substitute(argName,i));
+		i++;
+
+		if(parser->match(")")) break;
+		parser->expect(",");
+	}
+}
+
 static Function* parseTraitMethod(Parser* parser,ParameterTypeSuggestion* suggestions,size_t numberOfSuggestions){
 	auto name = parser->expectName();
+
 	auto func = new Function(name,parser->previousLocation());
 
 	parser->enterBlock(&func->body);
@@ -619,26 +643,27 @@ struct ConceptParser: IntrinsicPrefixMacro {
 
 		auto name      = parser->expectName();
 
-		Function* templateDeclaration = nullptr;
+		Scope* templateDeclaration = nullptr;
 		if(parser->match("(")){
-			templateDeclaration = parseTypeTemplateDeclaration(name,parser);
+			templateDeclaration = new Scope(parser->currentScope());
+			parseTraitTemplateDeclaration(parser,templateDeclaration);
+			parser->currentScope(templateDeclaration);
 		}
 		
 #ifdef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
 		parser->ignoreNewlines();
 #endif
 		parser->expect("{");
-		auto trait = new Trait();
+		auto trait = new Trait(templateDeclaration);
 		blockParser->body(parser,BodyParser(trait));
 
-		auto decl = new TypeDeclaration(trait,name,templateDeclaration != nullptr);
-		parser->introduceDefinition(decl);
 		if(templateDeclaration){
-			templateDeclaration->makeTypeTemplate(decl);
-			parser->leaveBlock();
-			parser->introduceDefinition(templateDeclaration);
-			return templateDeclaration;
-		}		
+			parser->currentScope(templateDeclaration->parent);
+		}
+		auto decl = new TypeDeclaration(trait,name);
+		parser->introduceDefinition(decl);
+
+
 
 		return decl;
 	}

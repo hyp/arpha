@@ -54,6 +54,7 @@ struct Argument;
 	X(ErrorExpression)        \
 	X(TypeReference)          \
 	X(TraitReference)         \
+	X(TraitParameterReference) \
 	X(ImportedScopeReference) \
 	X(VariableReference)     \
 	X(FunctionReference)     \
@@ -324,6 +325,13 @@ struct TraitReference : Node {
 
 	Trait* trait;
 	DECLARE_NODE(TraitReference);
+};
+
+struct TraitParameterReference : Node {
+	TraitParameterReference(size_t i);
+
+	size_t index;
+	DECLARE_NODE(TraitParameterReference);
 };
 
 //: variable->type

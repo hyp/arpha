@@ -486,6 +486,13 @@ TraitReference::TraitReference(Trait* trait){
 Node* TraitReference::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new TraitReference(trait));
 }
+
+TraitParameterReference::TraitParameterReference(size_t i){
+	this->index = i;
+}
+Node* TraitParameterReference::duplicate(DuplicationModifiers* mods) const {
+	return copyProperties(new TraitParameterReference(index));
+}
 //Other,temporary nodes
 
 ExpressionVerifier::ExpressionVerifier(const Location& loc,Node* child,Type* typeExpected) : expression(child),expectedType(typeExpected) {

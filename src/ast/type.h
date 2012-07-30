@@ -42,13 +42,13 @@ struct TypePatternUnresolvedExpression {
 		Scope* container;
 		Scope* expansionScope;//where the expansion is happening.. required to check if a type satisfies a trait from a perspective of the expansion scope
 		Resolver* resolver;
-		Type* topMatchedType;
 
-		PatternMatcher(Scope* scope,Resolver* resolver) : container(scope),resolver(resolver),topMatchedType(nullptr) {}
+		PatternMatcher(Scope* scope,Resolver* resolver) : container(scope),resolver(resolver) {}
 		IntroducedDefinition* lookupDefinition(SymbolID name);
 		void introduceDefinition(SymbolID name,Location location,Node* value = nullptr);
 		bool check(Node* expression,Trait* currentTrait = nullptr); //Returns true if a certain expression is a type pattern e.g. _
-		bool match(Type* type,Node* pattern,Scope* expansionScope = nullptr);
+		bool  match(Type* type,Node* pattern,Scope* expansionScope = nullptr);
+		Type* matchWithSubtyping(Type* type,Node* pattern,Scope* expansionScope = nullptr);
 		Node* inverseMatch(Node* pattern);
 		void defineIntroducedDefinitions();
 	private:
@@ -283,14 +283,17 @@ struct DeclaredType: public Type {
 * aka concept.
 */
 struct Trait: public DeclaredType {
-	Trait();
+	Trait(Scope* templateDeclaration);
 
 	DeclaredType* duplicate(DuplicationModifiers* mods) const;
 	DeclaredType* resolve(Resolver* resolver);
 
 	inline bool isImplicit(){ return true; }
+	size_t numberOfTemplateParameters();
 
 	std::vector<Function*> methods;
+
+	Scope* templateDeclaration;
 };
 
 

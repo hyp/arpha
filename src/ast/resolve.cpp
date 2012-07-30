@@ -242,7 +242,8 @@ Node* CallExpression::resolve(Resolver* resolver){
 		if(auto os = scope->lookupPrefix(callingOverloadSet->symbol)){
 			if(auto decl = os->asTypeDeclaration()){
 				object= callingOverloadSet->copyLocationSymbol(resolver->resolve(decl->createReference()));
-				resolver->markResolved(this);
+				if(!object->asTraitReference())
+					resolver->markResolved(this);
 				return this;
 			}
 			else assert(os->asOverloadset());
@@ -310,6 +311,9 @@ Node* CallExpression::resolve(Resolver* resolver){
 		return resolver->resolve(transformCallOnAccess(this,callingAccess));
 	}
 	else if(auto type = object->asTypeReference()){
+		resolver->markResolved(this);
+	}
+	else if(object->asTraitReference()){
 		resolver->markResolved(this);
 	}
 	else if(object->asVariableReference() && object->returnType()->isFunctionPointer()){
@@ -910,12 +914,20 @@ void generateDestructorBody(Record* type,Variable* selfObject,BlockExpression* b
 DeclaredType* Trait::resolve(Resolver* resolver){
 	bool allResolved = true;
 	resolver->currentTrait = this;
+
+	if(templateDeclaration){
+		templateDeclaration->parent = resolver->currentScope();
+		resolver->currentScope(templateDeclaration);
+	}
+
 	for(auto i = methods.begin();i!=methods.end();++i){
 		if(!(*i)->isResolved()){
 			(*i)->resolve(resolver);
 			if(!(*i)->isResolved()) allResolved = false;
 		}
 	}
+	if(templateDeclaration)
+		resolver->currentScope(templateDeclaration->parent);
 	resolver->currentTrait = nullptr;
 
 	if(allResolved && (declaration->optionalStaticBlock == nullptr || declaration->optionalStaticBlock->isResolved())){
@@ -993,6 +1005,10 @@ Node* Function::resolve(Resolver* resolver){
 
 	//If this is a generic or expendable function don't resolve body and return type!
 	if( isFlagSet(HAS_EXPENDABLE_ARGUMENTS) || isFlagSet(HAS_PATTERN_ARGUMENTS) || isFlagSet(FIELD_ACCESS_FUNCTION)){
+		if(resolver->currentTrait){
+			if(_returnType.isPattern() && !_returnType.pattern) _returnType.specify(intrinsics::types::Void);
+			else if(!_returnType.resolve(resolver)) return this;
+		}
 		setFlag(Node::RESOLVED);
 		debug("Function %s is partially resolved!",label());
 		return this;
@@ -1451,8 +1467,8 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 		else if( func->arguments[currentArg]->type.isPattern() ){
 			
 			if(auto pattern = func->arguments[currentArg]->type.pattern){
-				matcher.match(exprBegin[currentExpr]->returnType(),pattern);
-				result[currentArg] = resolve(matcher.topMatchedType->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType()));
+				auto topMatchedType = matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern);
+				result[currentArg] = resolve(topMatchedType->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType()));
 			}
 			else {
 				result[currentArg] = resolve(exprBegin[currentExpr]);
@@ -1649,7 +1665,7 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 		}
 		else if( func->arguments[currentArg]->type.isPattern() ){
 			if(auto pattern = func->arguments[currentArg]->type.pattern){
-				if(!matcher.match(exprBegin[currentExpr]->returnType(),pattern)) return false;
+				if(!matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern)) return false;
 				weight += WILDCARD + 1;
 			}
 			else weight += WILDCARD;
