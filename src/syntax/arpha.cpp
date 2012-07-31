@@ -365,12 +365,16 @@ bool parseFunctionBody(Parser* parser,Function* func,bool allowNoBody = false){
 	return true;
 }
 
+inline bool isIntrinsicImported(Parser* parser){
+	return parser->compilationUnit()->moduleBody->scope->importsArphaIntrinsic;
+}
+
 // TODO contract requirements?
 static Function* parseFunction(SymbolID name,Parser* parser){
 	//Function
 	auto func = new Function(name,parser->previousLocation());
 	//
-	if(parser->compilationUnit()->moduleBody->scope->importsArphaIntrinsic) func->applyProperty("intrinsic",nullptr);
+	if(isIntrinsicImported(parser)) func->applyProperty("intrinsic",nullptr);
 	else if(parser->compilationUnit()->moduleBody->scope->importsArphaExternal){
 		func->applyProperty("external",nullptr);
 		func->cc = data::ast::Function::CCALL;
@@ -392,47 +396,6 @@ static Function* parseFunction(SymbolID name,Parser* parser){
 
 	return func;
 }
-
-enum MethodContext {
-	MethodContextInterface,//allows only declarations, no implementation, this arg is virtual
-	MethodContextTrait,    //allows declarations as requirements, and implementation
-	MethodContextType
-};
-
-// TODO contract requirements
-// TODO interface no body check ??
-static Function* parseMethod(Parser* parser,Type* thisType,SymbolID name,MethodContext context){
-	auto func = new Function(name,parser->previousLocation());
-
-	parser->enterBlock(&func->body);
-	//parse arguments
-	auto arg = new Argument("self",parser->previousLocation(),func);
-	if(context == MethodContextType){
-		arg->type.unresolvedExpression = new TypeReference(new Type(Type::POINTER,thisType));
-		arg->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
-	}
-	else parser->expect("(");
-	func->addArgument(arg);
-	parseFunctionParameters(parser,func);
-	//return type & body
-	auto token = parser->peek();
-	if(!isEndExpression(token) && !(token.isSymbol() && (token.symbol == "=" || token.symbol == "{"))){
-		func->_returnType.parse(parser,arpha::Precedence::Assignment);
-	}
-	//special handling for body
-	auto hasBody= parseFunctionBody(parser,func,context != MethodContextType);
-	parser->leaveBlock();
-	if(context == MethodContextTrait && hasBody){//trait Foo {} def method(foo Foo)
-		func->arguments[0]->type.pattern = new TypeReference(thisType);
-		func->arguments[0]->type.kind = TypePatternUnresolvedExpression::PATTERN;
-		parser->mixinedExpressions.push_back(func);
-		return nullptr;//don't add to trait's required methods
-	}
-
-	return func;	
-}
-
-
 
 // TODO
 static void parseTypeInvariant(Parser* parser,TypeDeclaration* typeDecl){
@@ -833,7 +796,16 @@ struct TypeParser: IntrinsicPrefixMacro {
 		blockParser->body(parser,BodyParser(record,templateDeclaration,mixinedExpressions));
 
 		auto decl = new TypeDeclaration(record,name,templateDeclaration != nullptr);
+		if(record->fields.size() == 0){
+			if(templateDeclaration && isIntrinsicImported(parser)){
+				debug("Intr type!");
+				templateDeclaration->setFlag(Function::IS_INTRINSIC);
+				Function::getIntrinsicTypeTemplateBinder(templateDeclaration);
+			}
+			else error(decl,"The type '%s' must have at least one field!",name);
+		}
 		parser->introduceDefinition(decl);
+
 		if(templateDeclaration){
 			templateDeclaration->makeTypeTemplate(decl);
 			parser->leaveBlock();

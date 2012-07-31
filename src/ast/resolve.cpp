@@ -923,7 +923,17 @@ void generateDestructorBody(Record* type,Variable* selfObject,BlockExpression* b
 
 /**
 	Every requirement must containt self in parameters or return type.
+	Allowed:
+		def f(self)
+		def f() self
+	Not allowed:
+		def f()
+
 	All trait parameters must be represented in requirements.
+	Allowed:
+		concept Foo(T) { def go(self) T }
+	Not allowed:
+		concept Foo(T) { def go(self) Nothing }
 */
 bool Trait::verify(){
 	std::vector<bool> parametersPresent;
@@ -996,7 +1006,7 @@ bool Trait::verify(){
 						}
 					}
 				}
-				error(this->declaration,"Concept '%s' can't infer the parameter '%s' from its requirements!",this->declaration->label(),paramName);
+				error(this->declaration,"Concept '%s' can't deduce the value of the parameter '%s' from its requirements!",this->declaration->label(),paramName);
 			}
 		}
 	}

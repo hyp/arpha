@@ -492,6 +492,9 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 /**
 * The type
 */
+Function* Type::generators::linearSequence  = nullptr;
+Function* Type::generators::functionPointer = nullptr;
+
 Type::Type(int kind) : type(kind),flags(0) {
 	if(kind == BOOL) bits = 1;
 }
@@ -647,9 +650,9 @@ bool Type::wasGeneratedBy(Function* function) const {
 	switch(type){
 	case RECORD: return static_cast<const Record*>(this)->declaration->parametrization()->generatedFunctionParent == function;
 
-	case LINEAR_SEQUENCE: return function == intrinsics::types::LinearSequenceTypeGenerator;
-	case STATIC_ARRAY:    return function == intrinsics::types::StaticArrayTypeGenerator;
-	case FUNCTION_POINTER:        return function == intrinsics::types::FunctionTypeGenerator;
+	case LINEAR_SEQUENCE:  return function == generators::linearSequence;
+	case STATIC_ARRAY:     return function == intrinsics::types::StaticArrayTypeGenerator;
+	case FUNCTION_POINTER: return function == generators::functionPointer;
 
 	default:
 		return false;

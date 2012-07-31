@@ -9,8 +9,7 @@ namespace intrinsics {
 
 		extern ::Type *NodePointer;
 
-		extern Function *FunctionTypeGenerator,*RangeTypeGenerator,*StaticArrayTypeGenerator;
-		extern Function *LinearSequenceTypeGenerator;
+		extern Function *StaticArrayTypeGenerator;
 
 		//Boots up the type system by defining the void,type and literal types
 		void startup();

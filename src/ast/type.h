@@ -193,6 +193,11 @@ struct Type {
 	bool wasGeneratedBy(Function* function) const;  //Returns the function which generated this type
 	Node* generatedArgument(size_t i) const; //Returns the parameter i which was the argument to the function which generated this type
 
+	struct generators {
+		static Function* linearSequence;
+		static Function* functionPointer;
+	};
+
 	/**
 	* This is the one of the key functions of the type system.
 	* Given an expression and its type, this function will check if the 'this' type can be assigned from expression's type.
@@ -202,6 +207,8 @@ struct Type {
 	int assignFrom(Node** expression,Type* type,bool doTransform);
 	Node* assignableFrom(Node* expression,Type* type);
 	int canAssignFrom(Node* expression,Type* type);
+
+
 public:
 	enum {
 		IS_RESOLVED = 0x1,

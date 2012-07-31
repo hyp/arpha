@@ -6,14 +6,22 @@
 		max/min information in here.
 #
 
+import arpha.intrinsic
+
 #
 	Core types such as:
 		Nothing, Type and bool,
-		Pointer(_), LinearSequence(_) and Function(_,_) 
 	are defined by the implementation.
 	The constant values true and false are also defined by the implementation.
 #
 
+
+#
+	This type represents a pointer to a function.
+#
+type FunctionPointer(ParameterType,ReturnType)
+{
+}
 
 #
 	This trait describes a type which can be iterated in a sequential fashion.
@@ -31,18 +39,20 @@ trait InfiniteSequence(T)
 	def moveNext(self *InfiniteSequence) Nothing
 }
 
+#
+	Contiguos sequence is a contiguos sequence of elements. 
+	It is represented by a structure containing two pointers to the beggining and to the end of the sequence.
+#
+type LinearSequence(T)
+{
+}
+
+
 
 #
 	Type operations.
 	
 	isParametrized returns true if a type is parametrize e.g. Pointer(int32) is parametrized by int32
 #
-
-import arpha.intrinsic
-
-
 def equals(type Type,other Type) bool
 def isParametrized(type Type) bool
-
-
-

@@ -251,6 +251,7 @@ struct Function: public PrefixDefinition {
 
 	//Bindings to compile time evaluator
 	static void getIntrinsicFunctionBinder(Function* function);
+	static void getIntrinsicTypeTemplateBinder(Function* function);
 
 	//generated functions
 	Function* generatedFunctionParent;

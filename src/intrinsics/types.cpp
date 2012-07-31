@@ -134,19 +134,11 @@ namespace intrinsics {
 					moduleScope->defineFunction(func);
 				}
 
-				static void FunctionType(CTFEintrinsicInvocation* invocation){
-					invocation->ret(FunctionPointer::get(invocation->getTypeParameter(0),invocation->getTypeParameter(1)));
-				}
 				static void StaticArray(CTFEintrinsicInvocation* invocation){
 					invocation->ret(new ::Type(::Type::STATIC_ARRAY,invocation->getTypeParameter(0),(size_t)invocation->getInt32Parameter(1)));
 				}
-				static void LinearSequence(CTFEintrinsicInvocation* invocation){
-					invocation->ret(::Type::getLinearSequence(invocation->getTypeParameter(0)));
-				}
 			};
-			TypeFunc("Function",moduleScope,&FunctionTypeGenerator,&TypeFunc::FunctionType,2);
 			TypeFunc("Array",moduleScope,&StaticArrayTypeGenerator,&TypeFunc::StaticArray,2);
-			TypeFunc("LinearSequence",moduleScope,&LinearSequenceTypeGenerator,&TypeFunc::LinearSequence,1);
 		}
 
 	}

@@ -343,6 +343,36 @@ void Function::getIntrinsicFunctionBinder(Function* function){
 	compiler::intrinsicFatalError(function->location(),format(" Intrinsic binding failure - The function '%s' isn't intrinsic(man: %s)!\nPlease don't use the intrinsic property on it!",function->label(),signature));
 }
 
+void Function::getIntrinsicTypeTemplateBinder(Function* function){
+	assert(function->isIntrinsic());
+	bool error = false;
+
+	struct Generator { 
+		static void linearSequence(CTFEintrinsicInvocation* invocation){
+			invocation->ret(::Type::getLinearSequence(invocation->getTypeParameter(0)));
+		}
+		static void functionPointer(CTFEintrinsicInvocation* invocation){
+			invocation->ret(FunctionPointer::get(invocation->getTypeParameter(0),invocation->getTypeParameter(1)));
+		}
+	};
+
+	if(function->label() == "LinearSequence" && !Type::generators::linearSequence){
+		Type::generators::linearSequence = function;
+		function->intrinsicCTFEbinder = Generator::linearSequence;
+	}
+	else if(function->label() == "FunctionPointer" && !Type::generators::functionPointer){
+		Type::generators::functionPointer = function;
+		function->intrinsicCTFEbinder = Generator::functionPointer;
+	}
+	else {
+		error = true;
+	}
+
+
+	if(error)
+		compiler::intrinsicFatalError(function->location(),format(" Intrinsic binding failure - The type '%s' isn't intrinsic!\nPlease don't use the intrinsic property on it!",function->label()));
+}
+
 Node* Variable::getIntrinsicValue(Variable* variable){
 	if(!mappingInitialized) initMapping();
 
