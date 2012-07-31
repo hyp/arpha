@@ -1,5 +1,7 @@
 #
 	Testing out implicit sequences..
+	
+	TODO: fix bug where type matching via match doesn't a pattern even though the matching via patten isn't yet resolved
 #
 
 trait Seq(T) 
@@ -16,20 +18,20 @@ type RandomGenerator
 	def current (self) = self.x
 	def moveNext(self) = self.x++
 }
+type ParametrizedRandomGenerator(T)
+{
+	var x T
+	
+	def empty   (self) = false
+	def current (self) = self.x
+	def moveNext(self) = self.x++
+}
 def main(){
 	match(RandomGenerator) 
 	{ 	| Seq => true 
 		| _   => false 
 	}
+	match(ParametrizedRandomGenerator(int32)) 
+	{ 	| Seq => true 
+	}
 }
-
-trait Seq(T)
-{
-	def go(self) T
-}
-type Go(T)
-{
-	var x T
-	def go(self) = self.x
-}
-match(Go(int32)) { | Seq => true }

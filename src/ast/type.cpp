@@ -260,7 +260,6 @@ Type* matchPatternedTraitParameter(TypePatternUnresolvedExpression::PatternMatch
 }
 
 data::ast::Search::Result functionMatchesTraitsMethod(Type* type,Trait* trait,Function* function,Function* method,std::vector<Node*>* traitExpansions,Resolver* resolver){
-	//matching def f(x Bar(_)
 	bool patterned = false;
 	TypePatternUnresolvedExpression::PatternMatcher patternedMatcher(function->parameterPatternMatchingScope(),nullptr);
 	std::vector<Type*> specializedParameters;
