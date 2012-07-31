@@ -33,4 +33,11 @@ def main()
 	match(ParametrizedRandomGenerator(int32)) 
 	{ 	| Seq => true 
 	}
+	match(RandomGenerator)
+	{	| Seq(int32) => true
+		| _ => false
+	}
+	match(ParametrizedRandomGenerator(int32))
+	{	| Seq(int32) => true
+	}
 }
