@@ -16,9 +16,6 @@ namespace intrinsics {
 
 		::Type *NodePointer;
 
-		Function* PointerTypeGenerator,*FunctionTypeGenerator,*RangeTypeGenerator,*StaticArrayTypeGenerator;
-		Function *LinearSequenceTypeGenerator;
-
 		::Type* boolean = nullptr;
 		::Type* int8 = nullptr;
 		::Type* int16 = nullptr;
@@ -39,7 +36,7 @@ namespace intrinsics {
 
 			boolean = new ::Type(::Type::BOOL);
 
-			NodePointer = new ::Type(::Type::POINTER,new ::Type(::Type::NODE,-1));
+			NodePointer = ::Type::getPointerType(new ::Type(::Type::NODE,-1));
 
 
 			int8 = ::Type::getIntegerType (8,true);
@@ -101,44 +98,6 @@ namespace intrinsics {
 			moduleScope->define(new TypeRefCreator("float",::Type::getFloatType(32)) );
 			moduleScope->define(new TypeRefCreator("double",::Type::getFloatType(64)) );
 
-			struct TypeFunc {
-				TypeFunc(SymbolID name,Scope* moduleScope,Function** dest,Function::CTFE_Binder binder,int args = 1){
-					Function* func = new Function(name,Location());
-					if(dest) *dest = func;
-					if(args == 1){
-						func->arguments.push_back(new Argument("type",Location(),func));
-						func->arguments[0]->specifyType(Type);
-					}else{
-						if(name == SymbolID("Integer")){//TODO
-							func->arguments.push_back(new Argument("min",Location(),func));
-							func->arguments[0]->specifyType(Type);
-							func->arguments.push_back(new Argument("max",Location(),func));
-							func->arguments[1]->specifyType(Type);
-						} else if(name == "Array"){
-							func->arguments.push_back(new Argument("T",Location(),func));
-							func->arguments[0]->specifyType(Type);
-							func->arguments.push_back(new Argument("N",Location(),func));
-							func->arguments[1]->specifyType(natural);
-						}
-						else{
-							func->arguments.push_back(new Argument("parameter",Location(),func));
-							func->arguments[0]->specifyType(Type);
-							func->arguments.push_back(new Argument("return",Location(),func));
-							func->arguments[1]->specifyType(Type);
-						}
-					}
-					func->intrinsicCTFEbinder = binder;
-					func->setFlag(Function::TYPE_GENERATOR_FUNCTION | Function::PURE | Function::IS_INTRINSIC);
-					func->_returnType.specify(Type);
-					func->setFlag(Node::RESOLVED);
-					moduleScope->defineFunction(func);
-				}
-
-				static void StaticArray(CTFEintrinsicInvocation* invocation){
-					invocation->ret(new ::Type(::Type::STATIC_ARRAY,invocation->getTypeParameter(0),(size_t)invocation->getInt32Parameter(1)));
-				}
-			};
-			TypeFunc("Array",moduleScope,&StaticArrayTypeGenerator,&TypeFunc::StaticArray,2);
 		}
 
 	}

@@ -42,6 +42,7 @@ struct TypePatternUnresolvedExpression {
 		Scope* container;
 		Scope* expansionScope;//where the expansion is happening.. required to check if a type satisfies a trait from a perspective of the expansion scope
 		Resolver* resolver;
+		bool notAllResolvedMatch;
 
 		PatternMatcher(Scope* scope,Resolver* resolver) : container(scope),resolver(resolver) {}
 		IntroducedDefinition* lookupDefinition(SymbolID name);

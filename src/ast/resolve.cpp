@@ -642,6 +642,9 @@ Node* MatchResolver::resolve(Resolver* resolver){
 						matches = true;
 						matcher.defineIntroducedDefinitions();
 					}
+					else if(matcher.notAllResolvedMatch){
+						return this;
+					}
 				}
 				if(matches) return resolver->resolve(*(i+1));
 			}

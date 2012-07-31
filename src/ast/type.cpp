@@ -10,12 +10,6 @@
 #include "resolve.h"
 #include "../intrinsics/types.h"
 
-
-//TODO
-bool  typeSatistiesTrait(Type* type,Trait* trait,Scope* lookupScope){
-	return true;
-}
-
 /**
   This range iterates over all the possible meanings of a given type( direct, subtyping, implicit conversions etc)
 */
@@ -194,14 +188,17 @@ bool satisfiesConstraint(Node* arg,Function* constraint,Scope* expansionScope){
 }
 bool TypePatternUnresolvedExpression::PatternMatcher::match(Type* type,Node* pattern,Scope* expansionScope){
 	this->expansionScope = expansionScope? expansionScope : container;
+	notAllResolvedMatch = false;
 	auto ref = new TypeReference(type);
 	if(match(ref,pattern)) return true;
+	
 
 	return false;
 }
 
 Type* TypePatternUnresolvedExpression::PatternMatcher::matchWithSubtyping(Type* type,Node* pattern,Scope* expansionScope){
 	this->expansionScope = expansionScope? expansionScope : container;
+	notAllResolvedMatch = false;
 
 	auto ref = new TypeReference(type);
 	if(match(ref,pattern)) return type;
@@ -259,6 +256,7 @@ bool matchTraitParameter(Node** pattern,Type* given,bool strict){
 }
 
 Type* matchPatternedTraitParameter(TypePatternUnresolvedExpression::PatternMatcher& matcher,Node* pattern,Type* given,bool strict){
+
 	if(matcher.match(given,pattern)) return given;
 	else if(!strict){
 		auto ptr = Type::getPointerType(given);
@@ -448,9 +446,14 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 	//Match(type)
 	if(auto type2 = pattern->asTypeReference()) return type->isSame(type2->type); //| int32
 	else if(auto tref  = pattern->asTraitReference()){
-		if(typeSatisfiesTrait(expansionScope,type,tref->trait,resolver) == data::ast::Search::Found){
+		auto matches= typeSatisfiesTrait(expansionScope,type,tref->trait,resolver);
+		if(matches == data::ast::Search::Found){
 			if(!tref->label().isNull()) introduceDefinition(tref->label(),tref->location(),object);
 			return true;
+		}
+		else if(matches == data::ast::Search::NotAllElementsResolved){
+			notAllResolvedMatch = true;
+			return false;
 		}
 	}
 	else if(auto ptr = pattern->asPointerOperation()){
@@ -496,6 +499,10 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 					return true;
 				}
 				else return match(traitExpansions[0],call->arg);
+			}
+			else if(matches == data::ast::Search::NotAllElementsResolved){
+				notAllResolvedMatch = true;
+				return false;
 			}
 		}
 		if(matchedObject){	
@@ -691,7 +698,7 @@ bool Type::wasGeneratedBy(Function* function) const {
 	case RECORD: return static_cast<const Record*>(this)->declaration->parametrization()->generatedFunctionParent == function;
 
 	case LINEAR_SEQUENCE:  return function == generators::linearSequence;
-	case STATIC_ARRAY:     return function == intrinsics::types::StaticArrayTypeGenerator;
+	case STATIC_ARRAY:     return function == nullptr;
 	case FUNCTION_POINTER: return function == generators::functionPointer;
 
 	default:

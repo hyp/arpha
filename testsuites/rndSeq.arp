@@ -1,7 +1,5 @@
 #
 	Testing out implicit sequences..
-	
-	TODO: fix bug where type matching via match doesn't a pattern even though the matching via patten isn't yet resolved
 #
 
 concept(implicit) Seq(T) 
@@ -32,6 +30,7 @@ def main()
 	}
 	match(ParametrizedRandomGenerator(int32)) 
 	{ 	| Seq => true 
+		| _ => false
 	}
 	match(RandomGenerator)
 	{	| Seq(int32) => true
@@ -39,5 +38,6 @@ def main()
 	}
 	match(ParametrizedRandomGenerator(int32))
 	{	| Seq(int32) => true
+		| _ => false
 	}
 }
