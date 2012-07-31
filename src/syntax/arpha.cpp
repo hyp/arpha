@@ -584,7 +584,7 @@ static Function* parseTraitMethod(Parser* parser,ParameterTypeSuggestion* sugges
 /// trait          ::= 'trait' <name> ( '{' declarations '}' ) | ('{' '}')
 /// TODO trait inheritance
 struct ConceptParser: IntrinsicPrefixMacro {
-	ConceptParser(): IntrinsicPrefixMacro("trait") {}
+	ConceptParser(): IntrinsicPrefixMacro("concept") {}
 
 	struct BodyParser {
 		Trait* trait;
@@ -604,7 +604,12 @@ struct ConceptParser: IntrinsicPrefixMacro {
 	};
 
 	Node* parse(Parser* parser){
-
+		bool implicit = false;
+		if(parser->match("(")){
+			parser->expect("implicit");
+			implicit = true;
+			parser->expect(")");
+		}
 		auto name      = parser->expectName();
 
 		Scope* templateDeclaration = nullptr;

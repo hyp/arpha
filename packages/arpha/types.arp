@@ -15,6 +15,14 @@ import arpha.intrinsic
 	The constant values true and false are also defined by the implementation.
 #
 
+#
+	This concept descibes a type which can be used as a condition for the 'if' expression.
+	TODO: make bool match it.
+#
+concept(implicit) Conditional
+{
+	def isTrue(self) bool
+}
 
 #
 	This type represents a pointer to a function.
@@ -26,14 +34,14 @@ type FunctionPointer(ParameterType,ReturnType)
 #
 	This trait describes a type which can be iterated in a sequential fashion.
 #
-trait Sequence(T) 
+concept Sequence(T) 
 {
 	def empty   (self) bool
 	def current (self) T
 	def moveNext(self *Sequence) Nothing
 }
 
-trait InfiniteSequence(T)
+concept InfiniteSequence(T)
 {
 	def current (self) T
 	def moveNext(self *InfiniteSequence) Nothing

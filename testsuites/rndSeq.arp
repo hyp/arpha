@@ -4,11 +4,11 @@
 	TODO: fix bug where type matching via match doesn't a pattern even though the matching via patten isn't yet resolved
 #
 
-trait Seq(T) 
+concept(implicit) Seq(T) 
 {
-	def empty(self) bool
-	def current(self) T
-	def moveNext(self) Nothing
+	def empty   (self) bool
+	def current (self) T
+	def moveNext(self *Seq) Nothing
 }
 type RandomGenerator 
 {
