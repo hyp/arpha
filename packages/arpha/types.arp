@@ -17,19 +17,18 @@
 
 #
 	This trait describes a type which can be iterated in a sequential fashion.
-	TODO: moveNext *Sequence
 #
 trait Sequence(T) 
 {
 	def empty   (self) bool
 	def current (self) T
-	def moveNext(self Sequence)
+	def moveNext(self *Sequence)
 }
 
 trait InfiniteSequence(T)
 {
 	def current (self) T
-	def moveNext(self InfiniteSequence)
+	def moveNext(self *InfiniteSequence)
 }
 
 

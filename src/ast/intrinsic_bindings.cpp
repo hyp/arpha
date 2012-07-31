@@ -257,12 +257,12 @@ static void initMapping(){
 
 	mapStandartOperations(intrinsics::types::boolean);
 
-	MAPOP("length(Pointer(LinearSequence))",data::ast::Operations::LENGTH);
-	MAPOP("element(Pointer(LinearSequence),natural)",data::ast::Operations::ELEMENT_GET);
-	MAPOP("element(Pointer(LinearSequence),natural,Pointer)",data::ast::Operations::ELEMENT_SET);
+	MAPOP("length(*LinearSequence)",data::ast::Operations::LENGTH);
+	MAPOP("element(*LinearSequence,natural)",data::ast::Operations::ELEMENT_GET);
+	MAPOP("element(*LinearSequence,natural,*)",data::ast::Operations::ELEMENT_SET);
 
-	MAPOP("isEmpty(Pointer(LinearSequence))",data::ast::Operations::SEQUENCE_EMPTY);
-	MAPOP("moveNext(Pointer(LinearSequence))",data::ast::Operations::SEQUENCE_MOVENEXT);
+	MAPOP("empty(*LinearSequence)",data::ast::Operations::SEQUENCE_EMPTY);
+	MAPOP("moveNext(*LinearSequence)",data::ast::Operations::SEQUENCE_MOVENEXT);
 
 	/**
 	* arpha.functionality.misc
@@ -301,7 +301,13 @@ std::string intrinsicMangle(Function* function,bool argNames){
 			if((*i)->type.pattern == nullptr) result+="_";
 			else {
 				auto pattern = (*i)->type.pattern;
-				if(auto call = pattern->asCallExpression()){
+				if(auto ptr = pattern->asPointerOperation()){
+					result+="*";
+					if(auto call2 = ptr->expression->asCallExpression()){
+						result+=call2->object->asUnresolvedSymbol()->symbol.ptr();
+					}
+				}
+				else if(auto call = pattern->asCallExpression()){
 					result+=call->object->asUnresolvedSymbol()->symbol.ptr();
 					if(auto call2 = call->arg->asCallExpression()){
 						result+=std::string("(")+call2->object->asUnresolvedSymbol()->symbol.ptr()+")";

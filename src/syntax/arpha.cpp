@@ -22,6 +22,7 @@ namespace arpha {
 		enum {
 			Assignment = 10, // =
 			Tuple = 20, // ,
+			Unary = 90,
 			Call = 110, //()
 			Access = 120, //.
 		};
@@ -796,7 +797,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 					self.expression = new TypeReference(new Type(Type::POINTER,record));
 				}
 				//TODO
-				else self.expression = new CallExpression(new UnresolvedSymbol(parser->previousLocation(),"Pointer"),new UnresolvedSymbol(parser->previousLocation(),templateDeclaration->label()));
+				else self.expression = new PointerOperation(new UnresolvedSymbol(parser->previousLocation(),templateDeclaration->label()),PointerOperation::DEREFERENCE_OR_TYPE);
 				
 				auto func = parseTypeMethod(parser,&self,1);
 				if(flags & FIELDS_PRIVATE) func->visibilityMode(data::ast::PRIVATE);
@@ -837,6 +838,8 @@ struct TypeParser: IntrinsicPrefixMacro {
 			templateDeclaration->makeTypeTemplate(decl);
 			parser->leaveBlock();
 			parser->introduceDefinition(templateDeclaration);
+
+			parser->mixinedExpressions = mixinedExpressions;
 			return templateDeclaration;
 		}
 		parser->mixinedExpressions = mixinedExpressions;
@@ -918,6 +921,14 @@ struct ReturnParser: IntrinsicPrefixMacro {
 	Node* parse(Parser* parser){
 		if(isEndExpression(parser->peek())) return new ReturnExpression(new UnitExpression());
 		else return new ReturnExpression(parser->parse());
+	}
+};
+
+/// ::= '*' expression
+struct StarParser: IntrinsicPrefixMacro {
+	StarParser(): IntrinsicPrefixMacro("*") {}
+	Node* parse(Parser* parser){
+		return new PointerOperation(parser->parse(arpha::Precedence::Unary),PointerOperation::DEREFERENCE_OR_TYPE);
 	}
 };
 
@@ -1148,6 +1159,9 @@ void defineCoreSyntax(Scope* scope){
 	scope->define(new MatchParser);
 	scope->define(new CatchParser);
 	scope->define(new ThrowParser);
+
+	scope->define(new StarParser);
+
 
 	scope->define(new ReturnParser);
 

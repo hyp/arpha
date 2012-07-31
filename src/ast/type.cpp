@@ -122,6 +122,12 @@ bool TypePatternUnresolvedExpression::PatternMatcher::check(Node* expression,Tra
 	else if(auto tpref = expression->asTraitParameterReference()){
 		return true;
 	}
+	else if(auto ptr = expression->asPointerOperation()){
+		if(ptr->isDereferenceOrType() && check(ptr->expression,currentTrait)){
+			if(!ptr->label().isNull()) introduceDefinition(ptr->label(),ptr->location());
+			return true;
+		}
+	}
 	else if(auto unresolved = expression->asUnresolvedSymbol()){
 		auto symbol = unresolved->symbol;
 		if(symbol == "_"){
@@ -225,6 +231,10 @@ bool matchOnePatternedTypeDeclaration(Scope* scope,SymbolID name,Type* givenType
 
   requires def foo(x Trait) Trait given def foo(x TraitImplementation) TraitImplementation
                                   given def foo(x *TraitImplementation) *TraitImplementation
+  requires def foo(x *Trait)      given def foo(x *TraitImplementation) 
+  requires def foo(x TraitParameter) given def foo(x int32)
+                                     given def foo(x *int32)
+  requires def foo(x *TraitParameter) given def foo(x *int32)
 */
 bool match(Type* pattern,Type* given,bool strict){
 	return pattern->isSame(given) || (!strict && (given->isPointer() && pattern->isSame(given->next())) );
@@ -260,6 +270,11 @@ bool functionMatchesTraitsMethod(Type* type,Trait* trait,Function* function,Func
 			else if(method->arguments[i]->type.isPattern()){
 				if(function->arguments[i]->type.isResolved()){
 					auto pattern = method->arguments[i]->type.pattern;
+					if(auto ptr = pattern->asPointerOperation()){
+						assert(ptr->isDereferenceOrType());
+						pattern = ptr->expression;
+					}
+
 					if(auto tref = pattern->asTraitReference()){
 						if(tref->trait == trait){
 							if(match(type,function->arguments[i]->type.type(),strict)) continue;
@@ -353,6 +368,12 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 		if(typeSatisfiesTrait(expansionScope,type,tref->trait) == data::ast::Search::Found){
 			if(!tref->label().isNull()) introduceDefinition(tref->label(),tref->location(),object);
 			return true;
+		}
+	}
+	else if(auto ptr = pattern->asPointerOperation()){
+		if(type->isPointer()){
+			if(!ptr->label().isNull()) introduceDefinition(tref->label(),tref->location(),object);
+			return match(new TypeReference(type->next()),ptr->expression);
 		}
 	}
 	else if(auto ref = pattern->asFunctionReference()){
@@ -567,7 +588,6 @@ bool Type::wasGeneratedBy(Function* function) const {
 	switch(type){
 	case RECORD: return static_cast<const Record*>(this)->declaration->parametrization()->generatedFunctionParent == function;
 
-	case POINTER:         return function == intrinsics::types::PointerTypeGenerator;
 	case LINEAR_SEQUENCE: return function == intrinsics::types::LinearSequenceTypeGenerator;
 	case STATIC_ARRAY:    return function == intrinsics::types::StaticArrayTypeGenerator;
 	case FUNCTION_POINTER:        return function == intrinsics::types::FunctionTypeGenerator;

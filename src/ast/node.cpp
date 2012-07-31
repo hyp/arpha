@@ -356,19 +356,17 @@ Type* CallExpression::returnType() const {
 	if( auto refFunc = object->asFunctionReference()){
 		auto func = refFunc->function;
 		if(func->isIntrinsicReturningPattern()){
-			/**
-			*TODO: NB: This is very hacky now, tailored only for def foo(x Pointer | LinearSequence(T:_)) T
-			*/
-			Type* result;
+			Type* firstArg;
 
 			if(auto tuple = arg->asTupleExpression()){
-				result = (*tuple->begin())->returnType()->next()->next();
+				firstArg = (*tuple->begin())->returnType();
 			}
-			else result = arg->returnType()->next()->next();
-			if(auto call = func->_returnType.pattern->asCallExpression()){
-				result = new Type(Type::POINTER,result);
+			else firstArg = arg->returnType();
+			auto op = func->getOperation();
+
+			if(op == data::ast::Operations::ELEMENT_GET){
+				return new Type(Type::POINTER,firstArg->next()->next());
 			}
-			return result;
 		}
 		else return func->_returnType.type();
 	}

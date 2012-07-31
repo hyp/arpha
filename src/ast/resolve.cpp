@@ -465,6 +465,15 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 Node* PointerOperation::resolve(Resolver* resolver){
 	expression = resolver->resolve(expression);
 	if(expression->isResolved()){
+		if(isDereferenceOrType()){
+			if(auto tref = expression->asTypeReference()){
+				return copyLocationSymbol(resolver->resolve(new TypeReference(new Type(Type::POINTER,tref->type))));
+			}
+			else if(auto trref = expression->asTraitReference()){
+				return this;
+			}
+			else kind = DEREFERENCE;
+		}
 		resolver->markResolved(this);
 		if(isDereference() && !expression->returnType()->isPointer()){
 			error(this,"Can't dereference a non-pointer expression!");
@@ -976,6 +985,7 @@ struct ScopedStateChange {
 	}
 };
 
+
 Node* Function::resolve(Resolver* resolver){
 	parentNode = resolver->currentParentNode();
 	ScopedStateChange<Function*> _(&resolver->currentFunction,this);
@@ -1018,15 +1028,23 @@ Node* Function::resolve(Resolver* resolver){
 	
 	//NB: special case for intrinsic def foo(x Pointer(T:_)) T
 	if(isIntrinsic() && arguments.size() && arguments[0]->type.isPattern() && _returnType.kind == TypePatternUnresolvedExpression::UNRESOLVED){
+
 		if(auto sym = _returnType.unresolvedExpression->asUnresolvedSymbol()){
 			if(allArgMatcher.lookupDefinition(sym->symbol)){
-				makeIntrinsicReturningPattern(0);
+				makeIntrinsicReturningPattern();
+			}
+		}
+		else if(auto ptr = _returnType.unresolvedExpression->asPointerOperation()){
+			if(auto sym = ptr->expression->asUnresolvedSymbol()){
+				if(allArgMatcher.lookupDefinition(sym->symbol)){
+					makeIntrinsicReturningPattern();
+				}
 			}
 		}
 		else if(auto call = _returnType.unresolvedExpression->asCallExpression()){
 			if(auto sym = call->arg->asUnresolvedSymbol()){
 				if(allArgMatcher.lookupDefinition(sym->symbol)){
-					makeIntrinsicReturningPattern(0);
+					makeIntrinsicReturningPattern();
 				}
 			}
 		}

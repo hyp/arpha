@@ -231,9 +231,8 @@ void Function::makeIntrinsicOperation(data::ast::Operations::Kind op){
 	setFlag(IS_INTRINSIC_OPERATION);
 	ctfeRegisterCount = op;
 }
-void Function::makeIntrinsicReturningPattern(int argID){
+void Function::makeIntrinsicReturningPattern(){
 	setFlag(INTRINSIC_FUNCTION_RETURNS_PATTERNED_DEFINITION);
-	inliningWeight = argID;
 	//_returnType.kind =  TypePatternUnresolvedExpression::TYPE;
 	//_returnType._type = intrinsics::types::Void;
 }

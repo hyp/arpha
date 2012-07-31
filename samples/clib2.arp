@@ -1,7 +1,7 @@
 import cstdlib
 
 def print(string []char8){
-	until(string.isEmpty){
+	until(string.empty){
 		putchar( (*string.current) as int32 )
 		string.moveNext()
 	}

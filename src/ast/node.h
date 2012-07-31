@@ -471,9 +471,13 @@ struct PointerOperation : Node {
 	enum {
 		ADDRESS,     //&
 		DEREFERENCE, //*
-	};	
+
+		DEREFERENCE_OR_TYPE,//*
+	};
+
 	inline bool isAddress()     const { return kind == ADDRESS; }
 	inline bool isDereference() const { return kind == DEREFERENCE; }
+	inline bool isDereferenceOrType() const { return kind == DEREFERENCE_OR_TYPE; };
 	Node* expression;
 	int kind; // = ADDRESS
 	DECLARE_NODE(PointerOperation);

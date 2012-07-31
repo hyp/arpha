@@ -7,7 +7,7 @@
 
 import  arpha.intrinsic, arpha.ast
 
-def parse(precedence int32 = 0,ignoreNewlines bool = false) Pointer(Expression)
+def parse(precedence int32 = 0,ignoreNewlines bool = false) *Expression
 
 def expect(symbol LinearSequence(char8),ignoreNewlines bool = false)
 def match (symbol LinearSequence(char8),ignoreNewlines bool = false) bool

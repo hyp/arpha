@@ -5,20 +5,20 @@
 #
 import arpha.intrinsic
 
-def length (self Pointer(LinearSequence(_))) natural
+def length (self *LinearSequence(_)) natural
 
-def element(self Pointer(LinearSequence(T: _)),i natural) Pointer(T)
-def element(self Pointer(LinearSequence(T: _)),i natural,item Pointer(T))
+def element(self *LinearSequence(T: _),i natural) *T
+def element(self *LinearSequence(T: _),i natural,item *T)
 
 #
 TODO:
-def slice(self LinearSequence(T: _),from natural)            LinearSequence(T)
-def slice(self LinearSequence(T: _),to   natural)            LinearSequence(T)
-def slice(self LinearSequence(T: _),from natural,to natural) LinearSequence(T)
+def slice(self *LinearSequence(T: _),from natural)            LinearSequence(T)
+def slice(self *LinearSequence(T: _),to   natural)            LinearSequence(T)
+def slice(self *LinearSequence(T: _),from natural,to natural) LinearSequence(T)
 #
 
-# Range interface
-def isEmpty (self Pointer(LinearSequence(_))) bool
-macro current(self Pointer(LinearSequence(_))) = [> $self.element(0) <]
-def moveNext(self Pointer(LinearSequence(_)))
+# Sequence interface
+def empty    (self *LinearSequence(_)) bool
+macro current(self *LinearSequence(_)) = [> $self.element(0) <]
+def moveNext (self *LinearSequence(_))
 

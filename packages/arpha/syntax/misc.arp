@@ -10,14 +10,6 @@ macro &
 	return ast.newPointerOperation(expr,addressof: true)
 }
 
-macro * 
-{
-	var expr = parser.parse(precedence.unary)
-	return [> derefOrPtrType($expr) <]
-}
-macro derefOrPtrType(T Type)                 = [> Pointer($T) <]
-macro derefOrPtrType(expr Pointer(_))        = ast.newPointerOperation(expr,dereference: true)
-
 # Type casting
 macro (expression) as
 uses precedence: precedence.isas

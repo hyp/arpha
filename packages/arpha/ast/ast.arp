@@ -9,14 +9,14 @@ import arpha.intrinsic
 
 def Expression           Type
 
-def returnType(expression Pointer(Expression)) Type
+def returnType(expression *Expression) Type
 
 # Returns true if a given expression is constant.
 # Expression is constant if it is any Literal expression, a TypeReference or a Tuple containing the above expressions.
-def isConst   (expression Pointer(Expression)) bool
+def isConst   (expression *Expression) bool
 
 # Returns the location of the expression in the source file.
-def location  (expression Pointer(Expression)) line: natural,column: natural 
+def location  (expression *Expression) line: natural,column: natural 
 
 # The types below are derived from Expression
 def IntegerLiteral       Type
@@ -42,18 +42,16 @@ def UnresolvedSymbol     Type
 
 #def Variable             Type
 
+def newTypeReference(type Type) *TypeReference
+def newLoop(body *Expression) *Loop
+def newReturn(expression *Expression) *Return
+def newIfElse(condition *Expression,consequence *Expression,alternative *Expression) *IfElse
+def newControlFlow(continue bool)    *ControlFlow
+def newControlFlow(break bool)       *ControlFlow
+def newControlFlow(fallthrough bool) *ControlFlow
+def newPointerOperation(expression *Expression,addressof bool)   *PointerOperation
+def newPointerOperation(expression *Expression,dereference bool) *PointerOperation
+def newLogicalOperation(a *Expression,b *Expression,and bool) *LogicalOperation
+def newLogicalOperation(a *Expression,b *Expression,or bool) *LogicalOperation
 
-#def newVariable(name BoundedPointer(uint8)) Pointer(Variable)
-def newTypeReference(type Type) Pointer(TypeReference)
-def newLoop(body Pointer(Expression)) Pointer(Loop)
-def newReturn(expression Pointer(Expression)) Pointer(Return)
-def newIfElse(condition Pointer(Expression),consequence Pointer(Expression),alternative Pointer(Expression)) Pointer(IfElse)
-def newControlFlow(continue bool)    Pointer(ControlFlow)
-def newControlFlow(break bool)       Pointer(ControlFlow)
-def newControlFlow(fallthrough bool) Pointer(ControlFlow)
-def newPointerOperation(expression Pointer(Expression),addressof bool) Pointer(PointerOperation)
-def newPointerOperation(expression Pointer(Expression),dereference bool) Pointer(PointerOperation)
-def newLogicalOperation(a Pointer(Expression),b Pointer(Expression),and bool) Pointer(LogicalOperation)
-def newLogicalOperation(a Pointer(Expression),b Pointer(Expression),or bool) Pointer(LogicalOperation)
-
-def newCast(expression Pointer(Expression),type Pointer(Expression)) Pointer(Cast)
+def newCast(expression *Expression,type *Expression) *Cast

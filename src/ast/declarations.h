@@ -230,7 +230,7 @@ struct Function: public PrefixDefinition {
 	void makeTypeTemplate(TypeDeclaration* node);
 	TypeDeclaration* getTemplateTypeDeclaration();
 
-	void makeIntrinsicReturningPattern(int argID);
+	void makeIntrinsicReturningPattern();
 	inline bool isIntrinsicReturningPattern() const { return isFlagSet(INTRINSIC_FUNCTION_RETURNS_PATTERNED_DEFINITION); }
 
 	std::vector<Argument*> arguments;
