@@ -19,6 +19,6 @@ def slice(self *LinearSequence(T: _),from natural,to natural) LinearSequence(T)
 
 # Sequence interface
 def empty    (self *LinearSequence(_)) bool
-macro current(self *LinearSequence(_)) = [> $self.element(0) <]
+def current  (self *LinearSequence(T: _)) *T
 def moveNext (self *LinearSequence(_))
 

@@ -271,7 +271,9 @@ data::ast::Search::Result functionMatchesTraitsMethod(Type* type,Trait* trait,Fu
 	bool patterned = false;
 	TypePatternUnresolvedExpression::PatternMatcher patternedMatcher(function->parameterPatternMatchingScope(),nullptr);
 	std::vector<Type*> specializedParameters;
-	if(function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS)){
+	if(function->isFlagSet(Function::MACRO_FUNCTION)) return data::ast::Search::NotFound;
+
+	if(function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isIntrinsicOperation()){
 		if(function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return data::ast::Search::NotFound;
 		specializedParameters.resize(function->arguments.size(),nullptr);
 		patterned = true;
@@ -306,6 +308,10 @@ data::ast::Search::Result functionMatchesTraitsMethod(Type* type,Trait* trait,Fu
 				else if(function->arguments[i]->type.isPattern()){
 					auto pattern = method->arguments[i]->type.pattern;
 
+					if(auto ptr = pattern->asPointerOperation()){
+						assert(ptr->isDereferenceOrType());
+						pattern = ptr->expression;
+					}
 					if(auto tref = pattern->asTraitReference()){
 						if(tref->trait == trait){
 							if(auto t = matchPatternedTraitParameter(patternedMatcher,function->arguments[i]->type.pattern,type,strict)){
@@ -321,10 +327,35 @@ data::ast::Search::Result functionMatchesTraitsMethod(Type* type,Trait* trait,Fu
 		}
 
 		if(patterned){
-			function = resolver->specializeFunction(patternedMatcher,function,specializedParameters.begin()._Ptr,nullptr);
-			if(!function->isResolved()){
-				if(!resolver->resolveSpecialization(function)){
-					return data::ast::Search::NotAllElementsResolved;
+			if(function->isIntrinsicOperation()){
+				auto op = function->getOperation();
+
+				if(method->_returnType.isResolved() && function->_returnType.isResolved()){
+					if(method->_returnType.type()->isSame(function->_returnType.type())) return data::ast::Search::Found;
+				}
+				else if(method->_returnType.isPattern()){
+					Type* t;
+
+					if(function->_returnType.isResolved()) t= function->_returnType.type();
+					else {
+						if(op == data::ast::Operations::ELEMENT_GET){
+							assert(type->isLinearSequence());
+							t = Type::getPointerType(type->next());
+						}
+					}
+
+					if(auto p = method->_returnType.pattern->asTraitParameterReference()){
+						if(matchTraitParameter((traitExpansions->begin() + p->index)._Ptr,t,strict)) return data::ast::Search::Found;
+					}
+				}
+				return data::ast::Search::NotFound;				
+			}
+			else {
+				function = resolver->specializeFunction(patternedMatcher,function,specializedParameters.begin()._Ptr,nullptr);
+				if(!function->isResolved()){
+					if(!resolver->resolveSpecialization(function)){
+						return data::ast::Search::NotAllElementsResolved;
+					}
 				}
 			}
 		}

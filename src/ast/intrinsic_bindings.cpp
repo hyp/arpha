@@ -262,6 +262,7 @@ static void initMapping(){
 	MAPOP("element(*LinearSequence,natural,*)",data::ast::Operations::ELEMENT_SET);
 
 	MAPOP("empty(*LinearSequence)",data::ast::Operations::SEQUENCE_EMPTY);
+	MAPOP("current(*LinearSequence)",data::ast::Operations::ELEMENT_GET);
 	MAPOP("moveNext(*LinearSequence)",data::ast::Operations::SEQUENCE_MOVENEXT);
 
 	/**

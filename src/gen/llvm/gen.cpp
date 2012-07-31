@@ -561,6 +561,7 @@ llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Oper
 	// begin + i
 	case ELEMENT_GET:
 		loadLinearSequence(generator,operand1,sequence,true,false);
+		if(!operand2) return sequence.begin;
 		if(auto cnst = llvm::dyn_cast<llvm::ConstantInt>(operand2)){
 			if(cnst->getValue() == 0) return sequence.begin;
 		}
