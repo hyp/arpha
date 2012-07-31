@@ -13,7 +13,6 @@ trait Seq(T)
 type RandomGenerator 
 {
 	var x int32
-	
 	def empty   (self) = false
 	def current (self) = self.x
 	def moveNext(self) = self.x++
@@ -21,12 +20,12 @@ type RandomGenerator
 type ParametrizedRandomGenerator(T)
 {
 	var x T
-	
 	def empty   (self) = false
 	def current (self) = self.x
 	def moveNext(self) = self.x++
 }
-def main(){
+def main()
+{
 	match(RandomGenerator) 
 	{ 	| Seq => true 
 		| _   => false 
