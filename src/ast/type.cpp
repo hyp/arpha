@@ -261,7 +261,7 @@ bool matchTraitParameter(Node** pattern,Type* given,bool strict){
 Type* matchPatternedTraitParameter(TypePatternUnresolvedExpression::PatternMatcher& matcher,Node* pattern,Type* given,bool strict){
 	if(matcher.match(given,pattern)) return given;
 	else if(!strict){
-		auto ptr = new Type(Type::POINTER,given);
+		auto ptr = Type::getPointerType(given);
 		if(matcher.match(ptr,pattern)) return ptr;
 	}
 	return nullptr;
@@ -541,6 +541,9 @@ Type* Type::getUintptrType(){
 }
 Type* Type::getLinearSequence(Type* next){
 	return new Type(LINEAR_SEQUENCE,next);
+}
+Type* Type::getPointerType(Type* next){
+	return new Type(Type::POINTER,next);
 }
 
 void Type::setFlag(uint16 flag){
@@ -1001,7 +1004,7 @@ void TypeMeaningsRange::gatherMeanings(Type* type){
 	}
 	else getRecordSubtypes(record);
 
-	if(!type->isPointer()) add(new Type(Type::POINTER,type),ADDRESSOF);
+	if(!type->isPointer()) add(Type::getPointerType(type),ADDRESSOF);
 }
 
 

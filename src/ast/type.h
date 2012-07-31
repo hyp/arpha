@@ -128,6 +128,8 @@ struct Type {
 	static Type* getNaturalType();
 	static Type* getUintptrType();
 
+	static Type* getPointerType(Type* next);
+
 	static Type* getVariantOption(int optionID);
 
 	bool   canCastTo(Type* other);
@@ -294,6 +296,8 @@ struct Trait: public DeclaredType {
 	std::vector<Function*> methods;
 
 	Scope* templateDeclaration;
+private:
+	bool verify();
 };
 
 

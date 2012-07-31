@@ -467,7 +467,8 @@ Node* PointerOperation::resolve(Resolver* resolver){
 	if(expression->isResolved()){
 		if(isDereferenceOrType()){
 			if(auto tref = expression->asTypeReference()){
-				return copyLocationSymbol(resolver->resolve(new TypeReference(new Type(Type::POINTER,tref->type))));
+				tref->type = Type::getPointerType(tref->type);
+				return copyLocationSymbol(tref);
 			}
 			else if(auto trref = expression->asTraitReference()){
 				return this;
@@ -920,6 +921,90 @@ void generateDestructorBody(Record* type,Variable* selfObject,BlockExpression* b
 	}
 }
 
+/**
+	Every requirement must containt self in parameters or return type.
+	All trait parameters must be represented in requirements.
+*/
+bool Trait::verify(){
+	std::vector<bool> parametersPresent;
+	if(templateDeclaration){
+		parametersPresent.resize(numberOfTemplateParameters(),false);
+	}
+
+	struct PatternMatcher {
+		std::vector<bool>& parametersPresent;
+		Trait* trait;
+		bool hasSelf;
+
+		bool match(Node* pattern){
+			if(auto ptr = pattern->asPointerOperation()){
+				pattern = ptr->expression;
+			}
+			if(auto tref = pattern->asTraitReference()){
+				if(tref->trait == trait){
+					hasSelf = true;
+					return true;
+				}
+			}
+			else if(auto tpref = pattern->asTraitParameterReference()){
+				parametersPresent[tpref->index] = true;
+				return true;
+			}
+			return false;
+		}
+	};
+
+
+	PatternMatcher matcher = { parametersPresent,this,false };
+	for(auto i = methods.begin();i!=methods.end();++i){
+		matcher.hasSelf = false;
+
+		for(auto arg = (*i)->arguments.begin();arg!=(*i)->arguments.end();++arg){
+			if((*arg)->type.isResolved()) continue;
+			else {
+				assert((*arg)->type.isPattern());
+				if(matcher.match((*arg)->type.pattern)) continue;
+				error((*arg)->type.pattern,"Concept function requirement '%s' isn't allowed to have this type pattern for parameter '%s'",(*i)->label(),(*arg)->label());
+			}
+			return false;
+		}
+		
+		if(!(*i)->_returnType.isResolved()){
+			assert((*i)->_returnType.isPattern());
+			if(!matcher.match((*i)->_returnType.pattern)){
+				error((*i)->_returnType.pattern,"Concept function requirement '%s' isn't allowed to have this type pattern for the return value",(*i)->label());
+			}
+		}
+
+		if(!matcher.hasSelf){
+			error((*i),"Concept function requirement '%s' must have the concept as one of its parameters or as a return type",(*i)->label());
+		}
+
+	}
+
+	if(templateDeclaration){
+		for(size_t i = 0; i< parametersPresent.size();++i){
+			if(!parametersPresent[i]){
+				SymbolID paramName;
+				for(auto defs = templateDeclaration->prefixDefinitions.begin();defs != templateDeclaration->prefixDefinitions.end();++defs){
+					//NB: unecessary creation!
+					if(auto node = defs->second->createReference()){
+						auto p = node->asTraitParameterReference();
+						if(p->index == i){
+							paramName = defs->first;
+							break;
+						}
+					}
+				}
+				error(this->declaration,"Concept '%s' can't infer the parameter '%s' from its requirements!",this->declaration->label(),paramName);
+			}
+		}
+	}
+
+
+	return true;
+}
+
 DeclaredType* Trait::resolve(Resolver* resolver){
 	bool allResolved = true;
 	resolver->currentTrait = this;
@@ -940,7 +1025,8 @@ DeclaredType* Trait::resolve(Resolver* resolver){
 	resolver->currentTrait = nullptr;
 
 	if(allResolved && (declaration->optionalStaticBlock == nullptr || declaration->optionalStaticBlock->isResolved())){
-		setFlag(IS_RESOLVED);
+		if(verify())
+			setFlag(IS_RESOLVED);
 	}
 	return this;
 }
