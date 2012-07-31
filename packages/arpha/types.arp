@@ -22,13 +22,13 @@ trait Sequence(T)
 {
 	def empty   (self) bool
 	def current (self) T
-	def moveNext(self *Sequence)
+	def moveNext(self *Sequence) Nothing
 }
 
 trait InfiniteSequence(T)
 {
 	def current (self) T
-	def moveNext(self *InfiniteSequence)
+	def moveNext(self *InfiniteSequence) Nothing
 }
 
 
