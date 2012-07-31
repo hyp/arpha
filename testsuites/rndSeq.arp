@@ -8,7 +8,7 @@ trait Seq(T)
 {
 	def empty(self) bool
 	def current(self) T
-	def moveNext(self)
+	def moveNext(self) Nothing
 }
 type RandomGenerator 
 {
