@@ -22,3 +22,14 @@ def main(){
 		| _   => false 
 	}
 }
+
+trait Seq(T)
+{
+	def go(self) T
+}
+type Go(T)
+{
+	var x T
+	def go(self) = self.x
+}
+match(Go(int32)) { | Seq => true }

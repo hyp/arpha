@@ -250,21 +250,33 @@ bool matchTraitParameter(Node** pattern,Type* given,bool strict){
 	}
 }
 
-bool matchPatternedTraitParameter(Scope* scope,Node* pattern,Type* given,bool strict){
-	TypePatternUnresolvedExpression::PatternMatcher matcher(scope,nullptr);
-	if(matcher.match(given,pattern)) return true;
-	else if(!strict && matcher.match(new Type(Type::POINTER,given),pattern)) return true;
-	return false;
+Type* matchPatternedTraitParameter(TypePatternUnresolvedExpression::PatternMatcher& matcher,Node* pattern,Type* given,bool strict){
+	if(matcher.match(given,pattern)) return given;
+	else if(!strict){
+		auto ptr = new Type(Type::POINTER,given);
+		if(matcher.match(ptr,pattern)) return ptr;
+	}
+	return nullptr;
 }
 
-bool functionMatchesTraitsMethod(Type* type,Trait* trait,Function* function,Function* method,std::vector<Node*>* traitExpansions){
+data::ast::Search::Result functionMatchesTraitsMethod(Type* type,Trait* trait,Function* function,Function* method,std::vector<Node*>* traitExpansions,Resolver* resolver){
+	//matching def f(x Bar(_)
+	bool patterned = false;
+	TypePatternUnresolvedExpression::PatternMatcher patternedMatcher(function->parameterPatternMatchingScope(),nullptr);
+	std::vector<Type*> specializedParameters;
+	if(function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS)){
+		if(function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return data::ast::Search::NotFound;
+		specializedParameters.resize(function->arguments.size(),nullptr);
+		patterned = true;
+	}
+
 	bool strict = false;
 
 	if(function->arguments.size() == method->arguments.size()){
 		for(size_t i =0,s = function->arguments.size();i<s;++i){
 			if(method->arguments[i]->type.isResolved()){
 				if(function->arguments[i]->type.isResolved() && method->arguments[i]->type.type()->isSame(function->arguments[i]->type.type())){
-						continue;
+					continue;
 				}
 			}
 			else if(method->arguments[i]->type.isPattern()){
@@ -281,31 +293,49 @@ bool functionMatchesTraitsMethod(Type* type,Trait* trait,Function* function,Func
 						}
 					}
 					else if(auto p = pattern->asTraitParameterReference()){
-						return matchTraitParameter((traitExpansions->begin() + p->index)._Ptr,function->arguments[i]->type.type(),strict);
+						if(matchTraitParameter((traitExpansions->begin() + p->index)._Ptr,function->arguments[i]->type.type(),strict)) continue;
 					}
 				}
 				else if(function->arguments[i]->type.isPattern()){
-					if(matchPatternedTraitParameter(function->parameterPatternMatchingScope(),function->arguments[i]->type.pattern,type,strict)) continue;
+					auto pattern = method->arguments[i]->type.pattern;
+
+					if(auto tref = pattern->asTraitReference()){
+						if(tref->trait == trait){
+							if(auto t = matchPatternedTraitParameter(patternedMatcher,function->arguments[i]->type.pattern,type,strict)){
+								specializedParameters[i] = t;
+								continue;
+							}
+						}
+					}
+					//auto pattern = metho,
 				}
 			}
-			return false;
+			return data::ast::Search::NotFound;
+		}
+
+		if(patterned){
+			function = resolver->specializeFunction(patternedMatcher,function,specializedParameters.begin()._Ptr,nullptr);
+			if(!function->isResolved()){
+				if(!resolver->resolveSpecialization(function)){
+					return data::ast::Search::NotAllElementsResolved;
+				}
+			}
 		}
 
 		if(method->_returnType.isResolved() && function->_returnType.isResolved()){
-			return method->_returnType.type()->isSame(function->_returnType.type());
+			if(method->_returnType.type()->isSame(function->_returnType.type())) return data::ast::Search::Found;
 		}
 		else if(method->_returnType.isPattern()){
 			if(auto p = method->_returnType.pattern->asTraitParameterReference()){
-				return matchTraitParameter((traitExpansions->begin() + p->index)._Ptr,function->_returnType.type(),strict);
+				if(matchTraitParameter((traitExpansions->begin() + p->index)._Ptr,function->_returnType.type(),strict)) return data::ast::Search::Found;
 			}
 		}
-		//return true;
 	}
-	return false;
+	return data::ast::Search::NotFound;
 }
 
 //returns Found if the type satisfies trait
-data::ast::Search::Result typeSatisfiesTrait(Scope* scope,Type* type,Trait* trait){
+data::ast::Search::Result typeSatisfiesTrait(Scope* scope,Type* type,Trait* trait,Resolver* resolver){
 	std::vector<Node*> traitExpansions;
 	if(trait->templateDeclaration) traitExpansions.resize(trait->numberOfTemplateParameters(),nullptr);
 
@@ -314,10 +344,12 @@ data::ast::Search::Result typeSatisfiesTrait(Scope* scope,Type* type,Trait* trai
 
 		for(::overloads::OverloadRange overloads(scope,(*i)->label(),true);!overloads.isEmpty();overloads.advance()){
 			if(!overloads.currentFunction()->isResolved()) return data::ast::Search::NotAllElementsResolved;
-			if(functionMatchesTraitsMethod(type,trait,overloads.currentFunction(),(*i),&traitExpansions)){
+			auto matches =functionMatchesTraitsMethod(type,trait,overloads.currentFunction(),(*i),&traitExpansions,resolver);
+			if(matches == data::ast::Search::Found){
 				matchFound = true;
 				break;
 			}
+			else if(matches == data::ast::Search::NotAllElementsResolved) return data::ast::Search::NotAllElementsResolved;
 		}
 		if(!matchFound) return data::ast::Search::NotFound;
 	}
@@ -365,7 +397,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 	//Match(type)
 	if(auto type2 = pattern->asTypeReference()) return type->isSame(type2->type); //| int32
 	else if(auto tref  = pattern->asTraitReference()){
-		if(typeSatisfiesTrait(expansionScope,type,tref->trait) == data::ast::Search::Found){
+		if(typeSatisfiesTrait(expansionScope,type,tref->trait,resolver) == data::ast::Search::Found){
 			if(!tref->label().isNull()) introduceDefinition(tref->label(),tref->location(),object);
 			return true;
 		}

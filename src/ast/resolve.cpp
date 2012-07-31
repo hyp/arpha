@@ -1260,7 +1260,7 @@ Function* Function::specializationExists(Type** specializedParameters,Node** pas
 		auto alreadyGenerated = *i;
 		bool match = true;
 		size_t expandedParameterOffset = 0;
-		if(usageScope && alreadyGenerated->owner()->imports[1] != usageScope) continue;
+		if(usageScope && alreadyGenerated->owner()->parent != usageScope) continue;
 		for(j = 0; j<numberOfParameters; j++){
 			if(arguments[j]->expandAtCompileTime()){
 				//TODO Node::isSame
@@ -1312,9 +1312,9 @@ Function* Function::specializedDuplicate(DuplicationModifiers* mods,Type** speci
 	
 	//args
 	for(size_t i = 0;i < numberOfParameters;++i){
-		auto arg = arguments[i]->specializedDuplicate(func,mods,specializedParameters ? specializedParameters[i] : nullptr,passedExpressions[i]);
+		auto arg = arguments[i]->specializedDuplicate(func,mods,specializedParameters ? specializedParameters[i] : nullptr,passedExpressions ? passedExpressions[i] : nullptr);
 		if(arg) func->addArgument(arg);
-		else    func->expandedArguments.push_back(passedExpressions[i]);//Give the specialized function the knowledge about what parameters where expanded to create it
+		else func->expandedArguments.push_back(passedExpressions[i]);//Give the specialized function the knowledge about what parameters where expanded to create it
 	}
 
 	duplicateReturnBody(mods,func);
