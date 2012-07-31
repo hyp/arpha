@@ -624,6 +624,7 @@ struct ConceptParser: IntrinsicPrefixMacro {
 #endif
 		parser->expect("{");
 		auto trait = new Trait(templateDeclaration);
+		if(implicit) trait->makeImplicit();
 		blockParser->body(parser,BodyParser(trait));
 
 		if(templateDeclaration){
@@ -787,6 +788,13 @@ struct TypeParser: IntrinsicPrefixMacro {
 		if(parser->match("(")){
 			templateDeclaration = parseTypeTemplateDeclaration(name,parser);
 		}
+
+		std::vector<TypePatternUnresolvedExpression> extensions;
+		if(parser->match("extends")){
+			TypePatternUnresolvedExpression expr;
+			expr.parse(parser,1);
+			extensions.push_back(expr);
+		}
 		
 		/*if(parser->match("=")){
 			parser->syntaxError(format("NOT ALLOWED >_<!"));
@@ -810,6 +818,9 @@ struct TypeParser: IntrinsicPrefixMacro {
 			else error(decl,"The type '%s' must have at least one field!",name);
 		}
 		parser->introduceDefinition(decl);
+		if(extensions.size()){
+			decl->extendedConcepts = extensions;
+		}
 
 		if(templateDeclaration){
 			templateDeclaration->makeTypeTemplate(decl);

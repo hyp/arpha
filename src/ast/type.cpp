@@ -374,6 +374,15 @@ data::ast::Search::Result functionMatchesTraitsMethod(Type* type,Trait* trait,Fu
 
 //returns Found if the type satisfies trait
 data::ast::Search::Result typeSatisfiesTrait(Scope* scope,Type* type,Trait* trait,Resolver* resolver,std::vector<Node*>* traitExpansions){
+	if(!trait->isImplicit()){
+		if(auto record = type->asRecord()){
+			if(!record->declaration->extendsConcept(trait)) return data::ast::Search::NotFound;
+		}
+		else if(auto ls = type->isLinearSequence()){
+			if(!Type::generators::linearSequence->getTemplateTypeDeclaration()->resolveExtendedConcepts(resolver)) return data::ast::Search::NotAllElementsResolved;
+			if(!Type::generators::linearSequence->getTemplateTypeDeclaration()->extendsConcept(trait))             return data::ast::Search::NotFound;
+		}
+	}
 
 	for(auto i = trait->methods.begin();i!=trait->methods.end();i++){
 		bool matchFound = false;
@@ -1321,6 +1330,9 @@ Trait::Trait(Scope* templateDeclaration) : DeclaredType(Type::TRAIT) {
 Trait* Type::asTrait(){
 	return type == TRAIT? static_cast<Trait*>(this) : nullptr;
 }
+void Trait::makeImplicit(){
+	flags|=IS_IMPLICIT;
+}
 size_t Trait::numberOfTemplateParameters(){
 	return templateDeclaration->numberOfDefinitions();
 }
@@ -1376,9 +1388,22 @@ Node*  TypeDeclaration::duplicate(DuplicationModifiers* mods) const {
 	BlockExpression* sb = optionalStaticBlock? optionalStaticBlock->duplicate(mods)->asBlockExpression() : nullptr;
 	auto dup = new TypeDeclaration(_type->duplicate(mods),label());
 	dup->optionalStaticBlock = sb;
+	for(auto i = extendedConcepts.begin();i!=extendedConcepts.end();++i){
+		dup->extendedConcepts.push_back((*i).duplicate(mods));
+	}
 	mods->duplicateDefinition(const_cast<TypeDeclaration*>(this),dup);
 	return copyProperties(dup);
 }
 Function* TypeDeclaration::parametrization() const { 
 	return parentNode->asBlockExpression()->scope->functionOwner(); 
+}
+data::ast::Search::Result TypeDeclaration::extendsConcept(Trait* concept){
+	for(auto i = extendedConcepts.begin();i!=extendedConcepts.end();++i){
+		if((*i).isPattern()){
+			if((*i).pattern->asTraitReference()->trait == concept)
+				return data::ast::Search::Found;
+		}
+		else return data::ast::Search::NotAllElementsResolved;
+	}
+	return data::ast::Search::NotFound;
 }

@@ -281,11 +281,12 @@ struct DeclaredType: public Type {
 	virtual DeclaredType* resolve(Resolver* resolver) = 0;
 	virtual void  onTemplateSpecialization(Resolver* resolver){}
 	inline  bool  isResolved() const { return isFlagSet(IS_RESOLVED); }
-
+	
 	
 
 	TypeDeclaration* declaration;
 	void* generatorData;
+private:
 };
 
 /**
@@ -297,14 +298,20 @@ struct Trait: public DeclaredType {
 	DeclaredType* duplicate(DuplicationModifiers* mods) const;
 	DeclaredType* resolve(Resolver* resolver);
 
-	inline bool isImplicit(){ return true; }
+	
+	void makeImplicit();
 	size_t numberOfTemplateParameters();
 
 	std::vector<Function*> methods;
 
 	Scope* templateDeclaration;
 private:
+	enum {
+		IS_IMPLICIT = 0x8,
+	};
 	bool verify();
+public:
+	inline bool isImplicit() const { return isFlagSet(IS_IMPLICIT); }
 };
 
 
@@ -381,7 +388,11 @@ struct TypeDeclaration: PrefixDefinition {
 
 	Node* resolve(Resolver* resolver);
 
+	data::ast::Search::Result extendsConcept(Trait* concept);
+	bool resolveExtendedConcepts(Resolver* resolver);
+
 	BlockExpression* optionalStaticBlock;//can be used for static members i.e. type as a namespace kinda thingy
+	std::vector<TypePatternUnresolvedExpression> extendedConcepts;
 private:
 	enum {
 		PARAMETRIZED = 0x8

@@ -827,6 +827,30 @@ Node* Argument::resolve(Resolver* resolver){
 	return this;
 }
 
+bool TypeDeclaration::resolveExtendedConcepts(Resolver* resolver){
+	for(auto i = extendedConcepts.begin();i!=extendedConcepts.end();++i){
+		Node* pattern = nullptr;
+
+		if((*i).isResolved()){
+			if((*i).isPattern()) pattern = (*i).pattern;
+		}
+		else  {
+			if((*i).resolve(resolver)){
+				if((*i).isPattern()) pattern = (*i).pattern;
+			}
+			else return false;
+		}
+
+		if(pattern){
+			if(pattern->asTraitReference()) continue;
+		}
+
+		error(pattern? pattern->location() : location(),"Invalid type extension: The type '%s' can only be extended with concept or interface!",label());
+		return false;
+	}
+	return true;
+}
+
 //Record analysis
 //Collects all the extenders field from the record extender hierarchy
 static bool insertUniqueExtender(std::vector<Type*>& collection,Type* extender){
@@ -862,6 +886,8 @@ DeclaredType* Record::resolve(Resolver* resolver){
 	}
 	resolver->treatUnresolvedTypesAsResolved = false;
 	if(!allResolved) return this;
+	if(!declaration->resolveExtendedConcepts(resolver)) return this;
+
 	//analyze
 	std::vector<Type*> collection;
 	if(!traverseExtenderHierarchy(this,collection)){

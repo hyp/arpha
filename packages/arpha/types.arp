@@ -51,7 +51,7 @@ concept InfiniteSequence(T)
 	Contiguos sequence is a contiguos sequence of elements. 
 	It is represented by a structure containing two pointers to the beggining and to the end of the sequence.
 #
-type LinearSequence(T)
+type LinearSequence(T) extends Sequence
 {
 }
 
