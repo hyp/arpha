@@ -646,7 +646,11 @@ Node* MatchResolver::resolve(Resolver* resolver){
 						return this;
 					}
 				}
-				if(matches) return resolver->resolve(*(i+1));
+				if(matches){
+					auto result = resolver->resolve(*(i+1));
+					if(auto block = result->asBlockExpression()) result = simplifyBlock(block);
+					return result;
+				}
 			}
 			return this; //Can't match..
 		}
