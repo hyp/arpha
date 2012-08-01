@@ -35,6 +35,10 @@ namespace System {
 		std::string directory(const char* filename);
 		//Returns c.arp from a/b/c.arp
 		std::string filename(const char* path);
+
+		//Returns arp from a/b/c.arp. Can return null.
+		const char* extension(const char* path);
+
 		//Returns a from a/b/c.arp and advances the pointer to '/' or '\0'
 		std::pair<const char*,const char*> firstComponent(const char** path);
 	}

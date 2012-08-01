@@ -169,6 +169,13 @@ namespace System {
 			return filename;
 		}
 
+		const char* extension(const char* path){
+			for(auto i = path + (strlen(path));i != path;--i){
+				if(*i == '.') return (i+1);
+			}
+			return "";
+		}
+
 		std::pair<const char*,const char*> firstComponent(const char** path){
 			assert(path);
 			assert(*path);
@@ -191,6 +198,10 @@ namespace System {
 		assert(path::filename("/glasgow") == "glasgow");
 		assert(path::filename("foo") == "foo");
 		assert(path::filename("/washington/") == "");
+
+		assert(std::string("arp") == path::extension("packages/arpha/arpha.arp"));
+		assert(std::string("") == path::extension("/glasgow"));
+		assert(std::string("") == path::extension("ny."));
 
 		const char* name = "arpha/arpha.arp";
 		auto component = path::firstComponent(&name);

@@ -225,8 +225,25 @@ namespace compiler {
 	}
 
 
+
 }
 
+void onError(const std::string& message){
+	System::print("Error: ");
+	System::print(message);
+	System::print("\n");
+}
+void onWarning(const std::string& message){
+	System::print("Warning: ");
+	System::print(message);
+	System::print("\n");
+}
+void onFatalError(const std::string& message){
+	System::print("Fatal error: ");
+	System::print(message);
+	System::print("\n");
+	exit(-1);
+}
 
 void createDefaultTarget(data::gen::native::Target& target){
 #ifdef _WIN32
@@ -289,7 +306,7 @@ ClOption* findOption(const char* cl){
 			if(i->antipod){
 				for(auto j = clOptions;j!=end;j++){
 					if(stringsEqualAnyCase(i->antipod,j->name) && j->wasUsed){
-						System::print(format("WARNING - The command line option '%s' is mutually exclusive with option '%s'! THe compiler will use the option '%s'.\n",i->name,j->name,i->name));
+						onWarning(format("The command line option '%s' is mutually exclusive with option '%s'! THe compiler will use the option '%s'.",i->name,j->name,i->name));
 					}
 				}
 			}
@@ -306,7 +323,7 @@ struct ClOptionApplier {
 	data::gen::native::Target* nativeTarget;
 
 	void paramError(const char* option,const char* param,const char* allowed = nullptr){
-		System::print(format("ERROR - The parameter '%s' for the command line option '%s' is not valid!\n",param,option));
+		onError(format("The parameter '%s' for the command line option '%s' is not valid!",param,option));
 		if(allowed){
 			System::print(format("        The allowed parameters are %s\n",allowed));
 		}
@@ -359,15 +376,14 @@ int main(int argc, const char * argv[]){
 					const char* optParam = nullptr;
 					if(opt->requiresSecondParam){
 						if(!((i+1) < argc)){
-							System::print(format("ERROR - the command line option '%s' requires another parameter after it!\n",opt->name));
-							return -1;
+							onFatalError(format("The command line option '%s' requires another parameter after it!",opt->name));
 						}
 						optParam = argv[i+1];
 						i++;
 					}
 					applier.applyOption(opt->name,optParam);
 				}
-				else System::print(format("WARNING - unrecognized command line option '%s'! The compiler will ignore it!\n",argv[i]));
+				else onWarning(format("Unrecognized command line option '%s'! The compiler will ignore it!",argv[i]));
 			}
 			else {
 				files.push_back(argv[i]);
@@ -386,24 +402,54 @@ int main(int argc, const char * argv[]){
 	//runTests();
 	
 	if(operation == "build"){
-		auto mod = compiler::newModuleFromFile(files[0]);
-
-		auto dir = System::path::directory(files[0]);
-		auto name = System::path::filename(files[0]);
+		if(files.size() < 1){
+			onFatalError(format("No files provided!"));
+		}
 
 		std::vector<std::string> binaryFiles;
+		binaryFiles.reserve(files.size()+1);
+		std::string temp;
 
-		binaryFiles.push_back(backend.generateModule((*mod).second.body,dir.c_str(),name.c_str()));
+		for(auto f = files.begin();f!=files.end();++f){
+			auto file = *f;
+			auto ext = System::path::extension(file);
+			if(strcmp(ext,"") == 0){
+				temp = file;
+				temp += ".arp";
+				ext = "arp";
+				file = temp.c_str();
+			}
+
+			if(!System::fileExists(file)){
+				onError(format("The file '%s' doesn't exist!",file));
+				continue;
+			}
+
+			if(strcmp(ext,"arp") == 0){
+				auto module = compiler::newModuleFromFile(file);
+				auto dir  = System::path::directory(file);
+				auto name = System::path::filename(file);
+				binaryFiles.push_back(backend.generateModule((*module).second.body,dir.c_str(),name.c_str()));
+			}
+			else if(strcmp(ext,"obj") == 0 || strcmp(ext,"o") == 0 || strcmp(ext,"lib") == 0 || strcmp(ext,"a") == 0){
+				binaryFiles.push_back(file);
+			}
+			else {
+				onError(format("Can't compile file '%s' with an extension '%s'",file,ext));
+			}
+		}
 		if(compiler::generatedFunctions){
 			binaryFiles.push_back(backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen"));
 		}
+
+		if(binaryFiles.size()){
+			std::vector<const char*> binaryFilesPtr(binaryFiles.size(),nullptr);
+			for(size_t i = 0;i < binaryFiles.size();++i) binaryFilesPtr[i] = binaryFiles[i].c_str();
+			auto executable = linker.link(&binaryFilesPtr[0],binaryFilesPtr.size(),files[0],data::gen::native::PackageLinkingFormat::EXECUTABLE);
 		
-		std::vector<const char*> binaryFilesPtr(binaryFiles.size(),nullptr);
-		for(size_t i = 0;i < binaryFiles.size();++i) binaryFilesPtr[i] = binaryFiles[i].c_str();
-		auto executable = linker.link(&binaryFilesPtr[0],binaryFilesPtr.size(),files[0],data::gen::native::PackageLinkingFormat::EXECUTABLE);
-		
-		if(genOptions.run)
-			System::execute(executable.c_str(),"");
+			if(genOptions.run)
+				System::execute(executable.c_str(),"");
+		}
 	}
 	if(argc < 2){
 		System::print("\nWelcome to arpha code console. Type in the code and press return twice to compile it!\n");
