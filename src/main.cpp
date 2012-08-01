@@ -37,6 +37,7 @@ namespace compiler {
 		Scope* scope;
 		Node*  body;
 		bool compile;
+		size_t errorCount;
 		const char* src;
 	};
 
@@ -77,6 +78,7 @@ namespace compiler {
 		currentModule = insertionResult.first;
 
 		currentModule->second.directory = System::path::directory(moduleName);
+		currentModule->second.errorCount = 0;
 		currentModule->second.src = source;
 
 		//module
@@ -200,24 +202,28 @@ namespace compiler {
 			std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
 			showSourceLine(location,currentModule->first.size());
 		}
+		currentModule->second.errorCount++;
 	}
 	void onError(Node* node,const std::string& message){
 		auto location = node->location();
 		if(reportLevel >= ReportErrors)
 			std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
-		
+		currentModule->second.errorCount++;
 	}
 	void intrinsicFatalError(Location& location,const std::string& message){
 		std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": INTRINSIC FATAL ERROR: " << message << std::endl;
 		std::cout<<"The compiler will now exit!"<<std::endl;
+		currentModule->second.errorCount++;
 	}
 	void headError(Location& location,const std::string& message){
 		std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Error: " << message << std::endl;
+		currentModule->second.errorCount++;
 	}
 	void subError(Location& location,const std::string& message){
 		for(size_t i = 0;i<currentModule->first.size();i++) std::cout<<' ';
 		std::cout<< '(' << location.line() << ':' << location.column << ')' <<": " << message << std::endl;
 		showSourceLine(location,currentModule->first.size());
+		currentModule->second.errorCount++;
 	}
 	void onWarning(Location& location,const std::string& message){
 		std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Warning: " << message << std::endl;
@@ -297,7 +303,7 @@ unittest(cl){
 	assert(stringsEqualAnyCase("foo1","FoO1"));
 }
 
-ClOption clOptions[]={ClOption("m32","m64"),ClOption("m64","m32"),ClOption("arch",1),ClOption("run")};
+ClOption clOptions[]={ClOption("m32","m64"),ClOption("m64","m32"),ClOption("arch",1),ClOption("run"),ClOption("nolink"),ClOption("o",1)};
 ClOption* findOption(const char* cl){
 	auto end = clOptions+ (sizeof(clOptions) / sizeof(ClOption));
 	for(auto i = clOptions;i!=end;i++){
@@ -340,7 +346,13 @@ struct ClOptionApplier {
 			else paramError(option,param,"x86 or arm");
 		}
 		else if(stringsEqualAnyCase(option,"run")) genOptions->run = true;
-
+		else if(stringsEqualAnyCase(option,"nolink")) genOptions->link = false;
+		else if(stringsEqualAnyCase(option,"o")){
+			if(stringsEqualAnyCase(param,"0")) genOptions->optimizationLevel = 0;
+			else if(stringsEqualAnyCase(param,"1")) genOptions->optimizationLevel = 1;
+			else if(stringsEqualAnyCase(param,"2")) genOptions->optimizationLevel = 2;
+			else paramError(option,param,"0 or 1 or 2");
+		}
 	}
 };
 
@@ -358,6 +370,7 @@ int main(int argc, const char * argv[]){
 	genOptions.optimizationLevel = -1;
 	genOptions.generate = true;
 	genOptions.run = false;
+	genOptions.link = true;
 
 	data::gen::native::Target target;
 	createDefaultTarget(target);
@@ -409,6 +422,7 @@ int main(int argc, const char * argv[]){
 		std::vector<std::string> binaryFiles;
 		binaryFiles.reserve(files.size()+1);
 		std::string temp;
+		bool hasErrors = false;
 
 		for(auto f = files.begin();f!=files.end();++f){
 			auto file = *f;
@@ -422,27 +436,36 @@ int main(int argc, const char * argv[]){
 
 			if(!System::fileExists(file)){
 				onError(format("The file '%s' doesn't exist!",file));
+				hasErrors = true;
 				continue;
 			}
 
 			if(strcmp(ext,"arp") == 0){
 				auto module = compiler::newModuleFromFile(file);
+				if(module->second.errorCount > 0){
+					hasErrors = true;
+					continue;
+				}
 				auto dir  = System::path::directory(file);
 				auto name = System::path::filename(file);
-				binaryFiles.push_back(backend.generateModule((*module).second.body,dir.c_str(),name.c_str()));
+				binaryFiles.push_back(backend.generateModule(module->second.body,dir.c_str(),name.c_str()));
 			}
 			else if(strcmp(ext,"obj") == 0 || strcmp(ext,"o") == 0 || strcmp(ext,"lib") == 0 || strcmp(ext,"a") == 0){
 				binaryFiles.push_back(file);
 			}
 			else {
 				onError(format("Can't compile file '%s' with an extension '%s'",file,ext));
+				hasErrors = true;
 			}
 		}
+		if(hasErrors) return -1;
+
 		if(compiler::generatedFunctions){
+
 			binaryFiles.push_back(backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen"));
 		}
 
-		if(binaryFiles.size()){
+		if(binaryFiles.size() && genOptions.link){
 			std::vector<const char*> binaryFilesPtr(binaryFiles.size(),nullptr);
 			for(size_t i = 0;i < binaryFiles.size();++i) binaryFilesPtr[i] = binaryFiles[i].c_str();
 			auto executable = linker.link(&binaryFilesPtr[0],binaryFilesPtr.size(),files[0],data::gen::native::PackageLinkingFormat::EXECUTABLE);
