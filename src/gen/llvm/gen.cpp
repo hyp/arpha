@@ -1076,6 +1076,9 @@ Node* LLVMgenerator::visit(Function* function){
 	if(function->isExternal() || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro() || 
 		function->isTypeTemplate() || function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return function;
 
+	//NB: optimization: Don't generate unused generated functions!
+	if(function->generatedFunctionParent && !function->generatorData) return function;
+
 	auto func = getFunctionDeclaration(function);
 
 	//generate body
