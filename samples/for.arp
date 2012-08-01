@@ -1,0 +1,15 @@
+#
+	TODO: remove cast
+#
+
+import io
+
+def find(range Range(char8),value char8){
+	for(i in range){
+		if((i as uint8) == (value as uint8)) print("found character!\n")
+	}
+}
+
+def main(){
+	find("ranger of Greendale!",'G')
+}

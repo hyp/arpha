@@ -13,7 +13,7 @@ macro for {
 	
 	return [> {
 			var seq = $sequence
-			until(seq.isEmpty){
+			until(seq.empty){
 				def i = seq.current
 				$body
 				seq.moveNext()

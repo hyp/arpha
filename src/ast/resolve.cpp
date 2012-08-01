@@ -326,8 +326,14 @@ Node* CallExpression::resolve(Resolver* resolver){
 	else if(object->asVariableReference() && object->returnType()->isFunctionPointer()){
 		resolver->markResolved(this);
 	}
-	else
+	else {
 		error(object,"Invalid function call expression - %s(%s)!",object,arg);
+		return ErrorExpression::getInstance();
+	}
+
+	if(isResolved() && returnType()->isReference()){
+		return resolver->resolve(copyLocationSymbol(new PointerOperation(this,PointerOperation::DEREFERENCE)));
+	}
 	return this;
 }
 
@@ -415,8 +421,8 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 	Variable* variable;
 	if(auto var = object->asVariableReference()) variable = var->variable;
 	else {
+		object = resolver->resolve(object);
 		variable = object->asVariable();
-		if(variable) resolver->resolve(variable);
 	}
 	//Assigning values to variables
 	if(variable){
@@ -431,7 +437,9 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 		}
 
 		//perform the actual assignment
-		if(auto canBeAssigned = variable->type.type()->assignableFrom(value,valuesType)){
+		Type* expectedType = variable->type.type();
+
+		if(auto canBeAssigned = expectedType->assignableFrom(value,valuesType)){
 			value = resolver->resolve(canBeAssigned);
 			if(variable->isFlagSet(Variable::IS_IMMUTABLE) && value->isConst()){
 				variable->setImmutableValue(value);
@@ -439,32 +447,30 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 			resolver->markResolved(this);
 		} else {
 			error(value,"Can't assign %s to %s - the types don't match!",value,object);
+			return ErrorExpression::getInstance();
 		}
 	}
-	else if(auto access = object->asAccessExpression()){
-		if(auto f = accessingAnonymousRecordField(access)){
-			object = resolver->resolve(access->copyLocationSymbol(f));
-			resolver->markResolved(this);
+	else if(object->isResolved()) {
+		Type* expectedType;
+
+		if(auto access = object->asFieldAccessExpression())
+			expectedType = access->fieldsType();
+		else if(object->asPointerOperation() && object->asPointerOperation()->kind == PointerOperation::DEREFERENCE)
+			expectedType = object->returnType();
+		else {
+			error(object,"Can't perform an assignment to %s - only variables, fields, derefernced pointers and references are assignable!",object);
+			return ErrorExpression::getInstance();
 		}
-		//a.foo = 2 -> foo(a,2)
-		else return resolver->resolve(new CallExpression(new UnresolvedSymbol(access->location(),access->symbol),new TupleExpression(access->object,value)));
-	}
-	else if(auto access = object->asFieldAccessExpression()){
-		if(auto canBeAssigned = access->fieldsType()->assignableFrom(value,valuesType)){
+
+		if(auto canBeAssigned = expectedType->assignableFrom(value,valuesType)){
 			value = resolver->resolve(canBeAssigned);
 			resolver->markResolved(this);
 		}
-		else error(value,"Can't assign %s to %s - the types don't match!",value,object);
-	}
-	else if( object->asPointerOperation() && object->asPointerOperation()->kind == PointerOperation::DEREFERENCE){
-		if(auto canBeAssigned = object->returnType()->assignableFrom(value,valuesType)){
-			value = resolver->resolve(canBeAssigned);
-			resolver->markResolved(this);
-		} else {
+		else {
 			error(value,"Can't assign %s to %s - the types don't match!",value,object);
+			return ErrorExpression::getInstance();
 		}
 	}
-	else error(object,"Can't perform an assignment to %s - only variables, fields and derefernced pointers are assignable!",object);
 	
 	return this;
 }
@@ -480,12 +486,17 @@ Node* PointerOperation::resolve(Resolver* resolver){
 			else if(auto trref = expression->asTraitReference()){
 				return this;
 			}
-			else kind = DEREFERENCE;
+			else {
+				kind = DEREFERENCE;
+			}
 		}
 		resolver->markResolved(this);
-		if(isDereference() && !expression->returnType()->isPointer()){
-			error(this,"Can't dereference a non-pointer expression!");
-			return ErrorExpression::getInstance();
+		if(isDereference()){
+			auto ret = expression->returnType();
+			if(!(ret->isPointer() || ret->isReference() )){
+				error(this,"Can't dereference a non-pointer expression!");
+				return ErrorExpression::getInstance();
+			}
 		}
 	}
 	return this;
@@ -498,9 +509,9 @@ Node* ReturnExpression::resolve(Resolver* resolver){
 	func->setFlag(Function::CONTAINS_RETURN);
 	expression = resolver->resolve(expression);
 	if(expression->isResolved()){
+
 		//Type checking..
 		if(func->_returnType.isPattern()){
-			//Don't allow to return local types
 			auto valRet = expression->returnType();
 			if(!func->_returnType.deduce(valRet,func->body.scope)){
 					error(this,"Failed to deduce function's return type -\n\tA function %s is expected to return a type matching a pattern %s, which the type %s derived from the expression %s doesn't match!",
@@ -557,11 +568,14 @@ Node* CastExpression::resolve(Resolver* resolver){
 	if(object->isResolved()){
 		resolver->markResolved(this);
 		auto returns = object->returnType();
-		if(type->canAssignFrom(object,returns) == -1 && !returns->canCastTo(type)){
+		if(type->isSame(returns)) return object;
+		else if(returns->canCastTo(type)){
+			if(object->isConst()) return copyLocationSymbol(evaluateConstantCast(object,type));
+		}
+		else {
 			error(this,"Can't cast %s to %s!",returns,type);
 			return ErrorExpression::getInstance();
 		}
-		if(object->isConst()) return copyLocationSymbol(evaluateConstantCast(object,type));
 	}
 	return this;
 }

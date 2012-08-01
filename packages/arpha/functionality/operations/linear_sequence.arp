@@ -7,8 +7,7 @@ import arpha.intrinsic
 
 def length (self *LinearSequence(_)) natural
 
-def element(self *LinearSequence(T: _),i natural) *T
-def element(self *LinearSequence(T: _),i natural,item *T)
+def element(self *LinearSequence(T: _),i natural) Reference(T)
 
 #
 TODO:
@@ -19,6 +18,6 @@ def slice(self *LinearSequence(T: _),from natural,to natural) LinearSequence(T)
 
 # Sequence interface
 def empty    (self *LinearSequence(_)) bool
-def current  (self *LinearSequence(T: _)) *T
+def current  (self *LinearSequence(T: _)) Reference(T)
 def moveNext (self *LinearSequence(_))
 

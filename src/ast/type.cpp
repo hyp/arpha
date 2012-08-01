@@ -250,7 +250,7 @@ bool matchTraitParameter(Node** pattern,Type* given,bool strict){
 		return match((*pattern)->asTypeReference()->type,given,strict);
 	}
 	else {
-		if(given->isPointer()) given = given->next();
+		if(given->isReference()) given = given->next();
 		*pattern = new TypeReference(given);
 		return true;
 	}
@@ -344,7 +344,7 @@ data::ast::Search::Result functionMatchesTraitsMethod(Type* type,Trait* trait,Fu
 					else {
 						if(op == data::ast::Operations::ELEMENT_GET){
 							assert(type->isLinearSequence());
-							t = Type::getPointerType(type->next());
+							t = Type::getReferenceType(type->next());
 						}
 					}
 
@@ -545,6 +545,7 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 /**
 * The type
 */
+Function* Type::generators::reference  = nullptr;
 Function* Type::generators::linearSequence  = nullptr;
 Function* Type::generators::functionPointer = nullptr;
 
@@ -552,7 +553,7 @@ Type::Type(int kind) : type(kind),flags(0) {
 	if(kind == BOOL) bits = 1;
 }
 Type::Type(int kind,Type* next) : type(kind),flags(0) {
-	assert(kind == POINTER || kind == LINEAR_SEQUENCE);
+	assert(kind == POINTER || kind == LINEAR_SEQUENCE || kind == REFERENCE);
 	this->argument = next;
 }
 Type::Type(int kind,Type* T,size_t N) : type(kind),flags(0) {
@@ -600,6 +601,9 @@ Type* Type::getLinearSequence(Type* next){
 }
 Type* Type::getPointerType(Type* next){
 	return new Type(Type::POINTER,next);
+}
+Type* Type::getReferenceType(Type* next){
+	return new Type(Type::REFERENCE,next);
 }
 
 void Type::setFlag(uint16 flag){
@@ -656,6 +660,7 @@ bool Type::isSame(Type* other){
 			return true;
 		
 		case POINTER: 
+		case REFERENCE:
 		case LINEAR_SEQUENCE:
 			return argument->isSame(other->argument);
 		case STATIC_ARRAY: return argument->isSame(other->argument) && N == other->N;
@@ -691,9 +696,10 @@ bool Type::wasGenerated() const {
 	case RECORD:  return static_cast<const Record* >(this)->declaration->isParametrized();
 	case VARIANT: return static_cast<const Variant*>(this)->declaration->isParametrized();
 
-	case POINTER:          return true;
-	case LINEAR_SEQUENCE:  return true;
-	case STATIC_ARRAY:     return true;
+	case POINTER:
+	case REFERENCE:
+	case LINEAR_SEQUENCE: 
+	case STATIC_ARRAY:    
 	case FUNCTION_POINTER: return true;
 	
 	default: return false;
@@ -703,6 +709,7 @@ bool Type::wasGeneratedBy(Function* function) const {
 	switch(type){
 	case RECORD: return static_cast<const Record*>(this)->declaration->parametrization()->generatedFunctionParent == function;
 
+	case REFERENCE:        return function == generators::reference;
 	case LINEAR_SEQUENCE:  return function == generators::linearSequence;
 	case STATIC_ARRAY:     return function == nullptr;
 	case FUNCTION_POINTER: return function == generators::functionPointer;
@@ -716,6 +723,7 @@ Node* Type::generatedArgument(size_t i) const {
 	case RECORD: return static_cast<const Record*>(this)->declaration->parametrization()->expandedArguments[i];
 
 	case POINTER:
+	case REFERENCE:
 	case LINEAR_SEQUENCE:
 		return new TypeReference(argument);
 	case STATIC_ARRAY: 
@@ -966,7 +974,7 @@ Scenarios:
       x int64 = foo , &foo
   TODO:    x int8  = foo as int8 , &foo as int8
 
-  TODO: type Foo : Bar {} ; def bar(x *Bar) ; var foo Foo ; foo.bar &foo.bar
+  type Foo : Bar {} ; def bar(x *Bar) ; var foo Foo ; foo.bar &foo.bar
 
   TODO: NB: The weights are a bit dodgy now
 */
@@ -1017,6 +1025,17 @@ int referenceOf(Type* givenType, Node** node, Type* nodeType,bool doTransform){
 	return -1;
 }
 
+int referenceTo(Type* givenType, Node** node, Type* nodeType,bool doTransform){
+	int weight = givenType->assignFrom(node,nodeType->next(),doTransform);
+	if(weight != -1){
+		if(doTransform){
+			*node = new PointerOperation(*node,PointerOperation::DEREFERENCE);
+		}
+		return ADDRESSOF;
+	}
+	return -1;
+}
+
 
 /**
 Implicit type conversion system.
@@ -1024,7 +1043,10 @@ Returns the weight of the conversion or -1 if the conversion failed.
 Scenarios:
 	As per above literal,auto and record type casts
 	*ast.Call , etc => *ast.Node
-	x :: int32  => &x :: *int32
+	x :: int32    -> &x :: *int32
+
+	x :: Reference (T) -> *x  :: T
+	x :: Reference (T) -> x as *T :: *T
 */
 int Type::assignFrom(Node** expression,Type* type,bool doTransform){
 	if(this->isSame(type)) return EXACT;
@@ -1043,6 +1065,9 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform){
 		return RECORD_SUBTYPE;
 	}
 	else if( isPointer() && !type->isPointer() && ((assigns = referenceOf(this,expression,type,doTransform)) != -1) ){
+		return assigns;
+	}
+	else if( type->isReference() && !isReference() && ((assigns = referenceTo(this,expression,type,doTransform)) != -1) ){
 		return assigns;
 	}
 

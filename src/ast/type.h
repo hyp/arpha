@@ -86,6 +86,7 @@ struct Type {
 		UINTPTRT,//uintptr_t
 		
 		POINTER,
+		REFERENCE,
 		LINEAR_SEQUENCE,//a range of elements = { T*,natural }
 		STATIC_ARRAY,
 
@@ -130,6 +131,7 @@ struct Type {
 	static Type* getUintptrType();
 
 	static Type* getPointerType(Type* next);
+	static Type* getReferenceType(Type* next);
 
 	static Type* getVariantOption(int optionID);
 
@@ -150,6 +152,7 @@ struct Type {
 	inline bool isChar   ()  const { return type == CHAR;     }
 	inline bool isChar8  ()  const { return type == CHAR && bits == 8;     }
 	inline bool isPointer()  const { return type == POINTER;  }
+	inline bool isReference() const { return type == REFERENCE; }
 	inline bool isRecord()   const { return type == RECORD;   }
 	inline bool isVariant()  const { return type == VARIANT;  }
 	inline bool isFunctionPointer() const { return type == FUNCTION_POINTER; }
@@ -195,6 +198,7 @@ struct Type {
 	Node* generatedArgument(size_t i) const; //Returns the parameter i which was the argument to the function which generated this type
 
 	struct generators {
+		static Function* reference;
 		static Function* linearSequence;
 		static Function* functionPointer;
 	};

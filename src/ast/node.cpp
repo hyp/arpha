@@ -279,7 +279,7 @@ Type* PointerOperation::returnType() const {
 	assert(isResolved());
 	auto next = expression->returnType();
 	if(isAddress()) return new Type(Type::POINTER,next);
-	assert(next->isPointer());
+	assert(next->isPointer() || next->isReference());
 	return next->argument;
 }
 Node* PointerOperation::duplicate(DuplicationModifiers* mods) const {
@@ -365,7 +365,7 @@ Type* CallExpression::returnType() const {
 			auto op = func->getOperation();
 
 			if(op == data::ast::Operations::ELEMENT_GET){
-				return new Type(Type::POINTER,firstArg->next()->next());
+				return Type::getReferenceType(firstArg->next()->next());
 			}
 		}
 		else return func->_returnType.type();

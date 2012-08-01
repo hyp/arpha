@@ -243,14 +243,16 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 		case Type::UINTPTRT: stream<<"uintptr"; break;
 
 		case Type::POINTER: 
-			stream<<"Pointer("<<type->next()<<')'; break;
+			stream<<"*"<<type->next(); break;
+		case Type::REFERENCE:
+			stream<<"Reference("<<type->next()<<")"; break;
 		case Type::LINEAR_SEQUENCE:
 			stream<<"LinearSequence("<<type->next()<<")"; break;
 		case Type::STATIC_ARRAY:
 			stream<<"Array("<<type->next()<<","<<type->N<<')'; break;
 
 		case Type::FUNCTION_POINTER: 
-			stream<<"Function("<<type->argument<<" -> "<<static_cast<FunctionPointer*>(type)->returns()<<')'; break;
+			stream<<"("<<type->argument<<" -> "<<static_cast<FunctionPointer*>(type)->returns()<<')'; break;
 
 		case Type::NODE:
 			stream<<"ast.Expression";

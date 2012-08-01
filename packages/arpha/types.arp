@@ -15,6 +15,10 @@ import arpha.intrinsic
 	The constant values true and false are also defined by the implementation.
 #
 
+type Reference(T)
+{
+}
+
 #
 	This concept descibes a type which can be used as a condition for the 'if' expression.
 	TODO: make bool match it.
@@ -34,27 +38,32 @@ type FunctionPointer(ParameterType,ReturnType)
 #
 	This trait describes a type which can be iterated in a sequential fashion.
 #
-concept Sequence(T) 
+concept Range(T) 
 {
 	def empty   (self) bool
 	def current (self) T
-	def moveNext(self *Sequence) Nothing
+	def moveNext(self *Range) Nothing
 }
 
-concept InfiniteSequence(T)
+concept InfiniteRange(T)
 {
 	def current (self) T
-	def moveNext(self *InfiniteSequence) Nothing
+	def moveNext(self *InfiniteRange) Nothing
 }
+
+concept OutputRange(T)
+{
+	def put(self,item T) Nothing
+}
+
 
 #
 	Contiguos sequence is a contiguos sequence of elements. 
 	It is represented by a structure containing two pointers to the beggining and to the end of the sequence.
 #
-type LinearSequence(T) extends Sequence
+type LinearSequence(T) extends Range
 {
 }
-
 
 
 #

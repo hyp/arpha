@@ -75,6 +75,7 @@ void Mangler::Element::mangle(Type* type){
 	case Type::VARIANT:  mangle(static_cast<Variant*>(type)->declaration); break;
 
 	case Type::POINTER:  stream<<'P'; mangle(type->next()); break;
+	case Type::REFERENCE: stream<<'Q'; mangle(type->next()); break;
 	case Type::LINEAR_SEQUENCE: stream<<'S'; mangle(type->next()); break;
 
 	case Type::FUNCTION_POINTER: 

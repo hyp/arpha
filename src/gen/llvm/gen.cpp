@@ -271,6 +271,7 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 		return coreTypes[type->bits == 8? GEN_TYPE_I8 : (type->bits == 32? GEN_TYPE_I32 : GEN_TYPE_I16)];
 	
 	case Type::POINTER:
+	case Type::REFERENCE:
 		return generatePointerType(this,type->next());
 	case Type::LINEAR_SEQUENCE:
 		return generateLinearSequence(this,type->next());
@@ -741,7 +742,10 @@ Node* LLVMgenerator::visit(PointerOperation* node){
 	if(node->isAddress()){
 		emit(generatePointerExpression(node->expression));
 	} else {
-		if(this->needsPointer) emit(generateExpression(node->expression));
+		if(needsPointer){
+			needsPointer = false;
+			emit(generateExpression(node->expression));
+		}
 		else emitLoad(generateExpression(node->expression));
 	}
 	return node;
