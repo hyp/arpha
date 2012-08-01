@@ -255,13 +255,27 @@ bool matchTraitParameter(Node** pattern,Type* given,bool strict){
 	}
 }
 
-Type* matchPatternedTraitParameter(TypePatternUnresolvedExpression::PatternMatcher& matcher,Node* pattern,Type* given,bool strict){
+// self Foo matches  self Concept
+// self Foo.meanings matches self Concept
+bool matchConceptToConcrete(Type* given,Type* arg,bool strict){
+	if(given->isSame(arg)) return true;
 
-	if(matcher.match(given,pattern)) return given;
-	else if(!strict){
-		auto ptr = Type::getPointerType(given);
-		if(matcher.match(ptr,pattern)) return ptr;
+	if(strict) return false;
+
+	for(TypeMeaningsRange meanings(given);!meanings.isEmpty();meanings.advance()){
+		if(meanings.currentType()->isSame(arg)) return true;
 	}
+	return false;
+}
+
+// self Foo(_) matches self Concept
+// self Foo(_).meanings matches self Concept
+Type* matchConceptToPattern(Type* given,TypePatternUnresolvedExpression::PatternMatcher& matcher,Node* pattern,bool strict){
+	if(!strict){
+		if(auto t = matcher.matchWithSubtyping(given,pattern)){
+			return t;
+		}
+	} else if(matcher.match(given,pattern)) return given;
 	return nullptr;
 }
 
@@ -287,38 +301,29 @@ data::ast::Search::Result functionMatchesTraitsMethod(Type* type,Trait* trait,Fu
 				}
 			}
 			else if(method->arguments[i]->type.isPattern()){
-				if(function->arguments[i]->type.isResolved()){
-					auto pattern = method->arguments[i]->type.pattern;
-					if(auto ptr = pattern->asPointerOperation()){
-						assert(ptr->isDereferenceOrType());
-						pattern = ptr->expression;
-					}
+				auto pattern = method->arguments[i]->type.pattern;
+				if(auto ptr = pattern->asPointerOperation()){
+					assert(ptr->isDereferenceOrType());
+					pattern = ptr->expression;
+				}
 
-					if(auto tref = pattern->asTraitReference()){
-						if(tref->trait == trait){
-							if(match(type,function->arguments[i]->type.type(),strict)) continue;
-						}
+				if(auto tref = pattern->asTraitReference()){
+					if(tref->trait != trait) return data::ast::Search::NotFound;
+
+					if(function->arguments[i]->type.isResolved()){
+						if(matchConceptToConcrete(type,function->arguments[i]->type.type(),strict)) continue;
 					}
-					else if(auto p = pattern->asTraitParameterReference()){
-						if(matchTraitParameter((traitExpansions->begin() + p->index)._Ptr,function->arguments[i]->type.type(),strict)) continue;
+					else if(function->arguments[i]->type.isPattern()){
+						if(auto t = matchConceptToPattern(type,patternedMatcher,function->arguments[i]->type.pattern,strict)){
+							specializedParameters[i] = t;
+							continue;
+						}
 					}
 				}
-				else if(function->arguments[i]->type.isPattern()){
-					auto pattern = method->arguments[i]->type.pattern;
-
-					if(auto ptr = pattern->asPointerOperation()){
-						assert(ptr->isDereferenceOrType());
-						pattern = ptr->expression;
+				else if(auto p = pattern->asTraitParameterReference()){
+					if(function->arguments[i]->type.isResolved()){
+						if(matchTraitParameter((traitExpansions->begin() + p->index)._Ptr,function->arguments[i]->type.type(),strict)) continue;
 					}
-					if(auto tref = pattern->asTraitReference()){
-						if(tref->trait == trait){
-							if(auto t = matchPatternedTraitParameter(patternedMatcher,function->arguments[i]->type.pattern,type,strict)){
-								specializedParameters[i] = t;
-								continue;
-							}
-						}
-					}
-					//auto pattern = metho,
 				}
 			}
 			return data::ast::Search::NotFound;

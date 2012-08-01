@@ -22,6 +22,14 @@ type ParametrizedRandomGenerator(T)
 	def current (self) = self.x
 	def moveNext(self) = self.x++
 }
+type RandomGeneratorExtender
+{
+	extends var super RandomGenerator
+}
+type ParametrizedRandomGeneratorExtender
+{
+	extends var super ParametrizedRandomGenerator(int32)
+}
 def main()
 {
 	match(RandomGenerator) 
@@ -40,4 +48,12 @@ def main()
 	{	| Seq(int32) => true
 		| _ => false
 	}
+	match(RandomGeneratorExtender)
+	{	| Seq => true
+		| _ => false
+	}
+	match(ParametrizedRandomGeneratorExtender)
+	{	| Seq => true
+		| _ => false
+	}	
 }
