@@ -59,10 +59,29 @@ def reverse(range)
 }
 #
 
+# TODO: newValue T
+def replace(range,value,newValue)
+{
+	until(range.empty){
+		if(range.current == value) range.current = newValue
+		range.moveNext
+	}
+}
+
 def fill(range,value)
 {
 	until(range.empty){
 		range.current = value
 		range.moveNext
+	}
+}
+
+# TODO: seq.T must match range.T
+def fill(range,seq InfiniteRange)
+{
+	until(range.empty){
+		range.current = seq.current
+		range.moveNext
+		seq.moveNext
 	}
 }
