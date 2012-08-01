@@ -391,9 +391,16 @@ int main(int argc, const char * argv[]){
 		auto dir = System::path::directory(files[0]);
 		auto name = System::path::filename(files[0]);
 
-		auto srcf = backend.generateModule((*mod).second.body,dir.c_str(),name.c_str());
-		auto src = srcf.c_str();
-		auto executable = linker.link(&src,1,files[0],data::gen::native::PackageLinkingFormat::EXECUTABLE);
+		std::vector<std::string> binaryFiles;
+
+		binaryFiles.push_back(backend.generateModule((*mod).second.body,dir.c_str(),name.c_str()));
+		if(compiler::generatedFunctions){
+			binaryFiles.push_back(backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen"));
+		}
+		
+		std::vector<const char*> binaryFilesPtr(binaryFiles.size(),nullptr);
+		for(size_t i = 0;i < binaryFiles.size();++i) binaryFilesPtr[i] = binaryFiles[i].c_str();
+		auto executable = linker.link(&binaryFilesPtr[0],binaryFilesPtr.size(),files[0],data::gen::native::PackageLinkingFormat::EXECUTABLE);
 		
 		if(genOptions.run)
 			System::execute(executable.c_str(),"");

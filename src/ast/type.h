@@ -187,7 +187,7 @@ struct Type {
 	bool isFlagSet(uint16 flag) const;
 
 	//const int32
-	inline bool hasConstSemantics() const { return isFlagSet(HAS_CONSTANT_SEMANTICS); }
+	inline bool hasConstSemantics() const { return false; }
 
 
 	bool wasGenerated() const; //Is this a parametrized type?
@@ -213,8 +213,7 @@ struct Type {
 public:
 	enum {
 		IS_RESOLVED = 0x1,
-		HAS_CONSTANT_SEMANTICS = 0x2,
-		HAS_LOCAL_SEMANTICS = 0x4,
+		IS_VALUE = 0x2,
 	};
 	uint16 type;
 	uint16 flags;
@@ -228,6 +227,8 @@ public:
 	union {
 		size_t N;
 	};
+
+	inline bool isValueType(){ return isFlagSet(IS_VALUE); }
 	friend std::ostream& operator<< (std::ostream& stream,Type* node);
 };
 

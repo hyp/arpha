@@ -86,6 +86,7 @@ private:
 	int distance;
 	Scope*  scope;
 	Scope*  prevScope;
+	Scope*  adjacentScope;
 	Scope** importsCurr; //import iterators
 	Scope** importsEnd;
 	SymbolID functionName;

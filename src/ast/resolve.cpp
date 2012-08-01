@@ -40,6 +40,7 @@ OverloadRange::OverloadRange(Scope* scope,SymbolID function,bool dotSyntax){
 	funcCurr        = nullptr;
 	distance = 0;
 	this->scope     = scope;
+	adjacentScope = nullptr;
 	importsCurr     = nullptr;
 	this->functionName = function;
 	this->dotSyntax = dotSyntax;
@@ -51,6 +52,7 @@ void OverloadRange::nextScope(){
 		//check imported scopes
 		if(!scope->imports.size()){
 			distance++;
+			if(scope->parent2) adjacentScope = scope->parent2;
 			scope = scope->parent;
 		}
 		else {
@@ -64,7 +66,12 @@ void OverloadRange::nextScope(){
 		importsCurr++;
 		if(importsCurr >= importsEnd){
 			distance++;
-			scope = prevScope->parent;
+			assert(!prevScope->parent2);//NB: the generate function container doens't import anything
+			if(!prevScope->parent && adjacentScope){
+				scope = adjacentScope;
+				adjacentScope = nullptr;
+			}
+			else scope = prevScope->parent;
 			importsCurr = nullptr;
 		}
 		else scope = *importsCurr;
@@ -1369,7 +1376,12 @@ Function* Resolver::resolveOverload(Scope* scope,SymbolID function,Node* arg,boo
 		else if(results.size()>1) return errorOnMultipleMatches(results.begin()._Ptr,results.size(),arg);
 	}
 	//step 3 - check parent scope
-	if(scope->parent) return resolveOverload(scope->parent,function,arg,dotSyntax);
+	if(scope->parent){
+		if(auto result = resolveOverload(scope->parent,function,arg,dotSyntax)) return result;
+	}
+	if(scope->parent2){
+		return resolveOverload(scope->parent2,function,arg,dotSyntax);
+	}
 	return nullptr;
 }
 
@@ -1506,10 +1518,15 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 		return specialization;
 	}
 	Scope* usageScope;
+	Scope* declarationScope;
 	bool definedInSameModule = false;
-	if(original->owner()->moduleScope() != this->compilationUnit()->moduleBody->scope) usageScope = this->compilationUnit()->moduleBody->scope;
+	if(original->owner()->moduleScope() != this->compilationUnit()->moduleBody->scope){
+		usageScope = this->compilationUnit()->moduleBody->scope;
+		declarationScope = original->owner();
+	}
 	else {
 		usageScope = original->owner();
+		declarationScope = nullptr;
 		definedInSameModule = true;
 	}
 
@@ -1519,6 +1536,7 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 	//specializationWrapper->scope->import(original->owner()); //import the scope in which the original function was defined.
 	//if(usageScope) 
 	specializationWrapper->scope->setParent(usageScope);//import the usage scope
+	specializationWrapper->scope->parent2 = declarationScope;
 	//duplicate the original
 	DuplicationModifiers mods(specializationWrapper->scope);
 	auto specialization = original->specializedDuplicate(&mods,specializedParameters,passedExpressions);

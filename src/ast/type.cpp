@@ -250,6 +250,7 @@ bool matchTraitParameter(Node** pattern,Type* given,bool strict){
 		return match((*pattern)->asTypeReference()->type,given,strict);
 	}
 	else {
+		if(given->isPointer()) given = given->next();
 		*pattern = new TypeReference(given);
 		return true;
 	}

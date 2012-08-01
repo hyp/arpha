@@ -11,6 +11,7 @@
 
 Scope::Scope(Scope* parent) : _functionOwner(parent ? parent->_functionOwner : nullptr) {
 	this->parent = parent;
+	parent2 = nullptr;
 	precedenceProperty = nullptr;
 	importsArphaIntrinsic = false;
 	importsArphaExternal = false;
@@ -114,7 +115,10 @@ InfixDefinition* Scope::lookupImportedInfix(SymbolID name){
 		} \
 	} \
 	if(def) return def;\
-	if(parent) return parent->lookup##c(name); \
+	if(parent && (def = parent->lookup##c(name))){ \
+		return def; \
+	} \
+	if(parent2) return parent2->lookup##c(name);  \
 	return nullptr
 
 
@@ -131,7 +135,10 @@ PrefixDefinition* Scope::lookupPrefix(SymbolID name){
 		} 
 	} 
 	if(def) return def;
-	if(parent) return parent->lookupPrefix(name); 
+	if(parent && (def = parent->lookupPrefix(name))){
+		return def;
+	}
+	if(parent2) return parent2->lookupPrefix(name); 
 	return nullptr;
 }
 InfixDefinition* Scope::lookupInfix(SymbolID name){

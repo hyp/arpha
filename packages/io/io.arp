@@ -1,0 +1,8 @@
+import cstdlib
+
+def print(string Sequence(char8)){
+	until(string.empty){
+		putchar( (*string.current) as int32 )
+		string.moveNext()
+	}
+}

@@ -53,6 +53,9 @@ struct Scope {
 
 	Scope* parent;
 
+	//Required for generated functions polymorphism :(
+	Scope* parent2;
+
 	Function* functionOwner() const;
 
 	Function* _functionOwner;
