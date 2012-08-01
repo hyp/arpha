@@ -1,0 +1,68 @@
+# TODO: make fill("AS",'A') work (TypeMeaningsRange : 'A' literal -> char8)
+
+#
+TODO:
+where range is Range(T: _),
+	  other is Range(T),
+	  value is T,
+	  init  is T
+#
+
+def find(range,value)
+{
+	until(range.empty){
+		if(range.current == value) break
+		range.moveNext
+	}
+	return range
+}
+
+def find(range,other)
+{
+	var r1,r2
+	until(range.empty){
+		r1 = range
+		r2 = other
+		until(r1.empty || r2.empty){
+			if(!(r1.current == r2.current)) break
+			r1.moveNext
+			r2.moveNext
+		}
+		if(r2.empty) break
+		range.moveNext
+	}
+	return range
+}
+
+def count(range,value)
+{
+	var n natural = 0
+	until(range.empty){
+		if(range.current == value) n++
+		range.moveNext
+	}
+	return n
+}
+
+#
+def reverse(range)
+{
+	var rev = range.retro
+	var temp
+	until(range.empty){
+		temp = range.current
+		range.current = rev.current
+		rev.current = temp
+		range.moveNext
+		rev.moveNext
+	}
+}
+#
+
+def fill(range,value)
+{
+	until(range.empty){
+		range.current = value
+		range.moveNext
+	}
+}
