@@ -7,5 +7,5 @@ def real    Type
 def char    Type
 def string  Type
 
-# Represents a string splice in a form of "string $value"
+# Represents a string splice in a form of a tuple i.e. "string $value" is represented by "string ",value
 concept splice

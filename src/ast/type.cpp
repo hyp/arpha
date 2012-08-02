@@ -384,6 +384,7 @@ data::ast::Search::Result typeSatisfiesTrait(Scope* scope,Type* type,Trait* trai
 			if(!Type::generators::linearSequence->getTemplateTypeDeclaration()->resolveExtendedConcepts(resolver)) return data::ast::Search::NotAllElementsResolved;
 			if(!Type::generators::linearSequence->getTemplateTypeDeclaration()->extendsConcept(trait))             return data::ast::Search::NotFound;
 		}
+		else return data::ast::Search::NotFound;
 	}
 
 	for(auto i = trait->methods.begin();i!=trait->methods.end();i++){

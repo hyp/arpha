@@ -995,10 +995,8 @@ bool TypeDeclaration::resolveExtendedConcepts(Resolver* resolver){
 	for(auto i = extendedConcepts.begin();i!=extendedConcepts.end();++i){
 		Node* pattern = nullptr;
 
-		if((*i).isResolved()){
-			if((*i).isPattern()) pattern = (*i).pattern;
-		}
-		else  {
+		if((*i).isPattern()) pattern = (*i).pattern;
+		else if(!(*i).isResolved()) {
 			if((*i).resolve(resolver)){
 				if((*i).isPattern()) pattern = (*i).pattern;
 			}
@@ -1128,6 +1126,17 @@ void generateDestructorBody(Record* type,Variable* selfObject,BlockExpression* b
 		concept Foo(T) { def go(self) Nothing }
 */
 bool Trait::verify(){
+	if(methods.size() == 0){
+		if(numberOfTemplateParameters() > 0){
+			templateDeclaration = nullptr;
+			error(this->declaration,"Abstract concept can't be parametrized!");
+		}
+		if(isImplicit()){
+			flags &= (~IS_IMPLICIT);
+			error(this->declaration,"Abstract concept can't be implicit!");
+		}
+	}
+
 	std::vector<bool> parametersPresent;
 	if(templateDeclaration){
 		parametersPresent.resize(numberOfTemplateParameters(),false);

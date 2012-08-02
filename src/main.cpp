@@ -303,7 +303,7 @@ unittest(cl){
 	assert(stringsEqualAnyCase("foo1","FoO1"));
 }
 
-ClOption clOptions[]={ClOption("m32","m64"),ClOption("m64","m32"),ClOption("arch",1),ClOption("run"),ClOption("nolink"),ClOption("o",1)};
+ClOption clOptions[]={ClOption("m32","m64"),ClOption("m64","m32"),ClOption("arch",1),ClOption("o",1)};
 ClOption* findOption(const char* cl){
 	auto end = clOptions+ (sizeof(clOptions) / sizeof(ClOption));
 	for(auto i = clOptions;i!=end;i++){
@@ -345,8 +345,6 @@ struct ClOptionApplier {
 			else if(stringsEqualAnyCase(param,"arm")) nativeTarget->cpuArchitecture = native::Target::ARM;
 			else paramError(option,param,"x86 or arm");
 		}
-		else if(stringsEqualAnyCase(option,"run")) genOptions->run = true;
-		else if(stringsEqualAnyCase(option,"nolink")) genOptions->link = false;
 		else if(stringsEqualAnyCase(option,"o")){
 			if(stringsEqualAnyCase(param,"0")) genOptions->optimizationLevel = 0;
 			else if(stringsEqualAnyCase(param,"1")) genOptions->optimizationLevel = 1;
@@ -369,15 +367,14 @@ int main(int argc, const char * argv[]){
 	data::gen::Options genOptions;
 	genOptions.optimizationLevel = -1;
 	genOptions.generate = true;
-	genOptions.run = false;
-	genOptions.link = true;
 
 	data::gen::native::Target target;
 	createDefaultTarget(target);
 
 	//command line
 	std::string operation;
-	std::vector<const char*> files;
+	std::vector<std::string> files;
+	bool hasErrors = false;
 	if(argc >= 2){
 		operation = argv[1]; 
 		ClOptionApplier applier = {&options,&genOptions,&target};
@@ -399,9 +396,24 @@ int main(int argc, const char * argv[]){
 				else onWarning(format("Unrecognized command line option '%s'! The compiler will ignore it!",argv[i]));
 			}
 			else {
-				files.push_back(argv[i]);
-				System::print(argv[i]);
-				System::print("\n");
+				std::string file= argv[i];
+				auto ext = System::path::extension(file.c_str());
+				if(strcmp(ext,"") == 0){
+					file += ".arp";
+					ext = "arp";
+				}
+
+				if(!System::fileExists(file.c_str())){
+					onError(format("The file '%s' doesn't exist!",file));
+					hasErrors = true;
+					continue;
+				}
+				if(strcmp(ext,"arp") && strcmp(ext,"obj") && strcmp(ext,"o") && strcmp(ext,"lib") && strcmp(ext,"a")){
+					onError(format("The file '%s' is of unrecognized format!",file));
+					hasErrors = true;
+					continue;
+				}
+				files.push_back(file);
 			}
 		}
 	}
@@ -414,33 +426,26 @@ int main(int argc, const char * argv[]){
 	compiler::init(&options);
 	//runTests();
 	
+	bool run  = false;
+	bool link = true;
+	if(operation == "run"){
+		run = true;
+		operation = "build";
+	}
+	else if(operation == "test"){
+		//TODO
+		operation = "build";
+	}
 	if(operation == "build"){
 		if(files.size() < 1){
 			onFatalError(format("No files provided!"));
 		}
-
-		std::vector<std::string> binaryFiles;
-		binaryFiles.reserve(files.size()+1);
-		std::string temp;
-		bool hasErrors = false;
+		compiler::reportLevel = compiler::ReportErrors;
 
 		for(auto f = files.begin();f!=files.end();++f){
-			auto file = *f;
-			auto ext = System::path::extension(file);
-			if(strcmp(ext,"") == 0){
-				temp = file;
-				temp += ".arp";
-				ext = "arp";
-				file = temp.c_str();
-			}
+			auto file = (*f).c_str();
 
-			if(!System::fileExists(file)){
-				onError(format("The file '%s' doesn't exist!",file));
-				hasErrors = true;
-				continue;
-			}
-
-			if(strcmp(ext,"arp") == 0){
+			if(strcmp(System::path::extension(file),"arp") == 0){
 				auto module = compiler::newModuleFromFile(file);
 				if(module->second.errorCount > 0){
 					hasErrors = true;
@@ -448,30 +453,22 @@ int main(int argc, const char * argv[]){
 				}
 				auto dir  = System::path::directory(file);
 				auto name = System::path::filename(file);
-				binaryFiles.push_back(backend.generateModule(module->second.body,dir.c_str(),name.c_str()));
-			}
-			else if(strcmp(ext,"obj") == 0 || strcmp(ext,"o") == 0 || strcmp(ext,"lib") == 0 || strcmp(ext,"a") == 0){
-				binaryFiles.push_back(file);
-			}
-			else {
-				onError(format("Can't compile file '%s' with an extension '%s'",file,ext));
-				hasErrors = true;
+				*f = backend.generateModule(module->second.body,dir.c_str(),name.c_str());
 			}
 		}
 		if(hasErrors) return -1;
 
 		if(compiler::generatedFunctions){
 
-			binaryFiles.push_back(backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen"));
+			files.push_back(backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen"));
 		}
 
-		if(binaryFiles.size() && genOptions.link){
-			std::vector<const char*> binaryFilesPtr(binaryFiles.size(),nullptr);
-			for(size_t i = 0;i < binaryFiles.size();++i) binaryFilesPtr[i] = binaryFiles[i].c_str();
-			auto executable = linker.link(&binaryFilesPtr[0],binaryFilesPtr.size(),files[0],data::gen::native::PackageLinkingFormat::EXECUTABLE);
+		if(files.size() && link){
+			std::vector<const char*> binaryFilesPtr(files.size(),nullptr);
+			for(size_t i = 0;i < files.size();++i) binaryFilesPtr[i] = files[i].c_str();
+			auto executable = linker.link(&binaryFilesPtr[0],binaryFilesPtr.size(),files[0].c_str(),data::gen::native::PackageLinkingFormat::EXECUTABLE);
 		
-			if(genOptions.run)
-				System::execute(executable.c_str(),"");
+			if(run) System::execute(executable.c_str(),"");
 		}
 	}
 	if(argc < 2){

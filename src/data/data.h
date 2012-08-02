@@ -97,8 +97,6 @@ namespace data {
 			bool generate;
 			bool generateDebugInfo;  
 			bool generateRuntimeBoundsChecks;
-			bool run;
-			bool link;
 		};
 
 		struct AbstractTarget {

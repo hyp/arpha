@@ -283,8 +283,7 @@ Type* PointerOperation::returnType() const {
 	return next->argument;
 }
 Node* PointerOperation::duplicate(DuplicationModifiers* mods) const {
-	auto result = new PointerOperation(expression->duplicate(mods),kind);
-	return result;
+	return copyProperties(new PointerOperation(expression->duplicate(mods),kind));
 }
 
 IfExpression::IfExpression(Node* condition,Node* consequence,Node* alternative){

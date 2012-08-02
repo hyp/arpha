@@ -1,11 +1,19 @@
 # TODO
 import cstdlib
 
-def print(string Range(char8)){
+def print(string Range(char8))
+{
 	until(string.empty){
 		putchar( string.current as int32 )
 		string.moveNext()
 	}
+}
+
+# TODO:
+# This is a possible syntax for print("x = $x")
+def print(splice arpha.literal.splice)
+{
+      for(i in splice) print(i)
 }
 
 # These are temporary hacks:
