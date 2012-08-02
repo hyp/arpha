@@ -24,6 +24,9 @@ public:
 	Trait* currentTrait;       // Required for the trait prerequisuite.
 	Function* currentFunction; // The function we are currently resolving. Can be null.
 
+	//For plain and generated functions respectively. A function is inlined if its inlining weight < threshold.
+	uint16 inliningThreshold[2]; 
+
 	// Sometimes we know that we want an expression of certain type at a given place e.g. var x Foo <- we expect Foo to be TypeExpression
 	// This knowledge can be used to resolve certain ambiguties: 
 	//		e.g. int32,int32 will become a anonymous record type of 2 ints rather than a record containing two types!

@@ -126,6 +126,10 @@ Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilat
 	currentFunction = nullptr;
 	currentTrait    = nullptr;
 	_currentParent  = nullptr;
+
+	//TODO
+	inliningThreshold[0] = 10;
+	inliningThreshold[1] = 20;
 }
 
 
@@ -245,11 +249,37 @@ static Node* transformCallOnAccess(CallExpression* node,AccessExpression* acessi
 
 Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter);
 
-// TODO: arguments
+bool isSimple(Node* node){
+	if(node->isFlagSet(Node::CONSTANT) || node->asVariableReference()) return true;
+	return false;
+}
+
+/**
+Inlines a function call.
+Scenarios: 
+	f(x,y) = x * y
+
+	f(a(),b()) => 
+	{
+		var x = a(); var y = b()
+		var ret
+		{ ret = x * y }
+		ret
+	}
+
+	f(1,y) => 
+	{
+		var ret
+		{ ret = 1 * y }
+		ret
+	}
+*/
 Node* Resolver::inlineCall(Function* function,Node* parameters){
+
 	BlockExpression* wrapper = new BlockExpression();
 	wrapper->scope->parent   = currentScope();
 	wrapper->setFlag(BlockExpression::RETURNS_LAST_EXPRESSION);
+	wrapper->_location = parameters->location();
 
 	DuplicationModifiers mods(wrapper->scope);
 
@@ -260,11 +290,20 @@ Node* Resolver::inlineCall(Function* function,Node* parameters){
 
 		size_t j = 0;
 		for(auto i = function->arguments.begin();i!=function->arguments.end();++i,++j){
-			mods.expandArgument((*i),parametersPointer[j]);
+			Node* expansion;
+			if(isSimple(parametersPointer[j])) expansion = parametersPointer[j];
+			else {
+				auto var = new Variable((*i)->label(),parametersPointer[j]->location());
+				var->type.specify((*i)->type.type());
+				wrapper->addChild(new AssignmentExpression(var,parametersPointer[j]));
+				expansion = new VariableReference(var);
+				expansion->_location = parametersPointer[j]->location();
+			} 
+			mods.expandArgument((*i),expansion);
 		}
 	}
 	if(!function->returns()->isVoid()){
-		auto var = new Variable("returnRedirector",parameters->location());
+		auto var = new Variable("A@ret",parameters->location());
 		var->type.specify(function->returns());
 		wrapper->addChild(var);
 		mods.returnValueRedirector = var;
@@ -272,16 +311,15 @@ Node* Resolver::inlineCall(Function* function,Node* parameters){
 
 	auto  block = &function->body;
 	if(block->size()){
-		wrapper->addChild(block->duplicate(&mods));
+		wrapper->addChild(block->duplicateMixin(&mods));
 	}
 
 	wrapper->addChild(mods.returnValueRedirector? (Node*)new VariableReference(mods.returnValueRedirector) : new UnitExpression());
 	return wrapper;	
 }
 
-// TODO: threshhold
 static Node* potentiallyInline(Resolver* resolver,Function* function,Node* param){
-	if(!function->intrinsicCTFEbinder && function->inliningWeight < 20){//TODO: treshhold
+	if(!function->intrinsicCTFEbinder && function->inliningWeight < resolver->inliningThreshold[function->generatedFunctionParent? 1 : 0]){
 		return resolver->inlineCall(function,param);
 	}
 	return nullptr;
