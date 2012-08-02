@@ -29,12 +29,16 @@ struct Lexer {
 	inline Location previousLocation(){ return location; }
 
 	void syntaxError(std::string& msg);
-private:
+protected:
+	void mixin(const char* source,Location& location);
+protected:
 	const char* ptr;
 	const char* original;
 	Location location;
 	bool  peeked;
+	bool  mixins;
 	Token peekedToken;
+	const char* prePeek;
 
 	bool matchNewline();
 	UnicodeChar lexChar();

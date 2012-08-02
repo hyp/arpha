@@ -469,7 +469,7 @@ void inferVariablesType(Variable* variable,AssignmentExpression* assignment,Type
 Tuple destructuring:
 
 var x,y = getTuple() => { var t = getTuple(); x = t[0]; y = t[1] }
-var x,y = tuple      => { x = tuple[0]; y = tuple[1] }
+var x,y = tuple      => { x = tuple[0]; y = tuple[1]             }
 */
 void destructure(BlockExpression* wrapper,TupleExpression* object,Node* value,AnonymousAggregate* valuesType){
 	DuplicationModifiers mods(nullptr);
@@ -702,8 +702,11 @@ Node* CastExpression::resolve(Resolver* resolver){
 		resolver->markResolved(this);
 		auto returns = object->returnType();
 		if(type->isSame(returns)) return object;
+		else if(auto expression = type->assignableFrom(object,returns)){
+			return copyLocationSymbol(resolver->resolve(expression));
+		}
 		else if(returns->canCastTo(type)){
-			if(object->isConst()) return copyLocationSymbol(evaluateConstantCast(object,type));
+			if(object->isConst()) return copyLocationSymbol(resolver->resolve(evaluateConstantCast(object,type)));
 		}
 		else {
 			error(this,"Can't cast %s to %s!",returns,type);

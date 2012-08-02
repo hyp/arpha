@@ -76,6 +76,59 @@ SymbolID Parser::expectName(){
 	return tok.symbol;
 }
 
+
+#include <algorithm>
+Node* Parser::spliceString(Token& token){
+	auto block = token.string;
+
+	auto begin = block.ptr();
+	auto end = block.ptr() + block.length();
+	if(std::find(begin,end,'$') == begin){
+		return new StringLiteral(block,Type::getStringLiteralType());
+	}
+	State state;
+	
+	Node* result = nullptr;
+	TupleExpression* splice = nullptr;
+	
+	for(auto i=begin;i<end;++i){
+		if(*i == '$'){
+			if(i != begin){
+				result = new StringLiteral(memory::Block::construct(begin,i - begin),Type::getStringLiteralType()); 
+				if(splice) splice->addChild(result);
+			}
+
+			++i;
+			if(i >= end){
+				syntaxError(format("Expected an expression after string splice '$', not string terminator"));
+				break;
+			}
+			saveState(&state);
+			mixin(i,state.location);
+			if(matchNewline()){
+				syntaxError(format("Expected an expression after string splice '$', not newline"));
+				break;
+			}
+			auto expr = parse();
+			this->mixins = false;
+			begin = i = (this->prePeek);
+			if(result){
+				if(splice) splice->addChild(expr);
+				else splice = new TupleExpression(result,expr);
+			}
+			else result = expr;
+			restoreState(&state);	
+		}
+	}
+
+	auto expr = new StringLiteral(memory::Block::construct(begin,end - begin),Type::getStringLiteralType()); 
+	if(result){
+		if(splice) splice->addChild(expr);
+		else splice = new TupleExpression(result,expr);
+		return splice;
+	}
+	else return expr;
+}
 static Node* parseNotSymbol(Parser* parser){
 	Token& token = parser->lookedUpToken;
 	if(token.isUinteger()){
@@ -85,7 +138,7 @@ static Node* parseNotSymbol(Parser* parser){
 		return new FloatingPointLiteral(token.real,Type::getFloatLiteralType());
 	}
 	else if(token.isString()){
-		return new StringLiteral(token.string,Type::getStringLiteralType());
+		return parser->spliceString(token);
 	}
 	else if(token.isChar()){
 		return new CharacterLiteral(token.character,Type::getCharLiteralType());

@@ -39,6 +39,16 @@ Lexer::Lexer(const char* source) : location(0,0) {
 	peeked = false;
 }
 
+void Lexer::mixin(const char* source,Location& location){
+	ptr= source;
+	this->location = location;
+	//check for UTF8 BOM
+	if(ptr[0]=='\xEF' && ptr[1]=='\xBB' && ptr[2]=='\xBF') ptr+=3;
+	original= ptr;
+	peeked = false;
+	mixins = true;
+}
+
 void Lexer::saveState(State *state){
 	state->src= ptr;
 	state->original = original;
@@ -260,6 +270,7 @@ Token Lexer::consume(){
 
 Token Lexer::peek(){
 	if(!peeked) {
+		if(mixins) prePeek = ptr;
 		peekedToken = consume();
 		peeked = true;
 	}

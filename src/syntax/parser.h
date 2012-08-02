@@ -80,6 +80,7 @@ public:
 	void leaveBlock();
 
 	Node* mixinMacroResult(CTFEinvocation* invocation);
+	Node* spliceString(Token& token);
 };
 
 
