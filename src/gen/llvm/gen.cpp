@@ -641,7 +641,7 @@ llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind o
 	if(operand1Type->isPointer() && operand1Type->next()->isLinearSequence()){
 		return genLinearSequenceOperation(generator,op,values[0],values[1],values[2]);
 	}
-	else if(operand1Type->isInteger() || operand1Type->isPlatformInteger() || operand1Type->isUintptr()){
+	else if(operand1Type->isInteger() || operand1Type->isPlatformInteger() || operand1Type->isUintptr() || operand1Type->isChar()){
 		return genIntegerOperation(generator,op,operand1Type,values[0],values[1]);
 	}
 	else if(operand1Type->isFloat()){
@@ -1086,6 +1086,7 @@ Node* LLVMgenerator::visit(Function* function){
 	auto func = getFunctionDeclaration(function);
 
 	//generate body
+	auto prev = builder.saveIP();
 	llvm::BasicBlock *block = llvm::BasicBlock::Create(context, "entry", func);
 
 	// Initialize arguments
@@ -1128,6 +1129,7 @@ Node* LLVMgenerator::visit(Function* function){
 	}
 	passManager->run(*func);
 	functionOwner = oldFunction;
+	builder.restoreIP(prev);
 
 	return function;
 }

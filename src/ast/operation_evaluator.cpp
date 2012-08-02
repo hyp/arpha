@@ -133,6 +133,14 @@ bool doComparison(data::ast::Operations::Kind op,double operand1,double operand2
 	DO_COMPARISONS
 }
 
+bool doComparison(data::ast::Operations::Kind op,UnicodeChar operand1,UnicodeChar operand2){
+	switch(op){
+	case EQUALITY_COMPARISON:
+		return operand1 == operand2;
+	}
+	return false;
+}
+
 void doBooleanOperation(data::ast::Operations::Kind op,bool& operand1,bool operand2){
 	switch(op){
 	case NEGATION:
@@ -177,6 +185,10 @@ Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
 			auto value = doComparison(op,operand1,params[1]->asIntegerLiteral()->integer); 
 			return new BoolExpression(value); 
 		}
+	}
+	else if(ret->isChar()  || ret->type == Type::LITERAL_CHAR){
+			auto value = doComparison(op,params[0]->asCharacterLiteral()->value,params[1]->asCharacterLiteral()->value); 
+			return new BoolExpression(value); 
 	}
 	else if(ret->isFloat() || ret->type == Type::LITERAL_FLOAT){
 		double& operand1 = params[0]->asFloatingPointLiteral()->value; 

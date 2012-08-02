@@ -39,6 +39,7 @@ def Loop                 Type
 def Return               Type
 def Block                Type
 def UnresolvedSymbol     Type
+def Function             Type
 
 #def Variable             Type
 
@@ -55,3 +56,6 @@ def newLogicalOperation(a *Expression,b *Expression,and bool) *LogicalOperation
 def newLogicalOperation(a *Expression,b *Expression,or bool) *LogicalOperation
 
 def newCast(expression *Expression,type *Expression) *Cast
+
+def newFunction(body *Expression) *Function
+def newFunction(body *Expression,returnType Type) *Function

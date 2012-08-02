@@ -19,6 +19,7 @@ import export syntax.misc
 
 import export functionality.operations.integer
 import export functionality.operations.floating_point
+import export functionality.operations.character
 import export functionality.operations.boolean
 import export functionality.operations.linear_sequence
 

@@ -1,3 +1,4 @@
+# TODO
 import cstdlib
 
 def print(string Range(char8)){
@@ -6,3 +7,14 @@ def print(string Range(char8)){
 		string.moveNext()
 	}
 }
+
+# These are temporary hacks:
+macro print(a,b) = [>
+	print($a)
+	print($b)
+<]
+macro print(a,b,c) = [>
+	print($a)
+	print($b)
+	print($c)
+<]

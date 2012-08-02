@@ -125,11 +125,20 @@ void mapRealOperations(const char* t1){
 	MAPOP(std::string("atan")+base1,data::ast::Operations::TRIG_ATAN);
 	MAPOP(std::string("atan2")+base2,data::ast::Operations::TRIG_ATAN2);
 }
+void mapCharOperations(const char* t1){
+	std::string base1 = std::string("(") + t1 + ")";
+	std::string base2 = std::string("(") + t1 + "," + t1 + ")";
+
+	MAPOP(std::string("equals")+base2,data::ast::Operations::EQUALITY_COMPARISON);
+}
 
 void mapStandartOperations(Type* t){
 	auto s =mangleArgType(t);
 	if(t->isInteger() || t->type == Type::LITERAL_INTEGER || t->isPlatformInteger() || t->isUintptr() ){
 		mapIntegerOperations(s.c_str());
+	}
+	else if(t->isChar() || t->type == Type::LITERAL_CHAR){
+		mapCharOperations(s.c_str());
 	}
 	else if(t->isFloat() || t->type == Type::LITERAL_FLOAT){
 		mapRealOperations(s.c_str());
@@ -193,6 +202,7 @@ static void initMapping(){
 	MAP_NODETYPE("Return",ReturnExpression);
 	MAP_NODETYPE("Block",BlockExpression);
 	MAP_NODETYPE("UnresolvedSymbol",UnresolvedSymbol);
+	MAP_NODETYPE("Function",Function);
 
 	MAP("returnType(Expression)",{ invocation->ret(invocation->getNodeParameter(0)->returnType()); });
 	MAP("isConst(Expression)",{ invocation->ret(invocation->getNodeParameter(0)->isConst()); });
@@ -210,7 +220,20 @@ static void initMapping(){
 	MAP_PROP("newPointerOperation(expression:Expression,dereference:bool)",0,{ invocation->ret(new PointerOperation(invocation->getNodeParameter(0),PointerOperation::DEREFERENCE)); });
 	MAP_PROP("newLogicalOperation(a:Expression,b:Expression,and:bool)",0,{ invocation->ret(new LogicalOperation(invocation->getNodeParameter(0),invocation->getNodeParameter(1),false)); });
 	MAP_PROP("newLogicalOperation(a:Expression,b:Expression,or:bool)",0,{ invocation->ret(new LogicalOperation(invocation->getNodeParameter(0),invocation->getNodeParameter(1),true)); });
-	
+	MAP_PROP("newFunction(body:Expression)",0,{
+		auto body = invocation->getNodeParameter(0);
+		auto func = new Function("foo",body->location());
+		func->body.addChild(body);
+		invocation->ret(func);
+	});
+	MAP_PROP("newFunction(body:Expression,returnType:Type)",0,{
+		auto body = invocation->getNodeParameter(0);
+		auto func = new Function("foo",body->location());
+		func->_returnType.specify(invocation->getTypeParameter(1));
+		func->body.addChild(body);
+		invocation->ret(func);
+	});
+
 	/**
 	* arpha.syntax.parser
 	*/
@@ -255,7 +278,10 @@ static void initMapping(){
 
 	mapStandartOperations(intrinsics::types::boolean);
 
-	mapStandartOperations(intrinsics::types::boolean);
+	mapStandartOperations(Type::getCharLiteralType());
+	mapStandartOperations(Type::getCharType(8));
+	mapStandartOperations(Type::getCharType(16));
+	mapStandartOperations(Type::getCharType(32));
 
 	MAPOP("length(*LinearSequence)",data::ast::Operations::LENGTH);
 	MAPOP("element(*LinearSequence,natural)",data::ast::Operations::ELEMENT_GET);

@@ -1,0 +1,14 @@
+#
+	This module defines standart character operations
+#
+import arpha.intrinsic
+
+macro defineCharacterOperations(T Type) = [>
+	def equals(x $T,y $T) bool
+<]
+
+defineCharacterOperations(arpha.literal.char)
+
+defineCharacterOperations(char8)
+defineCharacterOperations(char16)
+defineCharacterOperations(char32)
