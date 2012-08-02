@@ -284,7 +284,9 @@ void  Lexer::onExpectedError(const char* str){
 	compiler::onError(location,format("Expected %s instead of '%c'!",str,*ptr));
 }
 void  Lexer::syntaxError(std::string& msg){
-	compiler::onError(previousLocation(),msg);
+	auto loc = previousLocation();
+	if(original == ptr && location.column != 0) loc.lineNumber--;
+	compiler::onError(loc,msg);
 }
 unittest(lexer){
 	Token token;

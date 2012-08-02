@@ -266,7 +266,7 @@ struct VarParser: IntrinsicPrefixMacro {
 		if(parser->match("=")){
 			parser->ignoreNewlines();//NB: for consistency with other usages of '='
 			auto assign = new AssignmentExpression(result,parser->parse(arpha::Precedence::Assignment-1)); 
-			assign->_location = parser->currentLocation();
+			assign->_location = parser->previousLocation();
 			assign->isInitializingAssignment = true;
 			return assign;
 		}
@@ -619,13 +619,17 @@ struct ConceptParser: IntrinsicPrefixMacro {
 			parser->currentScope(templateDeclaration);
 		}
 		
-#ifdef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
-		parser->ignoreNewlines();
-#endif
-		parser->expect("{");
 		auto trait = new Trait(templateDeclaration);
 		if(implicit) trait->makeImplicit();
-		blockParser->body(parser,BodyParser(trait));
+
+
+#ifdef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
+		Parser::NewlineIgnorer i(true,parser);
+		parser->ignoreNewlines();
+#endif
+		if(parser->match("{")){
+			blockParser->body(parser,BodyParser(trait));
+		} else i.rollback();
 
 		if(templateDeclaration){
 			parser->currentScope(templateDeclaration->parent);

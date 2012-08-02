@@ -856,6 +856,7 @@ void Resolver::reportUnresolvedNode(Node* node){
 			error = format("Can't resolve the symbol '%s'",unr->symbol);
 		} 
 		else if(auto call = node->asCallExpression()){
+
 			if(auto unr = call->object->asUnresolvedSymbol()) {
 				if(call->isFlagSet(CallExpression::DOT_SYNTAX)) 
 					 error = format("Can't find the matching overload for the call %s.(%s)",unr->symbol,call->arg);

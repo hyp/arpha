@@ -6,3 +6,6 @@ def integer Type
 def real    Type
 def char    Type
 def string  Type
+
+# Represents a string splice in a form of "string $value"
+concept splice
