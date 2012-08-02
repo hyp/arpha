@@ -67,10 +67,6 @@ struct NodeToString: NodeVisitor {
 		stream<<node->type;
 		return node;
 	}
-	Node* visit(TraitReference* node){
-		stream<<node->trait;
-		return node;
-	}
 	Node* visit(VariableReference* node){
 		stream<<"variable "<<node->variable->label()<<"["<<(void*)node->variable<<"]";
 		return node;

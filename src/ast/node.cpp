@@ -478,13 +478,6 @@ Node* TypeReference::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new TypeReference(type));
 }
 
-TraitReference::TraitReference(Trait* trait){
-	this->trait = trait;
-}
-Node* TraitReference::duplicate(DuplicationModifiers* mods) const {
-	return copyProperties(new TraitReference(trait));
-}
-
 TraitParameterReference::TraitParameterReference(size_t i){
 	this->index = i;
 }

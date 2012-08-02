@@ -319,7 +319,8 @@ Node* Resolver::inlineCall(Function* function,Node* parameters){
 }
 
 static Node* potentiallyInline(Resolver* resolver,Function* function,Node* param){
-	if(!function->intrinsicCTFEbinder && function->inliningWeight < resolver->inliningThreshold[function->generatedFunctionParent? 1 : 0]){
+	if(!function->intrinsicCTFEbinder && !function->isExternal() && !function->isIntrinsicOperation() && 
+		function->inliningWeight < resolver->inliningThreshold[function->generatedFunctionParent? 1 : 0]){
 		return resolver->inlineCall(function,param);
 	}
 	return nullptr;
@@ -336,7 +337,7 @@ Node* CallExpression::resolve(Resolver* resolver){
 		if(auto os = scope->lookupPrefix(callingOverloadSet->symbol)){
 			if(auto decl = os->asTypeDeclaration()){
 				object= callingOverloadSet->copyLocationSymbol(resolver->resolve(decl->createReference()));
-				if(!object->asTraitReference())
+				if(!decl->type()->asTrait())
 					resolver->markResolved(this);
 				return this;
 			}
@@ -407,10 +408,8 @@ Node* CallExpression::resolve(Resolver* resolver){
 		return resolver->resolve(transformCallOnAccess(this,callingAccess));
 	}
 	else if(auto type = object->asTypeReference()){
-		resolver->markResolved(this);
-	}
-	else if(object->asTraitReference()){
-		resolver->markResolved(this);
+		if(!type->type->asTrait())
+			resolver->markResolved(this);
 	}
 	else if(object->asVariableReference() && object->returnType()->isFunctionPointer()){
 		resolver->markResolved(this);
@@ -613,11 +612,9 @@ Node* PointerOperation::resolve(Resolver* resolver){
 	if(expression->isResolved()){
 		if(isDereferenceOrType()){
 			if(auto tref = expression->asTypeReference()){
+				if(tref->type->isTrait()) return this;
 				tref->type = Type::getPointerType(tref->type);
 				return copyLocationSymbol(tref);
-			}
-			else if(auto trref = expression->asTraitReference()){
-				return this;
 			}
 			else {
 				kind = DEREFERENCE;
@@ -911,33 +908,35 @@ bool TypePatternUnresolvedExpression::resolve(Resolver* resolver,PatternMatcher*
 	unresolvedExpression = resolver->resolve(unresolvedExpression);
 	resolver->expectedTypeForEvaluatedExpression = oldSetting;
 	
-	
 	if(auto isTypeRef = unresolvedExpression->asTypeReference()){
-		if(isTypeRef->isResolved()){
-			kind = TYPE;
-			_type = isTypeRef->type;
-			return true;
-		}
-	} else { 
-		//pattern type?
-		if(patternMatcher){
-			auto oldSize = patternMatcher->introducedDefinitions.size();
-			if(patternMatcher->check(unresolvedExpression,resolver->currentTrait)){
-				kind = PATTERN;
-				pattern = unresolvedExpression;
-				return true;
-			} else if(oldSize != patternMatcher->introducedDefinitions.size()) 
-				patternMatcher->introducedDefinitions.erase(patternMatcher->introducedDefinitions.begin() + oldSize,patternMatcher->introducedDefinitions.end());
-		} else {
-			PatternMatcher matcher(resolver->currentScope(),resolver);
-			if(matcher.check(unresolvedExpression)){
-				kind = PATTERN;
-				pattern = unresolvedExpression; //NB: not really necessary because they are in one union together
+		if(!isTypeRef->type->isTrait()){
+			if(isTypeRef->isResolved()){
+				kind  = TYPE;
+				_type = isTypeRef->type;
 				return true;
 			}
+			return false;
+		}
+	} 
+
+	//pattern type?
+	if(patternMatcher){
+		auto oldSize = patternMatcher->introducedDefinitions.size();
+		if(patternMatcher->check(unresolvedExpression,resolver->currentTrait)){
+			kind = PATTERN;
+			pattern = unresolvedExpression;
+			return true;
+		} else if(oldSize != patternMatcher->introducedDefinitions.size()) 
+			patternMatcher->introducedDefinitions.erase(patternMatcher->introducedDefinitions.begin() + oldSize,patternMatcher->introducedDefinitions.end());
+	} else {
+		PatternMatcher matcher(resolver->currentScope(),resolver);
+		if(matcher.check(unresolvedExpression)){
+			kind = PATTERN;
+			pattern = unresolvedExpression; //NB: not really necessary because they are in one union together
+			return true;
 		}
 	}
-	
+
 	return false;
 }
 
@@ -1007,7 +1006,9 @@ bool TypeDeclaration::resolveExtendedConcepts(Resolver* resolver){
 		}
 
 		if(pattern){
-			if(pattern->asTraitReference()) continue;
+			if(auto tref = pattern->asTypeReference() ){
+				if(tref->type->isTrait()) continue;
+			}
 		}
 
 		error(pattern? pattern->location() : location(),"Invalid type extension: The type '%s' can only be extended with concept or interface!",label());
@@ -1141,8 +1142,9 @@ bool Trait::verify(){
 			if(auto ptr = pattern->asPointerOperation()){
 				pattern = ptr->expression;
 			}
-			if(auto tref = pattern->asTraitReference()){
-				if(tref->trait == trait){
+			if(auto tref = pattern->asTypeReference()){
+				auto concept = tref->type->asTrait();
+				if(concept == trait){
 					hasSelf = true;
 					return true;
 				}

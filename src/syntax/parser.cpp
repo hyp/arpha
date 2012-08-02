@@ -258,7 +258,7 @@ Node* Variable::parse(Parser* parser){
 }
 
 Node* TypeDeclaration::parse(Parser* parser){
-	return _type->isTrait()? (Node*)new TraitReference(_type->asTrait()) : new TypeReference(_type);
+	return new TypeReference(_type);
 }
 
 Node* Function::parse(Parser* parser){

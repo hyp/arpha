@@ -592,7 +592,7 @@ struct ConceptParser: IntrinsicPrefixMacro {
 		bool operator()(Parser* parser){
 			auto  cmd = parser->expectName();
 			if(cmd == "def"){
-				ParameterTypeSuggestion self = { "self",new TraitReference(trait) };
+				ParameterTypeSuggestion self = { "self",new TypeReference(trait) };
 				if(auto func = parseTraitMethod(parser,&self,1)) trait->methods.push_back(func);
 			}
 			else{
