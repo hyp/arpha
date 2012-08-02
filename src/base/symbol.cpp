@@ -30,7 +30,7 @@ SymbolID::SymbolID(const char* str){
 	symbol = symbols.create(str,strlen(str));
 }
 std::ostream& operator<< (std::ostream& stream,const SymbolID symbol){
-	return stream<<symbol.ptr();
+	return stream<<(symbol.isNull()?"":symbol.ptr());
 }
 
 //A hash function for a string

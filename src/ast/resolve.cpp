@@ -401,6 +401,7 @@ Node* CallExpression::resolve(Resolver* resolver){
 			i.invoke(func,arg);
 			return resolver->resolve(copyLocationSymbol(i.result()));
 		}
+		if(auto inl = potentiallyInline(resolver,func,arg)) return resolver->resolve(copyLocationSymbol(inl));
 	}
 	else if(auto callingAccess = object->asAccessExpression()){
 		return resolver->resolve(transformCallOnAccess(this,callingAccess));
@@ -464,6 +465,31 @@ void inferVariablesType(Variable* variable,AssignmentExpression* assignment,Type
 	debug("Inferred type for %s",variable);
 }
 
+/**
+Tuple destructuring:
+
+var x,y = getTuple() => { var t = getTuple(); x = t[0]; y = t[1] }
+var x,y = tuple      => { x = tuple[0]; y = tuple[1] }
+*/
+void destructure(BlockExpression* wrapper,TupleExpression* object,Node* value,AnonymousAggregate* valuesType){
+	DuplicationModifiers mods(nullptr);
+	Variable* var;
+	if(object->size() != valuesType->numberOfFields){
+		error(value,"Can't destructure between tuples of different length!");
+		return;
+	}
+	if(!isSimple(value)){
+		var = new Variable("A@dest",object->location());
+		var->type.specify(valuesType);
+		wrapper->addChild(new AssignmentExpression(var,value));
+	} else var = nullptr;
+
+	auto ptr = object->childrenPtr();
+	for(size_t i =0 ;i<valuesType->numberOfFields; ++i){
+		wrapper->addChild(new AssignmentExpression(ptr[i],new FieldAccessExpression(var? new VariableReference(var) : value->duplicate(&mods) ,i)));
+	}
+}
+
 Node* AssignmentExpression::resolve(Resolver* resolver){
 
 	struct Splitter {
@@ -500,10 +526,22 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 	//assign
 	value = resolver->resolve(value);
 	if(!value->isResolved()) return this;
+	auto valuesType = value->returnType();
 
 	//non tuple object
-	auto valuesType = value->returnType();
+	
 	object = resolver->resolve(object);
+
+	//destructuring
+	if(auto tuple = object->asTupleExpression()){
+		if(auto record = valuesType->asAnonymousRecord()){
+			auto block = new BlockExpression();
+			block->setFlag(BlockExpression::USES_PARENT_SCOPE);
+			destructure(block,tuple,value,record);
+			return resolver->resolve(block);
+		}
+	}
+
 	Variable* variable;
 	if(auto var = object->asVariableReference()){
 		variable = var->variable;

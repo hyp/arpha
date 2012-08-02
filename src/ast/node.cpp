@@ -333,7 +333,7 @@ SymbolID FieldAccessExpression::fieldsName() const{
 	auto type = object->returnType();
 	if(type->isPointer()) type = type->next();
 	if(auto record = type->asRecord()) return record->fields[field].name;
-	else if(auto rec = type->asAnonymousRecord()) return rec->fields[field];
+	else if(auto rec = type->asAnonymousRecord()) return rec->fields? rec->fields[field] : SymbolID();
 	assert(false);
 	return nullptr;
 }
