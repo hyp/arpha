@@ -133,6 +133,13 @@ Node* Resolver::resolve(Node* node){
 	if(node->isResolved()) return node;
 	auto result = node->resolve(this);
 	if(!result->isResolved()) markUnresolved(result);
+	else if(result->returnType()->isReference()){
+		result = result->copyLocationSymbol(new PointerOperation(result,PointerOperation::DEREFERENCE));
+
+		//NB: speed optimization
+		//result->setFlag(Node::RESOLVED);
+		result = resolve(result);
+	}
 	return result;
 }
 
@@ -331,9 +338,6 @@ Node* CallExpression::resolve(Resolver* resolver){
 		return ErrorExpression::getInstance();
 	}
 
-	if(isResolved() && returnType()->isReference()){
-		return resolver->resolve(copyLocationSymbol(new PointerOperation(this,PointerOperation::DEREFERENCE)));
-	}
 	return this;
 }
 
@@ -418,16 +422,26 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 
 	//non tuple object
 	auto valuesType = value->returnType();
+	object = resolver->resolve(object);
 	Variable* variable;
-	if(auto var = object->asVariableReference()) variable = var->variable;
+	if(auto var = object->asVariableReference()){
+		variable = var->variable;
+	}
 	else {
-		object = resolver->resolve(object);
 		variable = object->asVariable();
 	}
+	if(!object->isResolved()){
+		if(!variable || !variable->type.isPattern())
+			return this;
+	}
+
 	//Assigning values to variables
 	if(variable){
 		//type inferring
-		if(variable->type.isPattern()) inferVariablesType(variable,this,valuesType);
+		if(variable->type.isPattern()){
+			inferVariablesType(variable,this,valuesType);
+			object = resolver->resolve(object);
+		}
 		
 		if(!variable->type.isResolved()) return this;
 
