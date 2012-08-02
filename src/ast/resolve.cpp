@@ -245,6 +245,48 @@ static Node* transformCallOnAccess(CallExpression* node,AccessExpression* acessi
 
 Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter);
 
+// TODO: arguments
+Node* Resolver::inlineCall(Function* function,Node* parameters){
+	BlockExpression* wrapper = new BlockExpression();
+	wrapper->scope->parent   = currentScope();
+	wrapper->setFlag(BlockExpression::RETURNS_LAST_EXPRESSION);
+
+	DuplicationModifiers mods(wrapper->scope);
+
+	if(function->arguments.size()){
+		Node** parametersPointer;
+		if(auto tuple = parameters->asTupleExpression()) parametersPointer = tuple->childrenPtr();
+		else parametersPointer = &parameters;
+
+		size_t j = 0;
+		for(auto i = function->arguments.begin();i!=function->arguments.end();++i,++j){
+			mods.expandArgument((*i),parametersPointer[j]);
+		}
+	}
+	if(!function->returns()->isVoid()){
+		auto var = new Variable("returnRedirector",parameters->location());
+		var->type.specify(function->returns());
+		wrapper->addChild(var);
+		mods.returnValueRedirector = var;
+	}
+
+	auto  block = &function->body;
+	if(block->size()){
+		wrapper->addChild(block->duplicate(&mods));
+	}
+
+	wrapper->addChild(mods.returnValueRedirector? (Node*)new VariableReference(mods.returnValueRedirector) : new UnitExpression());
+	return wrapper;	
+}
+
+// TODO: threshhold
+static Node* potentiallyInline(Resolver* resolver,Function* function,Node* param){
+	if(!function->intrinsicCTFEbinder && function->inliningWeight < 20){//TODO: treshhold
+		return resolver->inlineCall(function,param);
+	}
+	return nullptr;
+}
+
 Node* CallExpression::resolve(Resolver* resolver){
 	arg  = resolver->resolve(arg);
 	if(!arg->isResolved()) return this;
@@ -298,6 +340,7 @@ Node* CallExpression::resolve(Resolver* resolver){
 				i.invoke(func,arg);
 				return resolver->resolve(copyLocationSymbol(i.result()));
 			}
+			if(auto inl = potentiallyInline(resolver,func,arg)) return resolver->resolve(copyLocationSymbol(inl));
 		}
 	} 
 	else if(auto callingFunc = object->asFunctionReference()){

@@ -48,6 +48,8 @@ public:
 	//Function-like macro
 	Node* executeAndMixinMacro(Function* function,Node* arg);
 
+	Node* inlineCall(Function* function,Node* parameters);
+
 	void reportUnresolvedNode(Node* node);
 
 	inline Scope* currentScope() const        { return _currentScope;  }
