@@ -83,7 +83,7 @@ Node* Parser::spliceString(Token& token){
 
 	auto begin = block.ptr();
 	auto end = block.ptr() + block.length();
-	if(std::find(begin,end,'$') == begin){
+	if(std::find(begin,end,'$') == end){
 		return new StringLiteral(block,Type::getStringLiteralType());
 	}
 	State state;
@@ -107,6 +107,7 @@ Node* Parser::spliceString(Token& token){
 			mixin(i,state.location);
 			if(matchNewline()){
 				syntaxError(format("Expected an expression after string splice '$', not newline"));
+				restoreState(&state);
 				break;
 			}
 			auto expr = parse();
@@ -120,6 +121,8 @@ Node* Parser::spliceString(Token& token){
 			restoreState(&state);	
 		}
 	}
+
+	if((end - begin) == 0 && result) return splice? splice: result;
 
 	auto expr = new StringLiteral(memory::Block::construct(begin,end - begin),Type::getStringLiteralType()); 
 	if(result){
