@@ -553,6 +553,7 @@ void TypePatternUnresolvedExpression::PatternMatcher::defineIntroducedDefinition
 Function* Type::generators::reference  = nullptr;
 Function* Type::generators::linearSequence  = nullptr;
 Function* Type::generators::functionPointer = nullptr;
+Function* Type::generators::staticArray = nullptr;
 
 Type::Type(int kind) : type(kind),flags(0) {
 	if(kind == BOOL) bits = 1;
@@ -560,11 +561,6 @@ Type::Type(int kind) : type(kind),flags(0) {
 Type::Type(int kind,Type* next) : type(kind),flags(0) {
 	assert(kind == POINTER || kind == LINEAR_SEQUENCE || kind == REFERENCE);
 	this->argument = next;
-}
-Type::Type(int kind,Type* T,size_t N) : type(kind),flags(0) {
-	assert(kind == STATIC_ARRAY);
-	argument = T;
-	this->N  = N;
 }
 Type::Type(int kind,int subtype) : type(kind),flags(0) {
 	nodeSubtype = subtype;
@@ -628,6 +624,7 @@ bool Type::isResolved() const {
 		case RECORD:  return isFlagSet(IS_RESOLVED);
 		case VARIANT: return isFlagSet(IS_RESOLVED);
 		case POINTER:
+		case REFERENCE:
 		case LINEAR_SEQUENCE:
 		case STATIC_ARRAY:
 			return argument->isResolved();
@@ -668,7 +665,8 @@ bool Type::isSame(Type* other){
 		case REFERENCE:
 		case LINEAR_SEQUENCE:
 			return argument->isSame(other->argument);
-		case STATIC_ARRAY: return argument->isSame(other->argument) && N == other->N;
+		case STATIC_ARRAY: 
+			return argument->isSame(other->argument) && static_cast<StaticArray*>(this)->length() == static_cast<StaticArray*>(other)->length();
 		
 		case FUNCTION_POINTER: 
 			return argument->isSame(other->argument) && 
@@ -716,7 +714,7 @@ bool Type::wasGeneratedBy(Function* function) const {
 
 	case REFERENCE:        return function == generators::reference;
 	case LINEAR_SEQUENCE:  return function == generators::linearSequence;
-	case STATIC_ARRAY:     return function == nullptr;
+	case STATIC_ARRAY:     return function == generators::staticArray;
 	case FUNCTION_POINTER: return function == generators::functionPointer;
 
 	default:
@@ -732,7 +730,7 @@ Node* Type::generatedArgument(size_t i) const {
 	case LINEAR_SEQUENCE:
 		return new TypeReference(argument);
 	case STATIC_ARRAY: 
-		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)N,intrinsics::types::natural);
+		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)static_cast<const StaticArray*>(this)->length(),Type::getIntegerLiteralType());
 	case FUNCTION_POINTER: return new TypeReference(i == 0 ? argument : static_cast<const FunctionPointer*>(this)->returns());
 
 	default:
@@ -965,6 +963,10 @@ int automaticTypeCast(Type* givenType,Node** node,Type* nodeType,bool doTransfor
 				weight = LITERAL_CONVERSION;
 		}
 	}
+	else if(givenType->isLinearSequence()){
+		if(nodeType->isStaticArray() && givenType->next()->isSame(nodeType->next()))
+			weight = LITERAL_CONVERSION;
+	}
 
 	if(weight != -1 && doTransform) *node = new CastExpression(*node,givenType);
 	return weight;
@@ -1018,9 +1020,9 @@ void TypeMeaningsRange::getRecordSubtypes(Record* record){
 	}
 }
 
-int referenceOf(Type* givenType, Node** node, Type* nodeType,bool doTransform){
+int referenceOf(Type* givenType, Node** node, Type* nodeType,bool doTransform,uint32 filters){
 	Type ptrType(Type::POINTER,nodeType);
-	int weight = givenType->assignFrom(node,&ptrType,doTransform);
+	int weight = givenType->assignFrom(node,&ptrType,doTransform,filters);
 	if(weight != -1){
 		if(doTransform){
 			*node = new PointerOperation(*node,PointerOperation::ADDRESS);
@@ -1053,14 +1055,14 @@ Scenarios:
 	x :: Reference (T) -> *x  :: T
 	x :: Reference (T) -> x as *T :: *T
 */
-int Type::assignFrom(Node** expression,Type* type,bool doTransform){
+int Type::assignFrom(Node** expression,Type* type,bool doTransform,uint32 filters){
 	if(this->isSame(type)) return EXACT;
 	int assigns;
 
-	if(type->isLiteral()){
+	if(!(filters & DisallowAutocasts) && type->isLiteral()){
 		return literalTypeAssignment(this,expression,type,doTransform);
 	}
-	else if( (assigns = automaticTypeCast(this,expression,type,doTransform)) != -1 ){
+	else if( !(filters & DisallowAutocasts) && (assigns = automaticTypeCast(this,expression,type,doTransform)) != -1 ){
 		return assigns;
 	}
 	else if( (assigns = recordSubtyping(this,expression,type,doTransform)) != -1){
@@ -1069,7 +1071,7 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform){
 	else if( isNodePointer() && type->isNodePointer() ){
 		return RECORD_SUBTYPE;
 	}
-	else if( isPointer() && !type->isPointer() && ((assigns = referenceOf(this,expression,type,doTransform)) != -1) ){
+	else if( isPointer() && !type->isPointer() && (filters & Type::AllowAutoAddressof) && ((assigns = referenceOf(this,expression,type,doTransform,filters)) != -1) ){
 		return assigns;
 	}
 	else if( type->isReference() && !isReference() && ((assigns = referenceTo(this,expression,type,doTransform)) != -1) ){
@@ -1095,11 +1097,11 @@ void TypeMeaningsRange::gatherMeanings(Type* type){
 
 
 
-int   Type::canAssignFrom(Node* expression,Type* type){
-	return assignFrom(&expression,type,false);
+int   Type::canAssignFrom(Node* expression,Type* type,uint32 filters){
+	return assignFrom(&expression,type,false,filters);
 }
-Node* Type::assignableFrom(Node* expression,Type* type) {
-	if(assignFrom(&expression,type,true) != -1) return expression;
+Node* Type::assignableFrom(Node* expression,Type* type,uint32 filters) {
+	if(assignFrom(&expression,type,true,filters) != -1) return expression;
 	return nullptr;
 }
 
@@ -1150,6 +1152,9 @@ bool  Type::canCastTo(Type* other){
 		if(other->isLinearSequence() &&
 			isIntOrChar(next()) && isIntOrChar(other->next()) &&
 			std::abs(next()->bits) == std::abs(other->next()->bits)) return true;
+	}
+	else if(this->isStaticArray()){
+		if(other->isLinearSequence() && next()->isSame(other->next())) return true;
 	}
 	return false;
 }
@@ -1246,6 +1251,22 @@ FunctionPointer* FunctionPointer::get(Type* argument,Type* ret,data::ast::Functi
 FunctionPointer* Type::asFunctionPointer(){
 	return type == FUNCTION_POINTER? static_cast<FunctionPointer*>(this) : nullptr;
 }
+
+
+/**
+* Static array type
+*/
+StaticArray* StaticArray::get(Type* next,size_t N){
+	assert(N);
+	auto t = new StaticArray();
+	t->argument = next;
+	t->size = N;
+	return t;
+}
+StaticArray* Type::asStaticArray(){
+	return type == STATIC_ARRAY? static_cast<StaticArray*>(this) : nullptr;
+}
+
 
 /**
 * Anonymous records/variants

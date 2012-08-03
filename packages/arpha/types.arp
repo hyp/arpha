@@ -65,6 +65,9 @@ type LinearSequence(T) extends Range
 {
 }
 
+type Array(T,N natural)
+{
+}
 
 #
 	Type operations.

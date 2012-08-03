@@ -113,6 +113,9 @@ struct LLVMgenerator: NodeVisitor {
 		emmittedValue = builder.CreateStore(val,var);
 	}
 
+	
+	llvm::AllocaInst *genLocalVariable(Type* type);
+
 	//
 	Node* visit(IntegerLiteral* node);
 	Node* visit(CharacterLiteral* node);
@@ -138,6 +141,7 @@ struct LLVMgenerator: NodeVisitor {
 	void  genStatements(BlockExpression* node,bool innermostInFunction = false);
 	void  genToplevelStatements(BlockExpression* node);
 
+	
 
 	Node* visit(Variable* var);
 	Node* visit(Function* func);
@@ -242,6 +246,21 @@ llvm::Type* generateLinearSequence(LLVMgenerator* generator,Type* next){
 	return llvm::StructType::get(generator->context,fields,false);
 }
 
+bool rewriteStaticArrayAsVector(StaticArray* type){
+	if(type->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)) return true;
+	auto t = type->next();
+	if(type->length() >= 2 && type->length() <= 4 && (t->isInteger() || t->isFloat() || t->isChar() /*??? || t->isPointer()*/)){
+		type->setFlag(AnonymousAggregate::GEN_REWRITE_AS_VECTOR);
+		return true;
+	}
+	return false;
+}
+
+llvm::Type* generateStaticArray(LLVMgenerator* generator,StaticArray* type){
+	if(rewriteStaticArrayAsVector(type)) return llvm::VectorType::get(generator->genType(type->next()),type->length());
+	return llvm::ArrayType::get(generator->genType(type->next()),type->length());
+}
+
 llvm::Type* generateFunctionPointerType(LLVMgenerator* generator,FunctionPointer* type){
 	llvm::Type* result;
 	auto arg = type->parameter();
@@ -293,6 +312,8 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 		return generatePointerType(this,type->next());
 	case Type::LINEAR_SEQUENCE:
 		return generateLinearSequence(this,type->next());
+	case Type::STATIC_ARRAY:
+		return generateStaticArray(this,static_cast<StaticArray*>(type));
 
 	case Type::FUNCTION_POINTER:
 		return generateFunctionPointerType(this,static_cast<FunctionPointer*>(type));
@@ -367,6 +388,12 @@ void LLVMgenerator::emitCreateLinearSequence(llvm::Value* begin,llvm::Value* len
 
 	if(needsPointer) emit(var);
 	else emitLoad(var);
+}
+
+llvm::AllocaInst* LLVMgenerator::genLocalVariable(Type* type){
+	auto block = builder.GetInsertBlock();
+	llvm::IRBuilder<> _builder(block,block->begin());
+	return _builder.CreateAlloca(genType(type),nullptr,"localTemp");
 }
 
 Node* LLVMgenerator::visit(VariableReference* node){
@@ -842,6 +869,8 @@ Node* LLVMgenerator::visit(CastExpression* node){
 	auto src = node->object->returnType();
 	auto dest = node->type;
 	int  cast = -1;
+	auto neededPointer = this->needsPointer;
+	needsPointer= false;
 
 	if(isIntLike(src)){
 		auto srcBits = std::abs(src->bits);
@@ -872,6 +901,24 @@ Node* LLVMgenerator::visit(CastExpression* node){
 		else if(dest->isUintptr() || dest->isPointer()){
 			auto begin = generateLinearSequenceBegin(this,node->object);
 			emit(dest->isPointer()? begin : builder.CreateCast(llvm::Instruction::PtrToInt,begin,llvm::Type::getInt64Ty(context)));
+			return node;
+		}
+	}
+	else if(src->isStaticArray()){
+		if(dest->isLinearSequence()){
+			auto arrPtr = generatePointerExpression(node->object);
+			arrPtr->getType()->dump();
+			module->dump();
+			auto var = genLocalVariable(dest);
+			var->getType()->dump();
+			module->dump();
+			auto val = builder.CreateStructGEP(arrPtr,0);
+			val->getType()->dump();
+			module->dump();
+			builder.CreateStore(val,builder.CreateStructGEP(var,0));
+			builder.CreateStore(builder.CreateGEP(val,builder.getInt32(src->asStaticArray()->length())),builder.CreateStructGEP(var,1));
+			if(neededPointer) emit(var);
+			else emitLoad(var);
 			return node;
 		}
 	}
@@ -1156,6 +1203,7 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 		std::vector<llvm::Type*> args;
 		args.reserve(function->arguments.size());
 		for(auto i = function->arguments.begin();i!=function->arguments.end();i++){
+			if((*i)->type.type()->isVoid()) continue;
 			if(optimizeSequences && (*i)->type.type()->isLinearSequence()){
 				auto pt = generatePointerType(this, (*i)->type.type()->next());
 				args.push_back(pt);
@@ -1192,6 +1240,8 @@ Node* LLVMgenerator::visit(Function* function){
 	size_t i = 0;
 	bool optimizeSequences = function->arguments.size() < 3;
 	for (llvm::Function::arg_iterator arg = func->arg_begin(); i != function->arguments.size(); ++arg, ++i) {
+		if(function->arguments[i]->type.type()->isVoid()) continue;
+
 		if(optimizeSequences && function->arguments[i]->type.type()->isLinearSequence()){
 			std::string n = function->arguments[i]->label().ptr();
 

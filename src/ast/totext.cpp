@@ -245,7 +245,7 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 		case Type::LINEAR_SEQUENCE:
 			stream<<"LinearSequence("<<type->next()<<")"; break;
 		case Type::STATIC_ARRAY:
-			stream<<"Array("<<type->next()<<","<<type->N<<')'; break;
+			stream<<"Array("<<type->next()<<","<<static_cast<StaticArray*>(type)->length()<<')'; break;
 
 		case Type::FUNCTION_POINTER: 
 			stream<<"("<<type->argument<<" -> "<<static_cast<FunctionPointer*>(type)->returns()<<')'; break;

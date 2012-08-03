@@ -699,12 +699,13 @@ Node* CastExpression::resolve(Resolver* resolver){
 		resolver->markResolved(this);
 		auto returns = object->returnType();
 		if(type->isSame(returns)) return object;
-		else if(auto expression = type->assignableFrom(object,returns)){
-			return copyLocationSymbol(resolver->resolve(expression));
-		}
 		else if(returns->canCastTo(type)){
 			if(object->isConst()) return copyLocationSymbol(resolver->resolve(evaluateConstantCast(object,type)));
 		}
+		else if(auto expression = type->assignableFrom(object,returns)){
+			return copyLocationSymbol(resolver->resolve(expression));
+		}
+
 		else {
 			error(this,"Can't cast %s to %s!",returns,type);
 			return ErrorExpression::getInstance();
@@ -1804,7 +1805,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 			
 			if(auto pattern = func->arguments[currentArg]->type.pattern){
 				auto topMatchedType = matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern,getSpecializationScope(func,this));
-				result[currentArg] = resolve(topMatchedType->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType()));
+				result[currentArg] = resolve(topMatchedType->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType(),Type::AllowAutoAddressof));
 			}
 			else {
 				result[currentArg] = resolve(exprBegin[currentExpr]);
@@ -1817,7 +1818,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 			determinedArguments[currentArg] = result[currentArg]->returnType();
 		}
 		else {
-			result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType());
+			result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType(),Type::AllowAutoAddressof);
 		}
 		currentArg++;resolvedArgs++;currentExpr++;	
 	}
@@ -2007,7 +2008,7 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 			else weight += WILDCARD;
 		}
 		else {
-			if((w = func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType() ))!= -1 ){
+			if((w = func->arguments[currentArg]->type.type()->canAssignFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType(),Type::AllowAutoAddressof ))!= -1 ){
 				weight += w;
 			}
 			else return false;

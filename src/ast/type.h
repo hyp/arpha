@@ -69,6 +69,7 @@ std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& 
 struct AnonymousAggregate;
 struct FunctionPointer;
 struct Variant;
+struct StaticArray;
 
 //(type ...): intrinsics::types::Type
 struct Type {
@@ -109,7 +110,6 @@ struct Type {
 
 	Type(int kind);
 	Type(int kind,Type* next);//ptr | bounded pointer
-	Type(int kind,Type* next,size_t N); //static array | bounded pointer constant length
 	Type(int kind,int subtype);//node
 
 	static Type* getIntegerType(int bits,bool isSigned);
@@ -159,6 +159,7 @@ struct Type {
 	inline bool isNodePointer() const { return type == POINTER && argument->type == NODE; }
 	inline bool isLiteral() const { return type>=LITERAL_INTEGER; }
 	inline bool isLinearSequence() const { return type == LINEAR_SEQUENCE; }
+	inline bool isStaticArray() const    { return type == STATIC_ARRAY;    }
 	inline bool isVariantOption() const  { return type == VARIANT_OPTION; }
 	inline bool isTrait() const { return type == TRAIT; }
 
@@ -168,6 +169,7 @@ struct Type {
 	AnonymousAggregate* asAnonymousRecord();
 	FunctionPointer* asFunctionPointer();
 	Trait* asTrait();
+	StaticArray* asStaticArray();
 
 	inline Type* next(){ return argument; }
 	inline const Type* next() const { return argument; }
@@ -201,6 +203,7 @@ struct Type {
 		static Function* reference;
 		static Function* linearSequence;
 		static Function* functionPointer;
+		static Function* staticArray;
 	};
 
 	/**
@@ -209,9 +212,13 @@ struct Type {
 	* If such an assignment is possible, it will return the resulting expression with possible conversions.
 	* If not, it will return null.
 	*/
-	int assignFrom(Node** expression,Type* type,bool doTransform);
-	Node* assignableFrom(Node* expression,Type* type);
-	int canAssignFrom(Node* expression,Type* type);
+	enum TypeMeaningFilters {
+		AllowAutoAddressof = 0x2, // allows promotion of a non-pointer value to a pointer value
+		DisallowAutocasts  = 0x4,
+	};
+	int assignFrom(Node** expression,Type* type,bool doTransform,uint32 filters = 0);
+	Node* assignableFrom(Node* expression,Type* type,uint32 filters = 0);
+	int canAssignFrom(Node* expression,Type* type,uint32 filters = 0);
 
 
 public:
@@ -227,9 +234,6 @@ public:
 		int   optionID;
 		int   nodeSubtype;//USE -1 for untyped note i.e. [> 1 <] returns untyped node, but new ast.IntegerLiteral returns typed node!
 		int   bits;       //number of bits in an integer / character type
-	};
-	union {
-		size_t N;
 	};
 
 	inline bool isValueType(){ return isFlagSet(IS_VALUE); }
@@ -254,6 +258,19 @@ public:
 	inline bool isNonthrow() const { return true;    }//TODO
 
 	static FunctionPointer* get(Type* argument,Type* ret,data::ast::Function::CallConvention cc = data::ast::Function::ARPHA);
+};
+
+/**
+* A static array
+*/
+struct StaticArray: public Type {
+private:
+	size_t size;
+	StaticArray() : Type(STATIC_ARRAY) {}
+public:
+	inline size_t length() const { return size; }
+
+	static StaticArray* get(Type* next,size_t N);
 };
 
 /*

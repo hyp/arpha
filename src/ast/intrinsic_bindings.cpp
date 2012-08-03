@@ -384,6 +384,9 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 		static void reference(CTFEintrinsicInvocation* invocation){
 			invocation->ret(Type::getReferenceType(invocation->getTypeParameter(0)));
 		}
+		static void staticArray(CTFEintrinsicInvocation* invocation){
+			invocation->ret(StaticArray::get(invocation->getTypeParameter(0),invocation->getUint32Parameter(1)));
+		}
 	};
 
 	if(function->label() == "LinearSequence" && !Type::generators::linearSequence){
@@ -397,6 +400,10 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 	else if(function->label() == "Reference" && !Type::generators::reference){
 		Type::generators::reference = function;
 		function->intrinsicCTFEbinder = Generator::reference;
+	}
+	else if(function->label() == "Array" && !Type::generators::staticArray){
+		Type::generators::staticArray = function;
+		function->intrinsicCTFEbinder = Generator::staticArray;
 	}
 	else {
 		error = true;
