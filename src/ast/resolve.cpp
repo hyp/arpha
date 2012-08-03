@@ -1058,6 +1058,9 @@ DeclaredType* Record::resolve(Resolver* resolver){
 		error(declaration,"Faulty type extension hierarchy - The type %s features multiple path to type %s",declaration->label(),collection.back());
 		return this;
 	}
+	if(fields.size() == 1 && fields[0].isExtending){
+		setFlag(FIELD_ABI);
+	}
 	setFlag(IS_RESOLVED);
 	debug("Successfully resolved record type %s",declaration->label());
 	return this;

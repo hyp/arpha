@@ -135,7 +135,8 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(LoopExpression* node);
 	Node* visit(BlockExpression* node);
 	void  gen(BlockExpression* node);
-
+	void  genStatements(BlockExpression* node,bool innermostInFunction = false);
+	void  genToplevelStatements(BlockExpression* node);
 
 
 	Node* visit(Variable* var);
@@ -171,10 +172,25 @@ LLVMgenerator::LLVMgenerator(
 
 	//create a module initializer
 
-	gen(root->asBlockExpression());
+	genToplevelStatements(root->asBlockExpression());
 }
 
+bool rewriteAnonymousRecordAsVector(AnonymousAggregate* type){
+	if(type->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)) return true;
+	if(type->allElementsSameType()){
+		auto t = type->types[0];
+		if(t->isInteger() || t->isFloat() || t->isChar() /*??? || t->isPointer()*/){
+			type->setFlag(AnonymousAggregate::GEN_REWRITE_AS_VECTOR);
+			return true;
+		}
+	}
+	return false;
+}
 llvm::Type* generateAnonymousRecord(LLVMgenerator* generator,AnonymousAggregate* type){
+	if(rewriteAnonymousRecordAsVector(type)){
+		return llvm::VectorType::get(generator->genType(type->types[0]),type->numberOfFields);
+	}
+
 	std::vector<llvm::Type*> fields(type->numberOfFields);
 	for(size_t i = 0;i<type->numberOfFields;i++){
 		fields[i] = generator->genType(type->types[i]);
@@ -183,6 +199,7 @@ llvm::Type* generateAnonymousRecord(LLVMgenerator* generator,AnonymousAggregate*
 }
 
 llvm::Type* getRecordDeclaration(LLVMgenerator* generator,Record* record){
+	if(record->isFlagSet(Record::FIELD_ABI)) return generator->genType(record->fields[0].type.type());
 	if(record->generatorData) return generator->unmap(record);
 
 	//mangle
@@ -201,6 +218,7 @@ llvm::Type* getRecordDeclaration(LLVMgenerator* generator,Record* record){
 
 //TODO
 llvm::Type* generateAnonymousVariant(LLVMgenerator* generator,AnonymousAggregate* type){
+
 	std::vector<llvm::Type*> fields(type->numberOfFields);
 	for(size_t i = 0;i<type->numberOfFields;i++){
 		fields[i] = generator->genType(type->types[i]);
@@ -359,10 +377,57 @@ Node* LLVMgenerator::visit(VariableReference* node){
 	return node;
 }
 
+llvm::Value* vectorizeFieldAssignment(LLVMgenerator* generator,FieldAccessExpression* node,llvm::Value* value,bool store = true){
+	auto otype = node->object->returnType();
+	bool objectIsPtr = false;
+	if(otype->isPointer()){
+		otype = otype->next();
+		objectIsPtr = true;
+	}
+
+	if(auto aggr = otype->asAnonymousRecord()){
+		if(rewriteAnonymousRecordAsVector(aggr)){
+			auto vec = generator->generateExpression(node->object);
+			if(objectIsPtr) vec = generator->builder.CreateLoad(vec);
+			value = generator->builder.CreateInsertElement(vec,value,generator->builder.getInt32(node->field));
+			if(store){
+				value = generator->builder.CreateStore(value,objectIsPtr? generator->generateExpression(node->object) : generator->generatePointerExpression(node->object));
+			}
+			return value;
+		}
+	}
+	return nullptr;
+}
 Node* LLVMgenerator::visit(FieldAccessExpression* node){
 	auto neededPointer = needsPointer;
 	if(neededPointer) needsPointer = false;
-	auto ptr = node->object->returnType()->isPointer()? generateExpression(node->object) : generatePointerExpression(node->object);
+
+	auto otype = node->object->returnType();
+	bool objectIsPtr = false;
+	if(otype->isPointer()){
+		otype = otype->next();
+		objectIsPtr = true;
+	}
+
+	if(auto record = otype->asRecord()){
+		if(record->isFlagSet(Record::FIELD_ABI)){
+			auto ptr = objectIsPtr? generateExpression(node->object) : generatePointerExpression(node->object);
+			if(neededPointer) emit(ptr); 
+			else emitLoad(ptr);
+			return node;
+		}
+	} else {
+		auto aggr = otype->asAnonymousRecord();
+		if(rewriteAnonymousRecordAsVector(aggr) && !neededPointer){
+			auto vec = generateExpression(node->object);
+			if(objectIsPtr) vec = builder.CreateLoad(vec);
+			emit(builder.CreateExtractElement(vec,builder.getInt32(node->field)));
+			return node;
+		}
+	}
+
+
+	auto ptr = objectIsPtr? generateExpression(node->object) : generatePointerExpression(node->object);
 	auto fieldPtr = builder.CreateStructGEP(ptr,node->field);
 	if(neededPointer) emit(fieldPtr); 
 	else emitLoad(fieldPtr);
@@ -759,6 +824,11 @@ Node* LLVMgenerator::visit(AssignmentExpression* node){
 
 	auto val = generateExpression(node->value);
 	assert(val);
+
+	if(auto field = node->object->asFieldAccessExpression()){
+		if(vectorizeFieldAssignment(this,field,val)) return node;
+	}
+
 	auto ptr = generatePointerExpression(node->object);
 	emitStore(ptr,val);
 	return node;
@@ -837,7 +907,7 @@ ControlFlowExpression* isBreakContinue(Node* node){
 }
 
 Node* LLVMgenerator::visit(IfExpression* node){
-	bool returnsValue   = false;
+	bool returnsValue   = !node->returnType()->isVoid();
 	bool isSelect = returnsValue && !node->consequence->asBlockExpression() && !node->alternative->asBlockExpression();
 	
 	//condition
@@ -990,14 +1060,43 @@ Node* LLVMgenerator::visit(LoopExpression* node){
 	return node;
 }
 
-void  LLVMgenerator::gen(BlockExpression* node){
+void LLVMgenerator::genStatements(BlockExpression* node,bool innermostInFunction){
+
+	bool returnCreated;
+
 	for(auto i = node->begin();i!=node->end();i++){
-		generateExpression(*i);
+		auto expr = *i;
+		generateExpression(expr);
+		if(expr->asReturnExpression() || expr->asControlFlowExpression()){
+			break;
+		}
 	}
 }
 
+void LLVMgenerator::genToplevelStatements(BlockExpression* node){
+	for(auto i = node->begin();i!=node->end();i++){
+		auto expr = *i;
+		if(expr->isDefinitionNode()) generateExpression(expr);
+		else if(auto assign = expr->asAssignmentExpression()){
+			assert(assign->object->asVariable());
+			generateExpression(expr);
+		}
+		else if(expr->asUnitExpression()){
+		}
+		else if(auto block = expr->asBlockExpression()){
+			genToplevelStatements(block);
+		}
+		else {
+			assert(false && "Invalid top-level statement!");
+		}
+	}
+}
+
+void LLVMgenerator::gen(BlockExpression* node){
+	genStatements(node);
+}
 Node* LLVMgenerator::visit(BlockExpression* node){
-	gen(node);
+	genStatements(node);
 	return node;
 }
 
@@ -1122,7 +1221,7 @@ Node* LLVMgenerator::visit(Function* function){
 
 	auto oldFunction = functionOwner;
 	functionOwner = function;
-	gen(&function->body);
+	genStatements(&function->body,true);
 	if(!function->isFlagSet(Function::CONTAINS_RETURN)) builder.CreateRetVoid();
 	if(llvm::verifyFunction(*func,llvm::PrintMessageAction)){
 		//TODO

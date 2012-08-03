@@ -265,6 +265,12 @@ struct AnonymousAggregate: public Type {
 		SymbolID name;
 		Type*    type;
 	};
+	enum {
+		ALL_SAME = 0x8,
+		GEN_REWRITE_AS_VECTOR = 0x16,
+	};
+
+	inline bool allElementsSameType(){ return isFlagSet(ALL_SAME); }
 
 	// Returns -1 if field isn't found
 	int lookupField(const SymbolID fieldName) const;
@@ -354,6 +360,9 @@ public:
 };
 
 struct Record: public DeclaredType {
+	enum {
+		FIELD_ABI = 0x8,//when given a type { extends 1 field } use the abi of the underlying field
+	};
 	struct Field {
 		SymbolID name;
 		TypePatternUnresolvedExpression type;

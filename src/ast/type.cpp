@@ -1254,6 +1254,14 @@ std::vector<std::pair<Type**,size_t>>    anonymousRecordTypes ;
 std::vector<std::pair<SymbolID*,size_t>> anonymousRecordFields;
 
 AnonymousAggregate::AnonymousAggregate(Type** t,SymbolID* fs,size_t n,bool isVariant): Type(isVariant? ANONYMOUS_VARIANT: ANONYMOUS_RECORD),types(t),fields(fs),numberOfFields(n) {
+	assert(n > 1);
+	if(!isVariant){
+		auto first = t[0];
+		for(auto i = t + 1; i < (t+n);i++){
+			if(!first->isSame(*i)) return;
+		}
+		setFlag(ALL_SAME);
+	}
 }
 AnonymousAggregate* Type::asAnonymousRecord(){
 	return type == ANONYMOUS_RECORD? static_cast<AnonymousAggregate*>(this) : nullptr;
