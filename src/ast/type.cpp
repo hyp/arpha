@@ -17,9 +17,9 @@ struct TypeMeaningsRange {
 private:
 
 	void getLiteralTypesConversions(Type* type);
-	void getRecordSubtypes(Record* record);
+	void getRecordSubtypes(Record* record,uint32 filters);
 
-	void gatherMeanings(Type* type);
+	void gatherMeanings(Type* type,uint32 filters);
 
 	struct Match {
 		Type* type;
@@ -31,15 +31,15 @@ private:
 	inline void add(Type* type,int weight){ Match m = { type,weight };meanings.push_back(m); }
 public:
 
-	TypeMeaningsRange(Type* type);
+	TypeMeaningsRange(Type* type,uint32 filters = 0);
 
 	inline bool isEmpty()       { return currMeaning == meanings.end(); }
 	inline void advance()       { ++currMeaning; }
 	inline Type* currentType()  { return currMeaning->type; }
 	inline int   currentWeight(){ return currMeaning->weight; }
 };
-TypeMeaningsRange::TypeMeaningsRange(Type* type){
-	gatherMeanings(type);
+TypeMeaningsRange::TypeMeaningsRange(Type* type,uint32 filters){
+	gatherMeanings(type,filters);
 	currMeaning = meanings.begin();
 }
 
@@ -193,7 +193,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Type* type,Node* pat
 	return false;
 }
 
-Type* TypePatternUnresolvedExpression::PatternMatcher::matchWithSubtyping(Type* type,Node* pattern,Scope* expansionScope){
+Type* TypePatternUnresolvedExpression::PatternMatcher::matchWithSubtyping(Type* type,Node* pattern,Scope* expansionScope,uint32 filters){
 	this->expansionScope = expansionScope? expansionScope : container;
 	notAllResolvedMatch = false;
 
@@ -201,7 +201,7 @@ Type* TypePatternUnresolvedExpression::PatternMatcher::matchWithSubtyping(Type* 
 	if(match(ref,pattern)) return type;
 	else {
 		Type* matchedType = nullptr;
-		for(TypeMeaningsRange meanings(type);!meanings.isEmpty();meanings.advance()){
+		for(TypeMeaningsRange meanings(type,filters);!meanings.isEmpty();meanings.advance()){
 			ref->type = meanings.currentType();
 			if(match(ref,pattern)){
 				if(matchedType){
@@ -1011,11 +1011,11 @@ int recordSubtyping(Type* givenType,Node** node,Type* nodeType,bool doTransform)
 	}
 	return -1;
 }
-void TypeMeaningsRange::getRecordSubtypes(Record* record){
+void TypeMeaningsRange::getRecordSubtypes(Record* record,uint32 filters){
 	for(auto field = record->fields.begin(); field != record->fields.end();++field){
 		if((*field).isExtending){
 			add((*field).type.type(),RECORD_SUBTYPE);
-			gatherMeanings((*field).type.type());
+			gatherMeanings((*field).type.type(),filters);
 		}
 	}
 }
@@ -1080,18 +1080,19 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform,uint32 filter
 
 	return -1;
 }
-void TypeMeaningsRange::gatherMeanings(Type* type){
+void TypeMeaningsRange::gatherMeanings(Type* type,uint32 filters){
 	if(type->isLiteral()) getLiteralTypesConversions(type);
 
 	Record* record = type->asRecord();
 	if(!record){
 		if(type->isPointer()){
 			record = type->next()->asRecord();
-			if(record) getRecordSubtypes(record);
+			if(record) getRecordSubtypes(record,filters);
 		}
 	}
-	else getRecordSubtypes(record);
+	else getRecordSubtypes(record,filters);
 
+	if(type->isStaticArray()) add(Type::getLinearSequence(type->next()),LITERAL_CONVERSION);
 	if(!type->isPointer()) add(Type::getPointerType(type),ADDRESSOF);
 }
 

@@ -285,11 +285,15 @@ static void initMapping(){
 
 	MAPOP("length(*LinearSequence)",data::ast::Operations::LENGTH);
 	MAPOP("element(*LinearSequence,natural)",data::ast::Operations::ELEMENT_GET);
-	MAPOP("element(*LinearSequence,natural,*)",data::ast::Operations::ELEMENT_SET);
 
 	MAPOP("empty(*LinearSequence)",data::ast::Operations::SEQUENCE_EMPTY);
 	MAPOP("current(*LinearSequence)",data::ast::Operations::ELEMENT_GET);
 	MAPOP("moveNext(*LinearSequence)",data::ast::Operations::SEQUENCE_MOVENEXT);
+
+	MAP_PROP("length(*Array)",Function::MACRO_FUNCTION,{ 
+		invocation->ret(new IntegerLiteral((uint64)invocation->getNodeParameter(0)->returnType()->next()->asStaticArray()->length(),intrinsics::types::natural)); 
+	});
+	MAPOP("element(*Array,natural)",data::ast::Operations::ELEMENT_GET);
 
 	/**
 	* arpha.functionality.misc

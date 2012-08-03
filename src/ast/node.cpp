@@ -278,7 +278,7 @@ PointerOperation::PointerOperation(Node* expression,int type){
 Type* PointerOperation::returnType() const {
 	assert(isResolved());
 	auto next = expression->returnType();
-	if(isAddress()) return new Type(Type::POINTER,next);
+	if(isAddress()) return isFlagSet(ADDRESS_RETURNS_REF)? Type::getReferenceType(next) : Type::getPointerType(next);
 	assert(next->isPointer() || next->isReference());
 	return next->argument;
 }

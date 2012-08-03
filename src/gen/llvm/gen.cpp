@@ -641,7 +641,7 @@ bool optimizeLinearSequenceAssignment(LLVMgenerator* generator,Node* src,Node* d
 	return false;
 }
 
-llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2,llvm::Value* operand3){
+llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2){
 	LinearSequenceValues sequence;
 
 	using namespace data::ast::Operations;
@@ -659,11 +659,6 @@ llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Oper
 			if(cnst->getValue() == 0) return sequence.begin;
 		}
 		return generator->builder.CreateGEP(sequence.begin,operand2);
-	
-	// *(begin + i) = v
-	case ELEMENT_SET:
-		loadLinearSequence(generator,operand1,sequence,true,false);
-		generator->builder.CreateStore(operand3,generator->builder.CreateGEP(sequence.begin,operand2));
 	
 	// begin >= end
 	case SEQUENCE_EMPTY:
@@ -683,6 +678,21 @@ llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Oper
 	}
 
 	assert(false && "Invalid sequence operation");
+}
+
+llvm::Value* genArrayOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,llvm::Value* operand1,llvm::Value* operand2){
+	LinearSequenceValues sequence;
+
+	using namespace data::ast::Operations;
+	switch(op){
+	
+	// [i]
+	case ELEMENT_GET:
+		return generator->builder.CreateGEP(generator->builder.CreateStructGEP(operand1,0),operand2);
+
+	}
+
+	assert(false && "Invalid array operation");
 }
 
 /**
@@ -711,27 +721,26 @@ llvm::Value* optimize1ArgOperation(LLVMgenerator* generator,data::ast::Operation
 // TODO: fix linear sequences
 llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Node* arg){
 	Type*  operand1Type;
-	llvm::Value* values[3];
+	llvm::Value* values[2];
 	if(auto tuple = arg->asTupleExpression()){
-		assert(tuple->size() < 4);
+		assert(tuple->size() < 3);
 
 		auto args = tuple->childrenPtr();
 		operand1Type = args[0]->returnType();
 		values[0] = generator->generateExpression(args[0]);
 		values[1] = generator->generateExpression(args[1]);
-		if(tuple->size() == 3) 
-			values[2] = generator->generateExpression(args[2]);
-		else values[2] = nullptr;
 	}
 	else {
 		operand1Type = arg->returnType();
 		values[0] = generator->generateExpression(arg);
 		values[1] = nullptr;
-		values[2] = nullptr;
 	}
 
 	if(operand1Type->isPointer() && operand1Type->next()->isLinearSequence()){
-		return genLinearSequenceOperation(generator,op,values[0],values[1],values[2]);
+		return genLinearSequenceOperation(generator,op,values[0],values[1]);
+	}
+	else if(operand1Type->isPointer() && operand1Type->next()->isStaticArray()){
+		return genArrayOperation(generator,op,values[0],values[1]);
 	}
 	else if(operand1Type->isInteger() || operand1Type->isPlatformInteger() || operand1Type->isUintptr() || operand1Type->isChar()){
 		return genIntegerOperation(generator,op,operand1Type,values[0],values[1]);
@@ -760,6 +769,8 @@ Node* LLVMgenerator::visit(CallExpression* node){
 	llvm::CallInst* instr;
 	const char* reg;
 	Function* function;
+
+	if(needsPointer) needsPointer= false;
 
 	if(auto fcall = node->object->asFunctionReference()){
 		if(fcall->function->isIntrinsicOperation()){
@@ -906,17 +917,18 @@ Node* LLVMgenerator::visit(CastExpression* node){
 	}
 	else if(src->isStaticArray()){
 		if(dest->isLinearSequence()){
+			//TODO fix
 			auto arrPtr = generatePointerExpression(node->object);
-			arrPtr->getType()->dump();
-			module->dump();
 			auto var = genLocalVariable(dest);
-			var->getType()->dump();
-			module->dump();
-			auto val = builder.CreateStructGEP(arrPtr,0);
-			val->getType()->dump();
-			module->dump();
-			builder.CreateStore(val,builder.CreateStructGEP(var,0));
-			builder.CreateStore(builder.CreateGEP(val,builder.getInt32(src->asStaticArray()->length())),builder.CreateStructGEP(var,1));
+			llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0);
+			llvm::Value *Args[] = { zero, zero };
+			auto begin = builder.CreateGEP(arrPtr, Args);
+			auto l = src->asStaticArray()->length();
+			//TODO
+			auto end = builder.CreateGEP( begin, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), l - 1));
+
+			builder.CreateStore(begin,builder.CreateStructGEP(var,0));
+			builder.CreateStore(end,builder.CreateStructGEP(var,1));
 			if(neededPointer) emit(var);
 			else emitLoad(var);
 			return node;
@@ -1167,7 +1179,7 @@ llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* var
 Node* LLVMgenerator::visit(Variable* variable){
 	if(!functionOwner){
 		auto var = getGlobalVariableDeclaration(variable);
-
+		var->setInitializer(llvm::ConstantAggregateZero::get(genType(variable->type.type())));
 		if(needsPointer) emit(var);
 	} else {
 		auto block = builder.GetInsertBlock();
@@ -1227,8 +1239,8 @@ Node* LLVMgenerator::visit(Function* function){
 	if(function->isExternal() || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro() || 
 		function->isTypeTemplate() || function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return function;
 
-	//NB: optimization: Don't generate unused generated functions!
-	if(function->generatedFunctionParent && !function->generatorData) return function;
+	//TODO: fix NB: optimization: Don't generate unused generated functions!
+	//if(function->generatedFunctionParent && !function->generatorData) return function;
 
 	auto func = getFunctionDeclaration(function);
 

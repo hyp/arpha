@@ -49,7 +49,7 @@ struct TypePatternUnresolvedExpression {
 		void introduceDefinition(SymbolID name,Location location,Node* value = nullptr);
 		bool check(Node* expression,Trait* currentTrait = nullptr); //Returns true if a certain expression is a type pattern e.g. _
 		bool  match(Type* type,Node* pattern,Scope* expansionScope = nullptr);
-		Type* matchWithSubtyping(Type* type,Node* pattern,Scope* expansionScope = nullptr);
+		Type* matchWithSubtyping(Type* type,Node* pattern,Scope* expansionScope = nullptr,uint32 filters = 0);
 		Node* inverseMatch(Node* pattern);
 		void defineIntroducedDefinitions();
 	private:

@@ -138,11 +138,15 @@ Node* Resolver::resolve(Node* node){
 	auto result = node->resolve(this);
 	if(!result->isResolved()) markUnresolved(result);
 	else if(result->returnType()->isReference()){
-		result = result->copyLocationSymbol(new PointerOperation(result,PointerOperation::DEREFERENCE));
+		auto ptr = result->asPointerOperation();
+		bool deref = ptr && ptr->isAddress();
+		if(!deref){
+			result = result->copyLocationSymbol(new PointerOperation(result,PointerOperation::DEREFERENCE));
 
-		//NB: speed optimization
-		//result->setFlag(Node::RESOLVED);
-		result = resolve(result);
+			//NB: speed optimization
+			//result->setFlag(Node::RESOLVED);
+			result = resolve(result);
+		}
 	}
 	return result;
 }
@@ -379,6 +383,20 @@ Node* CallExpression::resolve(Resolver* resolver){
 				i.invoke(func,arg);
 				return resolver->resolve(copyLocationSymbol(i.result()));
 			}
+			if(func->isIntrinsicOperation() && func->getOperation() == data::ast::Operations::ELEMENT_GET){
+				auto tuple = arg->asTupleExpression();
+				if(tuple){
+					auto ret = (*tuple->begin())->returnType();
+					if(ret->next()->isStaticArray()){
+						if(auto lit = (*(arg->asTupleExpression()->begin()+1))->asIntegerLiteral()){
+							if(lit->integer.isNegative() || lit->integer.u64 >= ret->next()->asStaticArray()->length()){
+								error(this,"Array index %s is out of bounds!",lit->integer.u64);
+								return ErrorExpression::getInstance();
+							}
+						}
+					}
+				}
+			}
 			if(auto inl = potentiallyInline(resolver,func,arg)) return resolver->resolve(copyLocationSymbol(inl));
 		}
 	} 
@@ -450,16 +468,25 @@ Node* accessingAnonymousRecordField(AccessExpression* node){
 	return nullptr;
 }
 
-// TODO tuple destructuring
-// TODO anonymous records a.foo
+Type* patternTypeInferralFromAssignment(Resolver* resolver,TypePatternUnresolvedExpression& type,Scope* container,Type* givenType){
+	auto pattern = type.pattern;
+	auto inferredType = givenType;
+	if(pattern){
+		TypePatternUnresolvedExpression::PatternMatcher matcher(container,resolver);
+		if(!(inferredType= matcher.matchWithSubtyping(givenType,pattern))) return nullptr;
+	}
+	type.kind  = TypePatternUnresolvedExpression::TYPE;
+	type._type = inferredType;
+	return inferredType;
+}
 
-void inferVariablesType(Variable* variable,AssignmentExpression* assignment,Type* valuesType){
+void inferVariablesType(Resolver* resolver,Variable* variable,AssignmentExpression* assignment,Type* valuesType){
 	if(variable->asArgument()) return;
 	auto value = assignment->value;
 
-	if(!variable->deduceType(valuesType)){
+	if(!patternTypeInferralFromAssignment(resolver,variable->type,variable->_owner,valuesType)){//variable->deduceType(valuesType)){
 		error(assignment,"Failed to deduce variable's type -\n\tA variable '%s' is expected to have a type matching a pattern %s, which the type '%s' derived from the expression %s doesn't match!",
-			variable->label(),variable->type.pattern,valuesType,assignment->value);
+			variable->label(),variable->type,valuesType,assignment->value);
 	}
 	debug("Inferred type for %s",variable);
 }
@@ -557,7 +584,7 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 	if(variable){
 		//type inferring
 		if(variable->type.isPattern()){
-			inferVariablesType(variable,this,valuesType);
+			inferVariablesType(resolver,variable,this,valuesType);
 			object = resolver->resolve(object);
 		}
 		
@@ -626,6 +653,15 @@ Node* PointerOperation::resolve(Resolver* resolver){
 			if(!(ret->isPointer() || ret->isReference() )){
 				error(this,"Can't dereference a non-pointer expression!");
 				return ErrorExpression::getInstance();
+			}
+		}
+		else if(isAddress()){
+
+			if(auto deref = expression->asPointerOperation()){
+				if(deref->isDereference()){
+					if(deref->expression->returnType()->isReference()) setFlag(ADDRESS_RETURNS_REF);
+					else return deref->expression;
+				}
 			}
 		}
 	}
@@ -1804,7 +1840,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 		else if( func->arguments[currentArg]->type.isPattern() ){
 			
 			if(auto pattern = func->arguments[currentArg]->type.pattern){
-				auto topMatchedType = matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern,getSpecializationScope(func,this));
+				auto topMatchedType = matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern,getSpecializationScope(func,this),Type::AllowAutoAddressof);
 				result[currentArg] = resolve(topMatchedType->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType(),Type::AllowAutoAddressof));
 			}
 			else {
@@ -2002,7 +2038,7 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 		}
 		else if( func->arguments[currentArg]->type.isPattern() ){
 			if(auto pattern = func->arguments[currentArg]->type.pattern){
-				if(!matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern,getSpecializationScope(func,evaluator))) return false;
+				if(!matcher.matchWithSubtyping(exprBegin[currentExpr]->returnType(),pattern,getSpecializationScope(func,evaluator),Type::AllowAutoAddressof)) return false;
 				weight += WILDCARD + 1;
 			}
 			else weight += WILDCARD;

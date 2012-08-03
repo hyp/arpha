@@ -158,9 +158,10 @@ struct Analyzer : NodeVisitor {
 	}
 
 	Node* visit(VariableReference* node){
-		if(node->variable->location().line() > node->location().line() && node->variable->location().column > node->location().column){
+		//TODO: fix
+		/*if(node->variable->location().line() > node->location().line() && node->variable->location().column > node->location().column){
 			error(node,"Variable usage before declaration!");
-		}
+		}*/
 		if(node->variable->functionOwner() != functionOwner){
 			if(node->variable->functionOwner() != nullptr){
 				//TODO closures

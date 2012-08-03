@@ -1,15 +1,23 @@
 #
-	TODO: remove cast
+	TODO: fix range variable visibility
 #
 
 import io
 
-def find(range Range(char8),value char8){
-	for(i in range){
-		if((i as uint8) == (value as uint8)) print("found character!\n")
+def find(r Range(char8),value char8){
+	for(i in r){
+		if(i == value) print("found character!\n")
 	}
 }
 
+var array Array(int32,10)
+
 def main(){
 	find("ranger of Greendale!",'G')
+	
+	# Set all elements in the array to 1
+	for(i in array){
+		print("Iteration!")
+		i = 1
+	}
 }

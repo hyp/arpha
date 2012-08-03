@@ -21,3 +21,5 @@ def empty    (self *LinearSequence(_)) bool
 def current  (self *LinearSequence(T: _)) Reference(T)
 def moveNext (self *LinearSequence(_))
 
+def length (self *Array(_,_))
+def element(self *Array(T:_,_),i natural) Reference(T)

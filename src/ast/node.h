@@ -460,6 +460,8 @@ struct PointerOperation : Node {
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
 
+
+
 	enum {
 		ADDRESS,     //&
 		DEREFERENCE, //*
@@ -473,6 +475,10 @@ struct PointerOperation : Node {
 	Node* expression;
 	int kind; // = ADDRESS
 	DECLARE_NODE(PointerOperation);
+
+	enum {
+		ADDRESS_RETURNS_REF = 0x10,
+	};
 };
 
 struct IfExpression : Node {

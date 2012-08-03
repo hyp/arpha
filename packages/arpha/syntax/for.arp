@@ -12,11 +12,11 @@ macro for {
 	var body = parser.parse(ignoreNewlines: true)
 	
 	return [> {
-			var seq = $sequence
-			until(seq.empty){
-				def i = seq.current
+			var range Range = $sequence
+			until(range.empty){
+				def i = &range.current
 				$body
-				seq.moveNext()
+				range.moveNext()
 			}
 	} <]
 }
