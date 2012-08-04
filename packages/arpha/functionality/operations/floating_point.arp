@@ -10,6 +10,7 @@ macro defineRealOperations(T Type) = [>
 	def subtract(x $T,y $T) $T
 	def multiply(x $T,y $T) $T
 	def divide(x $T,y $T) $T
+	def remainder(x $T,y $T) $T
 	
 	def equals(x $T,y $T) bool
 	def less(x $T,y $T) bool

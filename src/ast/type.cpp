@@ -554,6 +554,9 @@ Function* Type::generators::reference  = nullptr;
 Function* Type::generators::linearSequence  = nullptr;
 Function* Type::generators::functionPointer = nullptr;
 Function* Type::generators::staticArray = nullptr;
+Function* Type::generators::vector = nullptr;
+
+Function* Type::generators::constQualifier = nullptr;
 
 Type::Type(int kind) : type(kind),flags(0) {
 	if(kind == BOOL) bits = 1;
@@ -694,6 +697,10 @@ bool Type::isSame(Type* other){
 			return false;
 	}
 }
+Type* Type::stripQualifiers(){
+	//TODO
+	return this;
+}
 bool Type::wasGenerated() const {
 	switch(type){
 	case RECORD:  return static_cast<const Record* >(this)->declaration->isParametrized();
@@ -704,6 +711,8 @@ bool Type::wasGenerated() const {
 	case LINEAR_SEQUENCE: 
 	case STATIC_ARRAY:    
 	case FUNCTION_POINTER: return true;
+
+	case ANONYMOUS_RECORD: return static_cast<const AnonymousAggregate*>(this)->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR);
 	
 	default: return false;
 	}
@@ -716,6 +725,9 @@ bool Type::wasGeneratedBy(Function* function) const {
 	case LINEAR_SEQUENCE:  return function == generators::linearSequence;
 	case STATIC_ARRAY:     return function == generators::staticArray;
 	case FUNCTION_POINTER: return function == generators::functionPointer;
+
+	case ANONYMOUS_RECORD: return static_cast<const AnonymousAggregate*>(this)->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)? function == generators::vector : false;
+
 
 	default:
 		return false;
@@ -733,6 +745,10 @@ Node* Type::generatedArgument(size_t i) const {
 		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)static_cast<const StaticArray*>(this)->length(),Type::getIntegerLiteralType());
 	case FUNCTION_POINTER: return new TypeReference(i == 0 ? argument : static_cast<const FunctionPointer*>(this)->returns());
 
+	case ANONYMOUS_RECORD: if(static_cast<const AnonymousAggregate*>(this)->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)){
+								return i == 0 ? (Node*)new TypeReference(static_cast<const AnonymousAggregate*>(this)->types[0]) :
+									 new IntegerLiteral((uint64)static_cast<const AnonymousAggregate*>(this)->numberOfFields,intrinsics::types::natural);
+						   }
 	default:
 		throw std::runtime_error("TypeExpression generatedArgument failed");	
 		return nullptr;
@@ -1356,6 +1372,14 @@ AnonymousAggregate* AnonymousAggregate::create(Field* fields,size_t fieldsCount,
 		anonymousRecordFields.push_back(std::make_pair(symbolArray,fieldsCount));
 	}
 	return new AnonymousAggregate(typeArray,symbolArray,fieldsCount,isVariant);
+}
+AnonymousAggregate* AnonymousAggregate::getVector(Type* type,size_t elementsCount){
+	std::vector<Field> fields;
+	Field field = { SymbolID(),type };
+	fields.resize(elementsCount,field);
+	auto aggr = create(fields.begin()._Ptr,elementsCount);
+	aggr->setFlag(GEN_REWRITE_AS_VECTOR);
+	return aggr;
 }
 
 /**

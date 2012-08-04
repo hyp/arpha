@@ -1,0 +1,21 @@
+
+import export arpha.vector.core
+
+type vec(T,N natural) 
+{
+	extends var super Vector(T,N)
+}
+
+def dotProduct(self vec) = sum(self * self)
+
+def vec4f Type = vec(float,4)
+def vec3f Type = vec(float,3)
+def vec2f Type = vec(float,2)
+
+def vec4i Type = vec(int32,4)
+def vec3i Type = vec(int32,3)
+def vec2i Type = vec(int32,2)
+
+def vec4u Type = vec(uint32,4)
+def vec3u Type = vec(uint32,3)
+def vec2u Type = vec(uint32,2)

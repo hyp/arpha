@@ -350,22 +350,26 @@ CallExpression::CallExpression(Node* object,Node* argument){
 	this->arg = argument;
 }
 
+
+
 Type* CallExpression::returnType() const {
 	assert(isResolved());
 	if( auto refFunc = object->asFunctionReference()){
 		auto func = refFunc->function;
 		if(func->isIntrinsicReturningPattern()){
+
 			Type* firstArg;
 
 			if(auto tuple = arg->asTupleExpression()){
-				firstArg = (*tuple->begin())->returnType();
+				firstArg = (*tuple->begin())->returnType()->stripQualifiers();
 			}
-			else firstArg = arg->returnType();
-			auto op = func->getOperation();
+			else firstArg = arg->returnType()->stripQualifiers();
+			if(firstArg->isPointer()) firstArg = firstArg->next()->stripQualifiers();
 
-			if(op == data::ast::Operations::ELEMENT_GET){
-				return Type::getReferenceType(firstArg->next()->next());
-			}
+			return Function::getIntrinsicOperationReturnType(firstArg,func->getOperation());
+			//if(op == data::ast::Operations::ELEMENT_GET){
+			//	return Type::getReferenceType(firstArg->next()->next());
+			//}
 		}
 		else return func->_returnType.type();
 	}

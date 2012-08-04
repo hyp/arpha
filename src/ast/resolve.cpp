@@ -387,7 +387,7 @@ Node* CallExpression::resolve(Resolver* resolver){
 				auto tuple = arg->asTupleExpression();
 				if(tuple){
 					auto ret = (*tuple->begin())->returnType();
-					if(ret->next()->isStaticArray()){
+					if(ret->isPointer() && ret->next()->isStaticArray()){
 						if(auto lit = (*(arg->asTupleExpression()->begin()+1))->asIntegerLiteral()){
 							if(lit->integer.isNegative() || lit->integer.u64 >= ret->next()->asStaticArray()->length()){
 								error(this,"Array index %s is out of bounds!",lit->integer.u64);
@@ -1323,6 +1323,19 @@ struct ScopedStateChange {
 	}
 };
 
+//function of the form def(intrinsic) foo(x GeneratedType(T:_)) T
+bool isFunctionIntrinsicReturningPattern(TypePatternUnresolvedExpression::PatternMatcher& allArgMatcher,Node* returnType){
+	if(auto symbol = returnType->asUnresolvedSymbol()){
+		if(allArgMatcher.lookupDefinition(symbol->symbol)) return true;
+	}
+	else if(auto type = returnType->asTypeReference())   return true;
+	else if(auto ptr = returnType->asPointerOperation()) return isFunctionIntrinsicReturningPattern(allArgMatcher,ptr->expression);
+	else if(auto call = returnType->asCallExpression())  return isFunctionIntrinsicReturningPattern(allArgMatcher,call->arg);
+	else if(auto tuple =  returnType->asTupleExpression()){
+		for(auto i = tuple->begin();i!=tuple->end();i++){ if(!isFunctionIntrinsicReturningPattern(allArgMatcher,*i)) return false; }
+		return true;
+	}
+}
 
 Node* Function::resolve(Resolver* resolver){
 	parentNode = resolver->currentParentNode();
@@ -1366,26 +1379,7 @@ Node* Function::resolve(Resolver* resolver){
 	
 	//NB: special case for intrinsic def foo(x Pointer(T:_)) T
 	if(isIntrinsic() && arguments.size() && arguments[0]->type.isPattern() && _returnType.kind == TypePatternUnresolvedExpression::UNRESOLVED){
-
-		if(auto sym = _returnType.unresolvedExpression->asUnresolvedSymbol()){
-			if(allArgMatcher.lookupDefinition(sym->symbol)){
-				makeIntrinsicReturningPattern();
-			}
-		}
-		else if(auto ptr = _returnType.unresolvedExpression->asPointerOperation()){
-			if(auto sym = ptr->expression->asUnresolvedSymbol()){
-				if(allArgMatcher.lookupDefinition(sym->symbol)){
-					makeIntrinsicReturningPattern();
-				}
-			}
-		}
-		else if(auto call = _returnType.unresolvedExpression->asCallExpression()){
-			if(auto sym = call->arg->asUnresolvedSymbol()){
-				if(allArgMatcher.lookupDefinition(sym->symbol)){
-					makeIntrinsicReturningPattern();
-				}
-			}
-		}
+		if(isFunctionIntrinsicReturningPattern(allArgMatcher,_returnType.unresolvedExpression)) makeIntrinsicReturningPattern();
 	}
 
 	if(!this->isIntrinsicReturningPattern() && !_returnType.isResolved() && !_returnType.isPattern()){

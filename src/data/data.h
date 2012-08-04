@@ -85,6 +85,9 @@ namespace data {
 				ELEMENT_GET,
 				SEQUENCE_EMPTY,
 				SEQUENCE_MOVENEXT,
+
+				//vectors
+				VECTOR_SHUFFLE,
 			};
 		}
 	}

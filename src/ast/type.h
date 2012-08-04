@@ -135,6 +135,8 @@ struct Type {
 
 	static Type* getVariantOption(int optionID);
 
+	Type* stripQualifiers();
+
 	bool   canCastTo(Type* other);
 
 	
@@ -204,6 +206,9 @@ struct Type {
 		static Function* linearSequence;
 		static Function* functionPointer;
 		static Function* staticArray;
+		static Function* vector;
+
+		static Function* constQualifier;
 	};
 
 	/**
@@ -294,6 +299,8 @@ struct AnonymousAggregate: public Type {
 
 	//Unique anonymous record construction
 	static AnonymousAggregate* create(Field* fields,size_t fieldsCount,bool isVariant = false);
+
+	static AnonymousAggregate* getVector(Type* type,size_t elementsCount);
 private:
 	AnonymousAggregate(Type** t,SymbolID* fs,size_t n,bool isVariant);
 

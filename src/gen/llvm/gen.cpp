@@ -181,13 +181,13 @@ LLVMgenerator::LLVMgenerator(
 
 bool rewriteAnonymousRecordAsVector(AnonymousAggregate* type){
 	if(type->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)) return true;
-	if(type->allElementsSameType()){
+	/*if(type->allElementsSameType()){
 		auto t = type->types[0];
-		if(t->isInteger() || t->isFloat() || t->isChar() /*??? || t->isPointer()*/){
+		if(t->isInteger() || t->isFloat() || t->isChar() /*??? || t->isPointer()){
 			type->setFlag(AnonymousAggregate::GEN_REWRITE_AS_VECTOR);
 			return true;
 		}
-	}
+	}*/
 	return false;
 }
 llvm::Type* generateAnonymousRecord(LLVMgenerator* generator,AnonymousAggregate* type){
@@ -246,18 +246,7 @@ llvm::Type* generateLinearSequence(LLVMgenerator* generator,Type* next){
 	return llvm::StructType::get(generator->context,fields,false);
 }
 
-bool rewriteStaticArrayAsVector(StaticArray* type){
-	if(type->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)) return true;
-	auto t = type->next();
-	if(type->length() >= 2 && type->length() <= 4 && (t->isInteger() || t->isFloat() || t->isChar() /*??? || t->isPointer()*/)){
-		type->setFlag(AnonymousAggregate::GEN_REWRITE_AS_VECTOR);
-		return true;
-	}
-	return false;
-}
-
 llvm::Type* generateStaticArray(LLVMgenerator* generator,StaticArray* type){
-	if(rewriteStaticArrayAsVector(type)) return llvm::VectorType::get(generator->genType(type->next()),type->length());
 	return llvm::ArrayType::get(generator->genType(type->next()),type->length());
 }
 
@@ -570,6 +559,8 @@ llvm::Value* genRealOperation(LLVMgenerator* generator,data::ast::Operations::Ki
 		return generator->builder.CreateFMul(operand1,operand2);
 	case DIVISION:
 		return generator->builder.CreateFDiv(operand1,operand2);
+	case REMAINDER:
+		return generator->builder.CreateFRem(operand1,operand2);
 
 	case EQUALITY_COMPARISON:
 	case LESS_COMPARISON:
@@ -599,6 +590,16 @@ llvm::Value* genBoolOperation(LLVMgenerator* generator,data::ast::Operations::Ki
 	return nullptr;
 }
 
+llvm::Value* genVectorOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Type* vectorElementType,llvm::Value* operand1,llvm::Value* operand2,llvm::Value* operand3){
+	using namespace data::ast::Operations;
+
+	if(op == ELEMENT_GET) return generator->builder.CreateExtractElement(operand1,operand2);
+	else if(op == VECTOR_SHUFFLE) return generator->builder.CreateShuffleVector(operand1,operand2,operand3);
+	else {
+		if(vectorElementType->isFloat()) return genRealOperation(generator,op,operand1,operand2);
+		else return genIntegerOperation(generator,op,vectorElementType,operand1,operand2);
+	}
+}
 // TODO: bounds checking, slicing
 
 struct LinearSequenceValues {
@@ -720,20 +721,24 @@ llvm::Value* optimize1ArgOperation(LLVMgenerator* generator,data::ast::Operation
 
 // TODO: fix linear sequences
 llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Node* arg){
+
 	Type*  operand1Type;
-	llvm::Value* values[2];
+	llvm::Value* values[3];
 	if(auto tuple = arg->asTupleExpression()){
-		assert(tuple->size() < 3);
+		assert(tuple->size() < 4);
 
 		auto args = tuple->childrenPtr();
 		operand1Type = args[0]->returnType();
 		values[0] = generator->generateExpression(args[0]);
 		values[1] = generator->generateExpression(args[1]);
+		if(tuple->size() <= 2) values[2] = nullptr; 
+		else values[2] = generator->generateExpression(args[2]);
 	}
 	else {
 		operand1Type = arg->returnType();
 		values[0] = generator->generateExpression(arg);
 		values[1] = nullptr;
+		values[2] = nullptr;
 	}
 
 	if(operand1Type->isPointer() && operand1Type->next()->isLinearSequence()){
@@ -747,6 +752,12 @@ llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind o
 	}
 	else if(operand1Type->isFloat()){
 		return genRealOperation(generator,op,values[0],values[1]);
+	}
+	else if(auto aggr = operand1Type->asAnonymousRecord()){
+		//NB: This isn't required
+		//if(aggr->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)){
+			return genVectorOperation(generator,op,aggr->types[0]->stripQualifiers(),values[0],values[1],values[2]);
+		//}
 	}
 	else if(operand1Type->isBool()){
 		return genBoolOperation(generator,op,values[0],values[1]);

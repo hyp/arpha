@@ -96,6 +96,11 @@ void Mangler::Element::mangle(Type* type){
 	case Type::ANONYMOUS_VARIANT:
 		{
 		auto rec = static_cast<AnonymousAggregate*>(type);
+		if(rec->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)){
+			stream<<'X'<<rec->numberOfFields;
+			mangle(rec->types[0]);
+			break;
+		}
 		stream<<(type->type == Type::ANONYMOUS_RECORD?'T':'U')<<rec->numberOfFields<<'_';
 		for(size_t i = 0;i < rec->numberOfFields;i++){
 			if(rec->fields && !rec->fields[i].isNull())

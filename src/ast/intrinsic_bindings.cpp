@@ -104,6 +104,7 @@ void mapRealOperations(const char* t1){
 	MAPOP(std::string("subtract")+base2,data::ast::Operations::SUBTRACTION);
 	MAPOP(std::string("multiply")+base2,data::ast::Operations::MULTIPLICATION);
 	MAPOP(std::string("divide")+base2,data::ast::Operations::DIVISION);
+	MAPOP(std::string("remainder")+base2,data::ast::Operations::REMAINDER);
 
 	MAPOP(std::string("equals")+base2,data::ast::Operations::EQUALITY_COMPARISON);
 	MAPOP(std::string("less")+base2,data::ast::Operations::LESS_COMPARISON);
@@ -283,17 +284,33 @@ static void initMapping(){
 	mapStandartOperations(Type::getCharType(16));
 	mapStandartOperations(Type::getCharType(32));
 
-	MAPOP("length(*LinearSequence)",data::ast::Operations::LENGTH);
-	MAPOP("element(*LinearSequence,natural)",data::ast::Operations::ELEMENT_GET);
+	using namespace data::ast::Operations;
 
-	MAPOP("empty(*LinearSequence)",data::ast::Operations::SEQUENCE_EMPTY);
-	MAPOP("current(*LinearSequence)",data::ast::Operations::ELEMENT_GET);
-	MAPOP("moveNext(*LinearSequence)",data::ast::Operations::SEQUENCE_MOVENEXT);
+	MAPOP("length(*LinearSequence)",LENGTH);
+	MAPOP("element(*LinearSequence,natural)",ELEMENT_GET);
+
+	MAPOP("empty(*LinearSequence)",SEQUENCE_EMPTY);
+	MAPOP("current(*LinearSequence)",ELEMENT_GET);
+	MAPOP("moveNext(*LinearSequence)",SEQUENCE_MOVENEXT);
 
 	MAP_PROP("length(*Array)",Function::MACRO_FUNCTION,{ 
 		invocation->ret(new IntegerLiteral((uint64)invocation->getNodeParameter(0)->returnType()->next()->asStaticArray()->length(),intrinsics::types::natural)); 
 	});
-	MAPOP("element(*Array,natural)",data::ast::Operations::ELEMENT_GET);
+	MAPOP("element(*Array,natural)",ELEMENT_GET);
+
+	//Core vector operations
+	MAPOP("element(Vector,natural)",ELEMENT_GET);
+	MAPOP("shuffle(Vector,Vector)",VECTOR_SHUFFLE);
+	MAPOP("shuffle(Vector,Vector,Vector)",VECTOR_SHUFFLE);
+	MAPOP("add(Vector,Vector)",ADDITION);
+	MAPOP("subtract(Vector,Vector)",SUBTRACTION);
+	MAPOP("multiply(Vector,Vector)",MULTIPLICATION);
+	MAPOP("divide(Vector,Vector)",DIVISION);
+	MAPOP("remainder(Vector,Vector)",REMAINDER);
+
+	MAPOP("equals(Vector,Vector)",EQUALITY_COMPARISON);
+	MAPOP("less(Vector,Vector)",LESS_COMPARISON);
+	MAPOP("greater(Vector,Vector)",GREATER_COMPARISON);
 
 	/**
 	* arpha.functionality.misc
@@ -316,6 +333,24 @@ static void initMapping(){
 		}
 	});
 	mappingInitialized = true;
+}
+
+Type* Function::getIntrinsicOperationReturnType(Type* operand1,data::ast::Operations::Kind op){
+	using namespace data::ast::Operations;
+
+	if(operand1->isLinearSequence()){
+		if(op == ELEMENT_GET) return Type::getReferenceType(operand1->next());
+	}
+	else if(auto aggr = operand1->asAnonymousRecord()){
+		if(!aggr->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)) return nullptr;
+
+		if(op == ELEMENT_GET) return aggr->types[0];
+		else if(op >= EQUALITY_COMPARISON && op <= LESS_EQUALS_COMPARISON) return AnonymousAggregate::getVector(intrinsics::types::boolean,aggr->numberOfFields);
+		else return operand1;
+	}
+
+	assert(false && "Invalid operation");
+	return nullptr;
 }
 
 
@@ -380,7 +415,7 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 
 	struct Generator { 
 		static void linearSequence(CTFEintrinsicInvocation* invocation){
-			invocation->ret(::Type::getLinearSequence(invocation->getTypeParameter(0)));
+			invocation->ret(Type::getLinearSequence(invocation->getTypeParameter(0)));
 		}
 		static void functionPointer(CTFEintrinsicInvocation* invocation){
 			invocation->ret(FunctionPointer::get(invocation->getTypeParameter(0),invocation->getTypeParameter(1)));
@@ -390,6 +425,13 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 		}
 		static void staticArray(CTFEintrinsicInvocation* invocation){
 			invocation->ret(StaticArray::get(invocation->getTypeParameter(0),invocation->getUint32Parameter(1)));
+		}
+		static void vector(CTFEintrinsicInvocation* invocation){
+			auto t = invocation->getTypeParameter(0);
+			if(t->isInteger() || t->isFloat() || t->isChar() || t->isBool()){
+				invocation->ret(AnonymousAggregate::getVector(invocation->getTypeParameter(0),invocation->getUint32Parameter(1)));
+			}
+			else invocation->retError("Invalid element type for a vector type!");
 		}
 	};
 
@@ -408,6 +450,10 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 	else if(function->label() == "Array" && !Type::generators::staticArray){
 		Type::generators::staticArray = function;
 		function->intrinsicCTFEbinder = Generator::staticArray;
+	}
+	else if(function->label() == "Vector" && !Type::generators::vector){
+		Type::generators::vector = function;
+		function->intrinsicCTFEbinder = Generator::vector;
 	}
 	else {
 		error = true;

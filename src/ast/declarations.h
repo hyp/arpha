@@ -225,6 +225,7 @@ struct Function: public PrefixDefinition {
 	void makeIntrinsicOperation(data::ast::Operations::Kind op);
 	inline bool isIntrinsicOperation() const { return isFlagSet(IS_INTRINSIC_OPERATION); }
 	inline data::ast::Operations::Kind getOperation() const { return (data::ast::Operations::Kind)ctfeRegisterCount; }
+	static Type* getIntrinsicOperationReturnType(Type* operand1,data::ast::Operations::Kind op);
 
 	inline bool isTypeTemplate() const { return isFlagSet(TYPE_GENERATOR_FUNCTION); }
 	void makeTypeTemplate(TypeDeclaration* node);

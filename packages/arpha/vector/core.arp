@@ -1,0 +1,28 @@
+#
+	The vector type is a simple type that represents a vector of elements.
+	It is used to perform parallel operations on primitive types such as integers and floats.
+	It is equivalent to LLVM's vector type.
+	
+	Author:  Hyp
+	Version: 1
+#
+import arpha.intrinsic
+
+type Vector(ElementType,NumberOfElements natural) { }
+
+def element (vector Vector(T: _,_),i natural) T
+	
+#TODO
+#def shuffle (x Vector(T: _,N: _),mask Vector(uint32,_)) Vector(T,N)
+#def shuffle (x Vector(T: _,N: _),y Vector(T,_),mask Vector(uint32,_)) Vector(T,N)
+
+#TODO wnd vector match N
+def add      (x Vector(T: _,N: _),y Vector(T,_))  Vector(T,N)
+def subtract (x Vector(T: _,N: _),y Vector(T,_))  Vector(T,N)
+def multiply (x Vector(T: _,N: _),y Vector(T,_))  Vector(T,N)
+def divide   (x Vector(T: _,N: _),y Vector(T,_))  Vector(T,N)
+def remainder(x Vector(T: _,N: _),y Vector(T,_))  Vector(T,N)
+
+def equals   (x Vector(T: _,N: _),y Vector(T,_))  Vector(bool,N)
+def less     (x Vector(T: _,N: _),y Vector(T,_))  Vector(bool,N)
+def greater  (x Vector(T: _,N: _),y Vector(T,_))  Vector(bool,N)
