@@ -16,8 +16,13 @@ def main(){
 	find("ranger of Greendale!",'G')
 	
 	# Set all elements in the array to 1
-	for(i in array){
+	for(item in array){
 		print("Iteration!")
-		i = 1
+		item = 1
+	}
+	
+	# Check if all elements in the array are 1
+	for(i in array){
+		if(i == 1) print("ok")
 	}
 }

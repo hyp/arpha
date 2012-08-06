@@ -17,11 +17,11 @@ void DuplicationModifiers::duplicateDefinition(Argument* original,Argument* dupl
 	redirectors[reinterpret_cast<void*>(static_cast<Variable*>(original))] = std::make_pair(reinterpret_cast<void*>(static_cast<Variable*>(duplicate)),false);
 }
 void DuplicationModifiers::duplicateDefinition(Variable* original,Variable* duplicate){
-	target->define(duplicate);
+	if(!original->label().isNull()) target->define(duplicate);
 	redirectors[reinterpret_cast<void*>(original)] = std::make_pair(reinterpret_cast<void*>(duplicate),false);
 }
 void DuplicationModifiers::duplicateDefinition(Function* original,Function* duplicate){
-	target->defineFunction(duplicate);
+	if(!original->label().isNull()) target->defineFunction(duplicate);
 	redirectors[reinterpret_cast<void*>(original)] = std::make_pair(reinterpret_cast<void*>(duplicate),false);
 }
 void DuplicationModifiers::duplicateDefinition(TypeDeclaration* original,TypeDeclaration* duplicate){
@@ -139,8 +139,8 @@ StringLiteral::StringLiteral(memory::Block& block,Type* t) : explicitType(t){
 
 StringLiteral::StringLiteral(SymbolID symbol){
 	if(!symbol.isNull())
-		block.construct(symbol.ptr(),symbol.length());
-	else block.construct("",0);
+		block = memory::Block::construct(symbol.ptr(),symbol.length());
+	else block = memory::Block::construct("",0);
 	explicitType = Type::getLinearSequence(Type::getCharType(8));
 }
 Type* StringLiteral::returnType() const{

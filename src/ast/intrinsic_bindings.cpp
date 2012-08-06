@@ -203,6 +203,7 @@ static void initMapping(){
 	MAP_NODETYPE("Return",ReturnExpression);
 	MAP_NODETYPE("Block",BlockExpression);
 	MAP_NODETYPE("UnresolvedSymbol",UnresolvedSymbol);
+	MAP_NODETYPE("Variable",Variable);
 	MAP_NODETYPE("Function",Function);
 
 	MAP("returnType(Expression)",{ invocation->ret(invocation->getNodeParameter(0)->returnType()); });
@@ -221,6 +222,22 @@ static void initMapping(){
 	MAP_PROP("newPointerOperation(expression:Expression,dereference:bool)",0,{ invocation->ret(new PointerOperation(invocation->getNodeParameter(0),PointerOperation::DEREFERENCE)); });
 	MAP_PROP("newLogicalOperation(a:Expression,b:Expression,and:bool)",0,{ invocation->ret(new LogicalOperation(invocation->getNodeParameter(0),invocation->getNodeParameter(1),false)); });
 	MAP_PROP("newLogicalOperation(a:Expression,b:Expression,or:bool)",0,{ invocation->ret(new LogicalOperation(invocation->getNodeParameter(0),invocation->getNodeParameter(1),true)); });
+	MAP_PROP("newVariable(Expression)",0,{
+		auto t = invocation->getNodeParameter(0);
+		auto v = new Variable(SymbolID(),t->location());
+		v->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
+		v->type.unresolvedExpression = t;
+		invocation->ret(v);
+	});
+	MAP_PROP("newVariable([]char8)",0,{
+		auto v = new Variable(invocation->getStringParameterAsSymbol(0),Location());
+		invocation->ret(new Variable(invocation->getStringParameterAsSymbol(0),Location()));
+	});
+	MAP_PROP("newVariableReference(Expression)",0,{
+		auto v = invocation->getNodeParameter(0)->asVariable();
+		invocation->ret(new VariableReference(v));
+	});
+	
 	MAP_PROP("newFunction(body:Expression)",0,{
 		auto body = invocation->getNodeParameter(0);
 		auto func = new Function("foo",body->location());
@@ -256,6 +273,12 @@ static void initMapping(){
 		if(!match) i.rollback();
 		invocation->ret(match);
 	});
+	MAP_PROP("symbol()",Function::INTERPRET_ONLY_INSIDE,{
+		auto parser = invocation->getParser();
+		invocation->ret(parser->expectName());
+	});
+
+
 
 	/**
 	*arpha.functionality.operations.integer

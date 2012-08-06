@@ -4,7 +4,6 @@
 #
 
 import arpha.external
-#arpha.assemblies.load()
 
 def putchar(character int32) int32
 def getchar() int32

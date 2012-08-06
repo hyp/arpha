@@ -1215,7 +1215,7 @@ Node* LLVMgenerator::visit(Variable* variable){
 	} else {
 		auto block = builder.GetInsertBlock();
 		llvm::IRBuilder<> _builder(block,block->begin());
-		auto var = _builder.CreateAlloca(genType(variable->type.type()),nullptr,variable->label().ptr());
+		auto var = _builder.CreateAlloca(genType(variable->type.type()),nullptr,variable->label().isNull() ? "" : variable->label().ptr());
 		map(variable,var);
 
 		if(needsPointer) emit(var);
@@ -1230,6 +1230,7 @@ llvm::Function* LLVMgenerator::getIntrinsicFunctionDeclaration(const char* name,
 	return func;
 }
 
+//TODO unnamed function?
 llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 	if(auto unmapped = unmap(function)) return static_cast<llvm::Function*>(unmapped);
 

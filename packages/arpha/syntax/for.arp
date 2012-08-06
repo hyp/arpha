@@ -5,18 +5,23 @@
 
 macro for {
 	parser.expect("(")
-	var name = parser.parse()
+	var name = parser.symbol()
 	parser.expect("in")
-	var sequence = parser.parse()
+	var collection = parser.parse()
 	parser.expect(")")
 	var body = parser.parse(ignoreNewlines: true)
 	
+	
+	var rangeVariable = ast.newVariable( [> Range <] )
+	var range = ast.newVariableReference(rangeVariable)
+	var i = ast.newVariable(name)
+	
 	return [> {
-			var range Range = $sequence
-			until(range.empty){
-				def i = &range.current
+			$rangeVariable = $collection
+			until(($range).empty){
+				$i = &($range).current
 				$body
-				range.moveNext()
+				($range).moveNext()
 			}
 	} <]
 }

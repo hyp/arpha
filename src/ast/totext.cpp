@@ -68,7 +68,7 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(VariableReference* node){
-		stream<<"variable "<<node->variable->label()<<"["<<(void*)node->variable<<"]";
+		stream<<"variable "<<(node->variable->label().isNull()? "unnamed" : node->variable->label().ptr())<<"["<<(void*)node->variable<<"]";
 		return node;
 	}
 	Node* visit(FunctionReference* node){
@@ -159,7 +159,7 @@ struct NodeToString: NodeVisitor {
 	}
 
 	Node* visit(Variable* node){
-		stream<<"variable "<<node->label()<<" as "<<node->type<<"["<<(void*)node<<"]";
+		stream<<"variable "<<(node->label().isNull()? "unnamed" : node->label().ptr())<<" as "<<node->type<<"["<<(void*)node<<"]";
 		return node;
 	}
 

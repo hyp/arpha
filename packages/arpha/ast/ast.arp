@@ -39,9 +39,9 @@ def Loop                 Type
 def Return               Type
 def Block                Type
 def UnresolvedSymbol     Type
+def Variable             Type
 def Function             Type
 
-#def Variable             Type
 
 def newTypeReference(type Type) *TypeReference
 def newLoop(body *Expression) *Loop
@@ -57,5 +57,8 @@ def newLogicalOperation(a *Expression,b *Expression,or bool) *LogicalOperation
 
 def newCast(expression *Expression,type *Expression) *Cast
 
-def newFunction(body *Expression) *Function
-def newFunction(body *Expression,returnType Type) *Function
+def newVariable         (type *Expression)           *Variable
+def newVariable         (name LinearSequence(char8)) *Variable
+def newVariableReference(variable *Variable)         *VariableReference
+def newFunction         (body *Expression)           *Function
+def newFunction         (body *Expression,returnType Type) *Function
