@@ -152,16 +152,13 @@ struct Analyzer : NodeVisitor {
 			}
 			node->ctfeRegisterID = (uint16)mappingOffset;
 			mappingOffset++;
+			node->setFlag(Variable::ANALYSIS_DECLARED);
 		}
 		addInliningWeight(3);
 		return node;
 	}
 
 	Node* visit(VariableReference* node){
-		//TODO: fix
-		/*if(node->variable->location().line() > node->location().line() && node->variable->location().column > node->location().column){
-			error(node,"Variable usage before declaration!");
-		}*/
 		if(node->variable->functionOwner() != functionOwner){
 			if(node->variable->functionOwner() != nullptr){
 				//TODO closures
@@ -172,7 +169,12 @@ struct Analyzer : NodeVisitor {
 			markImpure(node);
 			addInliningWeight(10);
 		}
-		else addInliningWeight(2);
+		else {
+			if(!node->variable->isFlagSet(Variable::ANALYSIS_DECLARED)){
+				error(node,"Variable usage before declaration!");
+			}
+			addInliningWeight(2);
+		}
 		return node;
 	}
 

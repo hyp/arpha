@@ -1385,7 +1385,7 @@ Node* Function::resolve(Resolver* resolver){
 	
 	//NB: special case for intrinsic def foo(x Pointer(T:_)) T
 	if(isIntrinsic() && arguments.size() && arguments[0]->type.isPattern() && _returnType.kind == TypePatternUnresolvedExpression::UNRESOLVED){
-		if(isFunctionIntrinsicReturningPattern(allArgMatcher,_returnType.unresolvedExpression)) makeIntrinsicReturningPattern();
+		if(!_returnType.unresolvedExpression->asTypeReference() && isFunctionIntrinsicReturningPattern(allArgMatcher,_returnType.unresolvedExpression)) makeIntrinsicReturningPattern();
 	}
 
 	if(!this->isIntrinsicReturningPattern() && !_returnType.isResolved() && !_returnType.isPattern()){

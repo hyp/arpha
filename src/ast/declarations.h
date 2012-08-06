@@ -48,6 +48,7 @@ struct Variable : PrefixDefinition  {
 
 		CONSTANT_SUBSTITUTE = 0x10,//def a = 1 => an occurence of a will be replaced by 1. Make sure value is set before setting this flag.
 
+		ANALYSIS_DECLARED = 0x20,
 	};
 	Variable(SymbolID name,Location& location);
 	Variable(SymbolID name,Location& location,Scope* owner,Node* value);//constant injection
