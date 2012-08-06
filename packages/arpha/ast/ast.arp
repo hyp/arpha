@@ -41,6 +41,7 @@ def Block                Type
 def UnresolvedSymbol     Type
 def Variable             Type
 def Function             Type
+def ExpressionReference  Type
 
 
 def newTypeReference(type Type) *TypeReference
@@ -55,10 +56,12 @@ def newPointerOperation(expression *Expression,dereference bool) *PointerOperati
 def newLogicalOperation(a *Expression,b *Expression,and bool) *LogicalOperation
 def newLogicalOperation(a *Expression,b *Expression,or bool) *LogicalOperation
 
+def newExpressionReference(expression *Expression) *ExpressionReference
+
 def newCast(expression *Expression,type *Expression) *Cast
 
-def newVariable         (type *Expression)           *Variable
-def newVariable         (name LinearSequence(char8)) *Variable
+def newVariable() *Variable
+def newVariable(name LinearSequence(char8)) *Variable
 def newVariableReference(variable *Variable)         *VariableReference
 def newFunction         (body *Expression)           *Function
 def newFunction         (body *Expression,returnType Type) *Function

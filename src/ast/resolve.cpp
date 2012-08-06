@@ -201,6 +201,7 @@ Node* TupleExpression::resolve(Resolver* resolver){
 	if(resolveChildren(this,resolver)){
 		resolver->markResolved(this);
 		//find the tuple's type!
+		if(type) return this;
 		std::vector<AnonymousAggregate::Field> fields;
 		bool allTypes = true;
 		bool allConst = true;

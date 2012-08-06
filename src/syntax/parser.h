@@ -57,13 +57,7 @@ public:
 	void introduceDefinition(InfixMacro* macroDefinition);
 
 	//definition properties
-	//TODO remove this hacks
-	void useProperty(SymbolID name,Node* value);
-	void useProperty(SymbolID name); // implies value = true
-	void clearProperties();
 	void useTypedArgument(SymbolID name,Node* type); //use argument parser as *Parser
-	
-	void applyProperties(Node* node);
 
 	//Current parsing state
 	Token  lookedUpToken;

@@ -205,6 +205,7 @@ static void initMapping(){
 	MAP_NODETYPE("UnresolvedSymbol",UnresolvedSymbol);
 	MAP_NODETYPE("Variable",Variable);
 	MAP_NODETYPE("Function",Function);
+	MAP_NODETYPE("ExpressionReference",NodeReference);
 
 	MAP("returnType(Expression)",{ invocation->ret(invocation->getNodeParameter(0)->returnType()); });
 	MAP("isConst(Expression)",{ invocation->ret(invocation->getNodeParameter(0)->isConst()); });
@@ -222,11 +223,9 @@ static void initMapping(){
 	MAP_PROP("newPointerOperation(expression:Expression,dereference:bool)",0,{ invocation->ret(new PointerOperation(invocation->getNodeParameter(0),PointerOperation::DEREFERENCE)); });
 	MAP_PROP("newLogicalOperation(a:Expression,b:Expression,and:bool)",0,{ invocation->ret(new LogicalOperation(invocation->getNodeParameter(0),invocation->getNodeParameter(1),false)); });
 	MAP_PROP("newLogicalOperation(a:Expression,b:Expression,or:bool)",0,{ invocation->ret(new LogicalOperation(invocation->getNodeParameter(0),invocation->getNodeParameter(1),true)); });
-	MAP_PROP("newVariable(Expression)",0,{
-		auto t = invocation->getNodeParameter(0);
-		auto v = new Variable(SymbolID(),t->location());
-		v->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
-		v->type.unresolvedExpression = t;
+	MAP_PROP("newExpressionReference(Expression)",0,{ invocation->ret(new NodeReference(invocation->getNodeParameter(0))); });
+	MAP_PROP("newVariable()",0,{
+		auto v = new Variable(SymbolID(),Location());
 		invocation->ret(v);
 	});
 	MAP_PROP("newVariable([]char8)",0,{

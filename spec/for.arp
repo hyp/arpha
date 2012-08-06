@@ -1,0 +1,15 @@
+import spec
+
+describe "A 'for' statement" {
+
+	it "should iterate over all elements in a given range" {
+		var iteration natural = 0
+		for(c in "10"){
+			if(iteration == 0) c should be '1'
+			else c should be '1'
+			iteration++
+		}
+		iteration should be 2
+	}
+	
+}

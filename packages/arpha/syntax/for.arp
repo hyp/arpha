@@ -3,27 +3,31 @@
 	TODO for over tuples
 #
 
-macro for {
-	parser.expect("(")
-	var name = parser.symbol()
-	parser.expect("in")
-	var collection = parser.parse()
-	parser.expect(")")
-	var body = parser.parse(ignoreNewlines: true)
-	
-	var rangeVariable = ast.newVariable( [> Range <] )
+macro foreach(collection Range,i,body)
+{
+	var rangeVariable = ast.newVariable()
 	var range = ast.newVariableReference(rangeVariable)
-	var i = ast.newVariable(name)
 	
-	return [> 
-	match(typeof($collection)){
-	| Range =>
+	return [>
 		$rangeVariable = $collection
 		until(($range).empty){
 			$i = &($range).current
 			$body
 			($range).moveNext()
 		}
-	| _ => arpha.compiler.error("Invalid for loop")
-	} <]
+	<]
+}
+
+macro foreach(collection,i,body) = [> compiler.error("Invalid for loop!") <]
+
+macro for {
+	parser.expect("(")
+	var name = parser.symbol()
+	parser.expect("in")
+	var collection = parser.parse()
+	parser.expect(")")
+	var body = ast.newExpressionReference(parser.parse(ignoreNewlines: true))
+	
+	var i = ast.newExpressionReference(ast.newVariable(name))
+	return [> foreach($collection,$i,$body) <]
 }

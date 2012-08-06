@@ -12,5 +12,6 @@ import qualified arpha.ast
 
 def print  (string arpha.literal.string)
 def error  (string arpha.literal.string)
+def error  (splice arpha.literal.splice)
 def warning(string arpha.literal.string)
 

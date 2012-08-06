@@ -204,19 +204,7 @@ Node* Parser::parse(int stickiness){
 
 //Definition properties application
 // TODO remove this hacks!!
-void Parser::useProperty(SymbolID name,Node* value){
-	if(name == "precedence"){
-		currentScope()->precedenceProperty = value;
-	}
-}
-void Parser::useProperty(SymbolID name){
-}
-void Parser::clearProperties(){
-}
 void Parser::useTypedArgument(SymbolID name,Node* type){
-}
-void Parser::applyProperties(Node* node){
-	if(currentScope()->precedenceProperty && node->asInfixMacro()) node->applyProperty("precedence",currentScope()->precedenceProperty);
 }
 
 //introducing definitions

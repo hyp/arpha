@@ -233,7 +233,6 @@ struct VarParser: IntrinsicPrefixMacro {
 
 		auto var = new Variable(first,parser->previousLocation());
 		if(!isMutable) var->setFlag(Variable::IS_IMMUTABLE);
-		parser->applyProperties(var);
 		if(!isMutable && parser->compilationUnit()->moduleBody->scope->importsArphaIntrinsic) var->applyProperty("intrinsic",nullptr);
 		parser->introduceDefinition(var);
 		vars.push_back(var);
@@ -241,7 +240,6 @@ struct VarParser: IntrinsicPrefixMacro {
 			auto name = parser->expectName();
 			var = new Variable(name,parser->previousLocation());
 			if(!isMutable) var->setFlag(Variable::IS_IMMUTABLE);
-			parser->applyProperties(var);
 			parser->introduceDefinition(var);
 			vars.push_back(var);
 		}
@@ -379,7 +377,6 @@ static Function* parseFunction(SymbolID name,Parser* parser){
 		func->applyProperty("external",nullptr);
 		func->cc = data::ast::Function::CCALL;
 	}
-	parser->applyProperties(func);
 	parser->introduceDefinition(func);
 
 	parser->enterBlock(&func->body);
@@ -478,7 +475,6 @@ struct MacroParser: IntrinsicPrefixMacro {
 		if(!infix){
 			if(!functionLike){
 				//auto macro = new PrefixMacro(func);
-				parser->applyProperties(macro);
 				parser->introduceDefinition(pmacro);
 				return parser->compilationUnit()->resolver->resolveMacroAtParseStage(macro);
 			} 
@@ -488,7 +484,6 @@ struct MacroParser: IntrinsicPrefixMacro {
 			}
 		} else {
 			//auto macro = new InfixMacro(func,new IntegerLiteral((uint64)0,Type::getIntegerLiteralType()));
-			parser->applyProperties(macro);
 			parser->introduceDefinition(imacro);
 			return parser->compilationUnit()->resolver->resolveMacroAtParseStage(macro);
 		}
@@ -1045,34 +1040,6 @@ struct ImportParser: IntrinsicPrefixMacro {
 			}
 		}while(parser->match(","));
 		return new UnitExpression;
-	}
-};
-
-/// TODO remove
-struct UseParser : IntrinsicPrefixMacro {
-	UseParser(): IntrinsicPrefixMacro("use") {}
-	Node* parse(Parser* parser){
-
-		if(parser->match("argument")){
-			auto argName = parser->expectName();
-			parser->expect("as");
-			auto typeExpr = parser->parse();
-			parser->useTypedArgument(argName,typeExpr);
-		}
-		else if(parser->match("_")){
-			//clear properties
-			parser->clearProperties();
-		} else {
-			do {
-				auto prop = parser->expectName();
-				Node* value = nullptr;
-				if(parser->match(":")) value = parser->parse(arpha::Precedence::Tuple);
-				if(value) parser->useProperty(prop,value);
-				else parser->useProperty(prop);
-			} while(parser->match(","));
-			parser->match("functions");
-		}
-		return new UnitExpression();
 	}
 };
 
