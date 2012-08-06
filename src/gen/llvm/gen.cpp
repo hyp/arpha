@@ -933,16 +933,13 @@ Node* LLVMgenerator::visit(CastExpression* node){
 	}
 	else if(src->isStaticArray()){
 		if(dest->isLinearSequence()){
-			//TODO fix
 			auto arrPtr = generatePointerExpression(node->object);
-			auto var = genLocalVariable(dest);
 			llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0);
 			llvm::Value *Args[] = { zero, zero };
-			auto begin = builder.CreateGEP(arrPtr, Args);
+			auto begin = builder.CreateInBoundsGEP(arrPtr, Args, "");
 			auto l = src->asStaticArray()->length();
-			//TODO
-			auto end = builder.CreateGEP( begin, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), l - 1));
-
+			auto end = builder.CreateGEP( begin, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), l));
+			auto var = genLocalVariable(dest);
 			builder.CreateStore(begin,builder.CreateStructGEP(var,0));
 			builder.CreateStore(end,builder.CreateStructGEP(var,1));
 			if(neededPointer) emit(var);
@@ -1184,7 +1181,7 @@ llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* var
 	gen::Mangler::Element mangler(moduleMangler);
 	mangler.mangle(variable);
 
-	auto threadLocal = true;
+	auto threadLocal = false;//NB: don't apply threadLocal to arrays
 	auto cnst        = variable->type.type()->hasConstQualifier();
 	auto var = new llvm::GlobalVariable(*module,genType(variable->type.type()),cnst,genLinkage(variable),nullptr,mangler.stream.str(),nullptr,threadLocal);
 	//var->setAlignment(variable->type.type()->alignment());
