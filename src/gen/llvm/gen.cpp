@@ -60,11 +60,13 @@ struct LLVMgenerator: NodeVisitor {
 	llvm::LLVMContext& context;
 	llvm::Module*      module;
 	llvm::Value*       emmittedValue;
+	llvm::Value**      emmittedValues;
 	gen::Mangler*      moduleMangler;
 	Function* functionOwner;
 	std::vector<Node*> moduleInitializerBody;
 	int currentGeneratingRound;
 	bool needsPointer;
+	bool needsRangeAsPointerPair;
 	Node* globalVariableInitializer;
 
 	/**
@@ -124,6 +126,10 @@ struct LLVMgenerator: NodeVisitor {
 	Node* visit(FloatingPointLiteral* node);
 	Node* visit(StringLiteral* node);
 
+	bool generateRangePointerPair(Node* expression,llvm::Value** beginEnd);
+	void emitRangePointerPair(llvm::Value* begin,size_t length,bool neededPointer = false);
+	void emitRangePointerPair(llvm::Value* begin,llvm::Value* end,bool neededPointer = false);
+
 	void emitCreateLinearSequence(llvm::Value* ptr,llvm::Value* length,Type* next);
 
 	Node* visit(VariableReference* node);
@@ -169,12 +175,14 @@ LLVMgenerator::LLVMgenerator(
 	this->passManager= passManager;
 
 	emmittedValue = nullptr;
+	emmittedValues = nullptr;
 	functionOwner = nullptr;
 	loopChain = nullptr;
 	ifFallthrough = false;
 	currentGeneratingRound = round;
 	needsPointer = false;
 	globalVariableInitializer = nullptr;
+	needsRangeAsPointerPair = false;
 
 	//create a module initializer
 
@@ -382,6 +390,27 @@ void LLVMgenerator::emitCreateLinearSequence(llvm::Value* begin,llvm::Value* len
 
 	if(needsPointer) emit(var);
 	else emitLoad(var);
+}
+
+void LLVMgenerator::emitRangePointerPair(llvm::Value* begin,size_t length,bool pointerNeeded){
+	emitRangePointerPair(begin,builder.CreateGEP(begin,builder.getInt64(length)));
+}
+void LLVMgenerator::emitRangePointerPair(llvm::Value* begin,llvm::Value* end,bool pointerNeeded){
+	if(!needsRangeAsPointerPair || pointerNeeded){
+		auto block = builder.GetInsertBlock();
+		llvm::IRBuilder<> _builder(block,block->begin());
+		auto type = begin->getType();
+		llvm::Type* fields[2] = { type,type };
+		auto var = _builder.CreateAlloca(llvm::StructType::get(context,fields,false),nullptr,"rangeTemp");
+
+		builder.CreateStore(begin,builder.CreateStructGEP(var,0));
+		builder.CreateStore(end  ,builder.CreateStructGEP(var,1));
+		if(pointerNeeded) emit(var);
+		else emitLoad(var);
+	} else {
+		emmittedValues[0] = begin;
+		emmittedValues[1] = end;
+	}
 }
 
 llvm::AllocaInst* LLVMgenerator::genLocalVariable(Type* type){

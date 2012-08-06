@@ -228,9 +228,10 @@ static void initMapping(){
 		auto v = new Variable(SymbolID(),Location());
 		invocation->ret(v);
 	});
-	MAP_PROP("newVariable([]char8)",0,{
+	MAP_PROP("newVariable([]char8,bool)",0,{
 		auto v = new Variable(invocation->getStringParameterAsSymbol(0),Location());
-		invocation->ret(new Variable(invocation->getStringParameterAsSymbol(0),Location()));
+		if(invocation->getBoolParameter(1)) v->setFlag(Variable::IS_IMMUTABLE);
+		invocation->ret(v);
 	});
 	MAP_PROP("newVariableReference(Expression)",0,{
 		auto v = invocation->getNodeParameter(0)->asVariable();

@@ -61,7 +61,7 @@ def newExpressionReference(expression *Expression) *ExpressionReference
 def newCast(expression *Expression,type *Expression) *Cast
 
 def newVariable() *Variable
-def newVariable(name LinearSequence(char8)) *Variable
+def newVariable(name LinearSequence(char8),mutable = true) *Variable
 def newVariableReference(variable *Variable)         *VariableReference
 def newFunction         (body *Expression)           *Function
 def newFunction         (body *Expression,returnType Type) *Function

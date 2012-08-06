@@ -68,6 +68,7 @@ void OverloadRange::nextScope(){
 			distance++;
 			assert(!prevScope->parent2);//NB: the generate function container doens't import anything
 			if(!prevScope->parent && adjacentScope){
+				distance++;
 				scope = adjacentScope;
 				adjacentScope = nullptr;
 			}
@@ -93,6 +94,8 @@ void OverloadRange::advance(){
 		nextScope();
 		if(scope) getNextFuncIterators();
 	}
+	//Only allow functions with 'public' visibility from imported scopes
+	if(importsCurr && scope && (!(*funcCurr)->isPublic())) advance();
 }
 
 /**
@@ -348,8 +351,7 @@ Node* CallExpression::resolve(Resolver* resolver){
 			}
 			else assert(os->asOverloadset());
 		}
-		if(auto func =  resolver->resolveOverload(scope,callingOverloadSet->symbol,arg,isFlagSet(DOT_SYNTAX))){
-			arg = resolver->resolve(resolver->constructFittingArgument(&func,arg));
+		if(auto func =  resolver->resolveFunctionCall(scope,callingOverloadSet->symbol,&arg,isFlagSet(DOT_SYNTAX))){
 			//macro
 			if(func->isFlagSet(Function::MACRO_FUNCTION)){
 				if(func->intrinsicCTFEbinder){
@@ -1529,65 +1531,6 @@ Node* mixinMacro(CTFEinvocation* invocation,Scope* scope){
 	return resultingExpression;
 }
 
-// Function overload resolving based on a function's type
-// TODO
-Function* Resolver::resolveOverload(Scope* scope,SymbolID function,Type* functionType){
-	assert(functionType->isFunctionPointer());
-	return nullptr;
-}
-
-// TODO Better error messages!
-static Function* errorOnMultipleMatches(Function** functions,size_t count,Node* arg){
-	//TODO
-	compiler::onError(arg,format("Multiple function overloads found when resolving the call %s(%s):",functions[0]->label(),arg));
-	Function** end = functions + count;
-	for(auto i = functions;i!=end;i++){
-		compiler::onError((*i)->location(),format("\tFunction %s",(*i)->label()));
-	}
-	return nullptr;
-}
-
-// Function overload resolving based on a given argument
-// TODO import qualified foo; var x foo.Foo ; foo.method() <-- FIX use dot syntax
-Function* Resolver::resolveOverload(Scope* scope,SymbolID function,Node* arg,bool dotSyntax){
-	
-	std::vector<Function*> results;
-	//step 1 - check current scope for matching function
-	if(auto hasDef = scope->containsPrefix(function)){
-		if(auto os = hasDef->asOverloadset()){
-			findMatchingFunctions(os->functions,results,arg);
-			if(results.size() == 1) return results[0];
-			else if(results.size()>1) return errorOnMultipleMatches(results.begin()._Ptr,results.size(),arg);
-		}
-	}
-	//step 2 - check imported scopes for matching function
-	if(scope->imports.size()){
-		std::vector<Function*> overloads;
-		for(auto i = scope->imports.begin();i!=scope->imports.end();++i){ 
-			if(auto hasDef = (*i)->containsPrefix(function)){
-				if(auto os = hasDef->asOverloadset()){
-					if(overloads.size()>0 && os->isFlagSet(Overloadset::TYPE_GENERATOR_SET)){
-						error(arg,"Function '%s' overloading abmiguity - it is either a type generation or a normal function!",function);
-						return nullptr;//TODO better error message
-					}
-					else overloads.insert(overloads.end(),os->functions.begin(),os->functions.end());
-				}
-			}
-		}
-		findMatchingFunctions(overloads,results,arg,true);
-		if(results.size() == 1) return results[0];
-		else if(results.size()>1) return errorOnMultipleMatches(results.begin()._Ptr,results.size(),arg);
-	}
-	//step 3 - check parent scope
-	if(scope->parent){
-		if(auto result = resolveOverload(scope->parent,function,arg,dotSyntax)) return result;
-	}
-	if(scope->parent2){
-		return resolveOverload(scope->parent2,function,arg,dotSyntax);
-	}
-	return nullptr;
-}
-
 /**
 *  Generic function specialization with parameter type deduction and/or value expansion
 *  The original function contains the set of the generated specializations.
@@ -2071,20 +2014,52 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 	return result; 
 }
 
-void Resolver::findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic){
+// TODO import qualified foo; var x foo.Foo ; foo.method() <-- FIX use dot syntax
+Function* Resolver::resolveFunctionCall(Scope* scope,SymbolID function,Node** parameter,bool dotSyntax){
+	auto arg = *parameter;
 	int weight = 0;
-	int maxweight = -1;
-	for(auto i=overloads.begin();i!=overloads.end();++i){
-		if(enforcePublic && !(*i)->isPublic()) continue;
-		if(!(*i)->isResolved()) continue; //TODO what if we need this
-		if(match(this,(*i),argument,weight)){
-			if(weight == maxweight){
-				results.push_back(*i);
-			}else if(weight >= maxweight){
-				results.clear();
-				results.push_back(*i);
-				maxweight = weight;
+	int maxWeight = -1;
+
+	int foundDistance;
+	Function* foundOverload = nullptr;
+	bool multipleOverload = false;
+
+	//Iterate over all the overloads picking the closest one with the best weight.
+	for(auto overload = ::overloads::OverloadRange(scope,function,dotSyntax);!overload.isEmpty();overload.advance()){
+		//Return the closest overload
+		if(foundOverload && overload.currentDistance() > foundDistance) break;
+
+		//TODO: recurive calls
+		if(!overload.currentFunction()->isResolved()) return nullptr;
+		if(match(this,overload.currentFunction(),arg,weight)){
+
+			if(weight > maxWeight){
+				foundOverload = overload.currentFunction();
+				foundDistance = overload.currentDistance();
+				maxWeight = weight;
+			} 
+			else if(weight == maxWeight){
+				//multiple overloads
+				if(!multipleOverload){
+					onFirstMultipleOverload(foundOverload,foundDistance,arg);
+					multipleOverload = true;
+				}
+				onMultipleOverload(overload.currentFunction());
 			}
 		}
 	}
+
+	if(foundOverload){
+		*parameter = this->constructFittingArgument(&foundOverload,arg);
+	}
+
+	return foundOverload;
+}
+
+void Resolver::onFirstMultipleOverload(Function* function,int distance,Node* arg){
+	compiler::onError(arg,format("Multiple function overloads found when resolving the call %s(%s):",function->label(),arg));
+	compiler::onAmbiguosDeclarationError(function);
+}
+void Resolver::onMultipleOverload(Function* function){
+	compiler::onAmbiguosDeclarationError(function);
 }

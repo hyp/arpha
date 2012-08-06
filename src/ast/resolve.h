@@ -66,16 +66,18 @@ public:
 
 	//function overloads resolving
 
-	Function* resolveOverload(Scope* scope,SymbolID function,Type* functionType);
-	Function* resolveOverload(Scope* scope,SymbolID function,Node* arg,bool dotSyntax = false);
 
+	
 	
 	Function* specializeFunction(TypePatternUnresolvedExpression::PatternMatcher& patternMatcher,Function* original,Type** specializedParameters,Node** passedExpressions);
 	bool resolveSpecialization(Function* function);
 	Node* constructFittingArgument(Function** function,Node *arg,bool dependentChecker = false,int* weight = nullptr);
 
-	void findMatchingFunctions(std::vector<Function*>& overloads,std::vector<Function*>& results,Node* argument,bool enforcePublic = false);
+	Function* resolveFunctionCall(Scope* scope,SymbolID function,Node** parameter,bool dotSyntax = false);
 
+private:
+	void onFirstMultipleOverload(Function* function,int distance,Node* arg);
+	void onMultipleOverload(Function* function);
 };
 
 namespace overloads {
@@ -105,6 +107,7 @@ public:
 	inline Function* currentFunction(){ return *funcCurr; }
 	void   advance();
 	inline int currentDistance(){ return distance; }
+
 };
 
 }

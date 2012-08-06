@@ -49,6 +49,14 @@ namespace compiler {
 
 	std::map<std::string,void (*)(Scope*)> postCallbacks;
 
+	ModulePtr findByScope(Scope* scope){
+		if(scope == currentModule->second.scope) return currentModule;
+		for(auto i = modules.begin();i!=modules.end();++i){
+			if(i->second.scope == scope) return i;
+		}
+		return currentModule;
+	}
+
 
 	void registerResolvedIntrinsicModuleCallback(const char* name,void (* f)(Scope*)){
 		postCallbacks[packageDir+"/"+name+".arp"] = f;
@@ -224,6 +232,16 @@ namespace compiler {
 		std::cout<< '(' << location.line() << ':' << location.column << ')' <<": " << message << std::endl;
 		showSourceLine(location,currentModule->first.size());
 		currentModule->second.errorCount++;
+	}
+	void onAmbiguosDeclarationError(Node* declaration){
+		
+		if(auto function = declaration->asFunction()){
+			auto module = findByScope(function->owner()->moduleScope());
+			System::print(format("\t%s(%d:%d): def %s(",module->first,function->location().lineNumber,function->location().column,function->label()));
+			for(auto i = function->arguments.begin();i!=function->arguments.end();++i)
+				System::print(format("%s %s%c ",(*i)->label(),(*i)->type,(i+1)==function->arguments.end()? ')':','));
+			System::print("\n");
+		} else assert(false);
 	}
 	void onWarning(Location& location,const std::string& message){
 		std::cout<< currentModule->first << '(' << location.line() << ':' << location.column << ')' <<": Warning: " << message << std::endl;

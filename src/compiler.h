@@ -37,11 +37,13 @@ namespace compiler {
 	void registerResolvedIntrinsicModuleCallback(const char* name,void (* f)(Scope*));
 
 	/// Reports a compilation error
+	
 	void onWarning(Location& location,const std::string& message);
 	void onError(Location& location,const std::string& message);//a standalone error message
 	void onError(Node* node,const std::string& message);
 	void headError(Location& location,const std::string& message);
 	void subError(Location& location,const std::string& message);
+	void onAmbiguosDeclarationError(Node* declaration);
 	// Corrupt intrinsic API, causes compiler exit
 	void intrinsicFatalError(Location& location,const std::string& message);
 

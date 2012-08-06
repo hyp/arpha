@@ -18,9 +18,10 @@ macro foreach(collection Range,i,body)
 	<]
 }
 
-macro foreach(collection,i,body) = [> compiler.error("Invalid for loop!") <]
+macro foreach(collection,i,body) = [> arpha.compiler.error("Invalid for loop - can't iterate over collection of type $(typeof($collection))!") <]
 
-macro for {
+macro for 
+{
 	parser.expect("(")
 	var name = parser.symbol()
 	parser.expect("in")
@@ -28,6 +29,6 @@ macro for {
 	parser.expect(")")
 	var body = ast.newExpressionReference(parser.parse(ignoreNewlines: true))
 	
-	var i = ast.newExpressionReference(ast.newVariable(name))
+	var i = ast.newExpressionReference(ast.newVariable(name,mutable: false))
 	return [> foreach($collection,$i,$body) <]
 }
