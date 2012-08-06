@@ -122,12 +122,13 @@ Node* Parser::spliceString(Token& token){
 		}
 	}
 
+	if(splice) splice->type = Trait::intrinsic::splice;
 	if((end - begin) == 0 && result) return splice? splice: result;
 
 	auto expr = new StringLiteral(memory::Block::construct(begin,end - begin),Type::getStringLiteralType()); 
 	if(result){
 		if(splice) splice->addChild(expr);
-		else splice = new TupleExpression(result,expr);
+		else splice  = new TupleExpression(result,expr);
 		return splice;
 	}
 	else return expr;

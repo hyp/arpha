@@ -44,9 +44,12 @@ struct CTFEintrinsicInvocation {
 	bool     getBoolParameter(uint16 id) const;
 	Type*    getTypeParameter(uint16 id) const;
 	Node*    getNodeParameter(uint16 id) const;
+	const char* getStringParameter(uint16 id) const;
 	SymbolID getStringParameterAsSymbol(uint16 id) const;
 	int      getInt32Parameter(uint16 id)  const;
 	uint32   getUint32Parameter(uint16 id) const;
+
+	Location getInvocationLocation() const ;
 	
 	Parser* getParser() const; //for parser api
 

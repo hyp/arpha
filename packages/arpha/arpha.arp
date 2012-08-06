@@ -7,6 +7,7 @@
 import export types
 import export qualified literal #literal types
 
+import export qualified compiler
 
 import export syntax.conditional
 import export syntax.logical
@@ -16,7 +17,6 @@ import export syntax.arithmetic
 import export syntax.increments
 import export syntax.misc
 import export syntax.for
-
 
 import export functionality.operations.integer
 import export functionality.operations.floating_point

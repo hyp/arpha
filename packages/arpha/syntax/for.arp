@@ -1,6 +1,6 @@
 #
 	This module implements the for statement
-	TODO
+	TODO for over tuples
 #
 
 macro for {
@@ -11,17 +11,19 @@ macro for {
 	parser.expect(")")
 	var body = parser.parse(ignoreNewlines: true)
 	
-	
 	var rangeVariable = ast.newVariable( [> Range <] )
 	var range = ast.newVariableReference(rangeVariable)
 	var i = ast.newVariable(name)
 	
-	return [> {
-			$rangeVariable = $collection
-			until(($range).empty){
-				$i = &($range).current
-				$body
-				($range).moveNext()
-			}
+	return [> 
+	match(typeof($collection)){
+	| Range =>
+		$rangeVariable = $collection
+		until(($range).empty){
+			$i = &($range).current
+			$body
+			($range).moveNext()
+		}
+	| _ => arpha.compiler.error("Invalid for loop")
 	} <]
 }

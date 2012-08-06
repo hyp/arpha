@@ -278,6 +278,24 @@ static void initMapping(){
 		invocation->ret(parser->expectName());
 	});
 
+	//arpha.compiler
+	MAP_PROP("print(literal.string)",0,{
+		compiler::onDebug(invocation->getStringParameter(0));
+		invocation->ret();
+	});
+	MAP_PROP("error(literal.string)",0,{
+		compiler::onError(invocation->getInvocationLocation(),invocation->getStringParameter(0));
+		invocation->ret();
+	});
+	MAP_PROP("error(literal.splice)",0,{
+		compiler::onError(invocation->getInvocationLocation(),invocation->getStringParameter(0));
+		invocation->ret();
+	});
+	MAP_PROP("warning(literal.string)",0,{
+		compiler::onWarning(invocation->getInvocationLocation(),invocation->getStringParameter(0));
+		invocation->ret();
+	});
+
 
 
 	/**
@@ -402,6 +420,11 @@ std::string intrinsicMangle(Function* function,bool argNames){
 						result+=std::string("(")+call2->object->asUnresolvedSymbol()->symbol.ptr()+")";
 					}
 				}
+				else if(auto tref = pattern->asTypeReference()){
+					if(auto concept = tref->type->asTrait()){
+						if(concept == Trait::intrinsic::splice) result+= "literal.splice";
+					}
+				}
 			}
 		}
 		else result += mangleArgType((*i)->type.type());
@@ -510,5 +533,15 @@ Node* Variable::getIntrinsicValue(Variable* variable){
 	if(value != variableMapping.end()) return (*value).second;
 	compiler::intrinsicFatalError(variable->location(),format(" Intrinsic binding failure - The variable '%s' isn't intrinsic!\nPlease don't use the intrinsic property on it!",variable->label()));
 	return new UnitExpression();
+}
+
+Trait* Trait::intrinsic::splice = nullptr;
+void Trait::mapIntrinsicConcept(Trait* trait){
+
+	auto name = trait->declaration->label();
+	if(name == "splice" && !(Trait::intrinsic::splice)){
+		Trait::intrinsic::splice = trait;
+	}
+
 }
 

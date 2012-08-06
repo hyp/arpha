@@ -350,6 +350,11 @@ struct Trait: public DeclaredType {
 	void makeImplicit();
 	size_t numberOfTemplateParameters();
 
+	static void mapIntrinsicConcept(Trait* trait);
+	struct intrinsic {
+		static Trait* splice;
+	};
+
 	std::vector<Function*> methods;
 
 	Scope* templateDeclaration;

@@ -636,7 +636,9 @@ struct ConceptParser: IntrinsicPrefixMacro {
 		}
 		auto decl = new TypeDeclaration(trait,name);
 		parser->introduceDefinition(decl);
-
+		if(!trait->isImplicit() && isIntrinsicImported(parser)){
+			Trait::mapIntrinsicConcept(trait);
+		}
 
 
 		return decl;
@@ -815,7 +817,6 @@ struct TypeParser: IntrinsicPrefixMacro {
 		auto decl = new TypeDeclaration(record,name,templateDeclaration != nullptr);
 		if(record->fields.size() == 0){
 			if(templateDeclaration && isIntrinsicImported(parser)){
-				debug("Intr type!");
 				templateDeclaration->setFlag(Function::IS_INTRINSIC);
 				Function::getIntrinsicTypeTemplateBinder(templateDeclaration);
 			}

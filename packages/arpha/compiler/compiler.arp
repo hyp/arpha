@@ -6,20 +6,11 @@
 
 import arpha.intrinsic
 
-def version major: natural, minor: natural
-#def info    string
-#def info
-#def provider?
+import qualified arpha.ast
 
-def print  ()
-def error  ()
-def warning()
+#def version major: natural, minor: natural
 
-type Options {
-	optimizations natural
-	debug         bool	
-}
-def options Options
-
-#def build
+def print  (string arpha.literal.string)
+def error  (string arpha.literal.string)
+def warning(string arpha.literal.string)
 

@@ -835,7 +835,7 @@ Node* MatchResolver::resolve(Resolver* resolver){
 				if(pattern.isPattern()){
 					auto scope = (*(i+1))->asBlockExpression()->scope;
 					TypePatternUnresolvedExpression::PatternMatcher matcher(scope,resolver);
-					if(matcher.match(type->type,pattern.pattern)){
+					if(matcher.matchWithSubtyping(type->type,pattern.pattern)){
 						matches = true;
 						matcher.defineIntroducedDefinitions();
 					}

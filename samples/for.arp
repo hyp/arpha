@@ -1,7 +1,3 @@
-#
-	TODO: fix range variable visibility
-#
-
 import io
 
 def find(r Range(char8),value char8){

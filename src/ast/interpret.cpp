@@ -250,8 +250,15 @@ SymbolID CTFEintrinsicInvocation::getStringParameterAsSymbol(uint16 id) const {
 	auto str = _params[id]->asStringLiteral();
 	return SymbolID(str->block.ptr(),str->block.length());
 }
+const char* CTFEintrinsicInvocation::getStringParameter(uint16 id) const {
+	auto str = _params[id]->asStringLiteral();
+	return str->block.ptr();
+}
 Parser*  CTFEintrinsicInvocation::getParser() const {
 	return _compilationUnit->parser;
+}
+Location CTFEintrinsicInvocation::getInvocationLocation() const {
+	return _params[0]->location();
 }
 
 void CTFEintrinsicInvocation::ret(){
