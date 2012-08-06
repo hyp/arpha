@@ -146,6 +146,7 @@ public:
 	Node* copyLocationSymbol(Node* dest) const;//Doesn't copy the flags.. use when resolving between nodes of different types
 
 	virtual Node* resolve(Resolver* resolver);
+	virtual bool  isSame(Node* other){ return false; }
 
 	inline  SymbolID label()   const { return _label; }
     Location location() const { return _location; }
@@ -207,7 +208,9 @@ struct LiteralNode: Node {
 //(0..9)+ : integer
 struct IntegerLiteral : LiteralNode {
 	IntegerLiteral(const BigInt& integer,Type* t);
-	Type* returnType() const;	
+	Type* returnType() const;
+
+	bool  isSame(Node* other);
 	
 	BigInt integer;
 	Type* explicitType;
@@ -218,6 +221,8 @@ struct FloatingPointLiteral : LiteralNode {
 	FloatingPointLiteral(const double v,Type* t);
 	Type* returnType() const;
 
+	bool  isSame(Node* other);
+
 	double value;
 	Type* explicitType;
 	DECLARE_NODE(FloatingPointLiteral);
@@ -226,6 +231,8 @@ struct FloatingPointLiteral : LiteralNode {
 struct CharacterLiteral: LiteralNode {
 	CharacterLiteral(UnicodeChar c,Type* t);
 	Type* returnType() const;
+
+	bool  isSame(Node* other);
 
 	UnicodeChar value ;
 	Type* explicitType;
@@ -237,6 +244,8 @@ struct BoolExpression: LiteralNode {
 	BoolExpression(const bool v);
 	Type* returnType() const;
 
+	bool  isSame(Node* other);
+
 	bool value;
 	DECLARE_NODE(BoolExpression);
 };
@@ -245,6 +254,8 @@ struct StringLiteral : LiteralNode {
 	StringLiteral(memory::Block& block,Type* t);
 	StringLiteral(SymbolID symbol);//<-- reuses the string, no duplication
 	Type* returnType() const;
+
+	bool  isSame(Node* other);
 	
 	memory::Block block;
 	Type* explicitType;
@@ -278,6 +289,8 @@ struct ArrayLiteral : NodeList {
 struct UnitExpression : LiteralNode {
 	UnitExpression(){}
 	Type* returnType() const;
+
+	bool  isSame(Node* other);
 
 	DECLARE_NODE(UnitExpression);
 private:
@@ -314,6 +327,8 @@ struct TypeReference : Node {
 
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
+
+	bool  isSame(Node* other);
 
 	Type* type;
 	DECLARE_NODE(TypeReference);

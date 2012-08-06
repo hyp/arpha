@@ -1606,8 +1606,7 @@ Function* Function::specializationExists(Type** specializedParameters,Node** pas
 		if(usageScope && alreadyGenerated->owner()->parent != usageScope) continue;
 		for(j = 0; j<numberOfParameters; j++){
 			if(arguments[j]->expandAtCompileTime()){
-				//TODO Node::isSame
-				if(!alreadyGenerated->expandedArguments[expandedParameterOffset]->asTypeReference()->type->isSame(passedExpressions[j]->asTypeReference()->type)){
+				if(!alreadyGenerated->expandedArguments[expandedParameterOffset]->isSame(passedExpressions[j])){
 					match = false;
 					break;
 				}

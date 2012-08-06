@@ -525,6 +525,36 @@ Node* MatchResolver::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(duplicateChildren(new MatchResolver(object->duplicate(mods)),mods));
 }
 
+//Node comparison
+
+bool  IntegerLiteral::isSame(Node* other){
+	if(auto node = other->asIntegerLiteral()) return integer == node->integer;
+	return false;
+}
+bool  FloatingPointLiteral::isSame(Node* other){
+	if(auto node = other->asFloatingPointLiteral()) return value == node->value;
+	return false;
+}
+bool  CharacterLiteral::isSame(Node* other){
+	if(auto node = other->asCharacterLiteral()) return value == node->value;
+	return false;
+}
+bool  BoolExpression::isSame(Node* other){
+	if(auto node = other->asBoolExpression()) return value == node->value;
+	return false;
+}
+bool  StringLiteral::isSame(Node* other){
+	if(auto node = other->asStringLiteral()) return strcmp(block.ptr(),node->block.ptr()) == 0;
+	return false;
+}
+bool  UnitExpression::isSame(Node* other){
+	return other->asUnitExpression()? true : false;
+}
+bool  TypeReference::isSame(Node* other){
+	if(auto node = other->asTypeReference()) return type->isSame(node->type);
+	return false;
+}
+
 //Injects visitor callback and dynamic cast function into a node structure
 //Note: only does the definitions, the appropriate implementations are done by traversing NODE_LIST
 #define DECLARE_NODE_IMPLEMENTATION(T) \
