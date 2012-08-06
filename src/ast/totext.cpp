@@ -225,7 +225,6 @@ std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& 
 }
 
 std::ostream& operator<< (std::ostream& stream,Type* type){
-	if(type->hasConstSemantics()) stream<<"const ";
 	switch(type->type){
 		case Type::VOID: stream<<"void"; break;
 		case Type::TYPE: stream<<"Type"; break;
@@ -282,6 +281,13 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 			stream<<"literal.char"; break;
 		case Type::LITERAL_STRING:
 			stream<<"literal.string"; break;
+
+		case Type::QUALIFIER:
+			if(type->hasConstQualifier()) stream<<"const ";
+			else assert(false && "Invalid type qualifier");
+			stream<<type->next(); 
+			break;
+
 	}
 	return stream;
 }

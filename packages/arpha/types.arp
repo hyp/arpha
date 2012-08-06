@@ -15,9 +15,9 @@ import arpha.intrinsic
 	The constant values true and false are also defined by the implementation.
 #
 
-type Reference(T)
-{
-}
+
+
+import export core.type_qualifiers
 
 #
 	This concept descibes a type which can be used as a condition for the 'if' expression.

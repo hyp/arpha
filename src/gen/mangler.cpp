@@ -115,6 +115,11 @@ void Mangler::Element::mangle(Type* type){
 	case Type::LITERAL_FLOAT:   stream<<"lf"; break;
 	case Type::LITERAL_CHAR:    stream<<"lc"; break;
 	case Type::LITERAL_STRING:  stream<<"ls"; break;
+
+	case Type::QUALIFIER:
+		if(type->hasConstQualifier()) stream<<"O";
+		else assert(false && "Invalid qualifier");
+		mangle(type->next()); break;
 	default:
 		assert(false);
 	}

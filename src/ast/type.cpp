@@ -562,7 +562,6 @@ Type::Type(int kind) : type(kind),flags(0) {
 	if(kind == BOOL) bits = 1;
 }
 Type::Type(int kind,Type* next) : type(kind),flags(0) {
-	assert(kind == POINTER || kind == LINEAR_SEQUENCE || kind == REFERENCE);
 	this->argument = next;
 }
 Type::Type(int kind,int subtype) : type(kind),flags(0) {
@@ -609,6 +608,16 @@ Type* Type::getPointerType(Type* next){
 Type* Type::getReferenceType(Type* next){
 	return new Type(Type::REFERENCE,next);
 }
+Type* Type::getConstQualifier(Type* next){
+	if(!next->isQualifier()) next = new Type(Type::QUALIFIER,next);
+	next->setFlag(CONST_QUALIFIER);
+	return next;
+}
+Type* Type::getLocalQualifier(Type* next){
+	if(!next->isQualifier()) next = new Type(Type::QUALIFIER,next);
+	next->setFlag(LOCAL_QUALIFIER);
+	return next;
+}
 
 void Type::setFlag(uint16 flag){
 	flags |= flag;
@@ -635,6 +644,9 @@ bool Type::isResolved() const {
 			return argument->isResolved() && static_cast<const FunctionPointer*>(this)->returns()->isResolved();
 		case TRAIT:
 			return static_cast<const Trait*>(this)->isResolved();
+
+		case QUALIFIER:
+			return argument->isResolved();
 		default:
 			return true;
 	}
@@ -644,6 +656,9 @@ bool Type::isPartiallyResolved() const {
 	switch(type){
 	case RECORD:  return isFlagSet(IS_RESOLVED);
 	case VARIANT: return isFlagSet(IS_RESOLVED);
+
+	case QUALIFIER:
+		return argument->isResolved();
 	default:
 		return true;
 	}
@@ -692,14 +707,22 @@ bool Type::isSame(Type* other){
 		case LITERAL_FLOAT :
 		case LITERAL_CHAR  :
 		case LITERAL_STRING:  return true;
+
+		case QUALIFIER:
+			return flags == other->flags && argument->isSame(other->argument);
 		default:
 			throw std::runtime_error("TypeExpression type invariant failed");	
 			return false;
 	}
 }
 Type* Type::stripQualifiers(){
-	//TODO
-	return this;
+	return isQualifier()? argument : this;
+}
+bool Type::hasConstQualifier() const {
+	return isQualifier()? isFlagSet(CONST_QUALIFIER) : false;
+}
+bool Type::hasLocalQualifier() const {
+	return isQualifier()? isFlagSet(LOCAL_QUALIFIER) : false;
 }
 bool Type::wasGenerated() const {
 	switch(type){
@@ -714,6 +737,8 @@ bool Type::wasGenerated() const {
 
 	case ANONYMOUS_RECORD: return static_cast<const AnonymousAggregate*>(this)->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR);
 	
+	case QUALIFIER:
+		return true;
 	default: return false;
 	}
 }
@@ -749,6 +774,9 @@ Node* Type::generatedArgument(size_t i) const {
 								return i == 0 ? (Node*)new TypeReference(static_cast<const AnonymousAggregate*>(this)->types[0]) :
 									 new IntegerLiteral((uint64)static_cast<const AnonymousAggregate*>(this)->numberOfFields,intrinsics::types::natural);
 						   }
+	case QUALIFIER:
+		return new TypeReference(argument);
+
 	default:
 		throw std::runtime_error("TypeExpression generatedArgument failed");	
 		return nullptr;
@@ -1075,7 +1103,10 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform,uint32 filter
 	if(this->isSame(type)) return EXACT;
 	int assigns;
 
-	if(!(filters & DisallowAutocasts) && type->isLiteral()){
+	if( this->hasConstQualifier() && ((assigns = this->next()->assignFrom(expression,type,doTransform,filters)) != -1) ){
+		return assigns;
+	}
+	else if(!(filters & DisallowAutocasts) && type->isLiteral()){
 		return literalTypeAssignment(this,expression,type,doTransform);
 	}
 	else if( !(filters & DisallowAutocasts) && (assigns = automaticTypeCast(this,expression,type,doTransform)) != -1 ){

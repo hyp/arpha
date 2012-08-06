@@ -106,6 +106,14 @@ struct Type {
 		LITERAL_FLOAT,//1.2
 		LITERAL_CHAR,//'A'
 		LITERAL_STRING,
+
+		QUALIFIER,
+	};
+
+
+	enum {
+		CONST_QUALIFIER = 0x1,
+		LOCAL_QUALIFIER = 0x2,
 	};
 
 	Type(int kind);
@@ -134,6 +142,9 @@ struct Type {
 	static Type* getReferenceType(Type* next);
 
 	static Type* getVariantOption(int optionID);
+
+	static Type* getConstQualifier(Type* next);
+	static Type* getLocalQualifier(Type* next);
 
 	Type* stripQualifiers();
 
@@ -165,6 +176,10 @@ struct Type {
 	inline bool isVariantOption() const  { return type == VARIANT_OPTION; }
 	inline bool isTrait() const { return type == TRAIT; }
 
+	inline bool isQualifier() const { return type == QUALIFIER; }
+	bool hasConstQualifier() const;
+	bool hasLocalQualifier() const;
+
 
 	Record* asRecord();
 	Variant* asVariant();
@@ -192,9 +207,6 @@ struct Type {
 
 	void setFlag(uint16 flag);
 	bool isFlagSet(uint16 flag) const;
-
-	//const int32
-	inline bool hasConstSemantics() const { return false; }
 
 
 	bool wasGenerated() const; //Is this a parametrized type?

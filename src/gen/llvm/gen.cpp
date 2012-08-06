@@ -65,6 +65,7 @@ struct LLVMgenerator: NodeVisitor {
 	std::vector<Node*> moduleInitializerBody;
 	int currentGeneratingRound;
 	bool needsPointer;
+	Node* globalVariableInitializer;
 
 	/**
 	* Control flow chains
@@ -173,6 +174,7 @@ LLVMgenerator::LLVMgenerator(
 	ifFallthrough = false;
 	currentGeneratingRound = round;
 	needsPointer = false;
+	globalVariableInitializer = nullptr;
 
 	//create a module initializer
 
@@ -321,6 +323,9 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 	case Type::LITERAL_CHAR:
 	case Type::LITERAL_STRING:
 		assert(false); break;
+
+	case Type::QUALIFIER:
+		return genType(type->next());
 	}
 	return coreTypes[0];
 }
@@ -1149,7 +1154,9 @@ void LLVMgenerator::genToplevelStatements(BlockExpression* node){
 		if(expr->isDefinitionNode()) generateExpression(expr);
 		else if(auto assign = expr->asAssignmentExpression()){
 			assert(assign->object->asVariable());
-			generateExpression(expr);
+			globalVariableInitializer = assign->value;
+			generateExpression(assign->object);
+			globalVariableInitializer = nullptr;
 		}
 		else if(expr->asUnitExpression()){
 		}
@@ -1178,8 +1185,7 @@ llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* var
 	mangler.mangle(variable);
 
 	auto threadLocal = true;
-	auto cnst = false;
-	llvm::Constant* init = llvm::ConstantInt::get(coreTypes[GEN_TYPE_I8],0,false);
+	auto cnst        = variable->type.type()->hasConstQualifier();
 	auto var = new llvm::GlobalVariable(*module,genType(variable->type.type()),cnst,genLinkage(variable),nullptr,mangler.stream.str(),nullptr,threadLocal);
 	//var->setAlignment(variable->type.type()->alignment());
 	map(variable,var);
@@ -1187,10 +1193,24 @@ llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* var
 	return var;
 }
 
+llvm::Constant* genDefaultInitializer(llvm::Type* type){
+	if(type->isIntegerTy()) return llvm::ConstantInt::get(type,0);
+	else if(type->isFloatTy()) return llvm::ConstantFP::get(type,0);
+	else if(type->isPointerTy()) return llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(type));
+	else return llvm::ConstantAggregateZero::get(type);
+}
+llvm::Constant* genInitializer(LLVMgenerator* generator,Node* value){
+	if(value->asTupleExpression()){
+		//TODO
+	}
+	auto expr = generator->generateExpression(value);
+	return llvm::dyn_cast<llvm::Constant>(expr);
+}
+
 Node* LLVMgenerator::visit(Variable* variable){
 	if(!functionOwner){
 		auto var = getGlobalVariableDeclaration(variable);
-		var->setInitializer(llvm::ConstantAggregateZero::get(genType(variable->type.type())));
+		var->setInitializer(globalVariableInitializer? genInitializer(this,globalVariableInitializer) : genDefaultInitializer(genType(variable->type.type())));
 		if(needsPointer) emit(var);
 	} else {
 		auto block = builder.GetInsertBlock();

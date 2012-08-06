@@ -295,7 +295,7 @@ Node* Resolver::inlineCall(Function* function,Node* parameters){
 		size_t j = 0;
 		for(auto i = function->arguments.begin();i!=function->arguments.end();++i,++j){
 			Node* expansion;
-			if(isSimple(parametersPointer[j])) expansion = parametersPointer[j];
+			if(false/*isSimple(parametersPointer[j])*/) expansion = parametersPointer[j];
 			else {
 				auto var = new Variable((*i)->label(),parametersPointer[j]->location());
 				var->type.specify((*i)->type.type());
@@ -610,6 +610,12 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 		}
 	}
 	else if(object->isResolved()) {
+		auto objectsType = object->returnType();
+		if(objectsType->hasConstQualifier()){
+			error(object,"Can't assign to a reference with type containing the 'Const' qualifier");
+			return ErrorExpression::getInstance();
+		}
+
 		Type* expectedType;
 
 		if(auto access = object->asFieldAccessExpression())

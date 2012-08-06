@@ -429,9 +429,17 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 		static void vector(CTFEintrinsicInvocation* invocation){
 			auto t = invocation->getTypeParameter(0);
 			if(t->isInteger() || t->isFloat() || t->isChar() || t->isBool()){
-				invocation->ret(AnonymousAggregate::getVector(invocation->getTypeParameter(0),invocation->getUint32Parameter(1)));
+				invocation->ret(AnonymousAggregate::getVector(t,invocation->getUint32Parameter(1)));
 			}
 			else invocation->retError("Invalid element type for a vector type!");
+		}
+
+		static void constQualifier(CTFEintrinsicInvocation* invocation){
+			auto t = invocation->getTypeParameter(0);
+			if(!t->hasConstQualifier()){
+				invocation->ret(Type::getConstQualifier(t));
+			}
+			else invocation->retError("Can't apply the type qualifier 'Const' onto another 'Const' qualifier!");
 		}
 	};
 
@@ -454,6 +462,10 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 	else if(function->label() == "Vector" && !Type::generators::vector){
 		Type::generators::vector = function;
 		function->intrinsicCTFEbinder = Generator::vector;
+	}
+	else if(function->label() == "Const" && !Type::generators::constQualifier){
+		Type::generators::constQualifier = function;
+		function->intrinsicCTFEbinder = Generator::constQualifier;
 	}
 	else {
 		error = true;
