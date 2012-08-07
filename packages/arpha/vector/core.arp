@@ -13,7 +13,9 @@ type Vector(ElementType,NumberOfElements natural) { }
 where self is Vector(T: _,N: _), other is Vector(T,N):
 
 def element(self,i natural) T
+def element(self,i natural,value T) Nothing #TODO
 
+def minus    (self)       Vector(T,N)
 def add      (self,other) Vector(T,N)
 def subtract (self,other) Vector(T,N)
 def multiply (self,other) Vector(T,N)

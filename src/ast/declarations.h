@@ -199,6 +199,7 @@ struct Function: public PrefixDefinition {
 	bool isExternal() const;
 	bool isIntrinsic() const;
 	data::ast::Function::CallConvention callingConvention() const;
+	bool isTest() const;
 
 	Type* argumentType();
 	Type* returns() const;

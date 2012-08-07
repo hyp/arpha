@@ -1,0 +1,18 @@
+#
+	This module implements arpha's unittest macro.
+#
+
+macro unittest 
+{
+	def name = parser.symbol()
+	
+	def body = parser.parse(ignoreNewlines: true)
+	def func = ast.newFunction(name,[>
+		macro assert(expr) = [> if(! $expr) print("Failure") <]
+		print("Running unittest ")
+		$body
+		print(" ... ok\r\n")
+	<],returnType: Nothing)
+	ast.applyProperty(func,"unittest")
+	return [> { { public $func } } <]
+}

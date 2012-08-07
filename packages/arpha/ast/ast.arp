@@ -18,6 +18,10 @@ def isConst   (expression *Expression) bool
 # Returns the location of the expression in the source file.
 def location  (expression *Expression) line: natural,column: natural 
 
+# Decorators for definitions
+def applyProperty(expression *Expression,name LinearSequence(char8))
+def applyProperty(expression *Expression,name LinearSequence(char8),value *Expression)
+
 # The types below are derived from Expression
 def IntegerLiteral       Type
 def FloatingPointLiteral Type
@@ -70,4 +74,5 @@ def newVariable() *Variable
 def newVariable(name LinearSequence(char8),mutable = true) *Variable
 def newVariableReference(variable *Variable)         *VariableReference
 def newFunction         (body *Expression)           *Function
-def newFunction         (body *Expression,returnType Type) *Function
+def newFunction         (name LinearSequence(char8),body *Expression,returnType Type) *Function
+

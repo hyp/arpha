@@ -59,6 +59,8 @@ namespace compiler {
 	CompilationUnit *currentUnit();
 
 	void addGeneratedExpression(Node* expr);
+	void addFunctionToTestsuite(Function* function);
+
 
 	extern BlockExpression* generatedFunctions;
 };

@@ -2107,9 +2107,6 @@ Function* Resolver::resolveFunctionCall(Scope* scope,SymbolID function,Node** pa
 		if(!overload.currentFunction()->isResolved()){
 			if(overload.currentFunction() != this->currentFunction) return nullptr;
 		}
-		if(function == "add" && overload.currentFunction()->arguments[0]->type.isPattern()){
-			debug("aad");
-		}
 
 		if(match(this,overload.currentFunction(),arg,weight)){
 

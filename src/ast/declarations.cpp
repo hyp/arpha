@@ -145,6 +145,7 @@ Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,loc
 	cc = data::ast::Function::ARPHA;
 	miscFlags = 0;
 }
+
 bool   Function::applyProperty(SymbolID name,Node* value){
 	if(name == "intrinsic"){
 		setFlag(IS_INTRINSIC);
@@ -155,8 +156,14 @@ bool   Function::applyProperty(SymbolID name,Node* value){
 	} else if(name == "nonthrow"){
 		setNonthrow();
 		return true;
+	} else if(name == "unittest"){
+		miscFlags |= 0x80;//TODO: change for proper flag
+		return true;
 	}
 	return false;
+}
+bool  Function::isTest() const {
+	return (miscFlags & 0x80) != 0;
 }
 bool   Function::isIntrinsic() const {
 	return isFlagSet(IS_INTRINSIC);

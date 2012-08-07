@@ -1,0 +1,17 @@
+#
+	This is a sample on how to use unittesting in arpha.
+	Compile with 'test' command to see it working!
+	
+	TODO: remove import io
+#
+import io, arpha.unittest
+
+unittest sample
+{
+	assert(true == true)
+}
+
+unittest failure
+{
+	assert(1 == 0)
+}

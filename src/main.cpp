@@ -76,6 +76,22 @@ namespace compiler {
 	}
 
 	BlockExpression* generatedFunctions = nullptr;
+	Function* generatedTestMain = nullptr;
+	bool testing = false;
+
+	void addFunctionToTestsuite(Function* function){
+		if(!testing) return;
+		if(!generatedTestMain){
+			generatedTestMain = new Function("main",Location());
+			generatedTestMain->specifyReturnType(intrinsics::types::Void);
+			generatedTestMain->setFlag(Node::RESOLVED);
+			addGeneratedExpression(generatedTestMain);
+			generatedTestMain->parentNode = generatedFunctions;
+		}
+		auto call = new CallExpression(new FunctionReference(function),new UnitExpression());
+		call->setFlag(Node::RESOLVED);
+		generatedTestMain->body.addChild(call);
+	}
 
 
 	ModulePtr newModule(const char* moduleName,const char* source){
@@ -248,6 +264,8 @@ namespace compiler {
 		showSourceLine(location,currentModule->first.size());
 	}
 
+
+	
 
 
 }
@@ -451,7 +469,8 @@ int main(int argc, const char * argv[]){
 		operation = "build";
 	}
 	else if(operation == "test"){
-		//TODO
+		run = true;
+		compiler::testing = true;
 		operation = "build";
 	}
 	if(operation == "build"){

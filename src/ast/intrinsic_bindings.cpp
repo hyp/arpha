@@ -249,12 +249,20 @@ static void initMapping(){
 		func->body.addChild(body);
 		invocation->ret(func);
 	});
-	MAP_PROP("newFunction(body:Expression,returnType:Type)",0,{
-		auto body = invocation->getNodeParameter(0);
-		auto func = new Function("foo",body->location());
-		func->_returnType.specify(invocation->getTypeParameter(1));
+	MAP_PROP("newFunction([]char8,Expression,Type)",0,{
+		auto body = invocation->getNodeParameter(1);
+		auto func = new Function(invocation->getStringParameterAsSymbol(0),body->location());
+		func->_returnType.specify(invocation->getTypeParameter(2));
 		func->body.addChild(body);
 		invocation->ret(func);
+	});
+	MAP_PROP("applyProperty(Expression,[]char8)",Function::INTERPRET_ONLY_INSIDE,{
+		invocation->getNodeParameter(0)->applyProperty(invocation->getStringParameterAsSymbol(1),nullptr);
+		invocation->ret();
+	});
+	MAP_PROP("applyProperty(Expression,[]char8,Expression)",Function::INTERPRET_ONLY_INSIDE,{
+		invocation->getNodeParameter(0)->applyProperty(invocation->getStringParameterAsSymbol(1),invocation->getNodeParameter(2));
+		invocation->ret();
 	});
 
 	/**
@@ -346,8 +354,10 @@ static void initMapping(){
 
 	//Core vector operations
 	MAPOP("element(Vector,natural)",ELEMENT_GET);
+	MAPOP("element(Vector,natural,)",ELEMENT_SET);
 	MAPOP("shuffle(Vector,Vector)",VECTOR_SHUFFLE);
 	MAPOP("shuffle(Vector,Vector,Vector)",VECTOR_SHUFFLE);
+	MAPOP("minus(Vector)",NEGATION);
 	MAPOP("add(Vector,Vector)",ADDITION);
 	MAPOP("subtract(Vector,Vector)",SUBTRACTION);
 	MAPOP("multiply(Vector,Vector)",MULTIPLICATION);

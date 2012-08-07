@@ -23,7 +23,7 @@
 #include "../../base/bigint.h"
 #include "../../base/format.h"
 
-#include "../../syntax/location.h"
+#include "../../compiler.h"
 #include "../../ast/scope.h"
 #include "../../ast/node.h"
 #include "../../ast/declarations.h"
@@ -628,6 +628,7 @@ llvm::Value* genVectorOperation(LLVMgenerator* generator,data::ast::Operations::
 	using namespace data::ast::Operations;
 
 	if(op == ELEMENT_GET) return generator->builder.CreateExtractElement(operand1,operand2);
+	else if(op == ELEMENT_SET) return generator->builder.CreateInsertElement(operand1,operand3,operand2);
 	else if(op == VECTOR_SHUFFLE) return generator->builder.CreateShuffleVector(operand1,operand2,operand3);
 	else {
 		if(vectorElementType->isFloat()) return genRealOperation(generator,op,operand1,operand2);
@@ -1306,6 +1307,8 @@ Node* LLVMgenerator::visit(Function* function){
 	//if(function->generatedFunctionParent && !function->generatorData) return function;
 
 	auto func = getFunctionDeclaration(function);
+
+	if(function->isTest()) compiler::addFunctionToTestsuite(function);
 
 	//generate body
 	auto prev = builder.saveIP();

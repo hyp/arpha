@@ -22,7 +22,7 @@ namespace data {
 				ARPHA,CCALL,STDCALL
 			};
 			enum Flags {
-				NONTHROW = 0x1
+				NONTHROW = 0x1,
 			};
 		}
 
@@ -83,6 +83,7 @@ namespace data {
 				//sequences
 				LENGTH,
 				ELEMENT_GET,
+				ELEMENT_SET,
 				SEQUENCE_EMPTY,
 				SEQUENCE_MOVENEXT,
 
