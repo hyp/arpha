@@ -767,6 +767,7 @@ Node* BlockExpression::resolve(Resolver* resolver){
 	auto oldScope = resolver->currentScope();
 	resolver->currentScope(scope);
 	auto oldParent = resolver->currentParentNode();
+	auto oldVisibilityMode = resolver->currentVisibilityMode;
 	resolver->currentParentNode(this);
 
 	setFlag(ITERATING);
@@ -786,6 +787,7 @@ Node* BlockExpression::resolve(Resolver* resolver){
 	if(allResolved) resolver->markResolved(this); 
 	resolver->currentParentNode(oldParent);
 	resolver->currentScope(oldScope);
+	resolver->currentVisibilityMode = oldVisibilityMode;
 	return this;
 }
 
@@ -889,6 +891,38 @@ Node* MatchResolver::resolve(Resolver* resolver){
 	return this;
 }
 
+Node* ScopedCommand::resolve(Resolver* resolver){
+	auto oldVisibility = resolver->currentVisibilityMode;
+	if(isFlagSet(WHERE)){
+		//TODO
+	}
+	else {
+		if(resolver->currentFunction){
+			error(this,"It doesn't make sense to use the visibility mode '%s' inside a function.",isFlagSet(PRIVATE)? "private" : "public");
+			return ErrorExpression::getInstance();
+		}
+		resolver->currentVisibilityMode = isFlagSet(PRIVATE)? data::ast::PRIVATE : data::ast::PUBLIC;
+	}
+
+	if(child){
+		child = resolver->resolve(child);
+		if(isFlagSet(WHERE)){
+			//TODO
+		}
+		else resolver->currentVisibilityMode = oldVisibility;
+
+		if(child->isResolved()){
+			if(!child->isDefinitionNode()){
+				error(this,"Expected a valid definition node after %s",this);
+				return ErrorExpression::getInstance();
+			}
+			resolver->markResolved(this);
+		}
+	} 
+	else resolver->markResolved(this);
+	return this;
+}
+
 #include "../base/system.h"
 
 // TODO better error reporting!
@@ -989,9 +1023,14 @@ bool TypePatternUnresolvedExpression::resolve(Resolver* resolver,PatternMatcher*
 /**
 * Resolving definition nodes
 */
+void Resolver::applyCurrentVisibilityMode(DefinitionNode* node){
+	if(!currentFunction && node->visibilityMode() == data::ast::PUBLIC && currentVisibilityMode != data::ast::PUBLIC) node->visibilityMode(currentVisibilityMode);
+}
+
 Node* Variable::resolve(Resolver* resolver){
 	_owner = resolver->currentScope();
 	parentNode = resolver->currentParentNode();
+	resolver->applyCurrentVisibilityMode(this);
 
 	auto _resolved = true;
 	if(type.isResolved()) _resolved = true;
@@ -1302,6 +1341,7 @@ DeclaredType* Variant::resolve(Resolver* resolver){
 //static block parent
 Node* TypeDeclaration::resolve(Resolver* resolver){
 	parentNode = resolver->currentParentNode();
+	resolver->applyCurrentVisibilityMode(this);
 
 	if(optionalStaticBlock){
 		optionalStaticBlock->scope->setParent(resolver->currentScope());
@@ -1348,6 +1388,8 @@ bool isFunctionIntrinsicReturningPattern(TypePatternUnresolvedExpression::Patter
 
 Node* Function::resolve(Resolver* resolver){
 	parentNode = resolver->currentParentNode();
+	resolver->applyCurrentVisibilityMode(this);
+
 	ScopedStateChange<Function*> _(&resolver->currentFunction,this);
 
 	//Resolve parameters!
@@ -1429,6 +1471,8 @@ Node* Function::resolve(Resolver* resolver){
 }
 
 Node* PrefixMacro::resolve(Resolver* resolver){
+	resolver->applyCurrentVisibilityMode(this);
+
 	if(!function->isResolved()) function->resolve(resolver);
 	if(function->isResolved()){
 		setFlag(RESOLVED);
@@ -1437,6 +1481,8 @@ Node* PrefixMacro::resolve(Resolver* resolver){
 }
 
 Node* InfixMacro::resolve(Resolver* resolver){
+	resolver->applyCurrentVisibilityMode(this);
+
 	if(!function->isResolved()) function->resolve(resolver);
 	if(function->isResolved()){
 		stickinessExpression = stickinessExpression->resolve(resolver);
@@ -1455,6 +1501,7 @@ Node* InfixMacro::resolve(Resolver* resolver){
 * Misc
 */
 Node* Resolver::multipassResolve(Node* node){
+	currentVisibilityMode = data::ast::PUBLIC;
 
 	size_t prevUnresolvedExpressions;
 	unresolvedExpressions = 0xDEADBEEF;
@@ -1470,6 +1517,7 @@ Node* Resolver::multipassResolve(Node* node){
 //Multi-pass module resolver
 void  Resolver::resolveModule(BlockExpression* module){
 	_currentParent = nullptr;
+	currentVisibilityMode = data::ast::PUBLIC;
 
 	size_t prevUnresolvedExpressions;
 	unresolvedExpressions = 0xDEADBEEF;
@@ -2014,7 +2062,9 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 	return result; 
 }
 
+// TODO explicitImport.foo <- need to limit this access to public 
 // TODO import qualified foo; var x foo.Foo ; foo.method() <-- FIX use dot syntax
+// TODO: recurive calls
 Function* Resolver::resolveFunctionCall(Scope* scope,SymbolID function,Node** parameter,bool dotSyntax){
 	auto arg = *parameter;
 	int weight = 0;
@@ -2025,12 +2075,14 @@ Function* Resolver::resolveFunctionCall(Scope* scope,SymbolID function,Node** pa
 	bool multipleOverload = false;
 
 	//Iterate over all the overloads picking the closest one with the best weight.
-	for(auto overload = ::overloads::OverloadRange(scope,function,dotSyntax);!overload.isEmpty();overload.advance()){
+	for(overloads::OverloadRange overload(scope,function,dotSyntax);!overload.isEmpty();overload.advance()){
 		//Return the closest overload
 		if(foundOverload && overload.currentDistance() > foundDistance) break;
 
 		//TODO: recurive calls
-		if(!overload.currentFunction()->isResolved()) return nullptr;
+		if(!overload.currentFunction()->isResolved()){
+			if(overload.currentFunction() != this->currentFunction) return nullptr;
+		}
 		if(match(this,overload.currentFunction(),arg,weight)){
 
 			if(weight > maxWeight){

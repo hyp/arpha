@@ -138,6 +138,14 @@ struct NodeToString: NodeVisitor {
 		stream<<node->object<<" as "<<node->type;
 		return node;
 	}
+	Node* visit(ScopedCommand* node){
+		if(node->isWhere()) stream<<"where";
+		else if(node->isVisibilityMode(data::ast::PRIVATE)) stream<<"private";
+		else stream<<"public";
+		if(node->child) stream<<' '<<node->child;
+		else stream<<':';
+		return node;
+	}
 
 	Node* visit(ExpressionVerifier* node){
 		stream<<node->expression<<" with expected type "<<node->expectedType;

@@ -1,5 +1,6 @@
 import cstdlib
 
+
 def print(string []char8){
 	until(string.empty){
 		putchar( string.current as int32 )

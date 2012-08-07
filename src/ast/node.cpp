@@ -459,6 +459,17 @@ Type* CastExpression::returnType() const {
 	return type;
 }
 
+ScopedCommand::ScopedCommand(data::ast::VisibilityMode mode,Node* expression){
+	setFlag(mode == data::ast::PRIVATE? PRIVATE:PUBLIC);
+	parameters = nullptr;
+	child = expression;
+}
+Node* ScopedCommand::duplicate(DuplicationModifiers* mods) const {
+	if(isFlagSet(WHERE)) return nullptr;//TODO
+	else return copyProperties(new ScopedCommand(isFlagSet(PRIVATE)? data::ast::PRIVATE : data::ast::PUBLIC,child? child->duplicate(mods): nullptr));
+}
+
+
 NodeReference::NodeReference(Node* node) : _node(node) {
 }
 Type* NodeReference::returnType() const { 
@@ -467,6 +478,8 @@ Type* NodeReference::returnType() const {
 Node* NodeReference::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new NodeReference(_node->duplicate(mods)));
 }
+
+
 
 //
 
@@ -552,6 +565,13 @@ bool  UnitExpression::isSame(Node* other){
 }
 bool  TypeReference::isSame(Node* other){
 	if(auto node = other->asTypeReference()) return type->isSame(node->type);
+	return false;
+}
+bool  ScopedCommand::isSame(Node* other){
+	if(auto node = other->asScopedCommand()){
+		if(isFlagSet(WHERE)) return false;
+		return isFlagSet(PRIVATE) == other->isFlagSet(PRIVATE) || isFlagSet(PUBLIC) == other->isFlagSet(PUBLIC);
+	}
 	return false;
 }
 

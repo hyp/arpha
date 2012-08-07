@@ -1177,6 +1177,11 @@ void LLVMgenerator::genStatements(BlockExpression* node,bool innermostInFunction
 void LLVMgenerator::genToplevelStatements(BlockExpression* node){
 	for(auto i = node->begin();i!=node->end();i++){
 		auto expr = *i;
+		if(auto cmd = expr->asScopedCommand()){
+			if(cmd->child) expr = cmd->child;
+			else continue;
+		}
+
 		if(expr->isDefinitionNode()) generateExpression(expr);
 		else if(auto assign = expr->asAssignmentExpression()){
 			assert(assign->object->asVariable());

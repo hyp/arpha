@@ -71,6 +71,7 @@ struct Argument;
 	X(BlockExpression)   \
 	X(LoopExpression)    \
 	X(CastExpression)    \
+	X(ScopedCommand) \
 	\
 	X(ExpressionVerifier) \
 	X(UnresolvedSymbol)   \
@@ -560,6 +561,29 @@ struct CastExpression : Node {
 	Node* object;
 	Type* type;
 	DECLARE_NODE(CastExpression);
+};
+
+struct ScopedCommand : Node {
+
+
+	//public: / private:
+	ScopedCommand(data::ast::VisibilityMode mode,Node* expression = nullptr);
+
+	Node* resolve(Resolver* resolver);
+	bool  isSame(Node* other);
+
+	Node* parameters;
+	Node* child;
+	DECLARE_NODE(ScopedCommand);
+
+	enum {
+		PUBLIC  = 0x10,
+		PRIVATE = 0x20,
+		WHERE   = 0x80,
+	};
+public:
+	inline bool isVisibilityMode(data::ast::VisibilityMode mode){ return isFlagSet(mode == data::ast::PRIVATE? PRIVATE: PUBLIC); }
+	inline bool isWhere(){ return isFlagSet(WHERE); }
 };
 
 /*****

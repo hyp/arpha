@@ -48,3 +48,16 @@ uses precedence: precedence.index
 	parser.expect("]")
 	return [> $sequence.element($i) <]
 }
+
+# Visibility modes
+macro public
+{
+	if(parser.match(":")) return ast.newScopedCommand(public: true) 
+	else return ast.newScopedCommand(public: true,parser.parse())
+}
+
+macro private
+{
+	if(parser.match(":")) return ast.newScopedCommand(private: true) 
+	else return ast.newScopedCommand(private: true,parser.parse())
+}

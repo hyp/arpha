@@ -166,14 +166,23 @@ Node* Parser::parse(int stickiness){
 	auto location = previousLocation();
 	if(lookedUpToken.isSymbol()){
 		auto next = peek();
+		bool notLabel = true;
 		if(next.isSymbol() && next.symbol == ":"){
+			State state;
+			saveState(&state);
 			auto label = lookedUpToken.symbol;
 			consume();
-			expression = parse(20);//TODO this is hacky..
-			location = expression->location();
-			expression->_label = label;
+			next = peek();
+			if(next.isLine() || next.isEOF()){
+				restoreState(&state);
+			} else {
+				expression = parse(20);//TODO this is hacky..
+				location = expression->location();
+				expression->_label = label;
+				notLabel = false;
+			}
 		}
-		else{
+		if(notLabel){
 			auto prefixDefinition = _currentScope->lookupPrefix(lookedUpToken.symbol);
 			if(!prefixDefinition){ 
 				expression = new UnresolvedSymbol(location,lookedUpToken.symbol);

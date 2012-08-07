@@ -23,6 +23,7 @@ public:
 	bool isRHS; // = false
 	Trait* currentTrait;       // Required for the trait prerequisuite.
 	Function* currentFunction; // The function we are currently resolving. Can be null.
+	data::ast::VisibilityMode currentVisibilityMode;
 
 	//For plain and generated functions respectively. A function is inlined if its inlining weight < threshold.
 	uint16 inliningThreshold[2]; 
@@ -36,6 +37,7 @@ public:
 
 	CompilationUnit* compilationUnit() const { return _compilationUnit; }
 
+	void applyCurrentVisibilityMode(DefinitionNode* node);
 
 
 	Node* resolve(Node* node);

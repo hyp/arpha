@@ -203,6 +203,7 @@ static void initMapping(){
 	MAP_NODETYPE("Return",ReturnExpression);
 	MAP_NODETYPE("Block",BlockExpression);
 	MAP_NODETYPE("UnresolvedSymbol",UnresolvedSymbol);
+	MAP_NODETYPE("ScopedCommand",ScopedCommand);
 	MAP_NODETYPE("Variable",Variable);
 	MAP_NODETYPE("Function",Function);
 	MAP_NODETYPE("ExpressionReference",NodeReference);
@@ -224,6 +225,10 @@ static void initMapping(){
 	MAP_PROP("newLogicalOperation(a:Expression,b:Expression,and:bool)",0,{ invocation->ret(new LogicalOperation(invocation->getNodeParameter(0),invocation->getNodeParameter(1),false)); });
 	MAP_PROP("newLogicalOperation(a:Expression,b:Expression,or:bool)",0,{ invocation->ret(new LogicalOperation(invocation->getNodeParameter(0),invocation->getNodeParameter(1),true)); });
 	MAP_PROP("newExpressionReference(Expression)",0,{ invocation->ret(new NodeReference(invocation->getNodeParameter(0))); });
+	MAP_PROP("newScopedCommand(private:bool)",0,{ invocation->ret(new ScopedCommand(data::ast::PRIVATE)); });
+	MAP_PROP("newScopedCommand(public:bool)",0,{ invocation->ret(new ScopedCommand(data::ast::PUBLIC)); });	
+	MAP_PROP("newScopedCommand(private:bool,expression:Expression)",0,{ invocation->ret(new ScopedCommand(data::ast::PRIVATE,invocation->getNodeParameter(1))); });
+	MAP_PROP("newScopedCommand(public:bool,expression:Expression)",0,{ invocation->ret(new ScopedCommand(data::ast::PUBLIC,invocation->getNodeParameter(1))); });	
 	MAP_PROP("newVariable()",0,{
 		auto v = new Variable(SymbolID(),Location());
 		invocation->ret(v);

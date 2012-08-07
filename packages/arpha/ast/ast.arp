@@ -39,6 +39,7 @@ def Loop                 Type
 def Return               Type
 def Block                Type
 def UnresolvedSymbol     Type
+def ScopedCommand        Type
 def Variable             Type
 def Function             Type
 def ExpressionReference  Type
@@ -55,6 +56,11 @@ def newPointerOperation(expression *Expression,addressof bool)   *PointerOperati
 def newPointerOperation(expression *Expression,dereference bool) *PointerOperation
 def newLogicalOperation(a *Expression,b *Expression,and bool) *LogicalOperation
 def newLogicalOperation(a *Expression,b *Expression,or bool) *LogicalOperation
+
+def newScopedCommand(private bool) *ScopedCommand
+def newScopedCommand(public  bool) *ScopedCommand
+def newScopedCommand(private bool,expression *Expression) *ScopedCommand
+def newScopedCommand(public  bool,expression *Expression) *ScopedCommand
 
 def newExpressionReference(expression *Expression) *ExpressionReference
 
