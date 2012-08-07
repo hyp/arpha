@@ -129,6 +129,8 @@ Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilat
 	currentFunction = nullptr;
 	currentTrait    = nullptr;
 	_currentParent  = nullptr;
+	currentVisibilityMode = data::ast::PUBLIC;
+	
 
 	//TODO
 	inliningThreshold[0] = 10;
@@ -768,6 +770,7 @@ Node* BlockExpression::resolve(Resolver* resolver){
 	resolver->currentScope(scope);
 	auto oldParent = resolver->currentParentNode();
 	auto oldVisibilityMode = resolver->currentVisibilityMode;
+	auto oldWhereChain = resolver->whereStack.size();
 	resolver->currentParentNode(this);
 
 	setFlag(ITERATING);
@@ -788,6 +791,7 @@ Node* BlockExpression::resolve(Resolver* resolver){
 	resolver->currentParentNode(oldParent);
 	resolver->currentScope(oldScope);
 	resolver->currentVisibilityMode = oldVisibilityMode;
+	if(resolver->whereStack.size()) resolver->whereStack.resize(oldWhereChain);
 	return this;
 }
 
@@ -894,7 +898,7 @@ Node* MatchResolver::resolve(Resolver* resolver){
 Node* ScopedCommand::resolve(Resolver* resolver){
 	auto oldVisibility = resolver->currentVisibilityMode;
 	if(isFlagSet(WHERE)){
-		//TODO
+		resolver->whereStack.push_back(this);
 	}
 	else {
 		if(resolver->currentFunction){
@@ -944,6 +948,7 @@ void Resolver::reportUnresolvedNode(Node* node){
 
 				bool header = false;
 				for(overloads::OverloadRange overloads(scope,unr->symbol,call->isFlagSet(CallExpression::DOT_SYNTAX));!overloads.isEmpty();overloads.advance()){
+					if(!overloads.currentFunction()->isResolved()) continue;
 					if(!header){
 						System::print(format("\tThe available overloads for the function '%s' are:",unr->symbol));
 						header = true;
@@ -1386,6 +1391,22 @@ bool isFunctionIntrinsicReturningPattern(TypePatternUnresolvedExpression::Patter
 	}
 }
 
+void Resolver::possiblyApplyWhere(Argument* argument){
+	auto current = whereStack.size();
+	do {
+		current--;
+		auto cmd = whereStack[current];
+		auto end = cmd->parameters.end();
+		DuplicationModifiers mods(nullptr);
+		for(auto i =cmd->parameters.begin();i!=end;++i){
+			if(i->first == argument->label()){
+				argument->type.kind = TypePatternUnresolvedExpression::UNRESOLVED;
+				argument->type.unresolvedExpression = i->second->duplicate(&mods);
+			}
+		}
+	} while(current != 0);
+}
+
 Node* Function::resolve(Resolver* resolver){
 	parentNode = resolver->currentParentNode();
 	resolver->applyCurrentVisibilityMode(this);
@@ -1394,6 +1415,8 @@ Node* Function::resolve(Resolver* resolver){
 
 	//Resolve parameters!
 	for(auto i = arguments.begin();i!=arguments.end();++i){
+		if(resolver->whereStack.size() && (*i)->type.isPattern() && (*i)->type.pattern == nullptr) resolver->possiblyApplyWhere(*i);
+
 		if(!(*i)->isResolved()){
 			(*i)->resolve(resolver);
 			if(!(*i)->isResolved()) return this;
@@ -1501,7 +1524,6 @@ Node* InfixMacro::resolve(Resolver* resolver){
 * Misc
 */
 Node* Resolver::multipassResolve(Node* node){
-	currentVisibilityMode = data::ast::PUBLIC;
 
 	size_t prevUnresolvedExpressions;
 	unresolvedExpressions = 0xDEADBEEF;
@@ -1518,6 +1540,7 @@ Node* Resolver::multipassResolve(Node* node){
 void  Resolver::resolveModule(BlockExpression* module){
 	_currentParent = nullptr;
 	currentVisibilityMode = data::ast::PUBLIC;
+	whereStack.clear();
 
 	size_t prevUnresolvedExpressions;
 	unresolvedExpressions = 0xDEADBEEF;
@@ -1546,6 +1569,7 @@ Node* Resolver::resolveMacroAtParseStage(Node* macro){
 	assert(_compilationUnit->parser);
 	currentScope(_compilationUnit->parser->currentScope());
 	currentParentNode(nullptr);
+	currentVisibilityMode = data::ast::PUBLIC;
 	return multipassResolve(macro);
 }
 
@@ -2083,6 +2107,10 @@ Function* Resolver::resolveFunctionCall(Scope* scope,SymbolID function,Node** pa
 		if(!overload.currentFunction()->isResolved()){
 			if(overload.currentFunction() != this->currentFunction) return nullptr;
 		}
+		if(function == "add" && overload.currentFunction()->arguments[0]->type.isPattern()){
+			debug("aad");
+		}
+
 		if(match(this,overload.currentFunction(),arg,weight)){
 
 			if(weight > maxWeight){

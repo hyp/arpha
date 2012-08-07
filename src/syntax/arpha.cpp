@@ -1043,6 +1043,22 @@ struct ImportParser: IntrinsicPrefixMacro {
 	}
 };
 
+struct WhereParser : IntrinsicPrefixMacro {
+	WhereParser(): IntrinsicPrefixMacro("where") {}
+	Node* parse(Parser* parser){
+		auto cmd = new ScopedCommand();
+		do{
+			auto label = parser->expectName();
+			parser->expect("is");
+			auto expr = parser->parse(arpha::Precedence::Tuple);
+			cmd->parameters.push_back(std::make_pair(label,expr));
+		} while(parser->match(","));
+		parser->expect(":");
+		return cmd;
+	}
+
+};
+
 /// capture    ::= '[>' expressions '<]'
 /// TODO might need to move this to macro related module
 struct CaptureParser : IntrinsicPrefixMacro {
@@ -1125,7 +1141,7 @@ void defineCoreSyntax(Scope* scope){
 
 	scope->define(new ReturnParser);
 
-	//scope->define(new UseParser);
+	scope->define(new WhereParser);
 
 	scope->define(new CaptureParser);
 }

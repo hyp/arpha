@@ -461,12 +461,22 @@ Type* CastExpression::returnType() const {
 
 ScopedCommand::ScopedCommand(data::ast::VisibilityMode mode,Node* expression){
 	setFlag(mode == data::ast::PRIVATE? PRIVATE:PUBLIC);
-	parameters = nullptr;
 	child = expression;
 }
+ScopedCommand::ScopedCommand(){
+	setFlag(WHERE);
+	child = nullptr;
+}
 Node* ScopedCommand::duplicate(DuplicationModifiers* mods) const {
-	if(isFlagSet(WHERE)) return nullptr;//TODO
-	else return copyProperties(new ScopedCommand(isFlagSet(PRIVATE)? data::ast::PRIVATE : data::ast::PUBLIC,child? child->duplicate(mods): nullptr));
+	ScopedCommand* dup = new ScopedCommand();
+	if(isFlagSet(WHERE)) {
+		dup->parameters.reserve(parameters.size());
+		for(auto i = parameters.begin(); i!=parameters.end(); ++i)
+			dup->parameters.push_back(std::make_pair(i->first,i->second->duplicate(mods)));
+	};
+
+	if(child) dup->child = child->duplicate(mods);
+	return copyProperties(dup);
 }
 
 

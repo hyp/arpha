@@ -1,12 +1,6 @@
 # TODO: make fill("AS",'A') work (TypeMeaningsRange : 'A' literal -> char8)
 
-#
-TODO:
-where range is Range(T: _),
-	  other is Range(T),
-	  value is T,
-	  init  is T
-#
+where range is Range(T: _), other is Range(T), value is T, init is T:
 
 def find(range,value)
 {

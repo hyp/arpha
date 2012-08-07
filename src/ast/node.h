@@ -568,11 +568,12 @@ struct ScopedCommand : Node {
 
 	//public: / private:
 	ScopedCommand(data::ast::VisibilityMode mode,Node* expression = nullptr);
+	ScopedCommand();
 
 	Node* resolve(Resolver* resolver);
 	bool  isSame(Node* other);
 
-	Node* parameters;
+	std::vector<std::pair<SymbolID,Node*>> parameters;
 	Node* child;
 	DECLARE_NODE(ScopedCommand);
 

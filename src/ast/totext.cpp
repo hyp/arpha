@@ -139,7 +139,13 @@ struct NodeToString: NodeVisitor {
 		return node;
 	}
 	Node* visit(ScopedCommand* node){
-		if(node->isWhere()) stream<<"where";
+		if(node->isWhere()){
+			stream<<"where ";
+			for(auto i = node->parameters.begin();i!=node->parameters.end();++i){
+				stream<<i->first<<" is "<<i->second;
+				if((i+1) != node->parameters.end()) stream<<", ";
+			}
+		}
 		else if(node->isVisibilityMode(data::ast::PRIVATE)) stream<<"private";
 		else stream<<"public";
 		if(node->child) stream<<' '<<node->child;

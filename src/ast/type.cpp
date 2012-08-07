@@ -425,7 +425,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 		if(auto def = lookupDefinition(symbol)){
 			if(auto vt = def->value->asTypeReference())
 				return type && type->isSame(vt->type);
-			else return object->isSame(pattern);
+			else return object->isSame(def->value);
 		}
 		else if(type){
 			if(!type->wasGenerated()) return false;
@@ -438,7 +438,7 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 		if(auto def = lookupDefinition(var->variable->label())){
 			if(auto vt = def->value->asTypeReference())
 				return type && type->isSame(vt->type);
-			else return object->isSame(pattern);
+			else return object->isSame(def->value);
 		}
 	}
 
