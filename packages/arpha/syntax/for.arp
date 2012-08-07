@@ -1,7 +1,7 @@
 #
 	This module implements the for statement
-	TODO for over tuples
 #
+import arpha.intrinsic
 
 macro foreach(collection Range,i,body)
 {
@@ -17,6 +17,9 @@ macro foreach(collection Range,i,body)
 		}
 	<]
 }
+
+# Foreach over tuple unfolds the loop.
+def   foreach(tuple Tuple,i,body)
 
 macro foreach(collection,i,body) = [> arpha.compiler.error("Invalid for loop - can't iterate over collection of type $(typeof($collection))!") <]
 

@@ -19,6 +19,11 @@ import arpha.intrinsic
 
 import export core.type_qualifiers
 
+# Represents a tuple
+type Tuple(Types)
+{
+}
+
 #
 	This concept descibes a type which can be used as a condition for the 'if' expression.
 	TODO: make bool match it.

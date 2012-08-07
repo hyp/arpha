@@ -48,7 +48,7 @@ def Variable             Type
 def Function             Type
 def ExpressionReference  Type
 
-
+def newStringLiteral(string LinearSequence(char8)) *StringLiteral
 def newTypeReference(type Type) *TypeReference
 def newLoop(body *Expression) *Loop
 def newReturn(expression *Expression) *Return

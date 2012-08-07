@@ -219,6 +219,7 @@ struct Type {
 		static Function* functionPointer;
 		static Function* staticArray;
 		static Function* vector;
+		static Function* tuple;
 
 		static Function* constQualifier;
 	};

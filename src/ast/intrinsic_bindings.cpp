@@ -211,7 +211,8 @@ static void initMapping(){
 	MAP("returnType(Expression)",{ invocation->ret(invocation->getNodeParameter(0)->returnType()); });
 	MAP("isConst(Expression)",{ invocation->ret(invocation->getNodeParameter(0)->isConst()); });
 	MAP("location(Expression)",{ auto node = invocation->getNodeParameter(0); invocation->retNaturalNatural(node->location().line(),node->location().column); });
-
+	
+	MAP_PROP("newStringLiteral([]char8)",0,{ invocation->ret(new StringLiteral(invocation->getStringParameterAsSymbol(0))); });//???
 	MAP_PROP("newTypeReference(Type)",0,{ invocation->ret(new TypeReference(invocation->getTypeParameter(0))); });
 	MAP_PROP("newLoop(Expression)",0,{ invocation->ret(new LoopExpression(invocation->getNodeParameter(0))); });
 	MAP_PROP("newReturn(Expression)",0,{ invocation->ret(new ReturnExpression(invocation->getNodeParameter(0))); });
@@ -309,6 +310,29 @@ static void initMapping(){
 		invocation->ret();
 	});
 
+	MAP_PROP("foreach(Tuple,_,_)",Function::MACRO_FUNCTION,{
+		auto tuple = invocation->getNodeParameter(0);
+		auto item = invocation->getNodeParameter(1);
+		auto body  = invocation->getNodeParameter(2);
+		auto block = new BlockExpression();
+		auto t  = tuple->asTupleExpression();
+		auto tt = tuple->returnType()->asAnonymousRecord();
+		DuplicationModifiers mods(nullptr);
+		for(size_t i = 0;i < tt->numberOfFields;++i){
+			auto subBlock = new BlockExpression();
+			mods.target = subBlock->scope;
+			if(i == 0) subBlock->addChild(new AssignmentExpression(item,t? t->childrenPtr()[i] : new FieldAccessExpression(tuple,i) )); 
+			else {
+				auto var = new Variable(item->label(),item->location());
+				var->setFlag(Variable::IS_IMMUTABLE);
+				subBlock->addChild(new AssignmentExpression(var,t? t->childrenPtr()[i] : new FieldAccessExpression(tuple,i) ));
+			}
+			subBlock->addChild(i == 0? body : body->duplicate(&mods));
+			block->addChild(subBlock);
+			subBlock->scope->parent = block->scope;
+		}
+		invocation->ret(block);
+	});
 
 
 	/**
@@ -354,7 +378,7 @@ static void initMapping(){
 
 	//Core vector operations
 	MAPOP("element(Vector,natural)",ELEMENT_GET);
-	MAPOP("element(Vector,natural,)",ELEMENT_SET);
+	MAPOP("element(Vector,natural,T)",ELEMENT_SET);
 	MAPOP("shuffle(Vector,Vector)",VECTOR_SHUFFLE);
 	MAPOP("shuffle(Vector,Vector,Vector)",VECTOR_SHUFFLE);
 	MAPOP("minus(Vector)",NEGATION);
@@ -440,6 +464,9 @@ std::string intrinsicMangle(Function* function,bool argNames){
 						if(concept == Trait::intrinsic::splice) result+= "literal.splice";
 					}
 				}
+				else if(auto sym = pattern->asUnresolvedSymbol()){
+					result+= sym->symbol.ptr();
+				}
 			}
 		}
 		else result += mangleArgType((*i)->type.type());
@@ -494,7 +521,9 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 			}
 			else invocation->retError("Invalid element type for a vector type!");
 		}
-
+		static void tuple(CTFEintrinsicInvocation* invocation){
+			invocation->ret(invocation->getTypeParameter(0));
+		}
 		static void constQualifier(CTFEintrinsicInvocation* invocation){
 			auto t = invocation->getTypeParameter(0);
 			if(!t->hasConstQualifier()){
@@ -523,6 +552,11 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 	else if(function->label() == "Vector" && !Type::generators::vector){
 		Type::generators::vector = function;
 		function->intrinsicCTFEbinder = Generator::vector;
+	}
+	else if(function->label() == "Tuple" && !Type::generators::tuple){
+		Type::generators::tuple = function;
+		function->arguments[0]->setFlag(Argument::IS_VARARG);//???
+		function->intrinsicCTFEbinder = Generator::tuple;
 	}
 	else if(function->label() == "Const" && !Type::generators::constQualifier){
 		Type::generators::constQualifier = function;

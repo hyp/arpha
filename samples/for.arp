@@ -21,4 +21,9 @@ def main(){
 	for(i in array){
 		if(i == 1) print("ok")
 	}
+	
+	# Iteration over tuples unrolls the loop
+	for(element in 1,2,3){
+		print("Hello world!")
+	}
 }

@@ -360,7 +360,9 @@ Node* CallExpression::resolve(Resolver* resolver){
 					CTFEintrinsicInvocation i(resolver->compilationUnit());
 					i.invoke(func,arg);
 					if(auto err = i.result()->asErrorExpression()) return err;
-					return resolver->resolve(copyLocationSymbol(i.result()->asNodeReference()->node()));
+					auto result = i.result()->asNodeReference()->node();
+					if(auto block = result->asBlockExpression()) block->scope->parent = resolver->currentScope();
+					return resolver->resolve(copyLocationSymbol(result));
 				}
 				else return resolver->executeAndMixinMacro(func,arg);
 			}
@@ -1818,7 +1820,9 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 	}
 
 	if(argsCount < expressionCount){
-		if(argsCount > 0 && func->arguments[argsCount-1]->type.isPattern()){
+		assert(argsCount > 0);
+		auto lastParameter = func->arguments[argsCount-1];
+		if(func->arguments[argsCount-1]->type.isPattern()){
 			argsCount--;
 			auto tuple = new TupleExpression();
 			for(auto i = argsCount;i<expressionCount;i++)
@@ -1831,7 +1835,19 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 			determinedArguments.resize(argsCount+1,nullptr);
 			determinedArguments[argsCount] = result[argsCount]->returnType();
 		}
-		else assert(false);
+		else {
+			//Type
+			argsCount--;
+
+			std::vector<AnonymousAggregate::Field> fields;
+			for(auto i = argsCount;i < expressionCount;i++){
+				AnonymousAggregate::Field field = { exprBegin[i]->label(),exprBegin[i]->asTypeReference()->type };
+				fields.push_back(field);
+			}
+			auto record = AnonymousAggregate::create(&fields[0],fields.size());
+			result[argsCount] = resolve(new TypeReference(record));
+			expressionCount = argsCount;
+		}
 	}
 
 	while(currentExpr<expressionCount){
@@ -2004,7 +2020,10 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 	if(argsCount < expressionCount){
 		if(argsCount > 0){
 			bool matches = false;
-			if(func->arguments[argsCount-1]->isVararg() && func->arguments[argsCount-1]->type.isPattern()){
+			auto lastParameter = func->arguments[argsCount-1];
+			if(lastParameter->type.isPattern()){
+				if(lastParameter->isVararg()) return false;
+
 				if(auto pattern = func->arguments[argsCount-1]->type.pattern){
 					TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope,evaluator);
 					//construct a record from the tailed parameters
@@ -2017,7 +2036,14 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 					if(!matcher.match(record,pattern)) return false;
 				}
 			}
-			else if(!func->arguments[argsCount-1]->type.type()->isSame(intrinsics::types::NodePointer)) return false;
+			else {
+				//match type x(T) x(int32,int32) as x(Tuple(int32,int32))
+				if(lastParameter->type.type()->isSame(intrinsics::types::Type)){
+					//All must be type
+					for(auto i = argsCount - 1;i < expressionCount;i++) if(!exprBegin[i]->returnType()->isType()) return false;
+				}
+				else if(!lastParameter->type.type()->isSame(intrinsics::types::NodePointer)) return false;
+			}
 			argsCount--;
 			checked[argsCount] = true;
 			expressionCount = argsCount;

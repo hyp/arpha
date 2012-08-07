@@ -7,9 +7,11 @@ macro unittest
 	def name = parser.symbol()
 	
 	def body = parser.parse(ignoreNewlines: true)
+	def nameLiteral = ast.newStringLiteral(name)
 	def func = ast.newFunction(name,[>
-		macro assert(expr) = [> if(! $expr) print("Failure") <]
+		macro assert(expr) = [> if(! $expr) print(" ... Failure") <]
 		print("Running unittest ")
+		print($nameLiteral)
 		$body
 		print(" ... ok\r\n")
 	<],returnType: Nothing)

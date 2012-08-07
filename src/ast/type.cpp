@@ -553,6 +553,7 @@ Function* Type::generators::linearSequence  = nullptr;
 Function* Type::generators::functionPointer = nullptr;
 Function* Type::generators::staticArray = nullptr;
 Function* Type::generators::vector = nullptr;
+Function* Type::generators::tuple = nullptr;
 
 Function* Type::generators::constQualifier = nullptr;
 
@@ -733,7 +734,7 @@ bool Type::wasGenerated() const {
 	case STATIC_ARRAY:    
 	case FUNCTION_POINTER: return true;
 
-	case ANONYMOUS_RECORD: return static_cast<const AnonymousAggregate*>(this)->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR);
+	case ANONYMOUS_RECORD: return true;
 	
 	case QUALIFIER:
 		return true;
@@ -749,7 +750,7 @@ bool Type::wasGeneratedBy(Function* function) const {
 	case STATIC_ARRAY:     return function == generators::staticArray;
 	case FUNCTION_POINTER: return function == generators::functionPointer;
 
-	case ANONYMOUS_RECORD: return static_cast<const AnonymousAggregate*>(this)->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)? function == generators::vector : false;
+	case ANONYMOUS_RECORD: return static_cast<const AnonymousAggregate*>(this)->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)? function == generators::vector : function == generators::tuple;
 
 
 	default:
@@ -771,6 +772,9 @@ Node* Type::generatedArgument(size_t i) const {
 	case ANONYMOUS_RECORD: if(static_cast<const AnonymousAggregate*>(this)->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)){
 								return i == 0 ? (Node*)new TypeReference(static_cast<const AnonymousAggregate*>(this)->types[0]) :
 									 new IntegerLiteral((uint64)static_cast<const AnonymousAggregate*>(this)->numberOfFields,intrinsics::types::natural);
+						   } else {
+							   return i < static_cast<const AnonymousAggregate*>(this)->numberOfFields? 
+								   new TypeReference(static_cast<const AnonymousAggregate*>(this)->types[i]) : nullptr;
 						   }
 	case QUALIFIER:
 		return new TypeReference(argument);
