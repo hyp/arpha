@@ -306,6 +306,7 @@ FunctionReference::FunctionReference(Function* func) : function(func) {
 	if(!func->isIntrinsic()) assert(!func->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) );
 }
 Type* FunctionReference::returnType() const {
+	if(function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS) || function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS)) return intrinsics::types::Void;
 	assert(isResolved());
 	if(function->isIntrinsic()) return intrinsics::types::Void;//NB: hack for function reference totext printing
 	else return FunctionPointer::get(function->argumentType(),function->returns(),function->callingConvention());

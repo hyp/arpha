@@ -1,13 +1,13 @@
 #include "../base/base.h"
 #include "../base/symbol.h"
 #include "../base/bigint.h"
+#include "../compiler.h"
 #include "../ast/node.h"
 #include "../ast/scope.h"
 #include "../ast/declarations.h"
 #include "../ast/resolve.h"
 #include "../ast/interpret.h"
 #include "parser.h"
-#include "../compiler.h"
 #include "../intrinsics/types.h"
 
 Parser::Parser(const char* src,CompilationUnit* compilationUnit) : Lexer(src),_compilationUnit(compilationUnit) {  
@@ -122,7 +122,7 @@ Node* Parser::spliceString(Token& token){
 		}
 	}
 
-	if(splice) splice->type = Trait::intrinsic::splice;
+	//if(splice) splice->type = Trait::intrinsic::splice;
 	if((end - begin) == 0 && result) return splice? splice: result;
 
 	auto expr = new StringLiteral(memory::Block::construct(begin,end - begin),Type::getStringLiteralType()); 

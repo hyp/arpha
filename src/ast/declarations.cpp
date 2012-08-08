@@ -1,6 +1,7 @@
-#include "../compiler.h"
+
 #include "../base/symbol.h"
 #include "../base/bigint.h"
+#include "../compiler.h"
 #include "scope.h"
 #include "node.h"
 #include "declarations.h"

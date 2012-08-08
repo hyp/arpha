@@ -1,10 +1,10 @@
 #include "../base/base.h"
+#include "../compiler.h"
 #include "../ast/node.h"
 #include "../ast/scope.h"
 #include "../ast/declarations.h"
 #include "../ast/resolve.h"
 #include "../ast/interpret.h"
-#include "../compiler.h"
 #include "../syntax/parser.h"
 #include "types.h"
 

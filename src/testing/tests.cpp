@@ -8,7 +8,7 @@
 #include "../base/symbol.h"
 #include "../base/bigint.h"
 
-#include "../syntax/location.h"
+#include "../compiler.h"
 
 #include "../ast/scope.h"
 #include "../ast/node.h"

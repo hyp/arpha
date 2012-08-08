@@ -2,8 +2,9 @@
 * This module implements arpha's core syntax macroes
 */
 
-#include "../compiler.h"
+
 #include "../base/symbol.h"
+#include "../compiler.h"
 #include "../ast/scope.h"
 #include "../ast/node.h"
 #include "../ast/declarations.h"
@@ -298,6 +299,7 @@ struct ParameterTypeSuggestion {
 /// paramList ::= param ',' paramList | param
 /// params    ::= '(' paramList ')' | '(' ')'
 void parseFunctionParameters(Parser* parser,Function* func,Type* defaultType = nullptr,ParameterTypeSuggestion* suggestions = nullptr,size_t numberOfSuggestions = 0){
+	bool vararg = false;
 	if(!parser->match(")")){
 		while(1){
 			auto location = parser->currentLocation();
@@ -305,6 +307,12 @@ void parseFunctionParameters(Parser* parser,Function* func,Type* defaultType = n
 			auto param = new Argument(argName,location,func);
 		
 			auto next = parser->peek();
+			if(next.isSymbol() && next.symbol == ".."){
+				parser->consume();
+				next = parser->peek();
+				vararg = true;
+				param->setFlag(Argument::IS_VARARG);
+			}
 			if(next.isSymbol() && ( next.symbol == "," || next.symbol == ")" || next.symbol == "=")){
 				if(defaultType) param->type.specify(defaultType);
 				else if(suggestions){
@@ -327,6 +335,10 @@ void parseFunctionParameters(Parser* parser,Function* func,Type* defaultType = n
 			}
 			func->addArgument(param);
 
+			if(vararg){
+				parser->expect(")");
+				break;
+			}
 			if(parser->match(")")) break;
 			parser->expect(",");
 		}

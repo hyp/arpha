@@ -3,321 +3,377 @@
 #include "../base/symbol.h"
 #include "../compiler.h"
 #include "node.h"
-#include "visitor.h"
 #include "declarations.h"
 
 /**
 * Node tracer
 */
-struct NodeToString: NodeVisitor {
-	std::ostream& stream;
-	NodeToString(std::ostream& ostream) : stream(ostream) {}
-
-	Node* visit(NodeReference* node){
-		stream<<"[> "<<node->node()<<" <]";
-		return node;
+void Node::dump(Dumper& dumper) const {
+	if(dumper.isVerbose()) dumper.print("(");
+	dumpImplementation(dumper);
+	if(dumper.isVerbose()){
+		dumper.print(")");
+		dumper.print(" as ");
+		if(isResolved()) returnType()->dump(dumper);
+		else dumper.print("?");
 	}
-	Node* visit(IntegerLiteral* node){
-		stream<<node->integer;
-		return node;
-	}
-	Node* visit(FloatingPointLiteral* node){
-		stream<<node->value;
-		return node;
-	}
-	Node* visit(CharacterLiteral* node){
-		if(node->value<=127) stream<<'\''<<(char)node->value<<'\'';
-		else stream<<"'\\U"<<node->value<<'\'';
-		return node;
-	}
-	Node* visit(BoolExpression* node){
-		stream<<(node->value?"true":"false");
-		return node;
-	}
-	Node* visit(ArrayLiteral* node){
-		stream<<'[';
-		for(auto i = node->begin();i!=node->end();i++){
-			stream<<*i;
-			if(i+1 != node->end()) stream<<" , ";
-		}
-		stream<<']';
-		return node;
-	}
-	Node* visit(ErrorExpression* node){
-		stream<<"error";
-		return node;
-	}
-	Node* visit(StringLiteral* node){
-		stream<<'"';
-		for(size_t i = 0;i<node->block.length();i++){
-			stream<<node->block[i];
-		}
-		stream<<'"';
-		return node;
-	}
-	Node* visit(UnitExpression* node){
-		stream<<"()";
-		return node;
-	}
-	Node* visit(ImportedScopeReference* node){
-		stream<<"scope-ref "<<node->scope->label();
-		return node;
-	}
-	Node* visit(TypeReference* node){
-		stream<<node->type;
-		return node;
-	}
-	Node* visit(VariableReference* node){
-		stream<<"variable "<<(node->variable->label().isNull()? "unnamed" : node->variable->label().ptr())<<"["<<(void*)node->variable<<"]";
-		return node;
-	}
-	Node* visit(FunctionReference* node){
-		stream<<"ref func "<<node->function->label();
-		return node;
-	}
-
-	Node* visit(CallExpression* node){
-		stream<<"call "<<node->object<<" with "<<node->arg;
-		return node;
-	}
-	Node* visit(LogicalOperation* node){
-		stream<<node->parameters[0]<<(node->isOr()?" || ":" && ")<<node->parameters[1];
-		return node;
-	}
-	Node* visit(FieldAccessExpression* node){
-		stream<<node->object<<" f. "<<node->fieldsName();
-		return node;
-	}
-
-	Node* visit(AssignmentExpression* node){
-		stream<<node->object<<" = "<<node->value;
-		return node;
-	}
-	Node* visit(ReturnExpression* node){
-		stream<<"return"<<' '<<node->expression;
-		return node;
-	}
-	Node* visit(ControlFlowExpression* node){
-		stream<<(node->isContinue() ? "continue" : (node->isBreak() ? "break" : "fallthrough"));
-		return node;
-	}
-	Node* visit(ThrowExpression* node){
-		stream<<"throw "<<node->expression;
-		return node;
-	}
-	Node* visit(PointerOperation* node){
-		stream<<(node->isAddress()?'&':'*')<<node->expression;
-		return node;
-	}
-	Node* visit(IfExpression* node){
-		stream<<"if("<<node->condition<<") "<<node->consequence<<" else "<<node->alternative;
-		return node;
-	}
-	Node* visit(TupleExpression* node){
-		auto i = node->children.begin();
-		if( i == node->children.end() ) return node;
-		while(1){
-			stream<<(*i);
-			++i;
-			if( i == node->children.end() ) break;
-			stream<<',';
-		}
-		return node;
-	}
-	Node* visit(BlockExpression* node){
-		stream<<"{\n  ";
-		for(auto i =node->children.begin();i != node->children.end(); ++i) stream<<(*i)<<";\n  "; 
-		stream<<"}";
-		return node;
-	}
-	Node* visit(LoopExpression* node){
-		stream<<"loop "<<node->body;
-		return node;
-	}
-	Node* visit(CastExpression* node){
-		stream<<node->object<<" as "<<node->type;
-		return node;
-	}
-	Node* visit(ScopedCommand* node){
-		if(node->isWhere()){
-			stream<<"where ";
-			for(auto i = node->parameters.begin();i!=node->parameters.end();++i){
-				stream<<i->first<<" is "<<i->second;
-				if((i+1) != node->parameters.end()) stream<<", ";
-			}
-		}
-		else if(node->isVisibilityMode(data::ast::PRIVATE)) stream<<"private";
-		else stream<<"public";
-		if(node->child) stream<<' '<<node->child;
-		else stream<<':';
-		return node;
-	}
-
-	Node* visit(ExpressionVerifier* node){
-		stream<<node->expression<<" with expected type "<<node->expectedType;
-		return node;
-	}
-	Node* visit(UnresolvedSymbol* node){
-		stream<<node->symbol;
-		return node;
-	}
-
-	Node* visit(AccessExpression* node){
-		stream<<node->object<<" u. "<<node->symbol;
-		return node;
-	}
-
-	Node* visit(MatchResolver* node){
-		stream<<"match("<<node->object<<")";
-		return node;
-	}
-
-	Node* visit(Variable* node){
-		stream<<"variable "<<(node->label().isNull()? "unnamed" : node->label().ptr())<<" as "<<node->type<<"["<<(void*)node<<"]";
-		return node;
-	}
-
-	void newline(){
-		stream<<std::endl<<"\t";
-	}
-
-	//TODO variant
-	Node* visit(TypeDeclaration* decl){
-		auto type = decl->type();
-		if(auto record = type->asRecord()){
-			stream<<"type "<<decl->label()<<" {";
-			for(auto i = record->fields.begin();i!=record->fields.end();i++){
-				newline();
-				stream<<"var "<<(*i).name<<" "<<(*i).type;
-			}
-			newline();
-			stream<<"}";
-		}
-		else if(auto variant = type->asVariant()){
-			stream<<"variant "<<decl->label();
-		}
-		else {
-			stream<<"trait "<<decl->label();
-		}
-
-		if(decl->optionalStaticBlock){
-			stream<<decl->optionalStaticBlock;
-		}
-		//newline();
-		return decl;
-	}
-	Node* visit(Function* node){
-		stream<<"function "<<node->label()<<"(";
-		for(auto i = node->arguments.begin();i!=node->arguments.end();i++) stream<<(*i);
-		stream<<")";
-		stream<<" -> "<<node->_returnType;
-		newline();
-		stream<<(&node->body);
-		return node;
-	}
-
-	Node* visit(PrefixMacro* node){
-		stream<<"prefix macro "<<node->label();
-		newline();
-		stream<<&node->func()->body;
-		return node;
-	}
-
-	Node* visit(InfixMacro* node){
-		stream<<"infix macro "<<node->label()<<" with precedence: "<<node->stickiness;
-		newline();
-		stream<<&node->func()->body;
-		return node;
-	}
-};
-
-std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& type){
-	if(type.isResolved()) return stream<<type.type();
-	else if(type.isPattern()){
-		return type.pattern ? stream<<type.pattern : stream<<"_";
-	} else return stream<<type.unresolvedExpression;
 }
 
-std::ostream& operator<< (std::ostream& stream,Type* type){
-	switch(type->type){
-		case Type::VOID: stream<<"void"; break;
-		case Type::TYPE: stream<<"Type"; break;
-		case Type::BOOL: stream<<"bool"; break;
-		case Type::RECORD:  stream<<static_cast<Record*>(type)->declaration->label(); break;
-		case Type::VARIANT: stream<<static_cast<Variant*>(type)->declaration->label(); break;
-		case Type::INTEGER: stream<<(type->bits<0?"int":"uint")<<(type->bits<0?-type->bits:type->bits); break;
-		case Type::FLOAT: stream<<(type->bits == 32? "float":"double"); break;
-		case Type::CHAR:  stream<<"char"<<type->bits; break;
-		case Type::NATURAL: stream<<"natural"; break;
-		case Type::UINTPTRT: stream<<"uintptr"; break;
+void IntegerLiteral::dumpImplementation(Dumper& dumper) const {
+	dumper.print(format("%s",integer));
+}
+void FloatingPointLiteral::dumpImplementation(Dumper& dumper) const {
+	dumper.print(format("%s",value));
+}
+void CharacterLiteral::dumpImplementation(Dumper& dumper) const {
+	dumper.print(format("%s",value));
+}
+void BoolExpression::dumpImplementation(Dumper& dumper) const {
+	dumper.print(format("%s",value?"true":"false"));
+}
+void StringLiteral::dumpImplementation(Dumper& dumper) const {
+	dumper.print(block.ptr());
+}
+void NodeReference::dumpImplementation(Dumper& dumper) const {
+	dumper.print("[> ");
+	node()->dump(dumper);
+	dumper.print(" <]");
+}
+void ArrayLiteral::dumpImplementation(Dumper& dumper) const {
+	dumper.print("[ ");
+	for(auto i = begin();i!=end();++i){
+		(*i)->dump(dumper);
+		if(i+1 != end()) dumper.print(" , ");
+	}
+	dumper.print(" ]");
+}
+void TupleExpression::dumpImplementation(Dumper& dumper) const {
+	for(auto i = begin();i!=end();++i){
+		(*i)->dump(dumper);
+		if(i+1 != end()) dumper.print(" , ");
+	}
+}
+void ErrorExpression::dumpImplementation(Dumper& dumper) const { dumper.print("error"); }
+void UnitExpression::dumpImplementation(Dumper& dumper) const { dumper.print("()"); }
+void ImportedScopeReference::dumpImplementation(Dumper& dumper) const { dumper.print("scope-ref");dumper.print(scope->label()); }
+void VariableReference::dumpImplementation(Dumper& dumper) const {
+	if(dumper.refDeclPointers()) dumper.print(format("variable [%d]",(void*)variable));
+
+	if(variable->label().isNull()) dumper.print(format("unnamed%d",(void*)variable));
+	else dumper.print(variable->label());
+}
+void FunctionReference::dumpImplementation(Dumper& dumper) const {
+	if(dumper.refDeclPointers()) dumper.print(format("function [%d]",(void*)function));
+
+	if(function->label().isNull()) dumper.print(format("unnamed%d",(void*)function));
+	else dumper.print(function->label());
+}
+void TypeReference::dumpImplementation(Dumper& dumper) const {
+	if(dumper.refDeclPointers()) dumper.print(format("type [%d]",(void*)type));
+
+	type->dump(dumper);
+}
+void TraitParameterReference::dumpImplementation(Dumper& dumper) const {
+	dumper.print("concept arg");
+}
+void CallExpression::dumpImplementation(Dumper& dumper) const {
+	object->dump(dumper);
+	dumper.print("(");
+	if(!arg->asUnitExpression()) arg->dump(dumper);
+	dumper.print(")");
+}
+void LogicalOperation::dumpImplementation(Dumper& dumper) const {
+	parameters[0]->dump(dumper);
+	dumper.print(isOr()?" || ":" && ");
+	parameters[1]->dump(dumper);
+}
+void FieldAccessExpression::dumpImplementation(Dumper& dumper) const {
+	object->dump(dumper);
+	auto name = fieldsName();
+	if(name.isNull()){
+		dumper.print(format("[%d]",field));
+	}
+	else {
+		dumper.print(dumper.isVerbose()? ".[f]" : ".");
+		dumper.print(name);
+	}
+}
+void AssignmentExpression::dumpImplementation(Dumper& dumper) const {
+	object->dump(dumper);
+	dumper.print(" = ");
+	value->dump(dumper);
+}
+void ReturnExpression::dumpImplementation(Dumper& dumper) const {
+	dumper.print("return ");
+	expression->dump(dumper);
+}
+void ControlFlowExpression::dumpImplementation(Dumper& dumper) const {
+	dumper.print((isContinue() ? "continue" : (isBreak() ? "break" : "fallthrough")));
+}
+void ThrowExpression::dumpImplementation(Dumper& dumper) const {
+	dumper.print("throw ");
+	expression->dump(dumper);
+}
+void PointerOperation::dumpImplementation(Dumper& dumper) const {
+	dumper.print(isAddress()?"& (":"* (");
+	expression->dump(dumper);
+	dumper.print(")");
+}
+void IfExpression::dumpImplementation(Dumper& dumper) const {
+	dumper.print("if(");
+	condition->dump(dumper);
+	dumper.print(") ");
+	consequence->dump(dumper);
+	dumper.print(" else ");
+	alternative->dump(dumper);
+}
+void LoopExpression::dumpImplementation(Dumper& dumper) const {
+	dumper.print("loop");
+	body->dump(dumper);
+}
+void CastExpression::dumpImplementation(Dumper& dumper) const {
+	object->dump(dumper);
+	dumper.print(" as ");
+	type->dump(dumper);
+}
+void BlockExpression::dumpImplementation(Dumper& dumper) const {
+	dumper.print("{\n");
+	dumper.incIndentation();
+	dumper.printIndentation();
+	for(auto i = begin();i!=end();++i){
+		(*i)->dump(dumper);
+		if(i+1 != end()){
+			dumper.print("\n");
+			dumper.printIndentation();
+		}
+	}
+	dumper.print("\n");
+	dumper.decIndentation();
+	dumper.printIndentation();
+	dumper.print("} ");
+}
+void ScopedCommand::dumpImplementation(Dumper& dumper) const {
+	if(isWhere()){
+		dumper.print("where ");
+		for(auto i = parameters.begin();i!=parameters.end();++i){
+			dumper.print(i->first);
+			dumper.print(" is ");
+			i->second->dump(dumper);
+			if((i+1) != parameters.end()) dumper.print(", ");
+		}
+	}
+	else if(isVisibilityMode(data::ast::PRIVATE)) dumper.print("private");
+	else dumper.print("public");
+	if(child){
+		dumper.print(" ");child->dump(dumper);
+	} 
+	else dumper.print(":");
+}
+void ExpressionVerifier::dumpImplementation(Dumper& dumper) const {
+	expression->dump(dumper);
+}
+void UnresolvedSymbol::dumpImplementation(Dumper& dumper) const {
+	dumper.print(symbol);
+	if(dumper.isVerbose() && explicitLookupScope) dumper.print("[scp]");
+}
+void AccessExpression::dumpImplementation(Dumper& dumper) const {
+	object->dump(dumper);
+	dumper.print(dumper.isVerbose()? ".[u]" : ".");
+	dumper.print(symbol);
+}
+void MatchResolver::dumpImplementation(Dumper& dumper) const {
+	dumper.print("match(");
+	object->dump(dumper);
+	dumper.print(")");
+}
+
+void Variable::dumpImplementation(Dumper& dumper) const {
+	dumper.print(isFlagSet(IS_IMMUTABLE)? "def " : "var ");
+	if(dumper.refDeclPointers()) dumper.print(format("[%d] ",(void*)this));
+	if(label().isNull()) dumper.print(format("unnamed%d",(void*)this));
+	else dumper.print(label());
+	dumper.print(" ");
+	if(!(type.isPattern() && type.pattern == nullptr)) type.dump(dumper);
+}
+void Function::dumpImplementation(Dumper& dumper) const {
+	dumpDeclaration(dumper);
+	dumper.print(" ");
+	body.dump(dumper);
+}
+void PrefixMacro::dumpImplementation(Dumper& dumper) const {
+	dumper.print("macro ");
+	dumper.print(label());
+	dumper.print(" ");
+	function->body.dump(dumper);
+}
+void InfixMacro::dumpImplementation(Dumper& dumper) const {
+	dumper.print(format("macro(infix %d) ",stickiness));
+	dumper.print(label());
+	dumper.print(" ");
+	function->body.dump(dumper);
+}
+void TypeDeclaration::dumpImplementation(Dumper& dumper) const {
+	auto type = this->type();
+	if(auto record = type->asRecord()){
+		dumper.print("type ");
+		dumper.print(label());
+		dumper.print(" {\n");
+		dumper.incIndentation();
+		for(auto i = record->fields.begin();i!=record->fields.end();i++){
+			dumper.printIndentation();
+			dumper.print("var ");
+			dumper.print((*i).name);
+			dumper.print(" ");
+			(*i).type.dump(dumper);
+			dumper.print("\n");
+		}
+		dumper.decIndentation();
+		dumper.printIndentation();
+		dumper.print("} ");
+	}
+	else if(auto variant = type->asVariant()){
+		dumper.print("variant ");
+		dumper.print(label());
+	}
+	else {
+		dumper.print("concept ");
+		dumper.print(label());
+	}
+}
+void Function::dumpDeclaration(Dumper& dumper) const{
+	dumper.print(isFlagSet(MACRO_FUNCTION)? "macro " : "def ");
+	dumper.print(label());
+	dumper.print("(");
+	for(auto i = arguments.begin();i!= arguments.end(); ++i){
+		if(i != arguments.begin()) dumper.print(", ");
+		auto arg = *i;
+		dumper.print(arg->label());
+		if(arg->isVararg()) dumper.print("..");
+		dumper.print(" ");
+		if(!(arg->type.isPattern() && arg->type.pattern == nullptr)) arg->type.dump(dumper);
+		if(auto defaultValue = arg->defaultValue()){
+			dumper.print(" = ");
+		}
+	}
+	dumper.print(") ");
+	if(!(_returnType.isPattern() && _returnType.pattern == nullptr)) _returnType.dump(dumper);
+}
+
+void TypePatternUnresolvedExpression::dump(Dumper& dumper) const {
+	if(isResolved()) type()->dump(dumper);
+	else if(isPattern()){
+		if(!pattern) dumper.print("_");
+		else pattern->dump(dumper);
+	} 
+	else unresolvedExpression->dump(dumper);
+}
+void Type::dump(Dumper& dumper) const {
+	const char* str = nullptr;
+	switch(type){
+		case Type::VOID: str = "Nothing"; break;
+		case Type::TYPE: str = "Type"; break;
+		case Type::BOOL: str = "bool"; break;
+		case Type::RECORD:  str = static_cast<const Record*>(this)->declaration->label().ptr(); break;
+		case Type::VARIANT: str = static_cast<const Variant*>(this)->declaration->label().ptr(); break;
+		case Type::INTEGER: dumper.print(format("%s%d",(bits<0?"int":"uint"),bits<0? -bits:bits)); break;
+		case Type::FLOAT: str = bits == 32? "float":"double"; break;
+		case Type::CHAR:  dumper.print(format("char%d",bits)); break;
+		case Type::NATURAL: str ="natural"; break;
+		case Type::UINTPTRT: str ="uintptr"; break;
 
 		case Type::POINTER: 
-			stream<<"*"<<type->next(); break;
+			dumper.print("*");
+			next()->dump(dumper); 
+			break;
 		case Type::REFERENCE:
-			stream<<"Reference("<<type->next()<<")"; break;
+			dumper.print("Reference(");
+			next()->dump(dumper); 
+			dumper.print(")");
+			break;
 		case Type::LINEAR_SEQUENCE:
-			stream<<"LinearSequence("<<type->next()<<")"; break;
+			dumper.print("LinearSequence(");
+			next()->dump(dumper); 
+			dumper.print(")");
+			break;
 		case Type::STATIC_ARRAY:
-			stream<<"Array("<<type->next()<<","<<static_cast<StaticArray*>(type)->length()<<')'; break;
-
+			dumper.print("LinearSequence(");
+			next()->dump(dumper); 
+			dumper.print(format(",%d)",static_cast<const StaticArray*>(this)->length()));
+			break;
 		case Type::FUNCTION_POINTER: 
-			stream<<"("<<type->argument<<" -> "<<static_cast<FunctionPointer*>(type)->returns()<<')'; break;
+			dumper.print("FunctionPointer(");
+			next()->dump(dumper); 
+			dumper.print(",");
+			static_cast<const FunctionPointer*>(this)->returns()->dump(dumper);
+			dumper.print(")");
+			break;
 
 		case Type::NODE:
-			stream<<"ast.Expression";
-			if(type->nodeSubtype != -1) stream<<"("<<type->nodeSubtype<<")"; 
+			dumper.print("ast.Expression");
+			if(nodeSubtype != -1) dumper.print(format("(%d)",nodeSubtype)); 
 			break;
 		case Type::ANONYMOUS_RECORD:
 		case Type::ANONYMOUS_VARIANT:
 			{
-			auto sep = type->type == Type::ANONYMOUS_RECORD? ", ":"| ";
-			auto aggr = static_cast<AnonymousAggregate*>(type);
-			stream<<"(";
-			for(size_t i =0;i<aggr->numberOfFields;i++){
-				if(i) stream<<sep;
-				if(aggr->fields && !aggr->fields[i].isNull()) stream<<aggr->fields[i]<<": ";
-				stream<<aggr->types[i];
+			auto sep = type == Type::ANONYMOUS_RECORD? ", ":"| ";
+			auto aggr = static_cast<const AnonymousAggregate*>(this);
+			if(aggr->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)){
+				dumper.print("Vector(");
+				aggr->types[0]->dump(dumper);
+				dumper.print(format(",%d)",aggr->numberOfFields));
+			} else {
+				dumper.print("(");
+				for(size_t i =0;i<aggr->numberOfFields;i++){
+					if(i) dumper.print(sep);
+					if(aggr->fields && !aggr->fields[i].isNull()){ dumper.print(aggr->fields[i]); dumper.print(": "); };
+					aggr->types[i]->dump(dumper);
+				}
+				dumper.print(")");
 			}
-			stream<<")";
 			}
 			break;
 		case Type::VARIANT_OPTION:
-			stream<<(static_cast<VariantOption*>(type)->declaration->label()); break;
+			str = static_cast<const VariantOption*>(this)->declaration->label().ptr(); break;
 
 		case Type::TRAIT:
-			stream<<(static_cast<Trait*>(type)->declaration->label()); break;
+			str = static_cast<const Trait*>(this)->declaration->label().ptr(); break;
 
 		case Type::LITERAL_INTEGER:
-			stream<<"literal.integer"; break;
+			str = "literal.integer"; break;
 		case Type::LITERAL_FLOAT:
-			stream<<"literal.real"; break;
+			str ="literal.real"; break;
 		case Type::LITERAL_CHAR:
-			stream<<"literal.char"; break;
+			str ="literal.char"; break;
 		case Type::LITERAL_STRING:
-			stream<<"literal.string"; break;
+			str ="literal.string"; break;
 
 		case Type::QUALIFIER:
-			if(type->hasConstQualifier()) stream<<"const ";
+			if(hasConstQualifier()) dumper.print("const ");
 			else assert(false && "Invalid type qualifier");
-			stream<<type->next(); 
+			next()->dump(dumper);
 			break;
 
 	}
+	if(str) dumper.print(str);
+}
+
+std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& type){
+	auto con = Dumper::console();
+	type.dump(con);
+	return stream;
+}
+
+std::ostream& operator<< (std::ostream& stream,Type* type){
+	auto con = Dumper::console();
+	type->dump(con);
 	return stream;
 }
 
 std::ostream& operator<< (std::ostream& stream,Node* node){
-	auto d = compiler::currentUnit()->printingDecorationLevel;
-	if(d) stream<<'(';
-	if(!node->label().isNull()) stream<<node->label()<<':';
-	
-	NodeToString visitor(stream);
-	node->accept(&visitor);
-	if(d) {
-		stream<<')';
-		stream<<"::";
-		if(node->isResolved() && !node->asFunctionReference()) stream<<node->returnType();
-		else stream<<"?";
+	if(compiler::reportLevel >= compiler::ReportDebug){
+		auto con = Dumper::console();
+		con.flags |= Dumper::VERBOSE | Dumper::REF_DECL_POINTERS;
+		node->dump(con);
 	}
 	return stream;
 }

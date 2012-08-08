@@ -30,14 +30,13 @@ struct CTFEinvocation;
 struct Resolver;
 struct Argument;
 
-
-
 //Injects visitor callback and dynamic cast function into a node structure
 //Note: only does the definitions, the appropriate implementations are done by traversing NODE_LIST
 #define DECLARE_NODE(T) \
 	Node* duplicate(DuplicationModifiers* mods) const; \
 	Node* accept(NodeVisitor* visitor);    \
 	private:             \
+	void  dumpImplementation(Dumper& dumper) const; \
 	T* as##T();  \
 
 #define DECLARE_TEMPNODE(T) DECLARE_NODE(T)
@@ -143,6 +142,7 @@ public:
 	virtual Node* duplicate(DuplicationModifiers* mods) const  = 0;
 protected:
 	Node* copyProperties(Node* dest) const; 
+	
 public:
 	Node* copyLocationSymbol(Node* dest) const;//Doesn't copy the flags.. use when resolving between nodes of different types
 
@@ -153,11 +153,15 @@ public:
     Location location() const { return _location; }
 	virtual bool applyProperty(SymbolID name,Node* value){ return false; }
 
+	void dump(Dumper& dumper) const;
+
 	//Dynamic casts
 	virtual bool isDefinitionNode(){ return false; }
 #define CAST(T) virtual T* as##T() { return nullptr; }
 	NODE_LIST(CAST)
 #undef CAST
+private:
+	virtual void  dumpImplementation(Dumper& dumper) const { }
 };
 std::ostream& operator<< (std::ostream& stream,Node* node);
 
@@ -583,8 +587,8 @@ struct ScopedCommand : Node {
 		WHERE   = 0x80,
 	};
 public:
-	inline bool isVisibilityMode(data::ast::VisibilityMode mode){ return isFlagSet(mode == data::ast::PRIVATE? PRIVATE: PUBLIC); }
-	inline bool isWhere(){ return isFlagSet(WHERE); }
+	inline bool isVisibilityMode(data::ast::VisibilityMode mode) const { return isFlagSet(mode == data::ast::PRIVATE? PRIVATE: PUBLIC); }
+	inline bool isWhere() const { return isFlagSet(WHERE); }
 };
 
 /*****

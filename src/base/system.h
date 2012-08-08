@@ -16,6 +16,16 @@ namespace System {
 	void print(const char* message);
 	void debugPrint(const std::string& message);
 
+	struct OutputBuffer {
+		FILE* file;
+
+		void print(const char* message);
+		void print(const std::string& message);
+	};
+
+	OutputBuffer console();
+
+
 	//Heap allocation
 	void* malloc(size_t size);
 	void free(void* ptr);

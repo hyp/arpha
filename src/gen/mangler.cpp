@@ -1,6 +1,7 @@
 #include "../base/base.h"
 #include "../base/symbol.h"
 #include "../base/system.h"
+#include "../compiler.h"
 #include "../ast/node.h"
 #include "../ast/scope.h"
 #include "../ast/declarations.h"

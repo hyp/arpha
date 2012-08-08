@@ -59,6 +59,8 @@ struct TypePatternUnresolvedExpression {
 
 	bool resolve(Resolver* evaluator,PatternMatcher* patternMatcher = nullptr);
 	void parse(Parser* parser,int stickiness);
+
+	void dump(Dumper& dumper) const;
 };
 std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& type);
 
@@ -238,7 +240,7 @@ struct Type {
 	Node* assignableFrom(Node* expression,Type* type,uint32 filters = 0);
 	int canAssignFrom(Node* expression,Type* type,uint32 filters = 0);
 
-
+	void dump(Dumper& dumper) const;
 public:
 	enum {
 		IS_RESOLVED = 0x1,

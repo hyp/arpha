@@ -29,6 +29,31 @@ namespace arpha {
 
 void runTests();
 
+namespace {
+	System::OutputBuffer dumpToConsole;
+	bool   dumpToConsoleInited = false;
+}
+Dumper Dumper::console(){
+	if(!dumpToConsoleInited ){
+		dumpToConsole = System::console();
+		dumpToConsoleInited = true;
+	}
+
+	Dumper dumper;
+	dumper.destination = dumpToConsole;
+	dumper.indentation = 0;
+	dumper.flags = 0;
+	return dumper;
+}
+void Dumper::printIndentation(){
+	for(auto i = 0;i<indentation;++i) print("  ");
+}
+void Dumper::incIndentation(){
+	indentation++;
+}
+void Dumper::decIndentation(){
+	indentation--;
+}
 
 namespace compiler {
 
@@ -133,7 +158,6 @@ namespace compiler {
 		_currentUnit.interpreter = interpreter;
 		_currentUnit.parser      = &parser;
 		_currentUnit.moduleBody  = block;
-		_currentUnit.printingDecorationLevel = 1;
 		
 		arpha::parseModule(&parser,block);
 
@@ -250,12 +274,16 @@ namespace compiler {
 		currentModule->second.errorCount++;
 	}
 	void onAmbiguosDeclarationError(Node* declaration){
-		
+
+
 		if(auto function = declaration->asFunction()){
 			auto module = findByScope(function->owner()->moduleScope());
-			System::print(format("\t%s(%d:%d): def %s(",module->first,function->location().lineNumber,function->location().column,function->label()));
-			for(auto i = function->arguments.begin();i!=function->arguments.end();++i)
-				System::print(format("%s %s%c ",(*i)->label(),(*i)->type,(i+1)==function->arguments.end()? ')':','));
+			System::print(format("\t%s(%d:%d): ",module->first,function->location().lineNumber,function->location().column));
+			//for(auto i = function->arguments.begin();i!=function->arguments.end();++i)
+			//	System::print(format("%s %s%c ",(*i)->label(),(*i)->type,(i+1)==function->arguments.end()? ')':','));
+
+			auto con = Dumper::console();
+			function->dumpDeclaration(con);
 			System::print("\n");
 		} else assert(false);
 	}

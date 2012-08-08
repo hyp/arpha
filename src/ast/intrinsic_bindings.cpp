@@ -1,6 +1,6 @@
-#include "../compiler.h"
 #include "../base/symbol.h"
 #include "../base/bigint.h"
+#include "../compiler.h"
 #include "scope.h"
 #include "node.h"
 #include "declarations.h"
@@ -555,7 +555,6 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 	}
 	else if(function->label() == "Tuple" && !Type::generators::tuple){
 		Type::generators::tuple = function;
-		function->arguments[0]->setFlag(Argument::IS_VARARG);//???
 		function->intrinsicCTFEbinder = Generator::tuple;
 	}
 	else if(function->label() == "Const" && !Type::generators::constQualifier){

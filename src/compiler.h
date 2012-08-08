@@ -8,6 +8,8 @@
 struct Scope;
 
 #include "base/base.h"
+#include "base/system.h"
+#include "base/symbol.h"
 #include "syntax/location.h"
 
 struct Parser;
@@ -23,8 +25,33 @@ struct CompilationUnit {
 	Resolver* resolver;
 	Interpreter* interpreter;
 	BlockExpression* moduleBody;
+};
 
-	int printingDecorationLevel;
+// Dumps AST to console/file
+struct Dumper {
+private:
+	System::OutputBuffer destination;
+	int indentation;
+public:	
+	uint32 flags;
+	enum {
+		VERBOSE = 0x1,
+		REF_DECL_POINTERS = 0x2,
+	};
+
+	inline void print(const char* str) { destination.print(str); }
+	inline void print(SymbolID symbol) { destination.print(symbol.ptr()); }
+	inline void print(std::string &str) { destination.print(str); }
+
+	//varios decorators
+	inline bool isVerbose() { return (flags & VERBOSE) != 0; }
+	inline bool refDeclPointers(){ return (flags & REF_DECL_POINTERS) != 0; }
+
+	void printIndentation();
+	void incIndentation();
+	void decIndentation();
+
+	static Dumper console();
 };
 
 namespace compiler {

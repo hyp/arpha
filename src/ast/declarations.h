@@ -86,7 +86,7 @@ struct Variable : PrefixDefinition  {
 struct Argument : Variable {
 	enum {
 		IS_EXPENDABLE = 0x10, //Is this argument expendable?
-		IS_VARARG = 0x20
+		IS_VARARG = 0x40
 	};
 
 	Argument(SymbolID name,Location& location,Function* owner);
@@ -186,7 +186,9 @@ struct Function: public PrefixDefinition {
 	Function(SymbolID name,Location& location);
 
 	bool applyProperty(SymbolID name,Node* value);
-	
+
+	void dumpDeclaration(Dumper& dumper) const;
+
 	
 	Node* parse(Parser* parser);
 	Node* createReference();

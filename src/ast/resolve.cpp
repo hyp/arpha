@@ -1,6 +1,6 @@
-#include "../compiler.h"
 #include "../base/symbol.h"
 #include "../base/bigint.h"
+#include "../compiler.h"
 #include "scope.h"
 #include "node.h"
 #include "declarations.h"
@@ -933,6 +933,8 @@ Node* ScopedCommand::resolve(Resolver* resolver){
 
 // TODO better error reporting!
 void Resolver::reportUnresolvedNode(Node* node){
+	auto console = Dumper::console();
+
 	if(!node->asBlockExpression() && !node->asErrorExpression() && !node->asTupleExpression()){
 		std::string error;
 		if(auto unr = node->asUnresolvedSymbol()){
@@ -952,23 +954,15 @@ void Resolver::reportUnresolvedNode(Node* node){
 				for(overloads::OverloadRange overloads(scope,unr->symbol,call->isFlagSet(CallExpression::DOT_SYNTAX));!overloads.isEmpty();overloads.advance()){
 					if(!overloads.currentFunction()->isResolved()) continue;
 					if(!header){
-						System::print(format("\tThe available overloads for the function '%s' are:",unr->symbol));
+						console.print(format("\tThe available overloads for the function '%s' are:",unr->symbol));
 						header = true;
 					}
-					std::stringstream def;
-					auto f = overloads.currentFunction();
-					def<<"\n\t  def "<<f->label()<<"(";
-					for(auto i = f->arguments.begin();i!=f->arguments.end();++i){
-						def<<(*i)->label()<<" "<<(*i)->type;
-						if((*i)->defaultValue()) def<<" = "<<(*i)->defaultValue();
-						if((i+1) != f->arguments.end()) def<<",";
-					}
-					def<<") "<<f->_returnType;
-					System::print(def.str());
+					console.print("\n\t\t");
+					overloads.currentFunction()->dumpDeclaration(console);
 				}
 				if(!header)
-					System::print(format("\tThere are no available overloads for the function '%s'! Perphaps you've misspelled the function?\n",unr->symbol));
-				else System::print("\n\n");
+					console.print(format("\tThere are no available overloads for the function '%s'! Perphaps you've misspelled the function?\n",unr->symbol));
+				else console.print("\n\n");
 				return;
 			}
 		} 
@@ -2021,9 +2015,9 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 		if(argsCount > 0){
 			bool matches = false;
 			auto lastParameter = func->arguments[argsCount-1];
-			if(lastParameter->type.isPattern()){
-				if(lastParameter->isVararg()) return false;
+			if(!lastParameter->isVararg()) return false;
 
+			if(lastParameter->type.isPattern()){
 				if(auto pattern = func->arguments[argsCount-1]->type.pattern){
 					TypePatternUnresolvedExpression::PatternMatcher matcher(func->body.scope,evaluator);
 					//construct a record from the tailed parameters
@@ -2042,7 +2036,7 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 					//All must be type
 					for(auto i = argsCount - 1;i < expressionCount;i++) if(!exprBegin[i]->returnType()->isType()) return false;
 				}
-				else if(!lastParameter->type.type()->isSame(intrinsics::types::NodePointer)) return false;
+				return false;
 			}
 			argsCount--;
 			checked[argsCount] = true;

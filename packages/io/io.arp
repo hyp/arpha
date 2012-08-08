@@ -9,20 +9,8 @@ def print(string Range(char8))
 	}
 }
 
-# TODO:
-# This is a possible syntax for print("x = $x")
-def print(splice arpha.literal.splice)
+macro print(parameters..)
 {
-      for(i in splice) print(i)
+	return [> for(i in $parameters) print(i) <]
 }
 
-# These are temporary hacks:
-macro print(a,b) = [>
-	print($a)
-	print($b)
-<]
-macro print(a,b,c) = [>
-	print($a)
-	print($b)
-	print($c)
-<]

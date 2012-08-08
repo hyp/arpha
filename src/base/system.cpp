@@ -45,6 +45,24 @@ void System::print(const char* message){
 		std::cout<<message;
 	#endif
 }
+System::OutputBuffer System::console(){
+	OutputBuffer con = { stdout };
+	return con;
+}
+void System::OutputBuffer::print(const char* message){
+	#ifdef  _WIN32
+		fwprintf(file,L"%S", message); 
+	#else
+		fprintf(file,"%s",message);
+	#endif
+}
+void System::OutputBuffer::print(const std::string& message){
+	#ifdef  _WIN32
+		fwprintf(file,L"%S", message.c_str()); 
+	#else
+		fprintf(file,"%s",message.c_str());
+	#endif
+}
 void System::debugPrint(const std::string& message){
 	#ifdef  _WIN32
 		auto cstr = message.c_str();
