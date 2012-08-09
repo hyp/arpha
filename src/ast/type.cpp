@@ -1128,6 +1128,27 @@ static inline bool isIntOrChar(Type* t){
 	return t->isInteger() || t->isChar();
 }
 
+Type* Type::getCommon(Node** elements,size_t count){
+	auto commonType = elements[0]->returnType();
+	auto end = elements+count;
+	for(auto i = elements;i!=end;++i){
+		auto type = (*i)->returnType();
+		if(type->isFloat()){
+			if(commonType->isFloat() && type->bits > commonType->bits) commonType = type;
+			else if(commonType->isInteger()) commonType = type;
+		}
+		else if(type->isChar()){
+			if(commonType->isChar() && type->bits > commonType->bits) commonType = type;
+		}
+		else if(type->isInteger()){
+			if(commonType->isInteger()){
+				if(std::abs(type->bits) > std::abs(commonType->bits)) commonType = type; 
+			}
+		}
+	}
+	return commonType;
+}
+
 /**
 Scenarios:
   integers <=> integers

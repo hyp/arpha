@@ -48,7 +48,7 @@ struct Argument;
 	X(CharacterLiteral) \
 	X(BoolExpression) \
 	X(StringLiteral)  \
-	X(ArrayLiteral)   \
+	X(ArrayExpression)   \
 	X(UnitExpression) \
 	X(ErrorExpression)        \
 	X(TypeReference)          \
@@ -289,13 +289,14 @@ struct NodeList : Node {
 	Node* duplicateChildren(NodeList* dest,DuplicationModifiers* mods) const ;
 };
 
-struct ArrayLiteral : NodeList {
-	ArrayLiteral();
+struct ArrayExpression : NodeList {
+	ArrayExpression();
 	
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
 
-	DECLARE_NODE(ArrayLiteral);
+	Type* explicitType;
+	DECLARE_NODE(ArrayExpression);
 };
 
 

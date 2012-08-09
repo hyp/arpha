@@ -22,7 +22,6 @@
 
 namespace arpha {
 	void defineCoreSyntax(Scope* scope);
-	void defineIntrinsicSyntax(Scope* scope);
 
 	BlockExpression* parseModule(Parser* parser,BlockExpression* block);
 };
@@ -137,7 +136,6 @@ namespace compiler {
 			//import 'arpha' by default
 			arpha::defineCoreSyntax(block->scope);
 			compiler::registerResolvedIntrinsicModuleCallback("arpha/types",intrinsics::types::preinit);
-			compiler::registerResolvedIntrinsicModuleCallback("arpha/intrinsic",arpha::defineIntrinsicSyntax);
 		}
 		else {
 			auto cb = postCallbacks.find(moduleName);

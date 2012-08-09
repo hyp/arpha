@@ -1,0 +1,16 @@
+import io, algorithms
+
+var array = [0,1,2,3,4,5]
+
+def main()
+{
+	var r = find(array,2)
+	if(!r.empty) print("found 2!")
+	
+	replace(array,2,42)
+	r = find(array,42)
+	if(!r.empty) print("found 42!")
+	
+	def n = count(array,0)
+	if(n == 1) print("There is one zero!")
+}

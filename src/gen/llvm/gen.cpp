@@ -132,6 +132,7 @@ struct LLVMgenerator: NodeVisitor {
 
 	void emitCreateLinearSequence(llvm::Value* ptr,llvm::Value* length,Type* next);
 
+	Node* visit(ArrayExpression* node);
 	Node* visit(VariableReference* node);
 	Node* visit(AssignmentExpression* node);
 	Node* visit(FieldAccessExpression* node);
@@ -415,6 +416,58 @@ llvm::AllocaInst* LLVMgenerator::genLocalVariable(Type* type){
 	return _builder.CreateAlloca(genType(type),nullptr,"localTemp");
 }
 
+llvm::Constant* genDefaultInitializer(llvm::Type* type){
+	if(type->isIntegerTy()) return llvm::ConstantInt::get(type,0);
+	else if(type->isFloatTy()) return llvm::ConstantFP::get(type,0);
+	else if(type->isPointerTy()) return llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(type));
+	else return llvm::ConstantAggregateZero::get(type);
+}
+llvm::Constant* genInitializer(LLVMgenerator* generator,Node* value){
+	if(auto tuple = value->asTupleExpression()){
+		std::vector<llvm::Constant*> constants(tuple->size());
+		size_t j= 0;
+		for(auto i =tuple->begin();i!=tuple->end();++i,++j) constants[j] = genInitializer(generator,*i);
+		return llvm::ConstantStruct::get(llvm::dyn_cast<llvm::StructType>(generator->genType(tuple->returnType())),constants);
+	}
+	else if(auto arr = value->asArrayExpression()){
+		std::vector<llvm::Constant*> constants(arr->size());
+		size_t j= 0;
+		for(auto i =arr->begin();i!=arr->end();++i,++j) constants[j] = genInitializer(generator,*i);
+		return llvm::ConstantArray::get( llvm::ArrayType::get(generator->genType(arr->explicitType->next()),arr->size()),constants);
+	}
+	auto expr = generator->generateExpression(value);
+	return llvm::dyn_cast<llvm::Constant>(expr);
+}
+
+Node* LLVMgenerator::visit(ArrayExpression* node){
+	auto t = llvm::ArrayType::get(genType(node->explicitType->next()),node->size());
+	bool neededPointer = needsPointer;
+	needsPointer = false;
+
+	if(node->isFlagSet(Node::CONSTANT)){
+		auto var = new llvm::GlobalVariable(*module,t,true,llvm::GlobalValue::CommonLinkage,genInitializer(this,node),"array",nullptr,false);
+		llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0);
+		llvm::Value *Args[] = { zero, zero };
+		auto begin = builder.CreateInBoundsGEP(var, Args, "");
+		emitRangePointerPair(begin,node->size(),neededPointer);
+	}	else {
+		//local array
+		auto block = builder.GetInsertBlock();
+		llvm::IRBuilder<> _builder(block,block->begin());
+		auto var = _builder.CreateAlloca(t,nullptr,"localarr");
+
+		llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0);
+		llvm::Value *Args[] = { zero, zero };
+		auto begin = builder.CreateInBoundsGEP(var, Args, "");
+		size_t j = 0;
+		for(auto i = node->begin();i!=node->end();++i,++j){
+			auto e= generateExpression(*i);
+			builder.CreateStore(e,builder.CreateGEP(begin,builder.getInt32(j)));
+		}
+		emitRangePointerPair(begin,node->size(),neededPointer);
+	}
+	return node;
+}
 Node* LLVMgenerator::visit(VariableReference* node){
 	//if(node->variable->asArgument())
 	//	emit(unmap(node->variable));
@@ -1219,20 +1272,6 @@ llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* var
 	map(variable,var);
 
 	return var;
-}
-
-llvm::Constant* genDefaultInitializer(llvm::Type* type){
-	if(type->isIntegerTy()) return llvm::ConstantInt::get(type,0);
-	else if(type->isFloatTy()) return llvm::ConstantFP::get(type,0);
-	else if(type->isPointerTy()) return llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(type));
-	else return llvm::ConstantAggregateZero::get(type);
-}
-llvm::Constant* genInitializer(LLVMgenerator* generator,Node* value){
-	if(value->asTupleExpression()){
-		//TODO
-	}
-	auto expr = generator->generateExpression(value);
-	return llvm::dyn_cast<llvm::Constant>(expr);
 }
 
 Node* LLVMgenerator::visit(Variable* variable){

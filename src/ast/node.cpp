@@ -150,12 +150,13 @@ Node* StringLiteral::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new StringLiteral(block.duplicate(),explicitType));
 }
 
-ArrayLiteral::ArrayLiteral(){}
-Type* ArrayLiteral::returnType() const {
-	return intrinsics::types::Void;//TODO
+ArrayExpression::ArrayExpression() :explicitType(nullptr) {}
+Type* ArrayExpression::returnType() const {
+	return explicitType? explicitType : intrinsics::types::Void;//TODO
 }
-Node* ArrayLiteral::duplicate(DuplicationModifiers* mods) const {
-	auto dup = new ArrayLiteral;
+Node* ArrayExpression::duplicate(DuplicationModifiers* mods) const {
+	auto dup = new ArrayExpression;
+	dup->explicitType = explicitType;
 	return copyProperties(duplicateChildren(dup,mods));
 }
 

@@ -143,6 +143,8 @@ struct Type {
 
 	bool   canCastTo(Type* other);
 
+	static Type* getCommon(Node** elements,size_t count);
+
 	
 
 	//

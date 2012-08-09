@@ -174,10 +174,14 @@ Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
 	auto ret = params[0]->returnType();
 
 	if(ret->isInteger() || ret->isPlatformInteger() || ret->isUintptr()){
-		BigInt& operand1 = params[0]->asIntegerLiteral()->integer; 
+		auto int0= params[0]->asIntegerLiteral();
+		BigInt& operand1 = int0->integer; 
 		if(isCalculationOperation(op)){ 
 			doCalculation(op,operand1,calculationOperationNumberOfParameters(op) == 1? operand1 : params[1]->asIntegerLiteral()->integer); 
-			if(ret->isInteger()){
+			if(int0->isUntypedLiteral()){
+				int0->explicitType = Type::getBestFitIntegerType(int0->integer); //NB: required after operations which overflow, e.g. 2billion :: int32 + 1billion :: int32 = 3billion :: uint32
+			}
+			else{
 				if(integerOverflowOccured(ret,op,operand1)) error(params[0],"Integer overflow occured when performing an integer calculation at compile time");
 			}
 		} 

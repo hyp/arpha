@@ -139,6 +139,9 @@ Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilat
 
 
 Node* Resolver::resolve(Node* node){
+	auto oldNode= _prevNodes[0];
+	_prevNodes[0] = _prevNodes[1];
+	_prevNodes[1] = node;
 	if(node->isResolved()) return node;
 	auto result = node->resolve(this);
 	if(!result->isResolved()) markUnresolved(result);
@@ -153,6 +156,8 @@ Node* Resolver::resolve(Node* node){
 			result = resolve(result);
 		}
 	}
+	_prevNodes[1] = _prevNodes[0];
+	_prevNodes[0] = oldNode;
 	return result;
 }
 
@@ -174,12 +179,25 @@ Node* Node::resolve(Resolver* resolver){
 	return this;
 }
 
-Node* ArrayLiteral::resolve(Resolver* resolver){
+Node* ArrayExpression::resolve(Resolver* resolver){
 	if(resolveChildren(this,resolver)){
-		resolver->markResolved(this);
+		Type* elementType = Type::getCommon(begin()._Ptr,size());
 		bool allConst = true;
-		for(auto i = begin();i!=end();i++){ if(!(*i)->isConst()) allConst = false; }
-		if(allConst) setFlag(CONSTANT);
+		for(auto i = begin();i!=end();++i){
+			if(auto expr = elementType->assignableFrom(*i,(*i)->returnType())) *i = expr;
+			else {
+				error(*i,"Can't convert the expression to type ",(*i)->returnType());
+				return ErrorExpression::getInstance();
+			}
+			if(!(*i)->isConst()) allConst = false; 
+		}
+
+		resolver->markResolved(this);
+		if(allConst){
+			setFlag(CONSTANT);
+			
+		}
+		explicitType = StaticArray::get(elementType,size());
 	}
 	return this;
 }
@@ -283,6 +301,11 @@ Scenarios:
 		{ ret = 1 * y }
 		ret
 	}
+
+	x = f(1,y) =>
+	{
+		x = { 1 * y }
+	}
 */
 Node* Resolver::inlineCall(Function* function,Node* parameters){
 
@@ -292,6 +315,8 @@ Node* Resolver::inlineCall(Function* function,Node* parameters){
 	wrapper->_location = parameters->location();
 
 	DuplicationModifiers mods(wrapper->scope);
+
+	bool oneReturn = false;
 
 	if(function->arguments.size()){
 		Node** parametersPointer;
@@ -313,18 +338,21 @@ Node* Resolver::inlineCall(Function* function,Node* parameters){
 		}
 	}
 	if(!function->returns()->isVoid()){
-		auto var = new Variable("A@ret",parameters->location());
-		var->type.specify(function->returns());
-		wrapper->addChild(var);
-		mods.returnValueRedirector = var;
+		if(function->body.childrenPtr()[0]->asReturnExpression()) oneReturn = true;
+		else {
+			auto var = new Variable("A@ret",parameters->location());
+			var->type.specify(function->returns());
+			wrapper->addChild(var);
+			mods.returnValueRedirector = var;
+		}
 	}
 
 	auto  block = &function->body;
 	if(block->size()){
-		wrapper->addChild(block->duplicateMixin(&mods));
+		wrapper->addChild(oneReturn? block->childrenPtr()[0]->asReturnExpression()->expression : block->duplicateMixin(&mods));
 	}
 
-	wrapper->addChild(mods.returnValueRedirector? (Node*)new VariableReference(mods.returnValueRedirector) : new UnitExpression());
+	if(!oneReturn) wrapper->addChild(mods.returnValueRedirector? (Node*)new VariableReference(mods.returnValueRedirector) : new UnitExpression());
 	return wrapper;	
 }
 

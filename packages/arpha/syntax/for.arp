@@ -1,5 +1,6 @@
 #
-	This module implements the for statement
+	This module implements the for statement.
+	It is used to iterate over the elements of a range or a tuple.
 #
 import arpha.intrinsic
 
@@ -18,7 +19,7 @@ macro foreach(collection Range,i,body)
 	<]
 }
 
-# Foreach over tuple unfolds the loop.
+# The compiler unrolls the foreach over tuples.
 def   foreach(tuple Tuple,i,body)
 
 macro foreach(collection,i,body) = [> arpha.compiler.error("Invalid for loop - can't iterate over collection of type $(typeof($collection))!") <]

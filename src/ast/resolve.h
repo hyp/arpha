@@ -16,6 +16,7 @@ private:
 	CompilationUnit* _compilationUnit;
 	Scope* _currentScope;
 	Node* _currentParent;
+	Node* _prevNodes[2];
 	bool reportUnevaluated;
 	size_t unresolvedExpressions;
 public:
@@ -65,6 +66,8 @@ public:
 
 	inline void currentParentNode(Node* node) { _currentParent = node; }
 	inline Node* currentParentNode() const    { return _currentParent; }
+
+	inline Node* previousNode() const { return _prevNodes[0]; }
 
 	inline void markResolved(Node* node){ node->setFlag(Node::RESOLVED); }
 	void markUnresolved(Node* node);

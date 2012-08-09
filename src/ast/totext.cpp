@@ -59,7 +59,7 @@ void NodeReference::dumpImplementation(Dumper& dumper) const {
 	node()->dump(dumper);
 	dumper.print(" <]");
 }
-void ArrayLiteral::dumpImplementation(Dumper& dumper) const {
+void ArrayExpression::dumpImplementation(Dumper& dumper) const {
 	dumper.print("[ ");
 	for(auto i = begin();i!=end();++i){
 		(*i)->dump(dumper);
@@ -316,7 +316,7 @@ void Type::dump(Dumper& dumper) const {
 			dumper.print(")");
 			break;
 		case Type::STATIC_ARRAY:
-			dumper.print("LinearSequence(");
+			dumper.print("Array(");
 			next()->dump(dumper); 
 			dumper.print(format(",%d)",static_cast<const StaticArray*>(this)->length()));
 			break;

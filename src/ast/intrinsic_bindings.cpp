@@ -283,8 +283,12 @@ static void initMapping(){
 	//arpha.compiler
 	auto major = new IntegerLiteral((uint64)0,Type::getNaturalType());major->label("major");
 	auto minor = new IntegerLiteral((uint64)1,Type::getNaturalType());minor->label("minor");
+	auto tuple = new TupleExpression(major,minor);
+	AnonymousAggregate::Field fields[2] = { { "major",Type::getNaturalType() } , { "minor",Type::getNaturalType() } };
+	tuple->type = AnonymousAggregate::create(fields,2);
+	tuple->setFlag(Node::RESOLVED | Node::CONSTANT);
 	variableMapping["compiler.vendor"]  = new StringLiteral("arpha");
-	variableMapping["compiler.version"] = new TupleExpression(major,minor);
+	variableMapping["compiler.version"] = tuple;
 	MAP_PROP("print([]char8)",0,{
 		compiler::onDebug(invocation->getStringParameter(0));
 		invocation->ret();

@@ -1,7 +1,6 @@
 import spec
 
 describe "A 'for' statement" {
-
 	it "should iterate over all elements in a given range" {
 		var iteration natural = 0
 		for(c in "10"){
@@ -11,5 +10,13 @@ describe "A 'for' statement" {
 		}
 		iteration should be 2
 	}
-	
+	it "should unroll the iteration over a tuple" {
+		var iteration natural = 0
+		for(i in 1,2){
+			if(iteration == 0) i should be 1
+			else i should be 2
+			iteration++
+		}
+		iteration should be 2
+	}
 }

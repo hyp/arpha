@@ -209,6 +209,24 @@ struct AccessParser: IntrinsicInfixMacro {
 	}
 };
 
+/// expressions ::= expression ',' expressions | expression
+/// array       ::= '[' expressions ']'
+struct ArrayParser: IntrinsicPrefixMacro {
+	SymbolID closingParenthesis;
+	ArrayParser(): IntrinsicPrefixMacro("[") {
+		closingParenthesis = "]";
+	}
+	Node* parse(Parser* parser){
+		if( parser->match(closingParenthesis) )
+			return new UnitExpression;
+		auto arr = new ArrayExpression();
+		do arr->addChild(parser->parse(arpha::Precedence::Tuple));
+		while(parser->match(","));
+		parser->expect(closingParenthesis);
+		return arr;
+	}
+};
+
 /// ::= expression '=' [Newlines] expression
 struct AssignmentParser: IntrinsicInfixMacro {
 	AssignmentParser(): IntrinsicInfixMacro("=",arpha::Precedence::Assignment) { }
@@ -1132,6 +1150,7 @@ void defineCoreSyntax(Scope* scope){
 	scope->define(new CallParser);
 	scope->define(new TupleParser);
 	scope->define(new AccessParser);
+	scope->define(new ArrayParser);
 	scope->define(new AssignmentParser);
 
 	scope->define(new DefParser);
@@ -1154,10 +1173,6 @@ void defineCoreSyntax(Scope* scope){
 	scope->define(new WhereParser);
 
 	scope->define(new CaptureParser);
-}
-
-void defineIntrinsicSyntax(Scope* scope){
-
 }
 
 }
