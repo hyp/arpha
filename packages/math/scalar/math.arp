@@ -14,7 +14,5 @@ macro defineMathFunctions(T Type) = [>
 	
 <]
 
-defineMathFunctions(arpha.literal.real)
-
 defineMathFunctions(float)
 defineMathFunctions(double)

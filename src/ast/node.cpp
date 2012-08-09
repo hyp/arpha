@@ -89,27 +89,20 @@ Node* NodeList::duplicateChildren(NodeList* dest,DuplicationModifiers* mods) con
 // Integer literals
 IntegerLiteral::IntegerLiteral(const BigInt& integer,Type* t){
 	this->integer = integer;
-	explicitType = t;
+	explicitType = t? t : Type::getBestFitIntegerType(integer);
+	if(t) setFlag(LiteralNode::EXPLICIT_TYPE);
 }
 Type* IntegerLiteral::returnType() const{
 	return explicitType;
-	/*//TODO integers overflowing int64 max/min
-	if(integer.isNegative()){
-		if(>= !(integer < intrinsics::types::int32->integer->min)) return intrinsics::types::int32;
-		else return intrinsics::types::int64;
-	}
-	else{
-		if(integer <= intrinsics::types::int32->integer->max) return intrinsics::types::int32;
-		else if(integer <= intrinsics::types::uint32->integer->max) return intrinsics::types::uint32;
-		else if(integer <= intrinsics::types::int64->integer->max) return intrinsics::types::int64;
-		else return intrinsics::types::uint64;
-	}*/
 }
 Node* IntegerLiteral::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new IntegerLiteral(integer,explicitType));
 }
 
-FloatingPointLiteral::FloatingPointLiteral(const double v,Type* t): value(v),explicitType(t) {}
+FloatingPointLiteral::FloatingPointLiteral(const double v,Type* t): value(v) {
+	explicitType = t? t : Type::getFloatType(64);
+	if(t) setFlag(LiteralNode::EXPLICIT_TYPE);
+}
 Type* FloatingPointLiteral::returnType() const {
 	return explicitType;
 }
@@ -117,7 +110,10 @@ Node* FloatingPointLiteral::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new FloatingPointLiteral(value,explicitType));
 }
 
-CharacterLiteral::CharacterLiteral(UnicodeChar c,Type* t) : value(c),explicitType(t) {}
+CharacterLiteral::CharacterLiteral(UnicodeChar c,Type* t) : value(c) {
+	explicitType = t? t : Type::getCharType(32);
+	if(t) setFlag(LiteralNode::EXPLICIT_TYPE);
+}
 Type* CharacterLiteral::returnType() const {
 	return explicitType;
 }
@@ -125,7 +121,9 @@ Node* CharacterLiteral::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new CharacterLiteral(value,explicitType));
 }
 
-BoolExpression::BoolExpression(const bool v) : value(v) { }
+BoolExpression::BoolExpression(const bool v) : value(v) { 
+	setFlag(RESOLVED | CONSTANT);
+}
 Type* BoolExpression::returnType() const {
 	return intrinsics::types::boolean;
 }
@@ -133,7 +131,9 @@ Node* BoolExpression::duplicate(DuplicationModifiers* mods) const {
 	return copyProperties(new BoolExpression(value));
 }
 
-StringLiteral::StringLiteral(memory::Block& block,Type* t) : explicitType(t){
+StringLiteral::StringLiteral(memory::Block& block,Type* t) {
+	explicitType = t? t : Type::getLinearSequence(Type::getCharType(8));
+	if(t) setFlag(LiteralNode::EXPLICIT_TYPE);
 	this->block.aquire(block);
 }
 
@@ -171,6 +171,7 @@ Node* UnitExpression::duplicate(DuplicationModifiers* mods) const {
 //Scope reference
 ImportedScopeReference::ImportedScopeReference(ImportedScope* scope){
 	this->scope = scope;
+	setFlag(CONSTANT | RESOLVED);
 }
 Type* ImportedScopeReference::returnType() const {
 	return intrinsics::types::Void;//TODO
@@ -482,6 +483,7 @@ Node* ScopedCommand::duplicate(DuplicationModifiers* mods) const {
 
 
 NodeReference::NodeReference(Node* node) : _node(node) {
+	setFlag(CONSTANT | RESOLVED);
 }
 Type* NodeReference::returnType() const { 
 	return intrinsics::types::NodePointer; 

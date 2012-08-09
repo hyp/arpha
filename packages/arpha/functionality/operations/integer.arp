@@ -27,8 +27,6 @@ macro defineIntegerOperations(T Type) = [>
 	def greaterEquals(x $T,y $T) bool
 <]
 
-defineIntegerOperations(arpha.literal.integer)
-
 defineIntegerOperations(int8)
 defineIntegerOperations(int16)
 defineIntegerOperations(int32)

@@ -15,7 +15,5 @@ macro defineTrigFunctions(T Type) = [>
 	def atan2(x $T,y $T) $T
 <]
 
-defineTrigFunctions(arpha.literal.real)
-
 defineTrigFunctions(float)
 defineTrigFunctions(double)

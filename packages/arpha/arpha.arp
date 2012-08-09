@@ -5,7 +5,6 @@
 #
 
 import export types
-import export qualified literal #literal types
 
 import export qualified compiler
 

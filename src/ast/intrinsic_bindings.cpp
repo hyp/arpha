@@ -61,12 +61,6 @@ std::string mangleArgType(Type* type){
 	} else if(type->isLinearSequence()){
 		return std::string("[]")+mangleArgType(type->next());
 	}
-	else if(type->isLiteral()){
-		if(type->type == Type::LITERAL_INTEGER) return "literal.integer";
-		else if(type->type == Type::LITERAL_FLOAT) return "literal.real";
-		else if(type->type == Type::LITERAL_CHAR) return "literal.char";
-		else if(type->type == Type::LITERAL_STRING) return "literal.string";
-	}
 	return "";
 }
 
@@ -135,13 +129,13 @@ void mapCharOperations(const char* t1){
 
 void mapStandartOperations(Type* t){
 	auto s =mangleArgType(t);
-	if(t->isInteger() || t->type == Type::LITERAL_INTEGER || t->isPlatformInteger() || t->isUintptr() ){
+	if(t->isInteger() || t->isPlatformInteger() || t->isUintptr() ){
 		mapIntegerOperations(s.c_str());
 	}
-	else if(t->isChar() || t->type == Type::LITERAL_CHAR){
+	else if(t->isChar() ){
 		mapCharOperations(s.c_str());
 	}
-	else if(t->isFloat() || t->type == Type::LITERAL_FLOAT){
+	else if(t->isFloat() ){
 		mapRealOperations(s.c_str());
 	}
 	else if(t->isBool()){
@@ -171,12 +165,6 @@ static void initMapping(){
 	*/
 	MAP("equals(Type,Type)",   { invocation->ret(invocation->getTypeParameter(0)->isSame(invocation->getTypeParameter(1))); });
 	MAP("isParametrized(Type)",{ invocation->ret(invocation->getTypeParameter(0)->wasGenerated()); });
-
-#define MAP_LITERAL_TYPE(s,T) variableMapping[std::string("literal.")+s] = new TypeReference(T)
-	MAP_LITERAL_TYPE("integer",Type::getIntegerLiteralType());
-	MAP_LITERAL_TYPE("real"   ,Type::getFloatLiteralType());
-	MAP_LITERAL_TYPE("char"   ,Type::getCharLiteralType());
-	MAP_LITERAL_TYPE("string" ,Type::getStringLiteralType());
 
 	//arpha.ast.ast
 	int nodeSubtype = -1;
@@ -236,7 +224,7 @@ static void initMapping(){
 	});
 	MAP_PROP("newVariable([]char8,bool)",0,{
 		auto v = new Variable(invocation->getStringParameterAsSymbol(0),Location());
-		if(invocation->getBoolParameter(1)) v->setFlag(Variable::IS_IMMUTABLE);
+		if(invocation->getBoolParameter(1) == false) v->setFlag(Variable::IS_IMMUTABLE);
 		invocation->ret(v);
 	});
 	MAP_PROP("newVariableReference(Expression)",0,{
@@ -293,19 +281,15 @@ static void initMapping(){
 	});
 
 	//arpha.compiler
-	MAP_PROP("print(literal.string)",0,{
+	MAP_PROP("print([]char8)",0,{
 		compiler::onDebug(invocation->getStringParameter(0));
 		invocation->ret();
 	});
-	MAP_PROP("error(literal.string)",0,{
+	MAP_PROP("error([]char8)",0,{
 		compiler::onError(invocation->getInvocationLocation(),invocation->getStringParameter(0));
 		invocation->ret();
 	});
-	MAP_PROP("error(literal.splice)",0,{
-		compiler::onError(invocation->getInvocationLocation(),invocation->getStringParameter(0));
-		invocation->ret();
-	});
-	MAP_PROP("warning(literal.string)",0,{
+	MAP_PROP("warning([]char8)",0,{
 		compiler::onWarning(invocation->getInvocationLocation(),invocation->getStringParameter(0));
 		invocation->ret();
 	});
@@ -321,10 +305,14 @@ static void initMapping(){
 		for(size_t i = 0;i < tt->numberOfFields;++i){
 			auto subBlock = new BlockExpression();
 			mods.target = subBlock->scope;
-			if(i == 0) subBlock->addChild(new AssignmentExpression(item,t? t->childrenPtr()[i] : new FieldAccessExpression(tuple,i) )); 
+			if(i == 0){
+				subBlock->scope->define(item->asVariable());
+				subBlock->addChild(new AssignmentExpression(item,t? t->childrenPtr()[i] : new FieldAccessExpression(tuple,i) )); 	
+			}
 			else {
 				auto var = new Variable(item->label(),item->location());
 				var->setFlag(Variable::IS_IMMUTABLE);
+				subBlock->scope->define(var);
 				subBlock->addChild(new AssignmentExpression(var,t? t->childrenPtr()[i] : new FieldAccessExpression(tuple,i) ));
 			}
 			subBlock->addChild(i == 0? body : body->duplicate(&mods));
@@ -339,7 +327,6 @@ static void initMapping(){
 	*arpha.functionality.operations.integer
 	*/
 
-	mapStandartOperations(Type::getIntegerLiteralType());
 	mapStandartOperations(intrinsics::types::int32);
 	mapStandartOperations(intrinsics::types::int8);
 	mapStandartOperations(intrinsics::types::int16);
@@ -351,13 +338,11 @@ static void initMapping(){
 	mapStandartOperations(Type::getNaturalType());
 	mapStandartOperations(Type::getUintptrType());
 
-	mapStandartOperations(Type::getFloatLiteralType());
 	mapStandartOperations(Type::getFloatType(32));
 	mapStandartOperations(Type::getFloatType(64));
 
 	mapStandartOperations(intrinsics::types::boolean);
 
-	mapStandartOperations(Type::getCharLiteralType());
 	mapStandartOperations(Type::getCharType(8));
 	mapStandartOperations(Type::getCharType(16));
 	mapStandartOperations(Type::getCharType(32));
@@ -586,10 +571,6 @@ Node* Variable::getIntrinsicValue(Variable* variable){
 Trait* Trait::intrinsic::splice = nullptr;
 void Trait::mapIntrinsicConcept(Trait* trait){
 
-	auto name = trait->declaration->label();
-	if(name == "splice" && !(Trait::intrinsic::splice)){
-		Trait::intrinsic::splice = trait;
-	}
 
 }
 

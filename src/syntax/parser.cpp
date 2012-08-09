@@ -84,7 +84,7 @@ Node* Parser::spliceString(Token& token){
 	auto begin = block.ptr();
 	auto end = block.ptr() + block.length();
 	if(std::find(begin,end,'$') == end){
-		return new StringLiteral(block,Type::getStringLiteralType());
+		return new StringLiteral(block);
 	}
 	State state;
 	
@@ -94,7 +94,7 @@ Node* Parser::spliceString(Token& token){
 	for(auto i=begin;i<end;++i){
 		if(*i == '$'){
 			if(i != begin){
-				result = new StringLiteral(memory::Block::construct(begin,i - begin),Type::getStringLiteralType()); 
+				result = new StringLiteral(memory::Block::construct(begin,i - begin)); 
 				if(splice) splice->addChild(result);
 			}
 
@@ -125,7 +125,7 @@ Node* Parser::spliceString(Token& token){
 	//if(splice) splice->type = Trait::intrinsic::splice;
 	if((end - begin) == 0 && result) return splice? splice: result;
 
-	auto expr = new StringLiteral(memory::Block::construct(begin,end - begin),Type::getStringLiteralType()); 
+	auto expr = new StringLiteral(memory::Block::construct(begin,end - begin)); 
 	if(result){
 		if(splice) splice->addChild(expr);
 		else splice  = new TupleExpression(result,expr);
@@ -136,16 +136,16 @@ Node* Parser::spliceString(Token& token){
 static Node* parseNotSymbol(Parser* parser){
 	Token& token = parser->lookedUpToken;
 	if(token.isUinteger()){
-		return new IntegerLiteral(BigInt(token.uinteger),Type::getIntegerLiteralType());
+		return new IntegerLiteral(BigInt(token.uinteger));
 	}
 	else if(token.isReal()){
-		return new FloatingPointLiteral(token.real,Type::getFloatLiteralType());
+		return new FloatingPointLiteral(token.real);
 	}
 	else if(token.isString()){
 		return parser->spliceString(token);
 	}
 	else if(token.isChar()){
-		return new CharacterLiteral(token.character,Type::getCharLiteralType());
+		return new CharacterLiteral(token.character);
 	}
 	else{
 		parser->syntaxError(format("Can't parse token %s!",token));

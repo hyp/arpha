@@ -19,7 +19,5 @@ macro defineRealOperations(T Type) = [>
 	def greaterEquals(x $T,y $T) bool
 <]
 
-defineRealOperations(arpha.literal.real)
-
 defineRealOperations(float)
 defineRealOperations(double)

@@ -326,10 +326,6 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 
 
 	case Type::TRAIT:
-	case Type::LITERAL_INTEGER:
-	case Type::LITERAL_FLOAT:
-	case Type::LITERAL_CHAR:
-	case Type::LITERAL_STRING:
 		assert(false); break;
 
 	case Type::QUALIFIER:

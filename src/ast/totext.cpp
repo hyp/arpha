@@ -13,7 +13,7 @@ void Node::dump(Dumper& dumper) const {
 	dumpImplementation(dumper);
 	if(dumper.isVerbose()){
 		dumper.print(")");
-		dumper.print(" as ");
+		dumper.print(" :: ");
 		if(isResolved()) returnType()->dump(dumper);
 		else dumper.print("?");
 	}
@@ -21,18 +21,38 @@ void Node::dump(Dumper& dumper) const {
 
 void IntegerLiteral::dumpImplementation(Dumper& dumper) const {
 	dumper.print(format("%s",integer));
+	if(isFlagSet(LiteralNode::EXPLICIT_TYPE)){
+		dumper.print(" as ");
+		explicitType->dump(dumper);
+	}
 }
 void FloatingPointLiteral::dumpImplementation(Dumper& dumper) const {
 	dumper.print(format("%s",value));
+	if(isFlagSet(LiteralNode::EXPLICIT_TYPE)){
+		dumper.print(" as ");
+		explicitType->dump(dumper);
+	}
 }
 void CharacterLiteral::dumpImplementation(Dumper& dumper) const {
+	dumper.print("'");
 	dumper.print(format("%s",value));
+	dumper.print("'");
+	if(isFlagSet(LiteralNode::EXPLICIT_TYPE)){
+		dumper.print(" as ");
+		explicitType->dump(dumper);
+	}
 }
 void BoolExpression::dumpImplementation(Dumper& dumper) const {
 	dumper.print(format("%s",value?"true":"false"));
 }
 void StringLiteral::dumpImplementation(Dumper& dumper) const {
+	dumper.print("\"");
 	dumper.print(block.ptr());
+	dumper.print("\"");
+	if(isFlagSet(LiteralNode::EXPLICIT_TYPE)){
+		dumper.print(" as ");
+		explicitType->dump(dumper);
+	}
 }
 void NodeReference::dumpImplementation(Dumper& dumper) const {
 	dumper.print("[> ");
@@ -337,15 +357,6 @@ void Type::dump(Dumper& dumper) const {
 
 		case Type::TRAIT:
 			str = static_cast<const Trait*>(this)->declaration->label().ptr(); break;
-
-		case Type::LITERAL_INTEGER:
-			str = "literal.integer"; break;
-		case Type::LITERAL_FLOAT:
-			str ="literal.real"; break;
-		case Type::LITERAL_CHAR:
-			str ="literal.char"; break;
-		case Type::LITERAL_STRING:
-			str ="literal.string"; break;
 
 		case Type::QUALIFIER:
 			if(hasConstQualifier()) dumper.print("const ");

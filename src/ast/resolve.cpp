@@ -2109,7 +2109,7 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 // TODO explicitImport.foo <- need to limit this access to public 
 // TODO import qualified foo; var x foo.Foo ; foo.method() <-- FIX use dot syntax
 // TODO: recurive calls
-Function* Resolver::resolveFunctionCall(Scope* scope,SymbolID function,Node** parameter,bool dotSyntax){
+Function* Resolver::resolveFunctionCall(Scope* scope,SymbolID function,Node** parameter,bool dotSyntax,bool reportMultipleOverloads){
 	auto arg = *parameter;
 	int weight = 0;
 	int maxWeight = -1;
@@ -2134,18 +2134,20 @@ Function* Resolver::resolveFunctionCall(Scope* scope,SymbolID function,Node** pa
 				foundOverload = overload.currentFunction();
 				foundDistance = overload.currentDistance();
 				maxWeight = weight;
+				multipleOverload = false;
 			} 
 			else if(weight == maxWeight){
 				//multiple overloads
 				if(!multipleOverload){
-					onFirstMultipleOverload(foundOverload,foundDistance,arg);
 					multipleOverload = true;
+					if(reportMultipleOverloads) onFirstMultipleOverload(foundOverload,foundDistance,arg);
 				}
-				onMultipleOverload(overload.currentFunction());
+				if(reportMultipleOverloads) onMultipleOverload(overload.currentFunction());
 			}
 		}
 	}
 
+	if(multipleOverload && !reportMultipleOverloads) resolveFunctionCall(scope,function,parameter,dotSyntax,true);
 	if(foundOverload){
 		*parameter = this->constructFittingArgument(&foundOverload,arg);
 	}

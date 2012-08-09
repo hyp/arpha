@@ -78,7 +78,7 @@ public:
 	bool resolveSpecialization(Function* function);
 	Node* constructFittingArgument(Function** function,Node *arg,bool dependentChecker = false,int* weight = nullptr);
 
-	Function* resolveFunctionCall(Scope* scope,SymbolID function,Node** parameter,bool dotSyntax = false);
+	Function* resolveFunctionCall(Scope* scope,SymbolID function,Node** parameter,bool dotSyntax = false,bool reportMultipleOverloads = false);
 
 private:
 	void onFirstMultipleOverload(Function* function,int distance,Node* arg);

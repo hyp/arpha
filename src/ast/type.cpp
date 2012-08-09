@@ -16,7 +16,6 @@
 struct TypeMeaningsRange {
 private:
 
-	void getLiteralTypesConversions(Type* type);
 	void getRecordSubtypes(Record* record,uint32 filters);
 
 	void gatherMeanings(Type* type,uint32 filters);
@@ -570,23 +569,11 @@ Type::Type(int kind,int subtype) : type(kind),flags(0) {
 Type* Type::getIntegerType(int bits,bool isSigned){
 	return new Type(INTEGER,isSigned? -bits:bits);
 }
-Type* Type::getIntegerLiteralType(){
-	return new Type(LITERAL_INTEGER);
-}
 Type* Type::getFloatType(int bits){
 	return new Type(FLOAT,bits);
 }
-Type* Type::getFloatLiteralType(){
-	return new Type(LITERAL_FLOAT);
-}
 Type* Type::getCharType(int bits){
 	return new Type(CHAR,bits);
-}
-Type* Type::getCharLiteralType(){
-	return new Type(LITERAL_CHAR);
-}
-Type* Type::getStringLiteralType(){
-	return new Type(LITERAL_STRING);
 }
 Type* Type::getNaturalType(){
 	auto t = new Type(NATURAL);
@@ -702,11 +689,6 @@ bool Type::isSame(Type* other){
 		case TRAIT:
 			return this == other;
 
-		case LITERAL_INTEGER:
-		case LITERAL_FLOAT :
-		case LITERAL_CHAR  :
-		case LITERAL_STRING:  return true;
-
 		case QUALIFIER:
 			return flags == other->flags && argument->isSame(other->argument);
 		default:
@@ -766,7 +748,7 @@ Node* Type::generatedArgument(size_t i) const {
 	case LINEAR_SEQUENCE:
 		return new TypeReference(argument);
 	case STATIC_ARRAY: 
-		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)static_cast<const StaticArray*>(this)->length(),Type::getIntegerLiteralType());
+		return i == 0 ? new TypeReference(argument) : (Node*) new IntegerLiteral((uint64)static_cast<const StaticArray*>(this)->length(),intrinsics::types::natural);
 	case FUNCTION_POINTER: return new TypeReference(i == 0 ? argument : static_cast<const FunctionPointer*>(this)->returns());
 
 	case ANONYMOUS_RECORD: if(static_cast<const AnonymousAggregate*>(this)->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)){
@@ -786,8 +768,9 @@ Node* Type::generatedArgument(size_t i) const {
 }
 
 enum {
-	LITERAL_TYPE_SPECIFICATION = 4, //Untyped literal to typed
-	LITERAL_CONVERSION,      //Untyped literal to another untyped literal
+	CONVERSION_DIFFERENT_KIND = 4,      //integers => float
+	CONVERSION_SAME_KIND,           //integers <=> integers
+	LITERAL_TYPE_SPECIFICATION, //Untyped literal to typed
 	ADDRESSOF,
 	RECORD_SUBTYPE,	
 	EXACT
@@ -809,6 +792,18 @@ inline bool characterFits(int bits,uint32 value){
 	return bits == 32 && value <= 0x10FFFF? true:false; //UNICODE_MAX
 }
 
+Type* Type::getBestFitIntegerType(const BigInt& value){
+	if(value.isNegative()){
+		if(/*>=*/ !(value < (uint64)std::numeric_limits<int32>::min())) return intrinsics::types::int32;
+		else return intrinsics::types::int64;
+	}
+	else{
+		if(value <= (uint64)std::numeric_limits<int32>::max()) return intrinsics::types::int32;
+		else if(value <= (uint64)std::numeric_limits<uint32>::max()) return intrinsics::types::uint32;
+		else if(value <= (uint64)std::numeric_limits<int64>::max()) return intrinsics::types::int64;
+		else return intrinsics::types::uint64;
+	}
+}
 bool Type::integerFits(uint64 value,bool isNegative){
 	if(isNegative && bits>0) return false;
 
@@ -817,11 +812,11 @@ bool Type::integerFits(uint64 value,bool isNegative){
 #define RANGE(T) { min = std::numeric_limits<T>::min() ; max = std::numeric_limits<T>::max() ; }
 	if(bits == 32)       RANGE(uint32)
 	else if(bits == 64)  RANGE(uint64)
-	else if(bits == -32) RANGE(int)
+	else if(bits == -32) RANGE(int32)
 	else if(bits == 16)  RANGE(uint16)
-	else if(bits == -16) RANGE(short)
-	else if(bits == 8)   RANGE(unsigned char)
-	else if(bits == -8)  RANGE(signed char)
+	else if(bits == -16) RANGE(int16)
+	else if(bits == 8)   RANGE(uint8)
+	else if(bits == -8)  RANGE(int8)
 	else if(bits == -64) RANGE(int64);
 	
 	if(bits > 0) return value <= max;
@@ -839,11 +834,6 @@ bool   Type::doesLiteralFit(IntegerLiteral* node){
 		return characterFits(bits,node->integer.u64);
 	}
 }
-
-inline bool doesIntegerLiteralFitInLiteralChar(IntegerLiteral* node){
-	return node->integer.isPositive() && node->integer.u64 <= 0x10FFFF;
-}
-
 bool   Type::doesLiteralFit(CharacterLiteral* node){
 	if(isInteger()){
 		return integerFits(node->value,false);
@@ -881,47 +871,45 @@ Scenarios:
 int literalTypeAssignment(Type* givenType,Node** literalNode,Type* literalNodeType,bool doTransform){
 	auto expression = *literalNode;
 
-	assert(literalNodeType->isLiteral());
 	if( auto integerLiteral = expression->asIntegerLiteral() ){
 		// a int32 = 1
 		if(givenType->isInteger() && givenType->doesLiteralFit(integerLiteral)){
-			if(doTransform) integerLiteral->explicitType = givenType;
+			if(doTransform) integerLiteral->specifyType(givenType);
 			return LITERAL_TYPE_SPECIFICATION;
 		}
 		// a float = 1
-		else if(givenType->type == Type::LITERAL_FLOAT || givenType->isFloat()){
+		else if(givenType->isFloat()){
 			if(doTransform) *literalNode = int2float(integerLiteral,givenType);
-			return givenType->type == Type::LITERAL_FLOAT? LITERAL_CONVERSION : LITERAL_TYPE_SPECIFICATION;
+			return LITERAL_TYPE_SPECIFICATION;
 		}
 		// a char = 1
-		else if( (givenType->type == Type::LITERAL_CHAR && doesIntegerLiteralFitInLiteralChar(integerLiteral) ) 
-			|| (givenType->isChar() && givenType->doesLiteralFit(integerLiteral)) ){
+		else if( givenType->isChar() && givenType->doesLiteralFit(integerLiteral) ){
 			if(doTransform) *literalNode = int2char(integerLiteral,givenType);
-			return givenType->type == Type::LITERAL_CHAR? LITERAL_CONVERSION : LITERAL_TYPE_SPECIFICATION;
+			return LITERAL_TYPE_SPECIFICATION;
 		}
 		// a natural/uintptr = 1
 		else if( (givenType->isPlatformInteger() || givenType->isUintptr()) && givenType->doesLiteralFit(integerLiteral)){
-			if(doTransform) integerLiteral->explicitType = givenType;
+			if(doTransform) integerLiteral->specifyType(givenType);
 			return LITERAL_TYPE_SPECIFICATION;
 		}
 	}
 	else if( auto floatingLiteral = expression->asFloatingPointLiteral() ){
 		//a float = 1.0
 		if(givenType->isFloat()){
-			if(doTransform) floatingLiteral->explicitType = givenType;
+			if(doTransform) floatingLiteral->specifyType(givenType);
 			return LITERAL_TYPE_SPECIFICATION;
 		}
 	}
 	else if( auto characterLiteral = expression->asCharacterLiteral() ){
 		//a char32 = 'A'
 		if(givenType->isChar() && givenType->doesLiteralFit(characterLiteral) ){
-			if(doTransform) characterLiteral->explicitType = givenType;
+			if(doTransform) characterLiteral->specifyType(givenType);
 			return LITERAL_TYPE_SPECIFICATION;
 		}
 		//a int32 = 'A'
-		else if( givenType->type == Type::LITERAL_INTEGER || (givenType->isInteger() && givenType->doesLiteralFit(characterLiteral)) ){
+		else if( givenType->isInteger() && givenType->doesLiteralFit(characterLiteral) ){
 			if(doTransform) *literalNode = char2int(characterLiteral,givenType);
-			return givenType->type == Type::LITERAL_INTEGER? LITERAL_CONVERSION : LITERAL_TYPE_SPECIFICATION;
+			return LITERAL_TYPE_SPECIFICATION;
 		}
 		// a natural = 'A'
 		else if(givenType->isPlatformInteger() /*NB: assume platform integers are >= char32 && givenType->doesLiteralFit(characterLiteral)*/){
@@ -929,30 +917,9 @@ int literalTypeAssignment(Type* givenType,Node** literalNode,Type* literalNodeTy
 			return LITERAL_TYPE_SPECIFICATION;
 		}
 	}
-	else if( auto stringLiteral = expression->asStringLiteral() ){
-		//a LinearSequence(char8) = "fooo"
-		if(givenType->isLinearSequence() && givenType->next()->isChar8()){
-			if(doTransform) stringLiteral->explicitType = givenType;
-			return LITERAL_TYPE_SPECIFICATION;
-		}
-	}
 
 	return -1;
 }
-void TypeMeaningsRange::getLiteralTypesConversions(Type* type){
-	switch(type->type){
-	case Type::LITERAL_INTEGER:
-		break;
-	case Type::LITERAL_FLOAT:
-		break;
-	case Type::LITERAL_CHAR:
-		break;
-	case Type::LITERAL_STRING:
-		add(Type::getLinearSequence(Type::getCharType(8)),LITERAL_TYPE_SPECIFICATION);
-		break;
-	}
-}
-
 /**
 TODO: adjust conversion weights
 
@@ -981,37 +948,37 @@ int automaticTypeCast(Type* givenType,Node** node,Type* nodeType,bool doTransfor
 		//uintX = uint(X-1)
 		if(givenType->bits > 0){
 			if(nodeType->bits > 0 && nodeType->bits < givenType->bits)
-				weight = LITERAL_CONVERSION;
+				weight = CONVERSION_SAME_KIND;
 		}
 		//intX = (u)int(X-1)
 		else {
 			if(std::abs(nodeType->bits) < -givenType->bits)
-				weight = LITERAL_CONVERSION;
+				weight = CONVERSION_SAME_KIND;
 		}
 	}
 	else if(givenType->isFloat()){
 		if(nodeType->isFloat() && nodeType->bits < givenType->bits)
-			weight = LITERAL_CONVERSION;
+			weight = CONVERSION_SAME_KIND;
 		else if(nodeType->isInteger())
-			weight = LITERAL_TYPE_SPECIFICATION;
+			weight = CONVERSION_DIFFERENT_KIND;
 	}
 	else if(givenType->isPlatformInteger()){
 		//natural = uintX
 		if(nodeType->isInteger()){
 			if(nodeType->bits > 0 && nodeType->bits < givenType->bits)
-				weight = LITERAL_CONVERSION;
+				weight = CONVERSION_SAME_KIND;
 		}
 	}
 	else if(givenType->isChar()){
 		//charX = char(X-1)
 		if(nodeType->isChar()){
 			if(nodeType->bits < givenType->bits)
-				weight = LITERAL_CONVERSION;
+				weight = CONVERSION_SAME_KIND;
 		}
 	}
 	else if(givenType->isLinearSequence()){
 		if(nodeType->isStaticArray() && givenType->next()->isSame(nodeType->next()))
-			weight = LITERAL_CONVERSION;
+			weight = CONVERSION_SAME_KIND;
 	}
 
 	if(weight != -1 && doTransform) *node = new CastExpression(*node,givenType);
@@ -1108,7 +1075,7 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform,uint32 filter
 	if( this->hasConstQualifier() && ((assigns = this->next()->assignFrom(expression,type,doTransform,filters)) != -1) ){
 		return assigns;
 	}
-	else if(!(filters & DisallowAutocasts) && type->isLiteral()){
+	else if(!(filters & DisallowAutocasts) && (*expression)->isUntypedLiteral() ){
 		return literalTypeAssignment(this,expression,type,doTransform);
 	}
 	else if( !(filters & DisallowAutocasts) && (assigns = automaticTypeCast(this,expression,type,doTransform)) != -1 ){
@@ -1130,7 +1097,6 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform,uint32 filter
 	return -1;
 }
 void TypeMeaningsRange::gatherMeanings(Type* type,uint32 filters){
-	if(type->isLiteral()) getLiteralTypesConversions(type);
 
 	Record* record = type->asRecord();
 	if(!record){
@@ -1141,7 +1107,7 @@ void TypeMeaningsRange::gatherMeanings(Type* type,uint32 filters){
 	}
 	else getRecordSubtypes(record,filters);
 
-	if(type->isStaticArray()) add(Type::getLinearSequence(type->next()),LITERAL_CONVERSION);
+	if(type->isStaticArray()) add(Type::getLinearSequence(type->next()),CONVERSION_SAME_KIND);
 	if(!type->isPointer()) add(Type::getPointerType(type),ADDRESSOF);
 }
 
@@ -1228,7 +1194,7 @@ Node* evaluateConstantCast(Node* expression,Type* givenType){
 
 	if(auto integerLiteral = expression->asIntegerLiteral()){
 		if(givenType->isInteger() || givenType->isPlatformInteger() || givenType->isUintptr()){
-			integerLiteral->explicitType = givenType;
+			integerLiteral->specifyType(givenType);
 		}
 		else if(givenType->isFloat())
 			return int2float(integerLiteral,givenType);
@@ -1236,21 +1202,21 @@ Node* evaluateConstantCast(Node* expression,Type* givenType){
 			return int2char(integerLiteral,givenType);
 	}
 	else if( auto floatingLiteral = expression->asFloatingPointLiteral() ){
-		if(givenType->isFloat()) floatingLiteral->explicitType = givenType;
+		if(givenType->isFloat()) floatingLiteral->specifyType(givenType);
 		else if(givenType->isInteger() || givenType->isPlatformInteger() || givenType->isUintptr())
 			return float2int(floatingLiteral,givenType);
 		else if(givenType->isChar())
 			return float2char(floatingLiteral,givenType);
 	}
 	else if( auto characterLiteral = expression->asCharacterLiteral() ){
-		if(givenType->isChar()) characterLiteral->explicitType = givenType;
+		if(givenType->isChar()) characterLiteral->specifyType(givenType);
 		else if(givenType->isInteger() || givenType->isPlatformInteger() || givenType->isUintptr())
 			return char2int(characterLiteral,givenType);
 		else if(givenType->isFloat())
 			return char2float(characterLiteral,givenType);
 	}
 	else if( auto stringLiteral = expression->asStringLiteral() ){
-		if(givenType->isLinearSequence()) stringLiteral->explicitType = givenType;
+		if(givenType->isLinearSequence()) stringLiteral->specifyType(givenType);
 	}
 	else if( auto boolLiteral = expression->asBoolExpression() ){
 		if(givenType->isInteger() || givenType->isPlatformInteger() || givenType->isUintptr())

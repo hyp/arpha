@@ -157,6 +157,7 @@ public:
 
 	//Dynamic casts
 	virtual bool isDefinitionNode(){ return false; }
+	virtual bool isUntypedLiteral() const { return false; }
 #define CAST(T) virtual T* as##T() { return nullptr; }
 	NODE_LIST(CAST)
 #undef CAST
@@ -207,45 +208,53 @@ struct InfixDefinition : DefinitionNode {
 #include "type.h"
 
 struct LiteralNode: Node {
+	enum {
+		EXPLICIT_TYPE = 0x4 //strongly typed literal
+	};
 	inline LiteralNode() { setFlag(CONSTANT | RESOLVED); }
+	bool isUntypedLiteral() const { return !isFlagSet(EXPLICIT_TYPE); }
+
+	Type* explicitType;
+
+	inline void specifyType(Type* type){
+		explicitType = type;
+		setFlag(EXPLICIT_TYPE);
+	}
 };
 
 //(0..9)+ : integer
 struct IntegerLiteral : LiteralNode {
-	IntegerLiteral(const BigInt& integer,Type* t);
+	IntegerLiteral(const BigInt& integer,Type* t = nullptr);
 	Type* returnType() const;
 
 	bool  isSame(Node* other);
 	
 	BigInt integer;
-	Type* explicitType;
 	DECLARE_NODE(IntegerLiteral);
 };
 
 struct FloatingPointLiteral : LiteralNode {
-	FloatingPointLiteral(const double v,Type* t);
+	FloatingPointLiteral(const double v,Type* t = nullptr);
 	Type* returnType() const;
 
 	bool  isSame(Node* other);
 
 	double value;
-	Type* explicitType;
 	DECLARE_NODE(FloatingPointLiteral);
 };
 
 struct CharacterLiteral: LiteralNode {
-	CharacterLiteral(UnicodeChar c,Type* t);
+	CharacterLiteral(UnicodeChar c,Type* t = nullptr);
 	Type* returnType() const;
 
 	bool  isSame(Node* other);
 
 	UnicodeChar value ;
-	Type* explicitType;
 	DECLARE_NODE(CharacterLiteral);
 };
 
 //true | false
-struct BoolExpression: LiteralNode {
+struct BoolExpression: Node {
 	BoolExpression(const bool v);
 	Type* returnType() const;
 
@@ -256,14 +265,13 @@ struct BoolExpression: LiteralNode {
 };
 
 struct StringLiteral : LiteralNode {
-	StringLiteral(memory::Block& block,Type* t);
+	StringLiteral(memory::Block& block,Type* t = nullptr);
 	StringLiteral(SymbolID symbol);//<-- reuses the string, no duplication
 	Type* returnType() const;
 
 	bool  isSame(Node* other);
 	
 	memory::Block block;
-	Type* explicitType;
 	DECLARE_NODE(StringLiteral);
 };
 
@@ -291,8 +299,8 @@ struct ArrayLiteral : NodeList {
 
 
 //():void
-struct UnitExpression : LiteralNode {
-	UnitExpression(){}
+struct UnitExpression : Node{
+	UnitExpression(){ setFlag(CONSTANT | RESOLVED); }
 	Type* returnType() const;
 
 	bool  isSame(Node* other);
@@ -304,7 +312,7 @@ private:
 
 
 //: intrinsics::types::Scope
-struct ImportedScopeReference : LiteralNode {
+struct ImportedScopeReference : Node {
 	ImportedScopeReference(ImportedScope* scope);
 
 	Type* returnType() const;
@@ -313,7 +321,7 @@ struct ImportedScopeReference : LiteralNode {
 	DECLARE_NODE(ImportedScopeReference);
 };
 
-struct NodeReference : LiteralNode {
+struct NodeReference : Node {
 	NodeReference(Node* node);
         
 	Type* returnType() const;

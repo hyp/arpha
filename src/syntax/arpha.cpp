@@ -471,7 +471,7 @@ struct MacroParser: IntrinsicPrefixMacro {
 			}
 		}
 		else {
-			imacro = new InfixMacro(func,new IntegerLiteral((uint64)0,Type::getIntegerLiteralType()));
+			imacro = new InfixMacro(func,new IntegerLiteral((uint64)0));
 			macro = imacro;
 		}
 		

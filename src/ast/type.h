@@ -102,12 +102,6 @@ struct Type {
 
 		VARIANT_OPTION,
 		TRAIT,
-		
-
-		LITERAL_INTEGER,
-		LITERAL_FLOAT,//1.2
-		LITERAL_CHAR,//'A'
-		LITERAL_STRING,
 
 		QUALIFIER,
 	};
@@ -123,18 +117,15 @@ struct Type {
 	Type(int kind,int subtype);//node
 
 	static Type* getIntegerType(int bits,bool isSigned);
-	static Type* getIntegerLiteralType();
+	static Type* getBestFitIntegerType(const BigInt& value);
 	bool   integerFits(uint64 value,bool isNegative);
 	bool   doesLiteralFit(IntegerLiteral* node); // type must be integer or character
 
 	static Type* getFloatType(int bits);
-	static Type* getFloatLiteralType();
 
 	static Type* getCharType (int bits);
-	static Type* getCharLiteralType();
 	bool   doesLiteralFit(CharacterLiteral* node); // type must be character
 
-	static Type* getStringLiteralType();
 	static Type* getLinearSequence(Type* next);
 
 	static Type* getNaturalType();
@@ -172,7 +163,6 @@ struct Type {
 	inline bool isVariant()  const { return type == VARIANT;  }
 	inline bool isFunctionPointer() const { return type == FUNCTION_POINTER; }
 	inline bool isNodePointer() const { return type == POINTER && argument->type == NODE; }
-	inline bool isLiteral() const { return type>=LITERAL_INTEGER; }
 	inline bool isLinearSequence() const { return type == LINEAR_SEQUENCE; }
 	inline bool isStaticArray() const    { return type == STATIC_ARRAY;    }
 	inline bool isVariantOption() const  { return type == VARIANT_OPTION; }

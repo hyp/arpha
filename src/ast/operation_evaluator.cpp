@@ -173,7 +173,7 @@ Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
 	
 	auto ret = params[0]->returnType();
 
-	if(ret->isInteger() || ret->type == Type::LITERAL_INTEGER || ret->isPlatformInteger() || ret->isUintptr()){
+	if(ret->isInteger() || ret->isPlatformInteger() || ret->isUintptr()){
 		BigInt& operand1 = params[0]->asIntegerLiteral()->integer; 
 		if(isCalculationOperation(op)){ 
 			doCalculation(op,operand1,calculationOperationNumberOfParameters(op) == 1? operand1 : params[1]->asIntegerLiteral()->integer); 
@@ -186,11 +186,11 @@ Node* evaluateConstantOperation(data::ast::Operations::Kind op,Node* parameter){
 			return new BoolExpression(value); 
 		}
 	}
-	else if(ret->isChar()  || ret->type == Type::LITERAL_CHAR){
+	else if(ret->isChar()){
 			auto value = doComparison(op,params[0]->asCharacterLiteral()->value,params[1]->asCharacterLiteral()->value); 
 			return new BoolExpression(value); 
 	}
-	else if(ret->isFloat() || ret->type == Type::LITERAL_FLOAT){
+	else if(ret->isFloat()){
 		double& operand1 = params[0]->asFloatingPointLiteral()->value; 
 		if(isCalculationOperation(op)){ 
 			doCalculation(op,operand1,calculationOperationNumberOfParameters(op) == 1? operand1 : params[1]->asFloatingPointLiteral()->value); 
