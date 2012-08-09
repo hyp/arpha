@@ -23,3 +23,6 @@ def moveNext (self *LinearSequence(_))
 
 def length (self *Array(_,_))
 def element(self *Array(T:_,_),i natural) Reference(T)
+
+# Indexing tuples TODO move
+def element(self Tuple,i natural)

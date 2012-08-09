@@ -122,7 +122,6 @@ Node* Parser::spliceString(Token& token){
 		}
 	}
 
-	//if(splice) splice->type = Trait::intrinsic::splice;
 	if((end - begin) == 0 && result) return splice? splice: result;
 
 	auto expr = new StringLiteral(memory::Block::construct(begin,end - begin)); 
@@ -135,18 +134,10 @@ Node* Parser::spliceString(Token& token){
 }
 static Node* parseNotSymbol(Parser* parser){
 	Token& token = parser->lookedUpToken;
-	if(token.isUinteger()){
-		return new IntegerLiteral(BigInt(token.uinteger));
-	}
-	else if(token.isReal()){
-		return new FloatingPointLiteral(token.real);
-	}
-	else if(token.isString()){
-		return parser->spliceString(token);
-	}
-	else if(token.isChar()){
-		return new CharacterLiteral(token.character);
-	}
+	if(token.isUinteger())  return new IntegerLiteral(BigInt(token.uinteger));
+	else if(token.isReal()) return new FloatingPointLiteral(token.real);
+	else if(token.isString()) return parser->spliceString(token);
+	else if(token.isChar()) return new CharacterLiteral(token.character);
 	else{
 		parser->syntaxError(format("Can't parse token %s!",token));
 		return ErrorExpression::getInstance();
@@ -211,11 +202,6 @@ Node* Parser::parse(int stickiness){
 	return expression;	
 }
 
-//Definition properties application
-// TODO remove this hacks!!
-void Parser::useTypedArgument(SymbolID name,Node* type){
-}
-
 //introducing definitions
 void Parser::introduceDefinition(Variable* variableDefinition){
 	currentScope()->define(variableDefinition);
@@ -241,28 +227,22 @@ void Parser::introduceDefinition(InfixMacro* macroDefinition){
 Node* Parser::mixinMacroResult(CTFEinvocation* invocation){
 	return mixinMacro(invocation,currentScope());
 }
-
 Node* ImportedScope::parse(Parser* parser) {
 	return reference();
 }
-
 void TypePatternUnresolvedExpression::parse(Parser* parser,int stickiness){
 	kind = UNRESOLVED;
 	unresolvedExpression = parser->parse(stickiness);
 }
-
 Node* Variable::parse(Parser* parser){
 	return new VariableReference(this);
 }
-
 Node* TypeDeclaration::parse(Parser* parser){
 	return new TypeReference(_type);
 }
-
 Node* Function::parse(Parser* parser){
 	return new FunctionReference(this);
 }
-
 Node* Overloadset::parse(Parser* parser){
 	return new UnresolvedSymbol(parser->previousLocation(),parser->lookedUpToken.symbol);
 }
@@ -279,7 +259,6 @@ Node* PrefixMacro::parse(Parser* parser){
 	}
 	return ErrorExpression::getInstance();
 }
-
 Node* InfixMacro::parse(Parser* parser,Node* node){
 	if(isResolved() || function->isFlagSet(Function::CANT_CTFE)){
 		CTFEinvocation i(parser->compilationUnit(),function);

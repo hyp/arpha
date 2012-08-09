@@ -56,9 +56,6 @@ public:
 	void introduceDefinition(PrefixMacro* macroDefinition);
 	void introduceDefinition(InfixMacro* macroDefinition);
 
-	//definition properties
-	void useTypedArgument(SymbolID name,Node* type); //use argument parser as *Parser
-
 	//Current parsing state
 	Token  lookedUpToken;
 	Scope* _outerMacroOuterScope;//the [> <] inside a macro will be parsed using this scope

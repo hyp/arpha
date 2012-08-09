@@ -3,14 +3,11 @@
 	Author: Hyp
 	Version: 1
 #
-
 import arpha.intrinsic
 
-import qualified arpha.ast
-
-#def version major: natural, minor: natural
+def vendor  LinearSequence(char8)
+def version major: natural, minor: natural
 
 def print  (string LinearSequence(char8))
 def error  (string LinearSequence(char8))
 def warning(string LinearSequence(char8))
-

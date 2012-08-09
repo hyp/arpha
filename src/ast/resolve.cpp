@@ -336,6 +336,7 @@ static Node* potentiallyInline(Resolver* resolver,Function* function,Node* param
 	return nullptr;
 }
 
+
 Node* CallExpression::resolve(Resolver* resolver){
 	arg  = resolver->resolve(arg);
 	if(!arg->isResolved()) return this;
@@ -454,6 +455,14 @@ Node* LogicalOperation::resolve(Resolver* resolver){
 		resolver->markResolved(this); 
 	}
 	return this;
+}
+
+Node* FieldAccessExpression::resolve(Resolver* resolver){
+	//NB: object will be already resolved, since we are only creating it here
+
+	if(auto tuple = object->asTupleExpression()) //simplify (x:1,y:1).x => 1
+		return resolver->resolve(copyLocationSymbol(tuple->childrenPtr()[field]));
+	resolver->markResolved(this);
 }
 
 /**
@@ -747,12 +756,12 @@ Node* CastExpression::resolve(Resolver* resolver){
 	if(object->isResolved()){
 		resolver->markResolved(this);
 		auto returns = object->returnType();
-		if(type->isSame(returns)) return object;
+		if(type->isSame(returns)){
+			if(object->isUntypedLiteral()) static_cast<LiteralNode*>(object)->specifyType(type); //1 as int32 -> 1 :: int32
+			return object;
+		}
 		else if(returns->canCastTo(type)){
 			if(object->isConst()) return copyLocationSymbol(resolver->resolve(evaluateConstantCast(object,type)));
-		}
-		else if(auto expression = type->assignableFrom(object,returns)){
-			return copyLocationSymbol(resolver->resolve(expression));
 		}
 
 		else {

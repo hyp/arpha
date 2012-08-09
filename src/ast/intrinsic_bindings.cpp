@@ -281,6 +281,10 @@ static void initMapping(){
 	});
 
 	//arpha.compiler
+	auto major = new IntegerLiteral((uint64)0,Type::getNaturalType());major->label("major");
+	auto minor = new IntegerLiteral((uint64)1,Type::getNaturalType());minor->label("minor");
+	variableMapping["compiler.vendor"]  = new StringLiteral("arpha");
+	variableMapping["compiler.version"] = new TupleExpression(major,minor);
 	MAP_PROP("print([]char8)",0,{
 		compiler::onDebug(invocation->getStringParameter(0));
 		invocation->ret();
@@ -320,6 +324,16 @@ static void initMapping(){
 			subBlock->scope->parent = block->scope;
 		}
 		invocation->ret(block);
+	});
+	MAP_PROP("element(Tuple,natural)",Function::MACRO_FUNCTION,{
+		auto tuple = invocation->getNodeParameter(0);
+		auto i = invocation->getNodeParameter(1)->asIntegerLiteral();
+		if(!i) invocation->retError("Expected an integer literal for tuple's index");
+		else {
+			auto type = tuple->returnType()->asAnonymousRecord();
+			if(i->integer.u64 >= type->numberOfFields) invocation->retError("The tuple index is out of bounds!");
+			else invocation->ret(new FieldAccessExpression(tuple,i->integer.u64));
+		}
 	});
 
 
@@ -561,7 +575,7 @@ Node* Variable::getIntrinsicValue(Variable* variable){
 	std::string signature = std::string("ast.") + variable->label().ptr();
 	auto value = variableMapping.find(signature);
 	if(value != variableMapping.end()) return (*value).second;
-	signature = std::string("literal.") + variable->label().ptr();
+	signature = std::string("compiler.") + variable->label().ptr();
 	value = variableMapping.find(signature);
 	if(value != variableMapping.end()) return (*value).second;
 	compiler::intrinsicFatalError(variable->location(),format(" Intrinsic binding failure - The variable '%s' isn't intrinsic!\nPlease don't use the intrinsic property on it!",variable->label()));

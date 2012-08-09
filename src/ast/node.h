@@ -150,6 +150,7 @@ public:
 	virtual bool  isSame(Node* other){ return false; }
 
 	inline  SymbolID label()   const { return _label; }
+	inline void label(SymbolID symbol) { _label = symbol; }
     Location location() const { return _location; }
 	virtual bool applyProperty(SymbolID name,Node* value){ return false; }
 
@@ -423,7 +424,8 @@ private:
 // Pointer(Record).field
 struct FieldAccessExpression : Node {
 	FieldAccessExpression(Node* object,int field);
-
+	
+	Node* resolve(Resolver* resolver);
 	Type* returnType() const;
 
 	Type*    fieldsType() const;

@@ -486,7 +486,6 @@ struct MacroParser: IntrinsicPrefixMacro {
 		//Create the actual macro
 		if(!infix){
 			if(!functionLike){
-				//auto macro = new PrefixMacro(func);
 				parser->introduceDefinition(pmacro);
 				return parser->compilationUnit()->resolver->resolveMacroAtParseStage(macro);
 			} 
@@ -495,7 +494,6 @@ struct MacroParser: IntrinsicPrefixMacro {
 				return func;
 			}
 		} else {
-			//auto macro = new InfixMacro(func,new IntegerLiteral((uint64)0,Type::getIntegerLiteralType()));
 			parser->introduceDefinition(imacro);
 			return parser->compilationUnit()->resolver->resolveMacroAtParseStage(macro);
 		}
