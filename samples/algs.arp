@@ -11,6 +11,10 @@ def main()
 	r = array.find(42)
 	if(!r.empty) print("found 42!")
 	
-	def n = array.count(0)
+	var n = array.count(0)
 	if(n == 1) print("There is one zero!")
+	
+	array.fill(0)
+	n = array.count(0)
+	if(n == array.length) print("yep!")
 }
