@@ -218,13 +218,13 @@ Node* TypeReference::resolve(Resolver* resolver){
 	}
 	return this;
 }
- 
+
 Node* TupleExpression::resolve(Resolver* resolver){
 	assert(size() > 1);
 	if(resolveChildren(this,resolver)){
 		resolver->markResolved(this);
 		//find the tuple's type!
-		if(type) return this;
+		//if(type) return this;
 		std::vector<AnonymousAggregate::Field> fields;
 		bool allTypes = true;
 		bool allConst = true;
@@ -239,6 +239,10 @@ Node* TupleExpression::resolve(Resolver* resolver){
 			fields.push_back(field);
 		}
 		if(allConst) setFlag(CONSTANT);
+		if(isFlagSet(GEN_REWRITE_AS_VECTOR)){
+			type = AnonymousAggregate::getVector((*begin())->returnType(),size());
+			return this;
+		}
 		//int32,int32 :: Type,Type -> anon-record(int32,int32) :: Type
 		if(resolver->expectedTypeForEvaluatedExpression && resolver->expectedTypeForEvaluatedExpression->isType() && allTypes){
 			auto children = childrenPtr();

@@ -164,8 +164,6 @@ bool TypePatternUnresolvedExpression::PatternMatcher::check(Node* expression,Tra
 				return check(call->arg);
 			}
 		}
-	} else if(auto var = expression->asVariableReference()){
-		if(lookupDefinition(var->variable->label())) return true;
 	}
 	return false;
 }
@@ -432,12 +430,6 @@ bool TypePatternUnresolvedExpression::PatternMatcher::match(Node* object,Node* p
 				if(!unresolved->label().isNull()) introduceDefinition(unresolved->label(),unresolved->location(),object);
 				return true;
 			}
-		}
-	} else if(auto var = pattern->asVariableReference()){ //shadowed T
-		if(auto def = lookupDefinition(var->variable->label())){
-			if(auto vt = def->value->asTypeReference())
-				return type && type->isSame(vt->type);
-			else return object->isSame(def->value);
 		}
 	}
 
@@ -1071,26 +1063,45 @@ Scenarios:
 int Type::assignFrom(Node** expression,Type* type,bool doTransform,uint32 filters){
 	if(this->isSame(type)) return EXACT;
 	int assigns;
+	bool canAddressOf = (filters & AllowAutoAddressof) != 0;
+	if(canAddressOf) filters &= (~AllowAutoAddressof);
 
 	if( this->hasConstQualifier() && ((assigns = this->next()->assignFrom(expression,type,doTransform,filters)) != -1) ){
 		return assigns;
 	}
-	else if(!(filters & DisallowAutocasts) && (*expression)->isUntypedLiteral() ){
-		return literalTypeAssignment(this,expression,type,doTransform);
+	if(auto tuple = (*expression)->asTupleExpression()){
+		auto aggr = this->asAnonymousRecord();
+		if(!aggr || aggr->numberOfFields != tuple->size()) return -1;
+		auto min  = 0xFFFF;
+		for(size_t i = 0;i<tuple->size();++i){
+			assigns = aggr->types[i]->assignFrom(tuple->childrenPtr() + i,tuple->childrenPtr()[i]->returnType(),doTransform,filters);
+			if(assigns == -1) return -1;
+			min =std::min(min,assigns);
+		}
+		if(doTransform){
+			if(aggr->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)) tuple->setFlag(TupleExpression::GEN_REWRITE_AS_VECTOR);
+			tuple->flags &= (~Node::RESOLVED);
+		}
+		return min;
 	}
-	else if( !(filters & DisallowAutocasts) && (assigns = automaticTypeCast(this,expression,type,doTransform)) != -1 ){
+	if(!(filters & DisallowAutocasts)){
+		if((*expression)->isUntypedLiteral() && (assigns = literalTypeAssignment(this,expression,type,doTransform)) != -1 ){
+			return assigns;
+		}
+		else if( (assigns = automaticTypeCast(this,expression,type,doTransform)) != -1 ){
+			return assigns;
+		}
+	}
+	if( (assigns = recordSubtyping(this,expression,type,doTransform)) != -1){
 		return assigns;
 	}
-	else if( (assigns = recordSubtyping(this,expression,type,doTransform)) != -1){
+	else if( isPointer() && !type->isPointer() && canAddressOf && (assigns = referenceOf(this,expression,type,doTransform,filters)) != -1 ){
 		return assigns;
 	}
 	else if( isNodePointer() && type->isNodePointer() ){
 		return RECORD_SUBTYPE;
 	}
-	else if( isPointer() && !type->isPointer() && (filters & Type::AllowAutoAddressof) && ((assigns = referenceOf(this,expression,type,doTransform,filters)) != -1) ){
-		return assigns;
-	}
-	else if( type->isReference() && !isReference() && ((assigns = referenceTo(this,expression,type,doTransform)) != -1) ){
+	else if( type->isReference() && !isReference() && (assigns = referenceTo(this,expression,type,doTransform)) != -1 ){
 		return assigns;
 	}
 

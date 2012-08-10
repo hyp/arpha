@@ -427,6 +427,9 @@ llvm::Constant* genInitializer(LLVMgenerator* generator,Node* value){
 		std::vector<llvm::Constant*> constants(tuple->size());
 		size_t j= 0;
 		for(auto i =tuple->begin();i!=tuple->end();++i,++j) constants[j] = genInitializer(generator,*i);
+		if(tuple->isFlagSet(TupleExpression::GEN_REWRITE_AS_VECTOR)){
+			return llvm::ConstantVector::get(constants);
+		}
 		return llvm::ConstantStruct::get(llvm::dyn_cast<llvm::StructType>(generator->genType(tuple->returnType())),constants);
 	}
 	else if(auto arr = value->asArrayExpression()){

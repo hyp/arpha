@@ -235,10 +235,10 @@ void TypePatternUnresolvedExpression::parse(Parser* parser,int stickiness){
 	unresolvedExpression = parser->parse(stickiness);
 }
 Node* Variable::parse(Parser* parser){
-	return new VariableReference(this);
+	return new UnresolvedSymbol(parser->previousLocation(),parser->lookedUpToken.symbol);
 }
 Node* TypeDeclaration::parse(Parser* parser){
-	return new TypeReference(_type);
+	return new UnresolvedSymbol(parser->previousLocation(),parser->lookedUpToken.symbol);
 }
 Node* Function::parse(Parser* parser){
 	return new FunctionReference(this);

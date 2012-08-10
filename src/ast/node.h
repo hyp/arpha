@@ -116,8 +116,9 @@ protected:
 	SymbolID _label; //optional label e.g. x:1 => 1 will have label x
 public:
 	Location _location;
-protected:	
 	uint16   flags;
+protected:	
+	
 
 	friend struct Parser;
 	
@@ -369,6 +370,9 @@ struct VariableReference : Node {
 
 //: record
 struct TupleExpression : NodeList {
+	enum {
+		GEN_REWRITE_AS_VECTOR = 0x16,
+	};
 	TupleExpression();
 	TupleExpression(Node* a,Node* b);
 
