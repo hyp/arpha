@@ -977,6 +977,7 @@ int automaticTypeCast(Type* givenType,Node** node,Type* nodeType,bool doTransfor
 	return weight;
 }
 
+
 /**
 Scenarios:
   type Foo { extends var x int32 ; }
@@ -1026,28 +1027,17 @@ void TypeMeaningsRange::getRecordSubtypes(Record* record,uint32 filters){
 }
 
 int referenceOf(Type* givenType, Node** node, Type* nodeType,bool doTransform,uint32 filters){
-	Type ptrType(Type::POINTER,nodeType);
-	int weight = givenType->assignFrom(node,&ptrType,doTransform,filters);
+	auto ptrType = givenType->isReference()? Type::getReferenceType(nodeType) : Type::getPointerType(nodeType);
+	int weight = givenType->assignFrom(node,ptrType,doTransform,filters);
 	if(weight != -1){
 		if(doTransform){
 			*node = new PointerOperation(*node,PointerOperation::ADDRESS);
+			if(givenType->isReference()) (*node)->setFlag(PointerOperation::ADDRESS_RETURNS_REF);
 		}
 		return ADDRESSOF;
 	}
 	return -1;
 }
-
-int referenceTo(Type* givenType, Node** node, Type* nodeType,bool doTransform){
-	int weight = givenType->assignFrom(node,nodeType->next(),doTransform);
-	if(weight != -1){
-		if(doTransform){
-			*node = new PointerOperation(*node,PointerOperation::DEREFERENCE);
-		}
-		return ADDRESSOF;
-	}
-	return -1;
-}
-
 
 /**
 Implicit type conversion system.
@@ -1055,10 +1045,9 @@ Returns the weight of the conversion or -1 if the conversion failed.
 Scenarios:
 	As per above literal,auto and record type casts
 	*ast.Call , etc => *ast.Node
-	x :: int32    -> &x :: *int32
 
-	x :: Reference (T) -> *x  :: T
-	x :: Reference (T) -> x as *T :: *T
+	x :: int32  -> &x :: *int32
+	x :: int32  -> &x :: Reference(int32)
 */
 int Type::assignFrom(Node** expression,Type* type,bool doTransform,uint32 filters){
 	if(this->isSame(type)) return EXACT;
@@ -1095,14 +1084,14 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform,uint32 filter
 	if( (assigns = recordSubtyping(this,expression,type,doTransform)) != -1){
 		return assigns;
 	}
-	else if( isPointer() && !type->isPointer() && canAddressOf && (assigns = referenceOf(this,expression,type,doTransform,filters)) != -1 ){
+	else if(isPointer() && !type->isPointer() && canAddressOf && (assigns = referenceOf(this,expression,type,doTransform,filters)) != -1 ){
 		return assigns;
+	}
+	else if(isReference()){
+		if( (assigns = referenceOf(this,expression,type,doTransform,filters)) != -1 ) return assigns;
 	}
 	else if( isNodePointer() && type->isNodePointer() ){
 		return RECORD_SUBTYPE;
-	}
-	else if( type->isReference() && !isReference() && (assigns = referenceTo(this,expression,type,doTransform)) != -1 ){
-		return assigns;
 	}
 
 	return -1;

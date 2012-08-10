@@ -43,12 +43,10 @@ struct Variable : PrefixDefinition  {
 		//The type that the variable returns isn't equal to the type that the variable was defined with 
 		// e.g. macro foo(x) = x  , x will be _ pattern on declaration, but really it is a *ast.Expression
 		HIDDEN_TYPE = 0x4 ,
-
 		IS_IMMUTABLE = 0x8,//def
-
 		CONSTANT_SUBSTITUTE = 0x10,//def a = 1 => an occurence of a will be replaced by 1. Make sure value is set before setting this flag.
-
 		ANALYSIS_DECLARED = 0x20,
+		IS_THREADLOCAL = 0x40,
 	};
 	Variable(SymbolID name,Location& location);
 	Variable(SymbolID name,Location& location,Scope* owner,Node* value);//constant injection

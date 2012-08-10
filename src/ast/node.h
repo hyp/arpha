@@ -503,6 +503,9 @@ struct PointerOperation : Node {
 
 		DEREFERENCE_OR_TYPE,//*
 	};
+	enum {
+		ADDRESS_RETURNS_REF = 0x10,
+	};
 
 	inline bool isAddress()     const { return kind == ADDRESS; }
 	inline bool isDereference() const { return kind == DEREFERENCE; }
@@ -510,10 +513,6 @@ struct PointerOperation : Node {
 	Node* expression;
 	int kind; // = ADDRESS
 	DECLARE_NODE(PointerOperation);
-
-	enum {
-		ADDRESS_RETURNS_REF = 0x10,
-	};
 };
 
 struct IfExpression : Node {

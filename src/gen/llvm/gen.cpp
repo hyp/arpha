@@ -133,6 +133,7 @@ struct LLVMgenerator: NodeVisitor {
 	void emitCreateLinearSequence(llvm::Value* ptr,llvm::Value* length,Type* next);
 
 	Node* visit(ArrayExpression* node);
+	Node* visit(TupleExpression* node);
 	Node* visit(VariableReference* node);
 	Node* visit(AssignmentExpression* node);
 	Node* visit(FieldAccessExpression* node);
@@ -148,7 +149,6 @@ struct LLVMgenerator: NodeVisitor {
 	void  gen(BlockExpression* node);
 	void  genStatements(BlockExpression* node,bool innermostInFunction = false);
 	void  genToplevelStatements(BlockExpression* node);
-
 	
 
 	Node* visit(Variable* var);
@@ -442,6 +442,12 @@ llvm::Constant* genInitializer(LLVMgenerator* generator,Node* value){
 	return llvm::dyn_cast<llvm::Constant>(expr);
 }
 
+Node* LLVMgenerator::visit(TupleExpression* node){
+	if(node->isConst()){
+		emit(genInitializer(this,node));
+	}
+	return node;
+}
 Node* LLVMgenerator::visit(ArrayExpression* node){
 	auto t = llvm::ArrayType::get(genType(node->explicitType->next()),node->size());
 	bool neededPointer = needsPointer;
@@ -1268,8 +1274,8 @@ llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* var
 	gen::Mangler::Element mangler(moduleMangler);
 	mangler.mangle(variable);
 
-	auto threadLocal = false;//NB: don't apply threadLocal to arrays
-	auto cnst        = variable->type.type()->hasConstQualifier();
+	auto threadLocal = variable->isFlagSet(Variable::IS_THREADLOCAL);//NB: don't apply threadLocal to arrays
+	auto cnst        = variable->isFlagSet(Variable::IS_IMMUTABLE);
 	auto var = new llvm::GlobalVariable(*module,genType(variable->type.type()),cnst,genLinkage(variable),nullptr,mangler.stream.str(),nullptr,threadLocal);
 	//var->setAlignment(variable->type.type()->alignment());
 	map(variable,var);
