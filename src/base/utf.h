@@ -22,6 +22,8 @@ namespace UTF16 {
 			BufferSize = 512
 		};
 		U16Char buffer[BufferSize];
+		bool outOfBuffer;
+		std::vector<U16Char> dynBuffer;
 	};
 
     UnicodeChar decode(const U16Char** ptr);

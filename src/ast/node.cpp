@@ -17,22 +17,22 @@ void DuplicationModifiers::duplicateDefinition(Argument* original,Argument* dupl
 	redirectors[reinterpret_cast<void*>(static_cast<Variable*>(original))] = std::make_pair(reinterpret_cast<void*>(static_cast<Variable*>(duplicate)),false);
 }
 void DuplicationModifiers::duplicateDefinition(Variable* original,Variable* duplicate){
-	if(!original->label().isNull()) target->define(duplicate);
+	if(redefine && !original->label().isNull()) target->define(duplicate);
 	redirectors[reinterpret_cast<void*>(original)] = std::make_pair(reinterpret_cast<void*>(duplicate),false);
 }
 void DuplicationModifiers::duplicateDefinition(Function* original,Function* duplicate){
-	if(!original->label().isNull()) target->defineFunction(duplicate);
+	if(redefine && !original->label().isNull()) target->defineFunction(duplicate);
 	redirectors[reinterpret_cast<void*>(original)] = std::make_pair(reinterpret_cast<void*>(duplicate),false);
 }
 void DuplicationModifiers::duplicateDefinition(TypeDeclaration* original,TypeDeclaration* duplicate){
-	target->define(duplicate);
+	if(redefine) target->define(duplicate);
 	redirectors[reinterpret_cast<void*>(original)] = std::make_pair(reinterpret_cast<void*>(duplicate),false);
 }
 void DuplicationModifiers::duplicateDefinition(PrefixMacro* original,PrefixMacro* duplicate){
-	target->define(duplicate);
+	if(redefine) target->define(duplicate);
 }
 void DuplicationModifiers::duplicateDefinition(InfixMacro* original,InfixMacro* duplicate){
-	target->define(duplicate);
+	if(redefine) target->define(duplicate);
 }
 
 void Node::setFlag(uint16 id){
@@ -490,7 +490,11 @@ Type* NodeReference::returnType() const {
 	return intrinsics::types::NodePointer; 
 }
 Node* NodeReference::duplicate(DuplicationModifiers* mods) const {
-	return copyProperties(new NodeReference(_node->duplicate(mods)));
+	auto old = mods->redefine;
+	mods->redefine = false;
+	auto expr = copyProperties(new NodeReference(_node->duplicate(mods)));
+	mods->redefine = old;
+	return expr;
 }
 
 

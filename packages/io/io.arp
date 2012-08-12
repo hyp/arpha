@@ -1,9 +1,29 @@
 # TODO
 import cstdlib
 
-def print(string Range(char8))
+def print  (number int32)
+{
+	if(number < 0){
+		putchar('-')
+		number = -number
+	}
+	var buffer Array(char8,16)
+	var i natural = 0
+	loop {
+		buffer[i] = ('0' + number % 10) as char8
+		i++
+		number/=10
+	} until(number == 0)
+	loop {
+		i--
+		putchar(buffer[i] as int32)
+	} until(i==0)
+}
+
+def print  (string Range(char8))
 {
 	until(string.empty){
+		if(string.current == '\n') putchar('\r')
 		putchar( string.current as int32 )
 		string.moveNext()
 	}
@@ -14,3 +34,13 @@ macro print(parameters..)
 	return [> for(i in $parameters) print(i) <]
 }
 
+macro println(parameters..)
+{
+	return [> 
+		match(typeof($parameters))
+		{|Tuple => for(i in $parameters) print(i)
+		 |_ 	=> print($parameters)
+		}
+		print("\n")
+	<]
+}

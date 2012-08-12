@@ -103,14 +103,29 @@ namespace UTF16 {
 		size_t i =0;
 		const size_t limit = BufferSize - 3;	
 		auto u8str = (const U8Char*) str;
+		outOfBuffer = false;
 		while(*u8str){
 			i+=UTF16::encode(UTF8::decode(&u8str),buffer + i);
-			if(i>=limit) break;
+			if(i>=limit){
+				dynBuffer.insert(dynBuffer.end(),buffer,buffer+i);
+				outOfBuffer = true;
+				break;
+			}
 		}
-		buffer[i] = 0;
+
+		if(outOfBuffer){
+			U16Char buf[2];
+			while(*u8str){
+				i = UTF16::encode(UTF8::decode(&u8str),buf);
+				dynBuffer.push_back(buf[0]);
+				if(i == 2) dynBuffer.push_back(buf[1]);
+			}
+			dynBuffer.push_back(0);
+		}
+		else buffer[i] = 0;
 	}
 	StringBuffer::operator const U16Char*(){
-		return buffer;
+		return outOfBuffer? dynBuffer.begin()._Ptr : buffer;
 	}
 
 

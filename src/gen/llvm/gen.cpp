@@ -85,7 +85,7 @@ struct LLVMgenerator: NodeVisitor {
 
 	llvm::FunctionPassManager* passManager;
 
-	LLVMgenerator(llvm::LLVMContext& _context,Node* root,llvm::Module* module,llvm::FunctionPassManager* passManager,int round);
+	LLVMgenerator(llvm::LLVMContext& _context,Node** roots,size_t rootCount,llvm::Module* module,llvm::FunctionPassManager* passManager,int round);
 	llvm::Type* genType(Type* type);
 	void emitConstant(llvm::Constant* value);
 	inline void emit(llvm::Value* value){ emmittedValue = value; }
@@ -166,7 +166,7 @@ struct LLVMgenerator: NodeVisitor {
 
 LLVMgenerator::LLVMgenerator(
 	llvm::LLVMContext& _context,
-	Node* root,llvm::Module* module,
+	Node** roots,size_t rootCount,llvm::Module* module,
 	llvm::FunctionPassManager* passManager,
 	int round) : 
 	context(_context),
@@ -186,8 +186,8 @@ LLVMgenerator::LLVMgenerator(
 	needsRangeAsPointerPair = false;
 
 	//create a module initializer
-
-	genToplevelStatements(root->asBlockExpression());
+	for(auto i = roots;i!= roots+rootCount;i++)
+		genToplevelStatements((*i)->asBlockExpression());
 }
 
 bool rewriteAnonymousRecordAsVector(AnonymousAggregate* type){
@@ -356,7 +356,7 @@ llvm::GlobalValue::LinkageTypes LLVMgenerator::genLinkage(PrefixDefinition* def)
 }
 
 Node* LLVMgenerator::visit(IntegerLiteral* node){
-	emitConstant(llvm::ConstantInt::get(genType(node->explicitType),node->integer.u64,false));
+	emitConstant(llvm::ConstantInt::get(genType(node->explicitType),node->integer.u64,node->integer.isNegative()));
 	return node;
 }
 Node* LLVMgenerator::visit(CharacterLiteral* node){
@@ -443,8 +443,22 @@ llvm::Constant* genInitializer(LLVMgenerator* generator,Node* value){
 }
 
 Node* LLVMgenerator::visit(TupleExpression* node){
+	bool neededPointer = needsPointer;
+	needsPointer = false;
+
 	if(node->isConst()){
 		emit(genInitializer(this,node));
+	}	else {
+		//local tuple
+		auto block = builder.GetInsertBlock();
+		llvm::IRBuilder<> _builder(block,block->begin());
+		auto var = _builder.CreateAlloca(genType(node->type),nullptr,"localtuple");
+
+		for(size_t i = 0;i<node->size();i++){
+			builder.CreateStore(generateExpression(node->childrenPtr()[i]),builder.CreateStructGEP(var,i));
+		}
+		if(neededPointer) emit(var);
+		else emitLoad(var);
 	}
 	return node;
 }
@@ -1129,7 +1143,7 @@ Node* LLVMgenerator::visit(IfExpression* node){
 		else generateExpression(node->alternative);
 		alternativeBlock = builder.GetInsertBlock();//update alternative block
 
-		if(!llvm::isa<llvm::BranchInst>(alternativeBlock->back()))
+		if(node->alternative->asIfExpression() || !llvm::isa<llvm::BranchInst>(alternativeBlock->back()))
 			builder.CreateBr(mergingBlock);	
 	}
 	//merge
@@ -1284,6 +1298,8 @@ llvm::GlobalVariable*  LLVMgenerator::getGlobalVariableDeclaration(Variable* var
 }
 
 Node* LLVMgenerator::visit(Variable* variable){
+	if(variable->type.type()->isType()) return variable;
+
 	if(!functionOwner){
 		auto var = getGlobalVariableDeclaration(variable);
 		var->setInitializer(globalVariableInitializer? genInitializer(this,globalVariableInitializer) : genDefaultInitializer(genType(variable->type.type())));
@@ -1344,8 +1360,8 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 }
 
 Node* LLVMgenerator::visit(Function* function){
-	if(function->isExternal() || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro() || 
-		function->isTypeTemplate() || function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return function;
+	if(function->isExternal() || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro() || function->isIntrinsic() || 
+		function->isTypeTemplate() || function->isFlagSet(Function::CONSTRAINT_FUNCTION) || function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return function;
 
 	//TODO: fix NB: optimization: Don't generate unused generated functions!
 	//if(function->generatedFunctionParent && !function->generatorData) return function;
@@ -1578,7 +1594,7 @@ namespace gen {
 		}
 	}
 	
-	std::string LLVMBackend::generateModule(Node* root,const char* outputDirectory,const char* moduleName,int outputFormat){
+	std::string LLVMBackend::generateModule(Node** roots,size_t rootCount,const char* outputDirectory,const char* moduleName,int outputFormat){
 		using namespace llvm;
 		auto module = new Module(StringRef(moduleName),getGlobalContext());
 		auto passManager = new FunctionPassManager(module);
@@ -1606,7 +1622,7 @@ namespace gen {
 		}
 		passManager->doInitialization();
 		
-		LLVMgenerator generator(getGlobalContext(),root,module,passManager,round);
+		LLVMgenerator generator(getGlobalContext(),roots,rootCount,module,passManager,round);
 		round++;
 		module->dump();
 		//extension
@@ -1621,6 +1637,10 @@ namespace gen {
 		delete passManager;
 		delete module;
 		return path;
+	}
+
+	std::string LLVMBackend::generateModule(Node* root,const char* outputDirectory,const char* moduleName,int outputFormat){
+		return generateModule(&root,1,outputDirectory,moduleName,outputFormat);
 	}
 
 };

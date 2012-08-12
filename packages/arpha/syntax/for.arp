@@ -12,7 +12,10 @@ macro foreach(collection Range,i,body)
 	return [>
 		$rangeVariable = $collection
 		until(($range).empty){
-			$i = &($range).current
+			$i = match(typeof(($range).current)) { 
+				| natural => ($range).current
+				| _ => &($range).current 
+				}
 			$body
 			($range).moveNext()
 		}

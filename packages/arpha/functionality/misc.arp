@@ -5,15 +5,15 @@
 import arpha.intrinsic
 
 # Returns the type of a given expression
-def typeof(expression)
+def typeof(expression..)
 
 # Returns the size(in bytes) of a given type
 def   sizeof (type Type) natural
-macro sizeof(expression) = [> sizeof(typeof($expression)) <]
+macro sizeof(expression..) = [> sizeof(typeof($expression)) <]
 
 # Returns the alignment(in bytes) of a given type
 def   alignof(type Type) natural
-macro alignof(expression) = [> alignof(typeof($expression)) <]
+macro alignof(expression..) = [> alignof(typeof($expression)) <]
 
 # Retuns the offset(in bytes) of a given field
 def offsetof(expression) natural

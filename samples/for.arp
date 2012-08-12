@@ -26,4 +26,9 @@ def main(){
 	for(element in 1,2,3){
 		print("Hello world!")
 	}
+	
+	# Iteration over indices
+	for(i in "LOL".indices) {
+		println("Index $(i as int32)")
+	}
 }

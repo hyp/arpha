@@ -329,16 +329,17 @@ Node* Resolver::inlineCall(Function* function,Node* parameters){
 
 		size_t j = 0;
 		for(auto i = function->arguments.begin();i!=function->arguments.end();++i,++j){
-			Node* expansion;
-			if(false/*isSimple(parametersPointer[j])*/) expansion = parametersPointer[j];
+			
+			if(false/*isSimple(parametersPointer[j])*/){
+				//mods.expandArgument((*i),parametersPointer[j]);
+			}
 			else {
 				auto var = new Variable((*i)->label(),parametersPointer[j]->location());
 				var->type.specify((*i)->type.type());
 				wrapper->addChild(new AssignmentExpression(var,parametersPointer[j]));
-				expansion = new VariableReference(var);
-				expansion->_location = parametersPointer[j]->location();
+				mods.duplicateDefinition(static_cast<Variable*>(*i),var);
 			} 
-			mods.expandArgument((*i),expansion);
+			
 		}
 	}
 	if(!function->returns()->isVoid()){
@@ -353,7 +354,7 @@ Node* Resolver::inlineCall(Function* function,Node* parameters){
 
 	auto  block = &function->body;
 	if(block->size()){
-		wrapper->addChild(oneReturn? block->childrenPtr()[0]->asReturnExpression()->expression : block->duplicateMixin(&mods));
+		wrapper->addChild(oneReturn? block->childrenPtr()[0]->asReturnExpression()->expression->duplicate(&mods) : block->duplicateMixin(&mods));
 	}
 
 	if(!oneReturn) wrapper->addChild(mods.returnValueRedirector? (Node*)new VariableReference(mods.returnValueRedirector) : new UnitExpression());
@@ -361,6 +362,7 @@ Node* Resolver::inlineCall(Function* function,Node* parameters){
 }
 
 static Node* potentiallyInline(Resolver* resolver,Function* function,Node* param){
+	return nullptr;
 	if(!function->intrinsicCTFEbinder && !function->isExternal() && !function->isIntrinsicOperation() && 
 		function->inliningWeight < resolver->inliningThreshold[function->generatedFunctionParent? 1 : 0]){
 		return resolver->inlineCall(function,param);
@@ -368,8 +370,23 @@ static Node* potentiallyInline(Resolver* resolver,Function* function,Node* param
 	return nullptr;
 }
 
+Node* inlinedRecordConstructor(Resolver* resolver,Record* record,Node* param){
+	auto tuple = param->asTupleExpression();
+	tuple->type = record;
+	tuple->flags &= (~Node::CONSTANT);
+	return tuple;
+}
+
 
 Node* CallExpression::resolve(Resolver* resolver){
+	if(auto callingOverloadSet = object->asUnresolvedSymbol()){
+		auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : resolver->currentScope());
+		if(auto os = scope->lookupPrefix(callingOverloadSet->symbol)){
+			if(auto decl = os->asTypeDeclaration())
+				object= callingOverloadSet->copyLocationSymbol(resolver->resolve(decl->createReference()));
+		}
+	}
+
 	arg  = resolver->resolve(arg);
 	if(!arg->isResolved()) return this;
 
@@ -380,8 +397,11 @@ Node* CallExpression::resolve(Resolver* resolver){
 		if(auto os = scope->lookupPrefix(callingOverloadSet->symbol)){
 			if(auto decl = os->asTypeDeclaration()){
 				object= callingOverloadSet->copyLocationSymbol(resolver->resolve(decl->createReference()));
-				if(!decl->type()->asTrait())
+				if(!decl->type()->asTrait()){
+					if(auto record = decl->type()->asRecord())
+						return copyLocationSymbol(inlinedRecordConstructor(resolver,record,arg));
 					resolver->markResolved(this);
+				}
 				return this;
 			}
 			else assert(os->asOverloadset());
@@ -466,8 +486,11 @@ Node* CallExpression::resolve(Resolver* resolver){
 		return resolver->resolve(transformCallOnAccess(this,callingAccess));
 	}
 	else if(auto type = object->asTypeReference()){
-		if(!type->type->asTrait())
+		if(!type->type->asTrait()){
+			if(auto record = type->type->asRecord())
+				return copyLocationSymbol(inlinedRecordConstructor(resolver,record,arg));
 			resolver->markResolved(this);
+		}
 	}
 	else if(object->asVariableReference() && object->returnType()->isFunctionPointer()){
 		resolver->markResolved(this);
@@ -710,7 +733,10 @@ Node* PointerOperation::resolve(Resolver* resolver){
 			}
 		}
 		else if(isAddress()){
-
+			if(expression->isConst()){
+				error(this,"Can't take adress of a constant expression!");
+				return ErrorExpression::getInstance();
+			}
 			if(auto deref = expression->asPointerOperation()){
 				if(deref->isDereference()){
 					if(deref->expression->returnType()->isReference()) setFlag(ADDRESS_RETURNS_REF);
@@ -1590,7 +1616,7 @@ void  Resolver::resolveModule(BlockExpression* module){
 		pass++;
 	}
 	while(prevUnresolvedExpressions != unresolvedExpressions && unresolvedExpressions != 0);
-	if(unresolvedExpressions > 0){
+	if(unresolvedExpressions > 0 && !module->isResolved()){
 		compiler::headError(module->location(),format("Can't resolve %s expressions and definitions:",unresolvedExpressions));
 		//Do an extra pass gathering unresolved definitions
 		reportUnevaluated = true;
@@ -1747,6 +1773,20 @@ Scope* getSpecializationScope(Function* original,Resolver* resolver){
 	else return original->owner();
 }
 
+void introduceFunctionExpansions(Scope* dest,Function* original,Node** passedExpressions){
+	for(size_t i = 0;i<original->arguments.size();++i){
+		auto arg = original->arguments[i];
+		if(arg->expandAtCompileTime()){
+			auto var = new Variable(arg->label(),arg->location());
+			var->_owner = dest;
+			var->setFlag(Variable::IS_IMMUTABLE);
+			var->specifyType(passedExpressions[i]->returnType());
+			var->setImmutableValue(passedExpressions[i]);
+			dest->define(var);
+		}
+	}
+}
+
 Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternMatcher& patternMatcher,Function* original,Type** specializedParameters,Node** passedExpressions){
 	size_t numberOfParameters = original->arguments.size();
 	assert(original->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || original->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS));	
@@ -1764,6 +1804,7 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 		auto oldParent = currentParentNode();
 		currentScope(original->owner());
 		currentParentNode(original->parentNode);
+		introduceFunctionExpansions(specialization->body.scope,original,passedExpressions);
 		multipassResolve(specialization);
 		original->parentNode->asBlockExpression()->addChildPotentiallyDisturbingIteration(specialization);
 		specialization->getTemplateTypeDeclaration()->type()->onTemplateSpecialization(this);
@@ -1800,6 +1841,9 @@ Function* Resolver::specializeFunction(TypePatternUnresolvedExpression::PatternM
 	if(original->isFlagSet(Function::HAS_PATTERN_ARGUMENTS)){
 		patternMatcher.container = specialization->body.scope;
 		patternMatcher.defineIntroducedDefinitions();
+	}
+	if(original->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)){
+		introduceFunctionExpansions(specialization->body.scope,original,passedExpressions);
 	}
 	//Resolve.. TODO error handling
 

@@ -2,6 +2,7 @@
 * Arpha programming language compiler.
 * (c) 2012
 */
+#include <algorithm>
 
 #include "base/base.h"
 #include "base/symbol.h"
@@ -41,8 +42,16 @@ Dumper Dumper::console(){
 	Dumper dumper;
 	dumper.destination = dumpToConsole;
 	dumper.indentation = 0;
-	dumper.flags = 0;
 	return dumper;
+}
+
+Dumper::Dumper(std::ostream* stream) {
+	this->stream = stream;
+	flags = IS_STREAM;
+}
+void Dumper::print(const char* str){
+	if((flags & IS_STREAM)!=0) (*stream)<<str;
+	else destination.print(str);
 }
 void Dumper::printIndentation(){
 	for(auto i = 0;i<indentation;++i) print("  ");
@@ -56,20 +65,30 @@ void Dumper::decIndentation(){
 
 namespace compiler {
 
+	struct Package;
+
 	struct Module {
 		std::string directory;
 		Scope* scope;
 		Node*  body;
-		bool compile;
+		std::map<std::string,Package>::iterator package;
 		size_t errorCount;
 		const char* src;
 	};
-
 	typedef std::map<std::string,Module>::iterator ModulePtr;
+	
 	std::map<std::string,Module> modules;
 	ModulePtr currentModule;
 
+	struct Package {
+		std::vector<ModulePtr> modules;
+	};
+	typedef std::map<std::string,Package>::iterator PackagePtr;
+	std::map<std::string,Package> packages;
+
 	std::string packageDir;
+	const char** rootImportDirectory;
+	size_t rootImportDirectoryCount;
 
 	std::map<std::string,void (*)(Scope*)> postCallbacks;
 
@@ -95,7 +114,10 @@ namespace compiler {
 	}
 
 	void addGeneratedExpression(Node* expr){
-		if(!generatedFunctions) generatedFunctions = new BlockExpression;
+		if(!generatedFunctions){
+			generatedFunctions = new BlockExpression;
+			generatedFunctions->label("__gen");
+		}
 		generatedFunctions->addChild(expr);
 	}
 
@@ -118,27 +140,29 @@ namespace compiler {
 	}
 
 
-	ModulePtr newModule(const char* moduleName,const char* source){
+	ModulePtr newModule(const char* path,const char* source,PackagePtr* package= nullptr){
 		Module module = {};
-		auto insertionResult = modules.insert(std::make_pair(std::string(moduleName),module));
+		auto insertionResult = modules.insert(std::make_pair(std::string(path),module));
 
 		auto prevModule = currentModule;
 		currentModule = insertionResult.first;
 
-		currentModule->second.directory = System::path::directory(moduleName);
+		currentModule->second.directory = System::path::directory(path);
+		if(package) currentModule->second.package = *package;
+		else currentModule->second.package = packages.end();
 		currentModule->second.errorCount = 0;
 		currentModule->second.src = source;
 
 		//module
 		auto block = new BlockExpression();
 		//Special case for 'packages/arpha/arp.arp'
-		if((packageDir + "/arpha/arpha.arp") == moduleName){
+		if((packageDir + "/arpha/arpha.arp") == path){
 			//import 'arpha' by default
 			arpha::defineCoreSyntax(block->scope);
 			compiler::registerResolvedIntrinsicModuleCallback("arpha/types",intrinsics::types::preinit);
 		}
 		else {
-			auto cb = postCallbacks.find(moduleName);
+			auto cb = postCallbacks.find(path);
 			if(cb != postCallbacks.end()) (*cb).second(block->scope);
 			//import 'arpha' by default
 			block->scope->import(findModule("arpha"),"arpha");
@@ -171,39 +195,71 @@ namespace compiler {
 		return insertionResult.first;
 	}
 
-	ModulePtr newModuleFromFile(const char* filename){
+	ModulePtr newModuleFromFile(const char* filename,const char* moduleName = nullptr,PackagePtr* package= nullptr){
+		std::string m;
+		if(!moduleName){
+			m = System::path::filename(filename);
+			auto index = m.find_last_of('.');
+			m[index] = '_';
+			moduleName = m.c_str();
+		}
 		auto src = System::fileToString(filename);
-		auto module = newModule(filename,(const char*)src);
+		auto module = newModule(filename,(const char*)src,package);
 		System::free((void*)src);
+		module->second.body->label(moduleName);
 		return module;
 	}
 
 	//Module importing is done by searching in the appropriate directories
-	Scope* findModuleFromDirectory(std::string& dir,const char* name){
+	Scope* findModuleFromDirectory(const char* dir,const char* name,ModulePtr* relative = nullptr){
+		std::string moduleName;
 		//Try non package way
-		auto filename = dir + "/" + name + ".arp";
+		auto filename = std::string(dir) + "/" + name + ".arp";
 		if(!System::fileExists(filename.c_str())){
 			//Try package way
-			filename = dir + "/" + name + "/" + System::path::filename(name) + ".arp";
+			filename = std::string(dir) + "/" + name + "/" + System::path::filename(name) + ".arp";
 			if(!System::fileExists(filename.c_str())) return nullptr;
-		}
+			else moduleName = std::string(name) + "_" + name;
+		} else moduleName = name;
 		//load module
 		auto module = modules.find(filename);
 		if(module == modules.end()){
+			std::replace(moduleName.begin(),moduleName.end(),'/','_');
+			PackagePtr package;
+			if(!relative){
+				auto comp = System::path::firstComponent(&name); //'arpha/foo' -> 'arpha'
+				auto packagePath = std::string(dir) + "/" + std::string(comp.first,comp.second); //'packages/arpha'
+				
+				auto insertionResult = packages.insert(std::make_pair(packagePath,Package()));
+				package = insertionResult.first;
+			}	else {
+				package = (*relative)->second.package;
+				if(package!=packages.end()){
+					moduleName = System::path::filename(package->first.c_str()) + "_" + moduleName;//TODO proper
+				}
+			}
+
 			onDebug(format("A new module %s located at '%s' will be loaded.",name,filename));
-			module = newModuleFromFile(filename.c_str());
+			module = newModuleFromFile(filename.c_str(),moduleName.c_str(),&package);
+
+			package->second.modules.push_back(module);
 		}
 		return module->second.scope;
 	}
+
 	//Finds a module and loads it if necessary to match the existing name
 	Scope* findModule(const char* name){
 		//Search in the current directory
 		if(currentModule != modules.end()){
-			auto module = findModuleFromDirectory(currentModule->second.directory,name);
+			auto module = findModuleFromDirectory(currentModule->second.directory.c_str(),name,&currentModule);
 			if(module) return module;
 		}
+		
 		//Search in the packages directory for a package
-		return findModuleFromDirectory(packageDir,name);
+		for(auto i = rootImportDirectory; i!= rootImportDirectory + rootImportDirectoryCount;++i){
+			auto module = findModuleFromDirectory(*i,name,nullptr);
+			if(module) return module;
+		}
 	}
 
 	int reportLevel;
@@ -211,14 +267,20 @@ namespace compiler {
 	void init(data::Options* options){
 		interpreter = constructInterpreter(nullptr);
 		currentModule = modules.end();
-		packageDir = options->packagesPaths[0];//TODO use all paths
+
+		rootImportDirectory      = options->packagesPaths;
+		rootImportDirectoryCount = options->packagesPathsCount;
+		assert(rootImportDirectoryCount);
+
+		packageDir = rootImportDirectory[0];
 
 		reportLevel = ReportErrors;
 
 		intrinsics::types::startup();
 
 		//Load language definitions.
-		newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str());
+		findModuleFromDirectory(packageDir.c_str(),"arpha/arpha",nullptr);
+		//newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str(),"arpha_arpha",nullptr,true);
 
 		reportLevel = ReportDebug;
 	}
@@ -416,6 +478,19 @@ struct ClOptionApplier {
 	}
 };
 
+void buildPackages(gen::LLVMBackend& backend,std::vector<std::string>& files){
+	std::vector<Node*> modules;
+	for(auto i = compiler::packages.begin(); i!=compiler::packages.end();++i){
+		
+		System::print(format("Compiling the package '%s' for the first time... \n",i->first));
+		
+		auto moduleCount = i->second.modules.size();
+		modules.resize(moduleCount);
+		for(size_t j = 0;j<moduleCount;j++) modules[j] = i->second.modules[j]->second.body;
+		files.push_back(backend.generateModule(modules.begin()._Ptr,modules.size(),i->first.c_str(),"arpha_cache"));
+		modules.clear();
+	}
+}
 
 int main(int argc, const char * argv[]){
 	
@@ -521,6 +596,7 @@ int main(int argc, const char * argv[]){
 		}
 		if(hasErrors) return -1;
 
+		buildPackages(backend,files);
 		if(compiler::generatedFunctions){
 
 			files.push_back(backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen"));
@@ -542,22 +618,24 @@ int main(int argc, const char * argv[]){
 			std::cout<<"> ";
 			std::cin.getline(buf,1024);
 			if(buf[0]=='\0'){
-				 auto mod = compiler::newModule("source",source.c_str());
-				 if(compiler::generatedFunctions){
+				auto mod = compiler::newModule("source",source.c_str());
+				
+				if(compiler::generatedFunctions){
 					debug("Generated functions - %s",compiler::generatedFunctions);
-				 }
+				}
 
-				 
-				 auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src",data::gen::native::ASSEMBLY);
-				 if(compiler::generatedFunctions){
+				mod->second.body->label("source");
+				auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src",data::gen::native::ASSEMBLY);
+				buildPackages(backend,files);
+				if(compiler::generatedFunctions){
 					backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen");
-				 }
-				 /*auto src = srcf.c_str();
-				 linker.link(&src,1,"D:/Alex/projects/parser/build/src",data::gen::native::PackageLinkingFormat::EXECUTABLE);
-				 */
+				}
+				/*auto src = srcf.c_str();
+				linker.link(&src,1,"D:/Alex/projects/parser/build/src",data::gen::native::PackageLinkingFormat::EXECUTABLE);
+				*/
 
-				 source = "";
-				 continue;
+				source = "";
+				continue;
 			}
 			source+=buf;
 			source+="\n";

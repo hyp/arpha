@@ -31,17 +31,23 @@ struct CompilationUnit {
 struct Dumper {
 private:
 	System::OutputBuffer destination;
+	std::ostream* stream;
 	int indentation;
+	enum {
+		IS_STREAM = 0x1
+	};
 public:	
 	uint32 flags;
 	enum {
-		VERBOSE = 0x1,
-		REF_DECL_POINTERS = 0x2,
+		VERBOSE = 0x2,
+		REF_DECL_POINTERS = 0x4,
 	};
+	Dumper() : flags(0) { }
+	Dumper(std::ostream* stream);
 
-	inline void print(const char* str) { destination.print(str); }
-	inline void print(SymbolID symbol) { destination.print(symbol.ptr()); }
-	inline void print(std::string &str) { destination.print(str); }
+	void print(const char* str);
+	inline void print(SymbolID symbol)  { print(symbol.ptr()); }
+	inline void print(std::string &str) { print(str.c_str()); }
 
 	//varios decorators
 	inline bool isVerbose() { return (flags & VERBOSE) != 0; }

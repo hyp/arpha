@@ -17,21 +17,18 @@ int blockComponentLength(uintptr_t n){
 	return count;
 }
 
-void Mangler::Element::mangleModule(BlockExpression* root){
-	stream<<"A3src";
-}
-
 void Mangler::Element::mangleComponents(Node* component){
 	if(auto block = component->asBlockExpression()){ 
-		if(block->parentNode == nullptr) mangleModule(block);
-		else if(auto func = block->parentNode->asFunction()){
-			mangle(func);
-		}
-		else {
-			mangleComponents(block->parentNode);
-			if(!block->label().isNull()) stream<<block->label().length()<<block->label();
-			else stream<<blockComponentLength((uintptr_t)block)<<'_'<<((uintptr_t)block);
-		}
+		if(block->parentNode != nullptr){
+			if(auto func = block->parentNode->asFunction()){
+				mangle(func);
+				return;
+			} else mangleComponents(block->parentNode);
+		} else stream<<'A';
+
+		//mangleComponents(block->parentNode);
+		if(!block->label().isNull()) stream<<block->label().length()<<block->label();
+		else stream<<blockComponentLength((uintptr_t)block)<<'_'<<((uintptr_t)block);
 	} else assert(false);
 }
 

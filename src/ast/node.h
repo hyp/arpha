@@ -94,12 +94,13 @@ struct DuplicationModifiers {
 	Scope* target;
 	CTFEinvocation* expandedMacroOptimization;//when a macro returns [> $x <] we replace x with a value during mixining into the caller's body
 
+	bool redefine;
 	//The bool indicates whether the redirector is expression(true) or a definition(false)
 	std::map<void*,std::pair<void*,bool> > redirectors;//Used to redirect references for duplicated definitions
 	
 	Variable* returnValueRedirector;//The variable to which the return value is assigned in inlined and mixined functions
 
-	DuplicationModifiers(Scope* target) : returnValueRedirector(nullptr),expandedMacroOptimization(nullptr) { this->target = target; }
+	DuplicationModifiers(Scope* target) : returnValueRedirector(nullptr),expandedMacroOptimization(nullptr),redefine(true) { this->target = target; }
 
 	void expandArgument(Argument* original,Node* value);
 	void duplicateDefinition(Argument* original,Argument* duplicate);

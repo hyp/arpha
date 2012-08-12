@@ -424,6 +424,9 @@ Type* Function::getIntrinsicOperationReturnType(Type* operand1,data::ast::Operat
 	if(operand1->isLinearSequence()){
 		if(op == ELEMENT_GET) return Type::getReferenceType(operand1->next());
 	}
+	else if(auto arr = operand1->asStaticArray()){
+		if(op == ELEMENT_GET) return Type::getReferenceType(arr->next());
+	}
 	else if(auto aggr = operand1->asAnonymousRecord()){
 		if(!aggr->isFlagSet(AnonymousAggregate::GEN_REWRITE_AS_VECTOR)) return nullptr;
 

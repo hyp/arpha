@@ -125,6 +125,8 @@ int System::execute(const char* file,const char* param,const char* dir){
 		UTF16::StringBuffer wfile(file);
 		UTF16::StringBuffer wparam(param);
 		UTF16::StringBuffer wdir(dir?dir:"");
+
+
 		//ShellExecuteW((HWND)0,L"open",wfile,wparam,dir?wdir:"",SW_SHOW);
 
 		STARTUPINFOW si;

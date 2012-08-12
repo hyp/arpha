@@ -18,7 +18,6 @@ namespace gen {
 			std::stringstream stream;
 		private:
 			void mangle(Type* type);
-			void mangleModule(BlockExpression* root);
 			void mangleComponents(Node* node);
 			Mangler* mangler;
 		};

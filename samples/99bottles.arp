@@ -1,0 +1,37 @@
+import io
+
+def printBottles(bottleCount int32){
+	if(bottleCount <= 0){
+		println("No beer - no song")
+	}
+	def printNumber(bottles int32){
+		match(bottles){
+		| 0 => print("no more bottles")
+		| 1 => print("1 bottle")
+		| _ => print("$(bottles) bottles")
+		}
+	}
+	
+	println("The \"$bottleCount bottles of beer\" song\n")
+	
+	var bottles = bottleCount
+	while(bottles > 0){
+		printNumber(bottles)
+		print(" of beer on the wall, ")
+		printNumber(bottles)
+		println(" of beer.")
+		bottles--
+		print("Take one down, pass it around, ")
+		printNumber(bottles)
+		println(" of beer on the wall.\n")
+	}
+	
+	println("No more bottles of beer on the wall, no more bottles of beer.")
+	print("Go to the store and buy some more, ")
+	printNumber(bottleCount)
+	println(" of beer on the wall.")
+}
+
+def main(){
+	printBottles(99)
+}

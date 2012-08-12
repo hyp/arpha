@@ -786,7 +786,7 @@ inline bool characterFits(int bits,uint32 value){
 
 Type* Type::getBestFitIntegerType(const BigInt& value){
 	if(value.isNegative()){
-		if(/*>=*/ !(value < (uint64)std::numeric_limits<int32>::min())) return intrinsics::types::int32;
+		if(/*>=*/ !(value < (uint64)std::numeric_limits<int32>::max())) return intrinsics::types::int32;
 		else return intrinsics::types::int64;
 	}
 	else{
@@ -1027,6 +1027,7 @@ void TypeMeaningsRange::getRecordSubtypes(Record* record,uint32 filters){
 }
 
 int referenceOf(Type* givenType, Node** node, Type* nodeType,bool doTransform,uint32 filters){
+	if((*node)->isConst()) return -1;//no &1 !
 	auto ptrType = givenType->isReference()? Type::getReferenceType(nodeType) : Type::getPointerType(nodeType);
 	int weight = givenType->assignFrom(node,ptrType,doTransform,filters);
 	if(weight != -1){

@@ -369,22 +369,22 @@ void Type::dump(Dumper& dumper) const {
 }
 
 std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& type){
-	auto con = Dumper::console();
-	type.dump(con);
+	Dumper dumper(&stream);
+	type.dump(dumper);
 	return stream;
 }
 
 std::ostream& operator<< (std::ostream& stream,Type* type){
-	auto con = Dumper::console();
-	type->dump(con);
+	Dumper dumper(&stream);
+	type->dump(dumper);
 	return stream;
 }
 
 std::ostream& operator<< (std::ostream& stream,Node* node){
 	if(compiler::reportLevel >= compiler::ReportDebug){
-		auto con = Dumper::console();
-		con.flags |= Dumper::VERBOSE | Dumper::REF_DECL_POINTERS;
-		node->dump(con);
+		Dumper dumper(&stream);
+		dumper.flags |= Dumper::VERBOSE | Dumper::REF_DECL_POINTERS;
+		node->dump(dumper);
 	}
 	return stream;
 }
