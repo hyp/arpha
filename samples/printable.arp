@@ -1,0 +1,13 @@
+import io
+
+type Object {
+	var i,j int32
+	
+	def print(self) = print("Object $(self.i):$(self.j)")
+}
+
+def main(){
+	var object = Object(1,0)
+	println("This is $object!")
+}
+
