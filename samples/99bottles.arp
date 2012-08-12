@@ -2,13 +2,13 @@ import io
 
 def printBottles(bottleCount int32){
 	if(bottleCount <= 0){
-		println("No beer - no song")
+		println("No beer - no song!")
 	}
-	def printNumber(bottles int32){
+	def printNumber(bottles typeof(bottleCount)){
 		match(bottles){
 		| 0 => print("no more bottles")
 		| 1 => print("1 bottle")
-		| _ => print("$(bottles) bottles")
+		| _ => print("$bottles bottles")
 		}
 	}
 	
