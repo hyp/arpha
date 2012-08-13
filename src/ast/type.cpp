@@ -1341,6 +1341,15 @@ AnonymousAggregate::AnonymousAggregate(Type** t,SymbolID* fs,size_t n,bool isVar
 AnonymousAggregate* Type::asAnonymousRecord(){
 	return type == ANONYMOUS_RECORD? static_cast<AnonymousAggregate*>(this) : nullptr;
 }
+Type* AnonymousAggregate::rewriteVariantAsNullablePointer(){
+	if(numberOfFields != 2) return nullptr;
+	Type* ptr;
+	if(types[0]->isVoid()) ptr = types[1];
+	else if(types[1]->isVoid()) ptr = types[0];
+	else return nullptr;
+	ptr = ptr->stripQualifiers();
+	return ptr->isPointer() || ptr->isReference()? ptr : nullptr;
+}
 int AnonymousAggregate::lookupField(const SymbolID fieldName) const {
 	if(fields){
 		for(auto i = fields;i!= (fields+numberOfFields);i++){

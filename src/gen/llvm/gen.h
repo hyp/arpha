@@ -10,7 +10,7 @@
 namespace gen {
 	struct LLVMBackend: AbstractBackend {
 		enum {
-			OUTPUT_BC = data::gen::native::ASSEMBLY + 1,
+			OUTPUT_BC = 0x4,
 		};
 		LLVMBackend(data::gen::native::Target* target,data::gen::Options* options);
 

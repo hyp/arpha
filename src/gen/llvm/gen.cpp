@@ -115,6 +115,7 @@ struct LLVMgenerator: NodeVisitor {
 	inline void emitStore(llvm::Value* var,llvm::Value* val){
 		emmittedValue = builder.CreateStore(val,var);
 	}
+	inline llvm::TargetMachine* targetMachine() { return ::targetMachine; }
 
 	
 	llvm::AllocaInst *genLocalVariable(Type* type);
@@ -233,7 +234,10 @@ llvm::Type* getRecordDeclaration(LLVMgenerator* generator,Record* record){
 
 //TODO
 llvm::Type* generateAnonymousVariant(LLVMgenerator* generator,AnonymousAggregate* type){
+	//Rewrite (Pointer ,Reference | Nothing) -> Pointer
+	if(auto ptr = type->rewriteVariantAsNullablePointer()) return generator->genType(ptr);
 
+	assert(false && "Anonymous variant's aren't implemented");
 	std::vector<llvm::Type*> fields(type->numberOfFields);
 	for(size_t i = 0;i<type->numberOfFields;i++){
 		fields[i] = generator->genType(type->types[i]);
@@ -241,9 +245,33 @@ llvm::Type* generateAnonymousVariant(LLVMgenerator* generator,AnonymousAggregate
 	return llvm::StructType::get(generator->context,fields,false);
 }
 
-//TODO
 llvm::Type* getVariantDeclaration(LLVMgenerator* generator,Variant* variant){
-	return llvm::Type::getInt32Ty(generator->context);
+	if(variant->generatorData) return generator->unmap(variant);
+	llvm::Type* result;
+
+	if(!variant->hasNoStructuredOptions()){
+		gen::Mangler::Element mangler(generator->moduleMangler);
+		mangler.mangle(variant->declaration);
+
+		auto targetData = generator->targetMachine()->getTargetData();
+		uint64 maxSize=0;
+		auto staticBlock = variant->declaration->optionalStaticBlock;
+		for(auto i = staticBlock->begin();i!=staticBlock->end();i++){
+			if(auto typeRef = (*i)->asTypeDeclaration()){
+				if(auto record = typeRef->type()->asRecord()){
+					assert(record->variant() == variant);
+					auto structure = getRecordDeclaration(generator,record);
+					maxSize = std::max(maxSize,targetData->getStructLayout(llvm::dyn_cast<llvm::StructType>(structure))->getSizeInBytes());
+				}
+			}
+		}
+
+		llvm::Type* types[2] = { llvm::Type::getInt32Ty(generator->context),llvm::ArrayType::get(llvm::Type::getInt8Ty(generator->context),maxSize) };
+		result = llvm::StructType::create(generator->context,types,mangler.stream.str(),true);
+	}
+	else result = llvm::Type::getInt32Ty(generator->context);
+	generator->map(variant,result);
+	return result;
 }
 
 llvm::Type* generatePointerType(LLVMgenerator* generator,Type* next){
@@ -833,7 +861,7 @@ llvm::Value* optimize1ArgOperation(LLVMgenerator* generator,data::ast::Operation
 }
 
 llvm::Value* genVariantGetTagValue(LLVMgenerator* generator,Variant* variant,Node* expression){
-	if(variant->isFlagSet(Variant::NO_INNER_STRUCTURES)){
+	if(variant->hasNoStructuredOptions()){
 		return generator->generateExpression(expression);
 	} else {
 		assert(false && "Structured variants not implemented yet!");
@@ -1669,15 +1697,18 @@ namespace gen {
 		LLVMgenerator generator(getGlobalContext(),roots,rootCount,module,passManager,round);
 		round++;
 		module->dump();
-		//extension
-		const char* extension;
+		
 		bool isWinMSVS = target->platform == data::gen::AbstractTarget::Platform::WINDOWS || target->platform == data::gen::AbstractTarget::Platform::WINDOWS_RT;
-		if(outputFormat == data::gen::native::OBJECT)        extension =  isWinMSVS ? ".obj" : ".o";
-		else if(outputFormat == data::gen::native::ASSEMBLY) extension =  isWinMSVS ? ".asm" : ".S";
-		else extension = ".bc";
-		//
-		std::string path = std::string(outputDirectory) + "/" + moduleName + extension;
-		genModule(this,outputFormat,module,path);
+		std::string path;
+		if((outputFormat & data::gen::native::OBJECT) != 0){
+			path = std::string(outputDirectory) + "/" + moduleName + (isWinMSVS ? ".obj" : ".o");
+			genModule(this,data::gen::native::OBJECT,module,path);
+		}
+		if((outputFormat & data::gen::native::ASSEMBLY) != 0)
+			genModule(this,data::gen::native::ASSEMBLY,module,std::string(outputDirectory) + "/" + moduleName + (isWinMSVS ? ".asm" : ".S"));
+		if((outputFormat & OUTPUT_BC) != 0)
+			genModule(this,OUTPUT_BC,module,std::string(outputDirectory) + "/" + moduleName + ".bc");
+
 		delete passManager;
 		delete module;
 		return path;

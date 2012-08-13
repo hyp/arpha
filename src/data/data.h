@@ -137,8 +137,8 @@ namespace data {
 			};
 
 			enum ModuleOutputFormat {
-				OBJECT,        //An .o or .obj file
-				ASSEMBLY,      //An .S file
+				OBJECT   = 0x1, //An .o or .obj file
+				ASSEMBLY = 0x2, //An .S file
 			};
 
 			enum PackageLinkingFormat {

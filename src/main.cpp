@@ -427,7 +427,7 @@ unittest(cl){
 	assert(stringsEqualAnyCase("foo1","FoO1"));
 }
 
-ClOption clOptions[]={ClOption("m32","m64"),ClOption("m64","m32"),ClOption("arch",1),ClOption("o",1)};
+ClOption clOptions[]={ClOption("m32","m64"),ClOption("m64","m32"),ClOption("arch",1),ClOption("o",1),ClOption("asm"),ClOption("llvmbc")};
 ClOption* findOption(const char* cl){
 	auto end = clOptions+ (sizeof(clOptions) / sizeof(ClOption));
 	for(auto i = clOptions;i!=end;i++){
@@ -451,6 +451,7 @@ struct ClOptionApplier {
 	data::Options* options;
 	data::gen::Options* genOptions;
 	data::gen::native::Target* nativeTarget;
+	int* outputFormat;
 
 	void paramError(const char* option,const char* param,const char* allowed = nullptr){
 		onError(format("The parameter '%s' for the command line option '%s' is not valid!",param,option));
@@ -475,6 +476,8 @@ struct ClOptionApplier {
 			else if(stringsEqualAnyCase(param,"2")) genOptions->optimizationLevel = 2;
 			else paramError(option,param,"0 or 1 or 2");
 		}
+		else if(stringsEqualAnyCase(option,"asm"))    *outputFormat |= data::gen::native::ASSEMBLY;
+		else if(stringsEqualAnyCase(option,"llvmbc")) *outputFormat |= gen::LLVMBackend::OUTPUT_BC;
 	}
 };
 
@@ -512,9 +515,10 @@ int main(int argc, const char * argv[]){
 	std::string operation;
 	std::vector<std::string> files;
 	bool hasErrors = false;
+	int outputFormat = data::gen::native::OBJECT;
 	if(argc >= 2){
 		operation = argv[1]; 
-		ClOptionApplier applier = {&options,&genOptions,&target};
+		ClOptionApplier applier = {&options,&genOptions,&target,&outputFormat};
 		
 
 		for(int i = 2;i<argc;i++){
@@ -591,7 +595,7 @@ int main(int argc, const char * argv[]){
 				}
 				auto dir  = System::path::directory(file);
 				auto name = System::path::filename(file);
-				*f = backend.generateModule(module->second.body,dir.c_str(),name.c_str());
+				*f = backend.generateModule(module->second.body,dir.c_str(),name.c_str(),outputFormat);
 			}
 		}
 		if(hasErrors) return -1;

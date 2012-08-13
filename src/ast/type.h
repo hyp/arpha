@@ -303,6 +303,8 @@ struct AnonymousAggregate: public Type {
 
 	inline bool allElementsSameType(){ return isFlagSet(ALL_SAME); }
 
+	Type* rewriteVariantAsNullablePointer();
+
 	// Returns -1 if field isn't found
 	int lookupField(const SymbolID fieldName) const;
 

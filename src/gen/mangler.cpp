@@ -29,7 +29,9 @@ void Mangler::Element::mangleComponents(Node* component){
 		//mangleComponents(block->parentNode);
 		if(!block->label().isNull()) stream<<block->label().length()<<block->label();
 		else stream<<blockComponentLength((uintptr_t)block)<<'_'<<((uintptr_t)block);
-	} else assert(false);
+	} else if(auto typeDecl = component->asTypeDeclaration()){ 
+		mangle(typeDecl);
+	} else assert(false && "Invalid parent Node");
 }
 
 void mangleNode(std::stringstream& stream,Node* node){
