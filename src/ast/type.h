@@ -415,6 +415,7 @@ struct Record: public DeclaredType {
 	};
 	
 	Record();
+	Record(Variant* variant,int optionID);
 
 	// Returns -1 if field isn't found
 	int lookupField(const SymbolID fieldName) const;

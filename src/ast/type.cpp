@@ -1424,6 +1424,9 @@ AnonymousAggregate* AnonymousAggregate::getVector(Type* type,size_t elementsCoun
 */
 Record::Record() : DeclaredType(Type::RECORD) {
 }
+Record::Record(Variant* variant,int optionID) : DeclaredType(Type::RECORD) {
+	owner = variant;
+}
 Record* Type::asRecord(){
 	return type == RECORD? static_cast<Record*>(this) : nullptr;
 }
@@ -1452,6 +1455,9 @@ DeclaredType* Record::duplicate(DuplicationModifiers* mods) const {
 	rec->flags = flags;
 	rec->fields.reserve(fields.size());
 	for(auto i = fields.begin();i!=fields.end();++i) rec->fields.push_back((*i).duplicate(mods));
+	if(owner){
+		rec->owner = mods->getDuplicate(owner->declaration)->type()->asVariant();
+	}
 	return rec;
 }
 

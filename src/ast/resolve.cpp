@@ -564,8 +564,12 @@ Node* accessingAnonymousRecordField(AccessExpression* node){
 	return nullptr;
 }
 
-Type* patternTypeInferralFromAssignment(Resolver* resolver,TypePatternUnresolvedExpression& type,Scope* container,Type* givenType){
+Type* patternTypeInferralFromAssignment(Resolver* resolver,TypePatternUnresolvedExpression& type,Scope* container,Node* value,Type* givenType){
 	auto pattern = type.pattern;
+	if(auto typeref = value->asTypeReference()){
+		if(auto opt = typeref->type->asVariantOption()) givenType = opt->variant();//variant X { | A } -> var x = X.A -> x is X
+	}
+
 	auto inferredType = givenType;
 	if(pattern){
 		TypePatternUnresolvedExpression::PatternMatcher matcher(container,resolver);
@@ -580,7 +584,7 @@ void inferVariablesType(Resolver* resolver,Variable* variable,AssignmentExpressi
 	if(variable->asArgument()) return;
 	auto value = assignment->value;
 
-	if(!patternTypeInferralFromAssignment(resolver,variable->type,variable->_owner,valuesType)){//variable->deduceType(valuesType)){
+	if(!patternTypeInferralFromAssignment(resolver,variable->type,variable->_owner,value,valuesType)){//variable->deduceType(valuesType)){
 		error(assignment,"Failed to deduce variable's type -\n\tA variable '%s' is expected to have a type matching a pattern %s, which the type '%s' derived from the expression %s doesn't match!",
 			variable->label(),variable->type,valuesType,assignment->value);
 	}

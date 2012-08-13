@@ -238,6 +238,7 @@ void TypeDeclaration::dumpImplementation(Dumper& dumper) const {
 	if(auto record = type->asRecord()){
 		dumper.print("type ");
 		dumper.print(label());
+		if(dumper.refDeclPointers() && record->variant()) dumper.print(format("[owner: %d] ",(void*)record->variant()));
 		dumper.print(" {\n");
 		dumper.incIndentation();
 		for(auto i = record->fields.begin();i!=record->fields.end();i++){

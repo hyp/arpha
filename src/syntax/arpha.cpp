@@ -810,6 +810,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 		}
 	};
 
+
 	Node* parse(Parser* parser){
 		auto name      = parser->expectName();
 
@@ -892,14 +893,14 @@ struct VariantParser: IntrinsicPrefixMacro {
 #endif
 			DeclaredType* type;
 			if(parser->match("{")){
-				parser->expect("}");
+				auto record = new Record(variant,optionID);
+				std::vector<Node*> mixinedExpressions;
+				blockParser->body(parser,TypeParser::BodyParser(record,nullptr,mixinedExpressions));
 				parser->ignoreNewlines();
-				type = new VariantOption(variant,optionID);//TODO
+				type = record;
 				hasStructs = true;
 			}
-			else {
-				type = new VariantOption(variant,optionID);
-			}
+			else type = new VariantOption(variant,optionID);
 			optionID++;
 
 			auto decl = new TypeDeclaration(type,option);
@@ -914,7 +915,6 @@ struct VariantParser: IntrinsicPrefixMacro {
 				declaration->optionalStaticBlock->addChild(decl);
 			}
 
-			//variant->add(field);
 #ifndef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
 			parser->ignoreNewlines();
 #endif
