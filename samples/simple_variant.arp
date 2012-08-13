@@ -1,0 +1,18 @@
+import io
+
+variant Switch {
+| Open
+| Closed
+}
+
+def print(switch Switch){
+	match(switch){
+	| Switch.Open   => println("The switch is open!")
+	| Switch.Closed => println("The switch is closed!")
+	}
+}
+
+def main(){
+	print(Switch.Open)
+	print(Switch.Closed)
+}

@@ -395,6 +395,8 @@ static void initMapping(){
 	MAPOP("less(Vector,Vector)",LESS_COMPARISON);
 	MAPOP("greater(Vector,Vector)",GREATER_COMPARISON);
 
+	MAPOP("is(_,Type)",TYPE_IS);
+
 	/**
 	* arpha.functionality.misc
 	*/
@@ -420,6 +422,8 @@ static void initMapping(){
 
 Type* Function::getIntrinsicOperationReturnType(Type* operand1,data::ast::Operations::Kind op){
 	using namespace data::ast::Operations;
+
+	if(op == TYPE_IS) return intrinsics::types::boolean;
 
 	if(operand1->isLinearSequence()){
 		if(op == ELEMENT_GET) return Type::getReferenceType(operand1->next());

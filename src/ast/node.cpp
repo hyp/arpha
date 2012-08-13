@@ -35,6 +35,11 @@ void DuplicationModifiers::duplicateDefinition(InfixMacro* original,InfixMacro* 
 	if(redefine) target->define(duplicate);
 }
 
+TypeDeclaration* DuplicationModifiers::getDuplicate(TypeDeclaration* original){
+	auto r = redirectors.find(reinterpret_cast<void*>(original));
+	return r == redirectors.end()? original : reinterpret_cast<TypeDeclaration*>(r->second.first);
+}
+
 void Node::setFlag(uint16 id){
 	flags |= id;
 }

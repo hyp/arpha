@@ -109,6 +109,8 @@ struct DuplicationModifiers {
 	void duplicateDefinition(TypeDeclaration* original,TypeDeclaration* duplicate);
 	void duplicateDefinition(PrefixMacro* original,PrefixMacro* duplicate);
 	void duplicateDefinition(InfixMacro* original,InfixMacro* duplicate);
+
+	TypeDeclaration* getDuplicate(TypeDeclaration* original);
 };
 
 //An AST node

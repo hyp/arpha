@@ -826,8 +826,20 @@ llvm::Value* optimize1ArgOperation(LLVMgenerator* generator,data::ast::Operation
 	return nullptr;
 }
 
+//TODO: proper variant is
+llvm::Value* genTypeOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Node* arg){
+	using namespace data::ast::Operations;
+
+	if(op == TYPE_IS){
+		auto children = arg->asTupleExpression()->childrenPtr();
+		//TODO proper
+		return generator->builder.CreateICmpEQ(generator->generateExpression(children[0]),generator->builder.getInt32(children[1]->asTypeReference()->type->asVariantOption()->optionID));
+	}
+}
+
 // TODO: fix linear sequences
 llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Node* arg){
+	if(op == data::ast::Operations::TYPE_IS) return genTypeOperation(generator,op,arg);
 
 	Type*  operand1Type;
 	llvm::Value* values[3];
@@ -1048,6 +1060,12 @@ Node* LLVMgenerator::visit(CastExpression* node){
 			else emitLoad(var);
 			return node;
 		}
+	} else if(dest->isVariant()){
+		if(auto tref = node->object->asTypeReference()){
+			auto option = tref->type->asVariantOption();
+			emit(builder.getInt32(option->optionID));//TODO proper
+			return node;
+		}
 	}
 
 	if(cast != -1){
@@ -1235,12 +1253,18 @@ Node* LLVMgenerator::visit(LoopExpression* node){
 }
 
 void LLVMgenerator::genStatements(BlockExpression* node,bool innermostInFunction){
+	bool pointerNeeded = needsPointer;
+	needsPointer = false;
 
-	bool returnCreated;
+	bool retLast = node->isFlagSet(BlockExpression::RETURNS_LAST_EXPRESSION);
 
 	for(auto i = node->begin();i!=node->end();i++){
 		auto expr = *i;
-		generateExpression(expr);
+		
+		if(retLast && ((i+1) == node->end()) && pointerNeeded){
+			generatePointerExpression(expr);
+		}
+		else generateExpression(expr);
 		if(expr->asReturnExpression() || expr->asControlFlowExpression()){
 			break;
 		}
@@ -1248,6 +1272,7 @@ void LLVMgenerator::genStatements(BlockExpression* node,bool innermostInFunction
 }
 
 void LLVMgenerator::genToplevelStatements(BlockExpression* node){
+	needsPointer = false;
 	for(auto i = node->begin();i!=node->end();i++){
 		auto expr = *i;
 		if(auto cmd = expr->asScopedCommand()){

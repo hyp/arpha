@@ -13,5 +13,5 @@ unittest sample
 
 unittest failure
 {
-	assert(1 == 0)
+	assert(1 == 0,"This should fail")
 }

@@ -1,6 +1,7 @@
 #
 	This module implements miscellaneos operators
 #
+import arpha.intrinsic
 import qualified precedence
 
 # Pointer adressing and dereference operators. Pointer Type.
@@ -26,6 +27,7 @@ uses precedence: precedence.isas
 }
 
 macro as(expression,T Type) = ast.newCast(expression,T)
+def   is(expression,T Type) bool
 
 macro []
 {

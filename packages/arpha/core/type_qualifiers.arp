@@ -1,0 +1,13 @@
+#
+	This module describes the varios internal type qualifiers.
+	
+	TODO: This module is not imported implicitly.
+#
+
+import arpha.intrinsic
+
+# The 'Const' qualifier indicates that the value can't be modified.
+type Const(T)     { }
+
+# The 'Reference' qualifier indicates that the value is stored as a pointer, but used with value semantics.
+type Reference(T) { }

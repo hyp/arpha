@@ -1082,8 +1082,24 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform,uint32 filter
 			return assigns;
 		}
 	}
+
 	if( (assigns = recordSubtyping(this,expression,type,doTransform)) != -1){
 		return assigns;
+	}
+	//variant promotion
+	else if( isVariant() ){
+		if(auto tref = (*expression)->asTypeReference()){
+			if(auto opt = tref->type->asVariantOption()){
+				if(opt->variant() == this){
+					if(doTransform) {
+						*expression = new CastExpression(*expression,this);
+						(*expression)->setFlag(Node::RESOLVED);
+					}
+					return RECORD_SUBTYPE;
+				}
+				return -1;
+			}
+		}
 	}
 	else if(isPointer() && !type->isPointer() && canAddressOf && (assigns = referenceOf(this,expression,type,doTransform,filters)) != -1 ){
 		return assigns;
@@ -1484,8 +1500,11 @@ VariantOption::VariantOption(Variant* variant,int id) : DeclaredType(VARIANT_OPT
 	this->optionID = id;
 	setFlag(IS_RESOLVED);
 }
+VariantOption* Type::asVariantOption(){
+	return type == VARIANT_OPTION? static_cast<VariantOption*>(this) : nullptr;
+}
 DeclaredType* VariantOption::duplicate(DuplicationModifiers* mods) const{
-	return const_cast<VariantOption*>(this);
+	return new VariantOption(mods->getDuplicate(owner->declaration)->type()->asVariant(),optionID);
 }
 DeclaredType* VariantOption::resolve(Resolver* resolver) {
 	return this;
@@ -1503,13 +1522,14 @@ Node*  TypeDeclaration::createReference(){
 	return new TypeReference(_type);
 }
 Node*  TypeDeclaration::duplicate(DuplicationModifiers* mods) const {
-	BlockExpression* sb = optionalStaticBlock? optionalStaticBlock->duplicate(mods)->asBlockExpression() : nullptr;
 	auto dup = new TypeDeclaration(_type->duplicate(mods),label());
+	mods->duplicateDefinition(const_cast<TypeDeclaration*>(this),dup);
+
+	BlockExpression* sb = optionalStaticBlock? optionalStaticBlock->duplicate(mods)->asBlockExpression() : nullptr;
 	dup->optionalStaticBlock = sb;
 	for(auto i = extendedConcepts.begin();i!=extendedConcepts.end();++i){
 		dup->extendedConcepts.push_back((*i).duplicate(mods));
 	}
-	mods->duplicateDefinition(const_cast<TypeDeclaration*>(this),dup);
 	return copyProperties(dup);
 }
 Function* TypeDeclaration::parametrization() const { 

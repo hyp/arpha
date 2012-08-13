@@ -71,6 +71,7 @@ std::ostream& operator<< (std::ostream& stream,TypePatternUnresolvedExpression& 
 struct AnonymousAggregate;
 struct FunctionPointer;
 struct Variant;
+struct VariantOption;
 struct StaticArray;
 
 //(type ...): intrinsics::types::Type
@@ -177,6 +178,7 @@ struct Type {
 
 	Record* asRecord();
 	Variant* asVariant();
+	VariantOption* asVariantOption();
 	AnonymousAggregate* asAnonymousRecord();
 	FunctionPointer* asFunctionPointer();
 	Trait* asTrait();
@@ -318,7 +320,7 @@ public:
 };
 
 struct DeclaredType: public Type {
-	DeclaredType(int kind) : Type(kind),generatorData(nullptr) {}
+	DeclaredType(int kind) : Type(kind),generatorData(nullptr),owner(nullptr) {}
 
 	virtual DeclaredType* duplicate(DuplicationModifiers* mods) const = 0;
 	virtual DeclaredType* resolve(Resolver* resolver) = 0;
@@ -329,7 +331,10 @@ struct DeclaredType: public Type {
 
 	TypeDeclaration* declaration;
 	void* generatorData;
-private:
+protected:
+	Variant* owner;
+public:
+	inline Variant* variant(){ return owner; }
 };
 
 /**
@@ -382,16 +387,12 @@ struct Variant: public DeclaredType {
 * A variant option (without additional structure load).
 */
 struct VariantOption: public DeclaredType {
-private:
-	Variant* owner;
-	
 public:
 	VariantOption(Variant* variant,int id);
 
 	DeclaredType* duplicate(DuplicationModifiers* mods) const;
 	DeclaredType* resolve(Resolver* resolver);
 
-	inline Variant* variant(){ return owner;    }
 	inline int id()          { return optionID; }
 };
 

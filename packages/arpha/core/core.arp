@@ -1,0 +1,8 @@
+
+def report_assertion_failure(location (file: LinearSequence(char8),line: natural,column: natural),failure LinearSequence(char8))
+{
+}
+
+# Checks if a condition is true.
+# TODO throw by default.
+macro assert(condition,failure LinearSequence(char8) = "") = [> if(! $condition) report_assertion_failure((file: "",line: 0,column: 0),$failure) <]

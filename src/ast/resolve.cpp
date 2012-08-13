@@ -377,6 +377,23 @@ Node* inlinedRecordConstructor(Resolver* resolver,Record* record,Node* param){
 	return tuple;
 }
 
+Node* resolveIS(Resolver* resolver,CallExpression* node){
+	auto obj = node->arg->asTupleExpression()->childrenPtr();
+	auto ret  = obj[0]->returnType();
+	auto type = obj[1]->asTypeReference()->type;
+	int result = 0;
+	if(ret->isSame(type)) result = 1;
+	else if(ret->isVariant()){
+		if(auto option = type->asVariantOption()){
+			if(option->variant() == ret) result = -1;
+		}
+	}
+	if(result!=-1){
+		return resolver->resolve(node->copyLocationSymbol(new BoolExpression(result == 1? true:false)));
+	}
+	return node;
+}
+
 
 Node* CallExpression::resolve(Resolver* resolver){
 	if(auto callingOverloadSet = object->asUnresolvedSymbol()){
@@ -429,8 +446,12 @@ Node* CallExpression::resolve(Resolver* resolver){
 					return resolver->resolve(copyLocationSymbol(new AssignmentExpression( new FieldAccessExpression(*t->begin(),func->getField()) , *(t->begin()+1) )));
 				}
 				return resolver->resolve(copyProperties(new FieldAccessExpression(arg,func->getField())));
-			} else if(func->isIntrinsicOperation() && arg->isConst()){
-				return resolver->resolve(copyLocationSymbol(evaluateConstantOperation(func->getOperation(),arg)));
+			} else if(func->isIntrinsicOperation()){
+				if(func->getOperation() == data::ast::Operations::TYPE_IS){
+					auto result = resolveIS(resolver,this);
+					if(result != this) return result;
+				}
+				else if(arg->isConst()) return resolver->resolve(copyLocationSymbol(evaluateConstantOperation(func->getOperation(),arg)));
 			}
 			object = resolver->resolve(new FunctionReference(func));
 			if(!func->isResolved()){
@@ -931,8 +952,9 @@ Node* MatchResolver::resolve(Resolver* resolver){
 		}
 		//Integers and booleans
 		auto returns = object->returnType();
-		if(returns->isBool() || returns->isInteger()){
+		if(returns->isBool() || returns->isInteger() || returns->isVariant()){
 			//| pattern => if(object == pattern)
+			//| pattern => object :: Variant is pattern
 			Node* firstBranch;
 			IfExpression* lastBranch = nullptr;
 			for(auto i = begin();i!=end();i+=2){
@@ -947,7 +969,12 @@ Node* MatchResolver::resolve(Resolver* resolver){
 						break;
 					}
 				}
-				IfExpression* newBranch = new IfExpression(new CallExpression(new UnresolvedSymbol((*i)->location(),"equals"),new TupleExpression(object,*i)),*(i+1),nullptr);
+				Node* condition;
+				if(returns->isVariant()){
+					condition = new CallExpression(new UnresolvedSymbol((*i)->location(),"is"),new TupleExpression(object,*i));
+				}
+				else condition = new CallExpression(new UnresolvedSymbol((*i)->location(),"equals"),new TupleExpression(object,*i));
+				IfExpression* newBranch = new IfExpression(condition,*(i+1),nullptr);
 				newBranch->setFlag(IfExpression::MATCH_SYNTAX);
 				if(lastBranch) lastBranch->alternative = newBranch;
 				else firstBranch = newBranch;

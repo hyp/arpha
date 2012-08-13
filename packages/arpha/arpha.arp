@@ -28,6 +28,8 @@ type Iota extends Range
 }
 def indices(self LinearSequence) = Iota(0 as natural,self.length) #TODO: remove as natural
 
+import export core
+
 import export functionality.operations.integer
 import export functionality.operations.floating_point
 import export functionality.operations.character

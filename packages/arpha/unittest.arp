@@ -9,7 +9,7 @@ macro unittest
 	def body = parser.parse(ignoreNewlines: true)
 	def nameLiteral = ast.newStringLiteral(name)
 	def func = ast.newFunction(name,[>
-		macro assert(expr) = [> if(! $expr) print(" ... Failure") <]
+		macro report_assertion_failure(location (file: LinearSequence(char8),line: natural,column: natural),failure LinearSequence(char8)) = [> print(" ... Failure"); <]
 		print("Running unittest ")
 		print($nameLiteral)
 		$body

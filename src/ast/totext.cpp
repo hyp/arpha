@@ -254,6 +254,22 @@ void TypeDeclaration::dumpImplementation(Dumper& dumper) const {
 	else if(auto variant = type->asVariant()){
 		dumper.print("variant ");
 		dumper.print(label());
+		if(dumper.refDeclPointers()) dumper.print(format("[%d] ",(void*)type));
+		dumper.print(" {\n");
+		dumper.incIndentation();
+		for(auto i = optionalStaticBlock->begin();i!=optionalStaticBlock->end();++i){
+			dumper.printIndentation();
+			dumper.print("| ");
+			(*i)->dump(dumper);
+			dumper.print("\n");
+		}
+		dumper.decIndentation();
+		dumper.printIndentation();
+		dumper.print("} ");
+	}
+	else if(auto option = type->isVariantOption()){
+		dumper.print(label());
+		if(dumper.refDeclPointers()) dumper.print(format("[owner: %d] ",(void*)type->asVariantOption()->variant()));
 	}
 	else {
 		dumper.print("concept ");
@@ -381,10 +397,8 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 }
 
 std::ostream& operator<< (std::ostream& stream,Node* node){
-	if(compiler::reportLevel >= compiler::ReportDebug){
-		Dumper dumper(&stream);
-		dumper.flags |= Dumper::VERBOSE | Dumper::REF_DECL_POINTERS;
-		node->dump(dumper);
-	}
+	Dumper dumper(&stream);
+	dumper.flags |= Dumper::VERBOSE | Dumper::REF_DECL_POINTERS;
+	node->dump(dumper);
 	return stream;
 }

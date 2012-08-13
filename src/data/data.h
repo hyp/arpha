@@ -89,6 +89,8 @@ namespace data {
 
 				//vectors
 				VECTOR_SHUFFLE,
+
+				TYPE_IS,
 			};
 		}
 	}
