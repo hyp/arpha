@@ -144,6 +144,11 @@ void mapStandartOperations(Type* t){
 	}
 }
 
+void mapEnvironment(){
+	//arpha.environment
+	variableMapping["environment.os"] = new IntegerLiteral((uint64)0);//TODO
+}
+
 /**
 * This function initializes the mapping between intrinsic definitions in arpha and the appropriate value or handler from the source code
 * TODO bind sizeof etc with backend
@@ -301,6 +306,8 @@ static void initMapping(){
 		compiler::onWarning(invocation->getInvocationLocation(),invocation->getStringParameter(0));
 		invocation->ret();
 	});
+
+	mapEnvironment();
 
 	MAP_PROP("foreach(Tuple,_,_)",Function::MACRO_FUNCTION,{
 		auto tuple = invocation->getNodeParameter(0);
@@ -589,8 +596,11 @@ Node* Variable::getIntrinsicValue(Variable* variable){
 	signature = std::string("compiler.") + variable->label().ptr();
 	value = variableMapping.find(signature);
 	if(value != variableMapping.end()) return (*value).second;
+	signature = std::string("environment.") + variable->label().ptr();
+	value = variableMapping.find(signature);
+	if(value != variableMapping.end()) return (*value).second;
 	compiler::intrinsicFatalError(variable->location(),format(" Intrinsic binding failure - The variable '%s' isn't intrinsic!\nPlease don't use the intrinsic property on it!",variable->label()));
-	return new UnitExpression();
+	return ErrorExpression::getInstance();
 }
 
 Trait* Trait::intrinsic::splice = nullptr;

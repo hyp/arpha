@@ -385,7 +385,12 @@ Node* resolveIS(Resolver* resolver,CallExpression* node){
 	if(ret->isSame(type)) result = 1;
 	else if(ret->isVariant()){
 		if(auto option = type->asVariantOption()){
-			if(option->variant() == ret) result = -1;
+			if(option->variant() == ret){
+				if(auto cnst = obj[0]->asIntegerLiteral()){
+					result = cnst->integer.u64 == (uint64)option->optionID;
+				}
+				else result = -1;
+			}
 		}
 	}
 	if(result!=-1){
@@ -1133,6 +1138,9 @@ Node* Variable::resolve(Resolver* resolver){
 	else _resolved = type.resolve(resolver) && type.isResolved();
 
 	if(_resolved) {
+		if(isFlagSet(CONSTANT_SUBSTITUTE) && type.type()->isVariant()){
+			value->asIntegerLiteral()->specifyType(type.type());//NB: used for arpha.environment.os
+		}
 		setFlag(RESOLVED);
 		if(!type.type()->isValidTypeForVariable()) error(this,"A variable '%s' can't have a type %s",label(),type.type());
 	}

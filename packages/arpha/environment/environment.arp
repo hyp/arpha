@@ -7,21 +7,24 @@
 
 import arpha.intrinsic
 
+variant OperatingSystem {
+ | windows
+ | linux
+ | macosx
+ | other
+}
+
+def os OperatingSystem
+
+#
+Possibilities:
+
 variant Platform {
 	| native
 #	| computation #gpu, cell spu
 }
 
 def platfrom Platform
-
-variant OperatingSystem {
-	| windows
-	| linux
-	| macosx
-}
-
-def os OperatingSystem
-
 # TODO better cpu description .. maybe cpu.arch cpu.arch.mode cpu.endianess
 # Also need cpu more information.. supported  features and others
 variant Architecture {
@@ -41,3 +44,4 @@ variant Endianess {
 def architecture Architecture
 def architectureMode ArchitectureMode
 def endianess Endianess
+#
