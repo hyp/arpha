@@ -31,4 +31,9 @@ def main(){
 	for(i in "LOL".indices) {
 		println("Index $(i as int32)")
 	}
+	
+	# Iteration over numerical range
+	for(x in 0 .. 10) {
+		println("i: $(x as int32)")
+	}
 }

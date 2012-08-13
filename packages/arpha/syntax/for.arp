@@ -33,6 +33,11 @@ macro for
 	var name = parser.symbol()
 	parser.expect("in")
 	var collection = parser.parse()
+	if(parser.match("..")){
+		var begin = collection
+		var end = parser.parse()
+		collection = [> Iota($begin,$end) <]
+	}
 	parser.expect(")")
 	var body = ast.newExpressionReference(parser.parse(ignoreNewlines: true))
 	

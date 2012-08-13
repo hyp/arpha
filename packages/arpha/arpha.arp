@@ -18,18 +18,7 @@ import export syntax.increments
 import export syntax.misc
 import export syntax.for
 
-# This is used to iterate over indices in an array or a sequence.
-type Iota extends Range
-{
-	var begin,end natural
-	
-	def empty   (self) = self.begin >= self.end
-	def current (self) = self.begin
-	def moveNext(self) = self.begin++
-}
-def indices(self LinearSequence) = Iota(0 as natural,self.length) #TODO: remove as natural
 
-import export core
 
 import export functionality.operations.integer
 import export functionality.operations.floating_point
@@ -37,7 +26,7 @@ import export functionality.operations.character
 import export functionality.operations.boolean
 import export functionality.operations.linear_sequence
 
-
+import export core
 
 
 
