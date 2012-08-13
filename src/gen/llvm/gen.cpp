@@ -87,7 +87,7 @@ struct LLVMgenerator: NodeVisitor {
 
 	LLVMgenerator(llvm::LLVMContext& _context,Node** roots,size_t rootCount,llvm::Module* module,llvm::FunctionPassManager* passManager,int round);
 	llvm::Type* genType(Type* type);
-	void emitConstant(llvm::Constant* value);
+	void emitConstant(llvm::Value* value,bool neededPointer = false);
 	inline void emit(llvm::Value* value){ emmittedValue = value; }
 	llvm::Value* generateExpression(Node* node);
 	llvm::Value* generatePointerExpression(Node* node);
@@ -334,8 +334,14 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 	}
 	return coreTypes[0];
 }
-void LLVMgenerator::emitConstant(llvm::Constant* value){
+void LLVMgenerator::emitConstant(llvm::Value* value,bool neededPointer){
 	emmittedValue = value;
+	if(neededPointer){
+		auto block = builder.GetInsertBlock();
+		llvm::IRBuilder<> _builder(block,block->begin());
+		auto var = _builder.CreateAlloca(value->getType(),nullptr,"constToPtr");
+		emmittedValue = var;
+	}
 }
 llvm::Value* LLVMgenerator::generateExpression(Node* node){
 	emmittedValue = nullptr;
@@ -826,14 +832,25 @@ llvm::Value* optimize1ArgOperation(LLVMgenerator* generator,data::ast::Operation
 	return nullptr;
 }
 
-//TODO: proper variant is
+llvm::Value* genVariantGetTagValue(LLVMgenerator* generator,Variant* variant,Node* expression){
+	if(variant->isFlagSet(Variant::NO_INNER_STRUCTURES)){
+		return generator->generateExpression(expression);
+	} else {
+		assert(false && "Structured variants not implemented yet!");
+	}
+}
+llvm::Value* genVariantTag(LLVMgenerator* generator,Variant* variant,uint32 tagID){
+	return generator->builder.getInt32(tagID);
+}
+
 llvm::Value* genTypeOperation(LLVMgenerator* generator,data::ast::Operations::Kind op,Node* arg){
 	using namespace data::ast::Operations;
 
 	if(op == TYPE_IS){
 		auto children = arg->asTupleExpression()->childrenPtr();
-		//TODO proper
-		return generator->builder.CreateICmpEQ(generator->generateExpression(children[0]),generator->builder.getInt32(children[1]->asTypeReference()->type->asVariantOption()->optionID));
+		auto opt = children[1]->asTypeReference()->type->asVariantOption();
+		auto variant = opt->variant();
+		return generator->builder.CreateICmpEQ(genVariantGetTagValue(generator,variant,children[0]),genVariantTag(generator,variant,opt->optionID));
 	}
 }
 
@@ -1062,9 +1079,11 @@ Node* LLVMgenerator::visit(CastExpression* node){
 		}
 	} else if(dest->isVariant()){
 		if(auto tref = node->object->asTypeReference()){
-			auto option = tref->type->asVariantOption();
-			emit(builder.getInt32(option->optionID));//TODO proper
-			return node;
+			if(auto option = tref->type->asVariantOption()){
+				auto tag = genVariantTag(this,option->variant(),option->optionID);
+				emitConstant(tag,neededPointer); 
+				return node;
+			}
 		}
 	}
 

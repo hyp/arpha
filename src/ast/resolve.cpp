@@ -362,7 +362,6 @@ Node* Resolver::inlineCall(Function* function,Node* parameters){
 }
 
 static Node* potentiallyInline(Resolver* resolver,Function* function,Node* param){
-	return nullptr;
 	if(!function->intrinsicCTFEbinder && !function->isExternal() && !function->isIntrinsicOperation() && 
 		function->inliningWeight < resolver->inliningThreshold[function->generatedFunctionParent? 1 : 0]){
 		return resolver->inlineCall(function,param);
@@ -808,7 +807,12 @@ Node* ThrowExpression::resolve(Resolver* resolver){
 
 // { 1 } => 1
 static Node* simplifyBlock(BlockExpression* block){
-	if(block->size() == 1 && block->scope->numberOfDefinitions() == 0) return *(block->begin());
+	if(block->size() == 1 && block->scope->numberOfDefinitions() == 0){
+		auto expr = *(block->begin());
+		if(auto innerBlock = expr->asBlockExpression())
+			innerBlock->scope->parent = block->scope->parent;//NB: { inlined: { var arg = 1; arg + 3 } } -> inlined: { var arg = 1; arg + 3 } 
+		return expr;
+	}
 	return block;
 }
 

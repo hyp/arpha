@@ -157,6 +157,7 @@ void CastExpression::dumpImplementation(Dumper& dumper) const {
 	type->dump(dumper);
 }
 void BlockExpression::dumpImplementation(Dumper& dumper) const {
+	if(dumper.refDeclPointers()) dumper.print(format("[PS: %s,Scope: %d(parent: %d)]",isFlagSet(USES_PARENT_SCOPE),scope,scope? scope->parent : nullptr));
 	dumper.print("{\n");
 	dumper.incIndentation();
 	dumper.printIndentation();

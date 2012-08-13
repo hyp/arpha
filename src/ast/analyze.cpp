@@ -181,9 +181,9 @@ struct Analyzer : NodeVisitor {
 	Node* visit(AssignmentExpression* node){
 		node->object->accept(this);
 		node->value->accept(this);
-		if(isLocal(node->value)){
-			error(node,"Can't assign %s to %s - because of local semantics!",node->value,node->object);
-		}
+		//if(isLocal(node->value)){
+		//	error(node,"Can't assign %s to %s - because of local semantics!",node->value,node->object);
+		//}
 		addInliningWeight(5);
 		return node;
 	}
