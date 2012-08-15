@@ -16,7 +16,7 @@ private:
 	CompilationUnit* _compilationUnit;
 	Scope* _currentScope;
 	Node* _currentParent;
-	Node* _prevNodes[2];
+	Node* _prevNode;
 	bool reportUnevaluated;
 	size_t unresolvedExpressions;
 public:
@@ -27,9 +27,6 @@ public:
 	data::ast::VisibilityMode currentVisibilityMode;
 	std::vector<ScopedCommand*> whereStack;
  
-
-	//For plain and generated functions respectively. A function is inlined if its inlining weight < threshold.
-	uint16 inliningThreshold[2]; 
 
 	// Sometimes we know that we want an expression of certain type at a given place e.g. var x Foo <- we expect Foo to be TypeExpression
 	// This knowledge can be used to resolve certain ambiguties: 
@@ -45,6 +42,7 @@ public:
 
 
 	Node* resolve(Node* node);
+	Node* resolve(Node* node,Node* previous);
 
 	Node* multipassResolve(Node* node);
 
@@ -67,7 +65,7 @@ public:
 	inline void currentParentNode(Node* node) { _currentParent = node; }
 	inline Node* currentParentNode() const    { return _currentParent; }
 
-	inline Node* previousNode() const { return _prevNodes[0]; }
+	inline Node* previousNode() const { return _prevNode; }
 
 	inline void markResolved(Node* node){ node->setFlag(Node::RESOLVED); }
 	void markUnresolved(Node* node);

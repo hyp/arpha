@@ -47,6 +47,7 @@ struct Variable : PrefixDefinition  {
 		CONSTANT_SUBSTITUTE = 0x10,//def a = 1 => an occurence of a will be replaced by 1. Make sure value is set before setting this flag.
 		ANALYSIS_DECLARED = 0x20,
 		IS_THREADLOCAL = 0x40,
+		ANALYSIS_USED = 0x80,
 	};
 	Variable(SymbolID name,Location& location);
 	Variable(SymbolID name,Location& location,Scope* owner,Node* value);//constant injection
@@ -192,6 +193,7 @@ struct Function: public PrefixDefinition {
 	Node* createReference();
 
 	Node* resolve(Resolver* evaluator);
+	Node* optimize(Optimizer* optimizer);
 
 	void makeAllArgumentsExpendable(); //Makes all arguments to be expendable, essentialy making this function a template.
 

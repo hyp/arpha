@@ -1291,6 +1291,10 @@ bool Type::isValidTypeForField(){
 	else if(type == TYPE) result = false;
 	return result;
 }
+bool Type::canBeContainedInOther(){
+	if(type == TYPE || type == VOID) return false;
+	return true;
+}
 
 /**
 * Function pointer type
@@ -1432,6 +1436,7 @@ AnonymousAggregate* AnonymousAggregate::getVector(Type* type,size_t elementsCoun
 * Record(class like) type
 */
 Record::Record() : DeclaredType(Type::RECORD) {
+	destructor = nullptr;
 }
 Record::Record(Variant* variant,int optionID) : DeclaredType(Type::RECORD) {
 	owner = variant;

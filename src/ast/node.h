@@ -29,6 +29,7 @@ struct Type;
 struct CTFEinvocation;
 struct Resolver;
 struct Argument;
+struct Optimizer;
 
 //Injects visitor callback and dynamic cast function into a node structure
 //Note: only does the definitions, the appropriate implementations are done by traversing NODE_LIST
@@ -150,8 +151,9 @@ protected:
 public:
 	Node* copyLocationSymbol(Node* dest) const;//Doesn't copy the flags.. use when resolving between nodes of different types
 
-	virtual Node* resolve(Resolver* resolver);
-	virtual bool  isSame(Node* other){ return false; }
+	virtual Node* resolve (Resolver* resolver);
+	virtual Node* optimize(Optimizer* optimizer);
+	virtual bool  isSame  (Node* other){ return false; }
 
 	inline  SymbolID label()   const { return _label; }
 	inline void label(SymbolID symbol) { _label = symbol; }
@@ -291,6 +293,8 @@ struct NodeList : Node {
 	inline Node** childrenPtr() { return &children[0];    }
 	inline void addChild(Node* child) { children.push_back(child); }
 	Node* duplicateChildren(NodeList* dest,DuplicationModifiers* mods) const ;
+
+	Node* optimize(Optimizer* optimizer);
 };
 
 struct ArrayExpression : NodeList {
@@ -399,11 +403,15 @@ struct FunctionReference : Node {
 struct CallExpression : Node {
 	enum {
 		DOT_SYNTAX = 0x4, //a call expression created from foo.bar
+
+		CALL_TO_DESTRUCTOR = 0x8,
+		CALL_TO_CONSTRUCTOR = 0x10,
 	};
 	CallExpression(Node* object,Node* argument);
 
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
+	Node* optimize(Optimizer* optimizer);
 
 	Node* object;
 	Node* arg;
@@ -415,6 +423,7 @@ struct LogicalOperation: Node {
 	LogicalOperation(Node* x,Node* y,bool isOr);
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
+	Node* optimize(Optimizer* optimizer);
 
 	inline bool isAnd() const { return !isFlagSet(IS_OR); }
 	inline bool isOr()  const { return isFlagSet(IS_OR); }
@@ -434,6 +443,7 @@ struct FieldAccessExpression : Node {
 	FieldAccessExpression(Node* object,int field);
 	
 	Node* resolve(Resolver* resolver);
+	Node* optimize(Optimizer* optimizer);
 	Type* returnType() const;
 
 	Type*    fieldsType() const;
@@ -449,6 +459,7 @@ struct AssignmentExpression : Node {
 	AssignmentExpression(Node* object,Node* value);
 
 	Type* returnType() const;
+	Node* optimize(Optimizer* optimizer);
 	Node* resolve(Resolver* resolver);
 
 	Node* object;
@@ -462,6 +473,7 @@ struct ReturnExpression : Node {
 	ReturnExpression(Node* expression);
 
 	Node* resolve(Resolver* resolver);
+	Node* optimize(Optimizer* optimizer);
 
 	Node* expression;
 	DECLARE_NODE(ReturnExpression);
@@ -497,7 +509,7 @@ struct PointerOperation : Node {
 
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
-
+	Node* optimize(Optimizer* optimizer);
 
 
 	enum {
@@ -526,6 +538,7 @@ struct IfExpression : Node {
 
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
+	Node* optimize(Optimizer* optimizer);
 
 	Node* condition;
 	Node* consequence;
@@ -540,9 +553,11 @@ struct BlockExpression : NodeList {
 		USES_PARENT_SCOPE = 0x10 ,//mixined blocks [> <] use parent scope to define definitons and they return the last expression
 	};
     BlockExpression();
+	BlockExpression(Scope* scope);
 
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
+	Node* optimize(Optimizer* optimizer);
 
 	void _duplicate(BlockExpression* dest,DuplicationModifiers* mods) const;
 
@@ -559,7 +574,6 @@ private:
 		ITERATING = 0x100,
 		ITERATION_MODIFIED_CHILDREN = 0x200,
 	};
-	BlockExpression(Scope* scope);
 };
 
 // A while or a do while expression
@@ -568,6 +582,7 @@ struct LoopExpression : Node {
 	LoopExpression(Node* body);
 
 	Node* resolve(Resolver* resolver);
+	Node* optimize(Optimizer* optimizer);
 
 	Node* body;
 	DECLARE_NODE(LoopExpression);
@@ -578,6 +593,7 @@ struct CastExpression : Node {
 
 	Node* resolve(Resolver* resolver);
 	Type* returnType() const;
+	Node* optimize(Optimizer* optimizer);
 
 	Node* object;
 	Type* type;
@@ -592,6 +608,7 @@ struct ScopedCommand : Node {
 	ScopedCommand();
 
 	Node* resolve(Resolver* resolver);
+	Node* optimize(Optimizer* optimizer);
 	bool  isSame(Node* other);
 
 	std::vector<std::pair<SymbolID,Node*>> parameters;

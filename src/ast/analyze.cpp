@@ -1,3 +1,5 @@
+#include <set>
+
 #include "../compiler.h"
 #include "../base/symbol.h"
 #include "../base/bigint.h"
@@ -46,6 +48,7 @@ struct Analyzer : NodeVisitor {
 	//TODO return.. not all control path return
 	uint32 returnFlags;
 	size_t mappingOffset;
+	std::set<Variable*> localInitializationState;
 
 	Analyzer(Function* owner) : functionOwner(owner) {
 		lastWhileExpression = nullptr;
@@ -64,6 +67,7 @@ struct Analyzer : NodeVisitor {
 		if(owner){
 			for(auto i = owner->arguments.begin();i!=owner->arguments.end();i++){
 				//map arguments
+				(*i)->setFlag(Variable::IS_IMMUTABLE);
 				(*i)->accept(this);
 			}
 		}
@@ -144,6 +148,36 @@ struct Analyzer : NodeVisitor {
 		return node;
 	}
 
+	void markLocalVariableUnitialized(Variable* var){
+		localInitializationState.insert(var);
+	}
+
+	void markLocalVariableAssignment(Variable* var){
+		auto r = localInitializationState.find(var);
+		if(r != localInitializationState.end()){
+			localInitializationState.erase(r);
+		}
+	}
+
+	void markLocalVariableUsage(VariableReference* vref,Variable* var){
+		var->setFlag(Variable::ANALYSIS_USED);
+		auto r = localInitializationState.find(var);
+		if(r != localInitializationState.end()){
+			error(vref,"Using variable '%s' before its initialization!",var->label());
+		}
+	}
+
+	void blockRemoveUnitializedLocals(Scope* scope){
+		for(auto i = localInitializationState.begin();i!=localInitializationState.end();++i){
+			if((*i)->_owner == scope){
+				if(!(*i)->isFlagSet(Variable::ANALYSIS_USED)) warning((*i)->location(),"The variable '%s' isn't used.",(*i)->label());
+			}
+		}
+	}
+
+	static bool needsConstruction(Type* type){
+		return true;//type->isRecord();
+	}
 	Node* visit(Variable* node){
 		//map local vars
 		if(functionOwner){
@@ -153,6 +187,10 @@ struct Analyzer : NodeVisitor {
 			node->ctfeRegisterID = (uint16)mappingOffset;
 			mappingOffset++;
 			node->setFlag(Variable::ANALYSIS_DECLARED);
+
+			if(!node->asArgument() && needsConstruction(node->type.type())){
+				markLocalVariableUnitialized(node);
+			}
 		}
 		addInliningWeight(3);
 		return node;
@@ -173,14 +211,31 @@ struct Analyzer : NodeVisitor {
 			if(!node->variable->isFlagSet(Variable::ANALYSIS_DECLARED)){
 				error(node,"Variable usage before declaration!");
 			}
+			markLocalVariableUsage(node,node->variable);
 			addInliningWeight(2);
 		}
 		return node;
 	}
 
 	Node* visit(AssignmentExpression* node){
-		node->object->accept(this);
 		node->value->accept(this);
+		Variable* variable = nullptr;
+
+		if(auto var = node->object->asVariable()) variable = var;
+		else if(auto vref = node->object->asVariableReference()) variable = vref->variable;
+		node->object->accept(this);
+
+		if(variable){
+			if(variable->functionOwner() == functionOwner && !variable->asArgument() && needsConstruction(variable->type.type())){
+				markLocalVariableAssignment(variable);
+			}
+		}
+		
+		if(auto vref= node->object->asVariableReference()){
+			if(auto arg = vref->variable->asArgument()){
+				arg->flags &= (~Variable::IS_IMMUTABLE);
+			}
+		}
 		//if(isLocal(node->value)){
 		//	error(node,"Can't assign %s to %s - because of local semantics!",node->value,node->object);
 		//}
@@ -196,26 +251,64 @@ struct Analyzer : NodeVisitor {
 
 	Node* visit(PointerOperation* node){
 		node->expression->accept(this);
+		if(node->isAddress()){
+			if(auto vref= node->expression->asVariableReference()){
+				if(auto arg = vref->variable->asArgument()){
+					arg->flags &= (~Variable::IS_IMMUTABLE);
+				}
+			}
+		}
 		markAsNotInterpretable(node);
 		addInliningWeight(2);
 		return node;
 	}
 
 	Node* visit(IfExpression* node){
+		addInliningWeight(10);
+
 		node->condition->accept(this);
 		auto constantCondition = constantBooleanExpression(node->condition);
 
-		auto _ = isDeadCode;
-		isDeadCode = constantCondition == 0;
+		auto oldLocalInitializationStateSize = localInitializationState.size();
+		auto oldLocalInitializationState = localInitializationState;
+
+		auto prevDeadCode = isDeadCode;
+		isDeadCode = prevDeadCode || constantCondition == 0;
 		auto prevIfExpression = lastIfExpression;
 		lastIfExpression = node;
 		node->consequence->accept(this);
-		lastIfExpression = prevIfExpression;
-		isDeadCode = constantCondition == 1;
-		node->alternative->accept(this);
-		isDeadCode = _;
 
-		addInliningWeight(10);
+		auto consequenceSize = localInitializationState.size();
+		auto consequenceCopy = localInitializationState;
+		localInitializationState = oldLocalInitializationState;
+
+		lastIfExpression = prevIfExpression;
+		isDeadCode = prevDeadCode || constantCondition == 1;
+		node->alternative->accept(this);
+		auto alternativeSize = localInitializationState.size();
+
+		if(oldLocalInitializationStateSize == consequenceSize && oldLocalInitializationStateSize == alternativeSize){
+			localInitializationState = oldLocalInitializationState;
+			isDeadCode = prevDeadCode;
+			return node;
+		}
+		else {
+			for(auto i = consequenceCopy.begin();i!=consequenceCopy.end();i++){
+				auto r = localInitializationState.find(*i);
+				if(r == localInitializationState.end()){
+					//debug("Variable %s is initialized at alternative, but not in consequence.",*i);
+					localInitializationState.insert(*i);
+				}
+			}
+			for(auto i = localInitializationState.begin();i!=localInitializationState.end();i++){
+				auto r = consequenceCopy.find(*i);
+				if(r == consequenceCopy.end()){
+					//debug("Variable %s is initialized at consequence, but not in alternative.",*i);
+				} else localInitializationState.insert(*i);
+			}
+		}
+
+		isDeadCode = prevDeadCode;
 		return node;
 	}
 
@@ -270,6 +363,17 @@ struct Analyzer : NodeVisitor {
 	}
 
 	Node* visit(CallExpression* node){
+		if(node->isFlagSet(CallExpression::CALL_TO_CONSTRUCTOR)){
+			auto self= node->arg;
+			if(auto tuple = self->asTupleExpression()) self = *tuple->begin();
+			if(auto pop = self->asPointerOperation()){
+				if(pop->isAddress()) self = pop->expression;
+			}
+			if(auto vref = self->asVariableReference	()){
+				if(vref->variable->functionOwner() == functionOwner) markLocalVariableAssignment(vref->variable);
+			}
+		}
+
 		node->object->accept(this);
 		node->arg->accept(this);
 		if(auto f = node->object->asFunctionReference()){
@@ -282,6 +386,7 @@ struct Analyzer : NodeVisitor {
 			addInliningWeight(10000);
 			markThrow(node);
 		}
+		
 		return node;
 	}
 
@@ -312,17 +417,22 @@ struct Analyzer : NodeVisitor {
 		return node;
 	}
 	Node* visit(BlockExpression* node){
-		for(auto i = node->children.begin();i!=node->children.end();i++){
+		bool returnsLast = node->isFlagSet(BlockExpression::RETURNS_LAST_EXPRESSION);
+
+		for(auto i = node->begin();i!=node->end();i++){
 			(*i)->accept(this);
 			bool warn = (*i)->isConst() && !(*i)->isDefinitionNode() && !(*i)->asUnitExpression() ; //NB: definition nodes have const flag overriden
-			warn = warn || ( !(*i)->returnType()->isVoid() /*NB: GIVE WARNING FOR CALLS AS WELL! TO DISABLE USE: && !(*i)->asCallExpression()*/ );
+			warn = warn  || ( !(*i)->returnType()->isVoid() /*NB: GIVE WARNING FOR CALLS AS WELL! TO DISABLE USE: && !(*i)->asCallExpression()*/ );
 			if(warn){
-				warning((*i)->location(),"Ignored expression: The value from this expression is not used for anything!");
+				if(!returnsLast || (i+1) != node->end()) warning((*i)->location(),"Ignored expression: The value from this expression is not used for anything!");
 			}
 		}
+		if(!node->isFlagSet(BlockExpression::USES_PARENT_SCOPE)) blockRemoveUnitializedLocals(node->scope);
 		return node;
 	}
 	Node* visit(CastExpression* node){
+		node->object->accept(this);
+
 		markAsNotInterpretable(node);
 		addInliningWeight(2);
 		return node;

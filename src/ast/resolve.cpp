@@ -130,18 +130,11 @@ Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilat
 	currentTrait    = nullptr;
 	_currentParent  = nullptr;
 	currentVisibilityMode = data::ast::PUBLIC;
-	
-
-	//TODO
-	inliningThreshold[0] = 10;
-	inliningThreshold[1] = 20;
 }
 
 
 Node* Resolver::resolve(Node* node){
-	auto oldNode= _prevNodes[0];
-	_prevNodes[0] = _prevNodes[1];
-	_prevNodes[1] = node;
+	_prevNode = nullptr;
 	if(node->isResolved()) return node;
 	auto result = node->resolve(this);
 	if(!result->isResolved()) markUnresolved(result);
@@ -156,8 +149,24 @@ Node* Resolver::resolve(Node* node){
 			result = resolve(result);
 		}
 	}
-	_prevNodes[1] = _prevNodes[0];
-	_prevNodes[0] = oldNode;
+	return result;
+}
+Node* Resolver::resolve(Node* node,Node* previous){
+	_prevNode = previous;
+	if(node->isResolved()) return node;
+	auto result = node->resolve(this);
+	if(!result->isResolved()) markUnresolved(result);
+	else if(result->returnType()->isReference()){
+		auto ptr = result->asPointerOperation();
+		bool deref = ptr && ptr->isAddress();
+		if(!deref){
+			result = result->copyLocationSymbol(new PointerOperation(result,PointerOperation::DEREFERENCE));
+
+			//NB: speed optimization
+			//result->setFlag(Node::RESOLVED);
+			result = resolve(result);
+		}
+	}
 	return result;
 }
 
@@ -287,94 +296,83 @@ bool isSimple(Node* node){
 }
 
 /**
-Inlines a function call.
-Scenarios: 
-	f(x,y) = x * y
-
-	f(a(),b()) => 
-	{
-		var x = a(); var y = b()
-		var ret
-		{ ret = x * y }
-		ret
-	}
-
-	f(1,y) => 
-	{
-		var ret
-		{ ret = 1 * y }
-		ret
-	}
-
-	x = f(1,y) =>
-	{
-		x = { 1 * y }
-	}
+* Object construction(stack):
+* Scenarios:
+* Foo(..)         -> { var _ Foo; construct(&_,..); _ }
+* var x = Foo(..) -> { var x Foo; construct(&x,..);   }
+* var x Foo       -> { var x Foo; construct(&x);      }
 */
-Node* Resolver::inlineCall(Function* function,Node* parameters){
 
-	BlockExpression* wrapper = new BlockExpression();
-	wrapper->scope->parent   = currentScope();
-	wrapper->setFlag(BlockExpression::RETURNS_LAST_EXPRESSION);
-	wrapper->_location = parameters->location();
-
-	DuplicationModifiers mods(wrapper->scope);
-
-	bool oneReturn = false;
-
-	if(function->arguments.size()){
-		Node** parametersPointer;
-		if(auto tuple = parameters->asTupleExpression()) parametersPointer = tuple->childrenPtr();
-		else parametersPointer = &parameters;
-
-		size_t j = 0;
-		for(auto i = function->arguments.begin();i!=function->arguments.end();++i,++j){
-			
-			if(false/*isSimple(parametersPointer[j])*/){
-				//mods.expandArgument((*i),parametersPointer[j]);
-			}
-			else {
-				auto var = new Variable((*i)->label(),parametersPointer[j]->location());
-				var->type.specify((*i)->type.type());
-				wrapper->addChild(new AssignmentExpression(var,parametersPointer[j]));
-				mods.duplicateDefinition(static_cast<Variable*>(*i),var);
-			} 
-			
-		}
-	}
-	if(!function->returns()->isVoid()){
-		if(function->body.childrenPtr()[0]->asReturnExpression()) oneReturn = true;
-		else {
-			auto var = new Variable("A@ret",parameters->location());
-			var->type.specify(function->returns());
-			wrapper->addChild(var);
-			mods.returnValueRedirector = var;
-		}
-	}
-
-	auto  block = &function->body;
-	if(block->size()){
-		wrapper->addChild(oneReturn? block->childrenPtr()[0]->asReturnExpression()->expression->duplicate(&mods) : block->duplicateMixin(&mods));
-	}
-
-	if(!oneReturn) wrapper->addChild(mods.returnValueRedirector? (Node*)new VariableReference(mods.returnValueRedirector) : new UnitExpression());
-	return wrapper;	
-}
-
-static Node* potentiallyInline(Resolver* resolver,Function* function,Node* param){
-	if(!function->intrinsicCTFEbinder && !function->isExternal() && !function->isIntrinsicOperation() && 
-		function->inliningWeight < resolver->inliningThreshold[function->generatedFunctionParent? 1 : 0]){
-		return resolver->inlineCall(function,param);
-	}
+// nullptr if constructor isn't needed
+TypeDeclaration* needsConstruction(Type* type){
+	if(type->isRecord()) return type->asRecord()->declaration;
 	return nullptr;
 }
 
-Node* inlinedRecordConstructor(Resolver* resolver,Record* record,Node* param){
-	auto tuple = param->asTupleExpression();
-	tuple->type = record;
-	tuple->flags &= (~Node::CONSTANT);
-	return tuple;
+Node* createConstructorCall(TypeDeclaration* typeDecl,Node* param){
+	auto call = new CallExpression(new UnresolvedSymbol(param->location(),"construct"),param);
+	call->setFlag(CallExpression::CALL_TO_CONSTRUCTOR);
+	return call;
 }
+
+Node* createDestructorCall(TypeDeclaration* typeDecl,Node* self){
+	auto t = typeDecl->type();
+	Function* destructor;
+	if(auto record =t->asRecord()) destructor = record->destructor;
+	else destructor = t->asVariant()->destructor;
+	CallExpression* call;
+	if(!destructor){
+		call = new CallExpression(nullptr,self);
+	} else call = new CallExpression(new FunctionReference(destructor),self);
+	call->setFlag(CallExpression::CALL_TO_DESTRUCTOR);
+	return call;
+}
+
+void addInDestructorCall(Resolver* resolver,TypeDeclaration* typeDecl,Variable* var){
+	auto self = new PointerOperation(new VariableReference(var),PointerOperation::ADDRESS);
+	auto block = resolver->currentParentNode()->asBlockExpression();
+	auto t = typeDecl->type();
+	block->addChildPotentiallyDisturbingIteration(createDestructorCall(typeDecl,self));
+}
+
+// Foo()         -> { ... { var _ Foo; construct(&_); _ } :: Foo ... destroy(&_) }
+Node* callConstructorFromTypeCall(Resolver* resolver,TypeDeclaration* typeDecl,Node* param){
+	auto block = new BlockExpression(resolver->currentScope());
+	block->setFlag(BlockExpression::USES_PARENT_SCOPE|BlockExpression::RETURNS_LAST_EXPRESSION);
+	auto var = new Variable(SymbolID(),param->location());
+	var->type.specify(typeDecl->type());
+	block->addChild(var);
+	auto self = new PointerOperation(new VariableReference(var),PointerOperation::ADDRESS);
+	if(param->asUnitExpression()) param = self;
+	else if(auto tuple = param->asTupleExpression()){
+		tuple->children.insert(tuple->children.begin(),self);
+		tuple->flags &= (~Node::CONSTANT);
+		tuple->flags &= (~Node::RESOLVED);
+	} else param = new TupleExpression(self,param);
+	block->addChild(createConstructorCall(typeDecl,param));
+	block->addChild(new VariableReference(var));
+	//addInDestructorCall(resolver,typeDecl,var);
+	return block;
+}
+
+// var x = Foo(arg) -> { ... { var x Foo; construct(&x,arg); } :: Nothing ... destroy(&x) }
+Node* fuzeVariableConstructorAssignment(Resolver* resolver,TypeDeclaration* typeDecl,Variable* var,Node* param){
+	auto block = new BlockExpression(resolver->currentScope());
+	block->setFlag(BlockExpression::USES_PARENT_SCOPE);
+	block->addChild(var);
+	auto self = new PointerOperation(new VariableReference(var),PointerOperation::ADDRESS);
+	if(param && (!param->asUnitExpression()) ){
+		if(auto tuple = param->asTupleExpression()){
+			tuple->children.insert(tuple->children.begin(),self);
+			tuple->flags &= (~Node::CONSTANT);
+			tuple->flags &= (~Node::RESOLVED);
+		} else param = new TupleExpression(self,param);
+	}	else param = self;
+	block->addChild(createConstructorCall(typeDecl,param));
+	//addInDestructorCall(resolver,typeDecl,var);
+	return block;
+}
+
 
 Node* resolveIS(Resolver* resolver,CallExpression* node){
 	auto obj = node->arg->asTupleExpression()->childrenPtr();
@@ -398,8 +396,42 @@ Node* resolveIS(Resolver* resolver,CallExpression* node){
 	return node;
 }
 
+bool resolveDestructorCall(Resolver* resolver,CallExpression* node){
+	auto self = node->arg;
+	auto t = self->returnType()->stripQualifiers()->next()->stripQualifiers();
+	if(auto record = t->asRecord()){
+		if(record->destructor){
+			node->object = new FunctionReference(record->destructor);
+			return true;
+		}
+	}
+	else assert(false);
+	return false;
+}
+
+Node* resolveTypeCall(Resolver* resolver,CallExpression* node,TypeReference* typeRef,Node* prevNode){
+	auto type = typeRef->type;
+	if(auto record = type->asRecord()){
+		if(!prevNode || !prevNode->asAssignmentExpression()){
+			return resolver->resolve(node->copyLocationSymbol(callConstructorFromTypeCall(resolver,record->declaration,node->arg)));
+		}
+	}
+	resolver->markResolved(node);
+	return node;
+}
 
 Node* CallExpression::resolve(Resolver* resolver){
+	auto prevNode = resolver->previousNode();
+
+	if(object == nullptr){
+		arg  = resolver->resolve(arg);
+		if(!arg->isResolved()) return this;
+		if(isFlagSet(CallExpression::CALL_TO_DESTRUCTOR)){
+			if(!resolveDestructorCall(resolver,this)) return this;
+		}
+		else assert(false && "Invalid null object");
+	}
+
 	if(auto callingOverloadSet = object->asUnresolvedSymbol()){
 		auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : resolver->currentScope());
 		if(auto os = scope->lookupPrefix(callingOverloadSet->symbol)){
@@ -416,16 +448,7 @@ Node* CallExpression::resolve(Resolver* resolver){
 		auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : resolver->currentScope());
 		
 		if(auto os = scope->lookupPrefix(callingOverloadSet->symbol)){
-			if(auto decl = os->asTypeDeclaration()){
-				object= callingOverloadSet->copyLocationSymbol(resolver->resolve(decl->createReference()));
-				if(!decl->type()->asTrait()){
-					if(auto record = decl->type()->asRecord())
-						return copyLocationSymbol(inlinedRecordConstructor(resolver,record,arg));
-					resolver->markResolved(this);
-				}
-				return this;
-			}
-			else assert(os->asOverloadset());
+			assert(os->asOverloadset());
 		}
 		if(auto func =  resolver->resolveFunctionCall(scope,callingOverloadSet->symbol,&arg,isFlagSet(DOT_SYNTAX))){
 			//macro
@@ -482,7 +505,6 @@ Node* CallExpression::resolve(Resolver* resolver){
 					}
 				}
 			}
-			if(auto inl = potentiallyInline(resolver,func,arg)) return resolver->resolve(copyLocationSymbol(inl));
 		}
 	} 
 	else if(auto callingFunc = object->asFunctionReference()){
@@ -505,23 +527,21 @@ Node* CallExpression::resolve(Resolver* resolver){
 			i.invoke(func,arg);
 			return resolver->resolve(copyLocationSymbol(i.result()));
 		}
-		if(auto inl = potentiallyInline(resolver,func,arg)) return resolver->resolve(copyLocationSymbol(inl));
 	}
 	else if(auto callingAccess = object->asAccessExpression()){
 		return resolver->resolve(transformCallOnAccess(this,callingAccess));
 	}
 	else if(auto type = object->asTypeReference()){
+		if(!type->type->isResolved()) return this;
 		if(!type->type->asTrait()){
-			if(auto record = type->type->asRecord())
-				return copyLocationSymbol(inlinedRecordConstructor(resolver,record,arg));
-			resolver->markResolved(this);
+			return resolveTypeCall(resolver,this,type,prevNode);
 		}
 	}
 	else if(object->asVariableReference() && object->returnType()->isFunctionPointer()){
 		resolver->markResolved(this);
 	}
 	else {
-		error(object,"Invalid function call expression - %s(%s)!",object,arg);
+		error(object,"Invalid call expression - the object '%s' isn't callable with parameter %s!",object,arg);
 		return ErrorExpression::getInstance();
 	}
 
@@ -642,7 +662,7 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 
 	//split
 	if(object->asTupleExpression() && value->asTupleExpression()){
-		auto block = new BlockExpression();
+		auto block = new BlockExpression(resolver->currentScope());
 		block->setFlag(BlockExpression::USES_PARENT_SCOPE);
 		Splitter splitter = { block };
 		splitter.split(object,value);
@@ -650,13 +670,14 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 	}
 
 	//assign
-	value = resolver->resolve(value);
+	value = resolver->resolve(value,this);
 	if(!value->isResolved()) return this;
-	auto valuesType = value->returnType();
+
 
 	//non tuple object
-	
-	object = resolver->resolve(object);
+	object = resolver->resolve(object,this);
+
+	auto valuesType = value->returnType();
 
 	//destructuring
 	if(auto tuple = object->asTupleExpression()){
@@ -680,12 +701,19 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 			return this;
 	}
 
+	CallExpression* typeCall = nullptr;
+	if(auto call = value->asCallExpression()){
+		if(call->object->asTypeReference()){
+			typeCall = call;
+		}
+	}
+
 	//Assigning values to variables
 	if(variable){
 		//type inferring
 		if(variable->type.isPattern()){
 			inferVariablesType(resolver,variable,this,valuesType);
-			object = resolver->resolve(object);
+			object = resolver->resolve(object,this);
 		}
 		
 		if(!variable->type.isResolved()) return this;
@@ -693,6 +721,19 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 		//def - dissallow assignments to references
 		if(variable->isFlagSet(Variable::IS_IMMUTABLE)){
 			if(!object->asVariable()) error(value,"Can't assign %s to a constant variable %s!",value,object);
+		}
+
+		if(typeCall){
+			if(object->asVariable()){
+				auto type = typeCall->object->asTypeReference()->type;
+				TypeDeclaration* decl;
+				if(auto record = type->asRecord()) decl = record->declaration;
+				return fuzeVariableConstructorAssignment(resolver,decl,variable,typeCall->arg);
+			}
+			else {
+				value->flags &= (~Node::RESOLVED);
+				value = resolver->resolve(value);
+			}
 		}
 
 		//perform the actual assignment
@@ -710,6 +751,11 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 		}
 	}
 	else if(object->isResolved()) {
+		if(typeCall){
+			value->flags &= (~Node::RESOLVED);
+			value = resolver->resolve(value);
+		}
+
 		auto objectsType = object->returnType();
 		if(objectsType->hasConstQualifier()){
 			error(object,"Can't assign to a reference with type containing the 'Const' qualifier");
@@ -746,6 +792,10 @@ Node* PointerOperation::resolve(Resolver* resolver){
 		if(isDereferenceOrType()){
 			if(auto tref = expression->asTypeReference()){
 				if(tref->type->isTrait()) return this;
+				if(!tref->type->canBeContainedInOther()){
+					error(this,"Can't create a pointer type to %s!",tref->type);
+					return ErrorExpression::getInstance();
+				}
 				tref->type = Type::getPointerType(tref->type);
 				return copyLocationSymbol(tref);
 			}
@@ -1136,6 +1186,7 @@ void Resolver::applyCurrentVisibilityMode(DefinitionNode* node){
 }
 
 Node* Variable::resolve(Resolver* resolver){
+
 	_owner = resolver->currentScope();
 	parentNode = resolver->currentParentNode();
 	resolver->applyCurrentVisibilityMode(this);
@@ -1302,14 +1353,6 @@ void Record::onTemplateSpecialization(Resolver* resolver){
 	}
 }
 
-void generateDestructorBody(Record* type,Variable* selfObject,BlockExpression* body){
-	auto size= type->fields.size();
-	for(size_t i = 0; i<size;i++ ){
-		if(type->fields[i].type.type()->requiresDestructorCall())
-			body->addChild(new CallExpression(new UnresolvedSymbol(Location(),"destroy"),new PointerOperation(new FieldAccessExpression(new VariableReference(selfObject),i),PointerOperation::ADDRESS)));
-	}
-}
-
 /**
 	Every requirement must containt self in parameters or return type.
 	Allowed:
@@ -1449,6 +1492,51 @@ DeclaredType* Variant::resolve(Resolver* resolver){
 	return this;
 }
 
+data::ast::Search::Result findDefaultDestructor(Function** result,Scope* scope,Type* type){
+	auto os = scope->containsOverloadset("destroy");
+	if(!os) return data::ast::Search::NotFound;
+	for(auto f = os->functions.begin();f!=os->functions.end();++f){
+		auto func = *f;
+		if(func->arguments.size() == 1){
+			if(!func->isResolved()) return data::ast::Search::NotAllElementsResolved;
+			if(!func->arguments[0]->type.isPattern()){
+				auto self = func->arguments[0]->type.type()->stripQualifiers();
+				bool isPointer = true;
+				if(self->isPointer()) self = self->next()->stripQualifiers();
+				else isPointer = false;
+
+				if(self->isSame(type)){ 
+					if(!isPointer){
+						error(func,"The first parameter to destructor for the type '%s' must be a pointer to that type!",type);
+					}
+					if(!func->returnType()->isVoid()){
+						error(func,"The destructor for the type '%s' must return Nothing",type);
+					}
+					*result = func;
+					return data::ast::Search::Found;
+				}
+			}
+		}
+	}
+	return data::ast::Search::NotFound;
+}
+
+// Create calls to field's destructors
+// destructors are invoked from the first to the last
+// foreach field -> destroy(&(self.field))
+bool fillDestructor(BlockExpression* destructorBody,Node* self,TypeDeclaration* typeDecl){
+	bool addedStuff = false;
+	if(auto record = typeDecl->type()->asRecord()){
+		for(auto i = record->fields.begin();i!=record->fields.end();++i){
+			if(auto decl = needsConstruction((*i).type.type())){
+				addedStuff = true;
+				destructorBody->addChild(createDestructorCall(decl,new PointerOperation(new FieldAccessExpression(self,i - record->fields.begin()),PointerOperation::ADDRESS) ));
+			}
+		}
+	}
+	return addedStuff;
+}
+
 //static block parent
 Node* TypeDeclaration::resolve(Resolver* resolver){
 	parentNode = resolver->currentParentNode();
@@ -1466,6 +1554,29 @@ Node* TypeDeclaration::resolve(Resolver* resolver){
 	if(!_type->isResolved())
 		_type = _type->resolve(resolver);
 	if(_type->isResolved() && (optionalStaticBlock? optionalStaticBlock->isResolved() : true)){
+
+		Function* destructor;
+		if(auto record = _type->asRecord()){
+			auto scope = resolver->currentScope();
+			if(isParametrized()) scope = scope->parent;
+			auto result = findDefaultDestructor(&destructor,resolver->currentScope(),record);
+			if(result == data::ast::Search::NotAllElementsResolved) return this;
+			else if(result == data::ast::Search::NotFound) {
+				auto block = resolver->currentParentNode();
+				destructor = new Function("destroy",location());
+				auto self = new Argument("self",location(),destructor);
+				self->specifyType(Type::getPointerType(_type));
+				destructor->addArgument(self);
+				destructor->_returnType.specify(intrinsics::types::Void);
+				destructor->body.scope->parent = resolver->currentScope();
+				resolver->currentParentNode()->asBlockExpression()->addChildPotentiallyDisturbingIteration(destructor);
+			}
+			record->destructor = destructor;
+			if(fillDestructor(&destructor->body,new VariableReference(destructor->arguments[0]),this)){
+				destructor->body.flags &= (~Node::RESOLVED);
+				destructor->flags &= (~Node::RESOLVED);
+			}
+		}
 		setFlag(RESOLVED);
 	}
 	return this;
@@ -1642,6 +1753,8 @@ Node* Resolver::multipassResolve(Node* node){
 	return node;
 }
 
+void optimizeModule(Node* node);
+
 //Multi-pass module resolver
 void  Resolver::resolveModule(BlockExpression* module){
 	_currentParent = nullptr;
@@ -1655,7 +1768,9 @@ void  Resolver::resolveModule(BlockExpression* module){
 		prevUnresolvedExpressions = unresolvedExpressions;
 		unresolvedExpressions = 0;
 		resolve(module);
-		debug("After extra pass %d(%d,%d) the module is %s",pass,prevUnresolvedExpressions,unresolvedExpressions,module);
+
+		debug("After extra pass %d(%d,%d) the module is",pass,prevUnresolvedExpressions,unresolvedExpressions);
+		compiler::dumpModule(module);
 		pass++;
 	}
 	while(prevUnresolvedExpressions != unresolvedExpressions && unresolvedExpressions != 0);
@@ -1669,6 +1784,9 @@ void  Resolver::resolveModule(BlockExpression* module){
 		compiler::reportLevel = reportLevel;
 	}
 	analyze(module,nullptr);
+	optimizeModule(module);
+	debug("After optimizations the module is:");
+	compiler::dumpModule(module);
 }
 
 Node* Resolver::resolveMacroAtParseStage(Node* macro){

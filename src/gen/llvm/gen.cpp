@@ -1665,6 +1665,56 @@ namespace gen {
 			llvm::WriteBitcodeToFile(module,out);
 		}
 	}
+
+	static void addOptimizationPasses(llvm::FunctionPassManager* passes,data::gen::Options* options){
+		using namespace llvm;
+		int optimizationLevel = options->optimizationLevel;
+
+		if(optimizationLevel >= 0){ 
+			// Do simple "peephole" optimizations and bit-twiddling optzns.
+			passes->add(createInstructionCombiningPass());
+			//Simplify the control flow graph (deleting unreachable blocks, etc).
+			passes->add(createCFGSimplificationPass());
+
+			passes->add(createTypeBasedAliasAnalysisPass());
+			// Provide basic AliasAnalysis support for GVN.
+			passes->add(createBasicAliasAnalysisPass());
+		}
+		if(optimizationLevel >= 1){
+			// Reassociate expressions.
+			passes->add(createReassociatePass());
+			passes->add(createLoopIdiomPass());
+			passes->add(createInstructionCombiningPass());
+			passes->add(createScalarReplAggregatesPass());
+			
+
+			passes->add(createTailCallEliminationPass());
+			passes->add(createCFGSimplificationPass());
+			// Eliminate Common SubExpressions.
+			passes->add(createGVNPass());
+		}
+		if(optimizationLevel >= 2){
+			passes->add(createSimplifyLibCallsPass());
+			passes->add(createJumpThreadingPass());
+			passes->add(createInstructionCombiningPass());
+
+			passes->add(createReassociatePass());
+			passes->add(createLoopRotatePass());
+			passes->add(createLCSSAPass());
+			passes->add(createLICMPass());
+			passes->add(createLoopUnswitchPass());
+			passes->add(createIndVarSimplifyPass());
+			passes->add(createLoopDeletionPass());
+			passes->add(createLoopUnrollPass());
+			passes->add(createGVNPass());
+			passes->add(createMemCpyOptPass());
+			passes->add(createSCCPPass());
+
+			passes->add(createDeadStoreEliminationPass());
+			passes->add(createAggressiveDCEPass());
+			passes->add(createCFGSimplificationPass());
+		}
+	}
 	
 	std::string LLVMBackend::generateModule(Node** roots,size_t rootCount,const char* outputDirectory,const char* moduleName,int outputFormat){
 		using namespace llvm;
@@ -1677,21 +1727,7 @@ namespace gen {
 			passManager->add(new TargetData(module));
 		// Create various passes
 		passManager->add(createPromoteMemoryToRegisterPass());
-		int optimizationLevel = options->optimizationLevel;
-		if(optimizationLevel >= 0){ 
-			// Do simple "peephole" optimizations and bit-twiddling optzns.
-			passManager->add(createInstructionCombiningPass());
-			//Simplify the control flow graph (deleting unreachable blocks, etc).
-			passManager->add(createCFGSimplificationPass());
-		}
-		if(optimizationLevel >= 1){
-			// Provide basic AliasAnalysis support for GVN.
-			passManager->add(createBasicAliasAnalysisPass());
-			// Reassociate expressions.
-			passManager->add(createReassociatePass());
-			// Eliminate Common SubExpressions.
-			passManager->add(createGVNPass());
-		}
+		addOptimizationPasses(passManager,options);
 		passManager->doInitialization();
 		
 		LLVMgenerator generator(getGlobalContext(),roots,rootCount,module,passManager,round);

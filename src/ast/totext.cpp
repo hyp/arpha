@@ -97,7 +97,7 @@ void TraitParameterReference::dumpImplementation(Dumper& dumper) const {
 	dumper.print("concept arg");
 }
 void CallExpression::dumpImplementation(Dumper& dumper) const {
-	object->dump(dumper);
+	if(object) object->dump(dumper);
 	dumper.print("(");
 	if(!arg->asUnitExpression()) arg->dump(dumper);
 	dumper.print(")");
@@ -400,7 +400,6 @@ std::ostream& operator<< (std::ostream& stream,Type* type){
 
 std::ostream& operator<< (std::ostream& stream,Node* node){
 	Dumper dumper(&stream);
-	dumper.flags |= Dumper::VERBOSE | Dumper::REF_DECL_POINTERS;
 	node->dump(dumper);
 	return stream;
 }

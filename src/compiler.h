@@ -82,6 +82,8 @@ namespace compiler {
 
 	void onDebug(const std::string& message);
 
+	void dumpModule(Node* module);
+
 	enum {
 		Silent = 0,
 		ReportErrors,

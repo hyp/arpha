@@ -381,6 +381,9 @@ Type* CallExpression::returnType() const {
 		}
 		else return func->_returnType.type();
 	}
+	else if(auto typeRef = object->asTypeReference()){
+		return typeRef->type;
+	}
 	else if( auto vref = object->asVariableReference()){
 		return vref->variable->type.type();//TODO function pointer type returns
 	}
@@ -389,7 +392,7 @@ Type* CallExpression::returnType() const {
 	return intrinsics::types::Void;
 }
 Node* CallExpression::duplicate(DuplicationModifiers* mods) const {
-	auto e = new CallExpression(object->duplicate(mods),arg->duplicate(mods));
+	auto e = new CallExpression(object? object->duplicate(mods) : nullptr,arg->duplicate(mods));
 	return copyProperties(e);
 }
 

@@ -1,0 +1,31 @@
+#TODO:
+
+import io
+
+type Foo {
+	var x int32
+	
+	def construct(self) = self.construct(0)
+	def construct(self,x int32){
+		self.x = x
+		print("Constructing $(self.x)!")
+	}
+	def destroy  (self){
+		print("Destroying $(self.x)!")
+	}
+}
+
+type Bar {
+	var f Foo
+	
+	#
+	The following functions should be generated:
+		
+		def destroy(self) = self.f.destroy()
+	#
+}
+
+def main(){
+	var f = Foo()
+}
+

@@ -192,6 +192,7 @@ struct Type {
 	bool isValidTypeForArgument();
 	bool isValidTypeForReturn();
 	bool isValidTypeForField();
+	bool canBeContainedInOther();
 
 	//..
 	bool isResolved() const;
@@ -383,6 +384,7 @@ struct Variant: public DeclaredType {
 	DeclaredType* resolve(Resolver* resolver);
 
 	size_t numberOfOptions;
+	Function* destructor;
 };
 
 /**
@@ -431,6 +433,7 @@ struct Record: public DeclaredType {
 	std::pair<Function*,Function*> createFieldGetterSetter(Location location,int fieldID);
 
 	std::vector<Field> fields;
+	Function* destructor;
 };
 
 // an actual declaration of a type which is added to the expression list

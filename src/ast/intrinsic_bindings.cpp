@@ -520,10 +520,15 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 
 	struct Generator { 
 		static void linearSequence(CTFEintrinsicInvocation* invocation){
-			invocation->ret(Type::getLinearSequence(invocation->getTypeParameter(0)));
+			auto t = invocation->getTypeParameter(0);
+			if(t->canBeContainedInOther()) invocation->ret(Type::getLinearSequence(t));
+			else invocation->retError("Invalid type");
 		}
 		static void functionPointer(CTFEintrinsicInvocation* invocation){
-			invocation->ret(FunctionPointer::get(invocation->getTypeParameter(0),invocation->getTypeParameter(1)));
+			auto t0 = invocation->getTypeParameter(0);
+			auto t1 = invocation->getTypeParameter(1);
+			if((t0->isVoid() || t0->canBeContainedInOther()) && (t1->isVoid() || t1->canBeContainedInOther())) invocation->ret(FunctionPointer::get(t0,t1));
+			else invocation->retError("Invalid type");
 		}
 		static void reference(CTFEintrinsicInvocation* invocation){
 			invocation->ret(Type::getReferenceType(invocation->getTypeParameter(0)));
@@ -544,7 +549,8 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 		static void constQualifier(CTFEintrinsicInvocation* invocation){
 			auto t = invocation->getTypeParameter(0);
 			if(!t->hasConstQualifier()){
-				invocation->ret(Type::getConstQualifier(t));
+				if(t->canBeContainedInOther()) invocation->ret(Type::getConstQualifier(t));
+				else invocation->retError("Can't apply the type qualifier 'Const' to the given type!");
 			}
 			else invocation->retError("Can't apply the type qualifier 'Const' onto another 'Const' qualifier!");
 		}

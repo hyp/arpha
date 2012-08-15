@@ -183,9 +183,7 @@ namespace compiler {
 		
 		arpha::parseModule(&parser,block);
 
-		debug("------------------- AST: ------------------------------");
-		debug("%s\n",block);
-
+		dumpModule(block);
 		resolver.resolveModule(block);
 
 		currentModule->second.src = nullptr;
@@ -283,6 +281,16 @@ namespace compiler {
 		//newModuleFromFile((packageDir + "/arpha/arpha.arp").c_str(),"arpha_arpha",nullptr,true);
 
 		reportLevel = ReportDebug;
+	}
+
+	void dumpModule(Node* module){
+		if(reportLevel >= ReportDebug){
+			auto console = Dumper::console();
+			console.flags |= Dumper::VERBOSE | Dumper::REF_DECL_POINTERS;
+			console.print("------------------- AST: ------------------------------\n");
+			module->dump(console);
+			console.print("\n");
+		}
 	}
 
 	void onDebug(const std::string& message){

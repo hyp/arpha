@@ -4,6 +4,8 @@
 #ifndef ARPHA_DATA_H
 #define ARPHA_DATA_H
 
+#define DATA_STAT_COLLECT_STATISTICS 1
+
 namespace data {
 
 	struct Options {
@@ -19,7 +21,7 @@ namespace data {
 
 		namespace Function {
 			enum CallConvention {
-				ARPHA,CCALL,STDCALL
+				ARPHA,COLD,CCALL,STDCALL
 			};
 			enum Flags {
 				NONTHROW = 0x1,
@@ -94,6 +96,18 @@ namespace data {
 			};
 		}
 	}
+
+	//This data represents varios compilation statistics
+	namespace stat {
+		struct Statistics {
+			int functionCalls;
+			int externFunctionCalls;
+			struct Optimizations {
+				int functionCallsInlined;
+			};
+			Optimizations optimizations;
+		};
+	};
 
 	namespace gen {
 
