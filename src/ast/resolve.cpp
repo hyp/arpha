@@ -310,7 +310,7 @@ TypeDeclaration* needsConstruction(Type* type){
 }
 
 Node* createConstructorCall(TypeDeclaration* typeDecl,Node* param){
-	auto call = new CallExpression(new UnresolvedSymbol(param->location(),"construct"),param);
+	auto call = new CallExpression(new UnresolvedSymbol(param->location(),"init"),param);
 	call->setFlag(CallExpression::CALL_TO_CONSTRUCTOR);
 	return call;
 }
@@ -429,9 +429,6 @@ Node* CallExpression::resolve(Resolver* resolver){
 	if(auto callingOverloadSet = object->asUnresolvedSymbol()){
 		auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : resolver->currentScope());
 		
-		if(auto os = scope->lookupPrefix(callingOverloadSet->symbol)){
-			assert(os->asOverloadset());
-		}
 		if(auto func =  resolver->resolveFunctionCall(scope,callingOverloadSet->symbol,&arg,isFlagSet(DOT_SYNTAX))){
 			//macro
 			if(func->isFlagSet(Function::MACRO_FUNCTION)){

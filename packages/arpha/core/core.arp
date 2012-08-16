@@ -7,14 +7,16 @@ def report_assertion_failure(location (file: LinearSequence(char8),line: natural
 # TODO throw by default.
 macro assert(condition,failure LinearSequence(char8) = "") = [> if(! $condition) report_assertion_failure((file: "",line: 0,column: 0),$failure) <]
 
-# This is used to iterate over indices in an array or a sequence.
+# This type is used to iterate over indices in an array or a sequence.
 type Iota extends Range
 {
 	var begin,end natural
+	
+	def init(self,begin natural,end natural) = self.begin,self.end = begin,end
 	
 	def empty   (self) = self.begin >= self.end
 	def current (self) = self.begin
 	def moveNext(self) = self.begin++
 }
 
-def indices(self LinearSequence) = Iota(0 as natural,self.length) #TODO: remove as natural
+def indices(self LinearSequence) = Iota(0,self.length)

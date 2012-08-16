@@ -71,6 +71,7 @@ Node* NodeList::optimize(Optimizer* optimizer){
 namespace {
 static bool isSimple(Node* node){
 	if(node->isFlagSet(Node::CONSTANT) || node->asVariableReference()) return true;
+	else if(auto ptr = node->asPointerOperation()) return ptr->isAddress() && isSimple(ptr->expression);
 	return false;
 }
 
@@ -104,6 +105,8 @@ Node* Optimizer::inlineCall(Function* function,Node* parameters){
 			}
 			else {
 				auto var = new Variable((*i)->label(),parametersPointer[j]->location());
+				var->_owner = wrapper->scope;
+				var->parentNode = wrapper;
 				var->type.specify((*i)->type.type());
 				var->setFlag(Node::RESOLVED);
 				auto assigns = new AssignmentExpression(var,parametersPointer[j]);
@@ -118,6 +121,8 @@ Node* Optimizer::inlineCall(Function* function,Node* parameters){
 		if(function->body.childrenPtr()[0]->asReturnExpression()) oneReturn = true;
 		else {
 			auto var = new Variable(SymbolID(),parameters->location());
+			var->_owner = wrapper->scope;
+			var->parentNode = wrapper;
 			var->type.specify(function->returns());
 			var->setFlag(Node::RESOLVED);
 			wrapper->addChild(var);
@@ -203,7 +208,14 @@ bool checkOptimizeInitialization(IfExpression* ifchain){
 
 // var x  = if(cond) Foo(0) else Foo(1) -> { var x; if(cond) construct(&x,0) else construct(&x,1) }
 Node* optimizeInitialization(Optimizer* optimizer,Node* object,IfExpression* ifchain){
-	bool assigningToVariable = object->asVariable() != nullptr;
+	Variable* assigningToVariable = object->asVariable();
+	BlockExpression* wrapper;
+	if(assigningToVariable){
+		wrapper = new BlockExpression(optimizer->currentScope);
+		wrapper->setFlag(BlockExpression::USES_PARENT_SCOPE | Node::RESOLVED);
+		wrapper->addChild(object);
+		object= new VariableReference(assigningToVariable);
+	}
 
 	if(auto block= ifchain->consequence->asBlockExpression()){
 		ifchain->consequence =  optimizeInitialization(optimizer,object,block);
@@ -214,6 +226,11 @@ Node* optimizeInitialization(Optimizer* optimizer,Node* object,IfExpression* ifc
 	}
 	else if(auto ifexpr = ifchain->alternative->asIfExpression()){
 		optimizeInitialization(optimizer,object,ifchain);
+	}
+
+	if(assigningToVariable){
+		wrapper->addChild(ifchain); 
+		return wrapper; 
 	}
 	return ifchain;
 }
@@ -226,12 +243,18 @@ Node* AssignmentExpression::optimize(Optimizer* optimizer){
 		// var x = { var _ Foo; construct(&_); _ } -> { var _; construct(&x) }
 		if(auto block= value->asBlockExpression()){
 			if(block->isFlagSet(BlockExpression::OPTIMIZATION_CONSTRUCTS_VARIABLE)){
-				return optimizeInitialization(optimizer,object,block);
+				auto result = optimizeInitialization(optimizer,object,block);
+				OPTIMIZE(result);
+				return result;
 			}
 		}
 		else if(auto ifexpr = value->asIfExpression()){
 			if(!ifexpr->returnType()->isVoid()){
-				if(checkOptimizeInitialization(ifexpr)) return optimizeInitialization(optimizer,object,ifexpr);
+				if(checkOptimizeInitialization(ifexpr)){
+					auto result = optimizeInitialization(optimizer,object,ifexpr);
+					OPTIMIZE(result);
+					return result;
+				}
 			}
 		}
 	}
