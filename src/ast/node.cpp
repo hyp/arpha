@@ -241,14 +241,12 @@ Node* TupleExpression::duplicate(DuplicationModifiers* mods) const {
 AssignmentExpression::AssignmentExpression(Node* object,Node* value){
 	this->object = object;
 	this->value = value;
-	isInitializingAssignment = false;
 }
 Type* AssignmentExpression::returnType() const {
 	return intrinsics::types::Void;//object->returnType();
 }
 Node* AssignmentExpression::duplicate(DuplicationModifiers* mods) const {
 	auto e = new AssignmentExpression(object->duplicate(mods),value->duplicate(mods));
-	e->isInitializingAssignment = isInitializingAssignment;
 	return copyProperties(e);
 }
 
@@ -259,7 +257,6 @@ ReturnExpression::ReturnExpression(Node* expression)  {
 Node* ReturnExpression::duplicate(DuplicationModifiers* mods) const {
 	if(mods->returnValueRedirector){
 		auto assign = new AssignmentExpression(new VariableReference(mods->returnValueRedirector),expression->duplicate(mods));
-		assign->isInitializingAssignment = true;//NB when mixing in we assign the return to a immutable value
 		return copyProperties(assign);
 	}
 	return copyProperties(new ReturnExpression(expression->duplicate(mods)));

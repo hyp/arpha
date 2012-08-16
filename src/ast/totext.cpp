@@ -121,6 +121,7 @@ void FieldAccessExpression::dumpImplementation(Dumper& dumper) const {
 void AssignmentExpression::dumpImplementation(Dumper& dumper) const {
 	object->dump(dumper);
 	dumper.print(" = ");
+	if(dumper.isVerbose() && isFlagSet(INITIALIZATION_ASSIGNMENT)) dumper.print("[Init]");
 	value->dump(dumper);
 }
 void ReturnExpression::dumpImplementation(Dumper& dumper) const {
@@ -158,6 +159,7 @@ void CastExpression::dumpImplementation(Dumper& dumper) const {
 }
 void BlockExpression::dumpImplementation(Dumper& dumper) const {
 	if(dumper.refDeclPointers()) dumper.print(format("[PS: %s,Scope: %d(parent: %d)]",isFlagSet(USES_PARENT_SCOPE),scope,scope? scope->parent : nullptr));
+	if(dumper.isVerbose() && isFlagSet(OPTIMIZATION_CONSTRUCTS_VARIABLE)) dumper.print("[Construct]");
 	dumper.print("{\n");
 	dumper.incIndentation();
 	dumper.printIndentation();

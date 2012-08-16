@@ -456,6 +456,9 @@ struct FieldAccessExpression : Node {
 
 /// NB: assignment(make exception for the initializing assignment) is a statement(Hello nemerle)
 struct AssignmentExpression : Node {
+	enum {
+		INITIALIZATION_ASSIGNMENT = 0x8
+	};
 	AssignmentExpression(Node* object,Node* value);
 
 	Type* returnType() const;
@@ -464,7 +467,6 @@ struct AssignmentExpression : Node {
 
 	Node* object;
 	Node* value;
-	bool isInitializingAssignment;// = false
 	DECLARE_NODE(AssignmentExpression);
 };
 
@@ -551,6 +553,7 @@ struct BlockExpression : NodeList {
 	enum {
 		RETURNS_LAST_EXPRESSION = 0x8,
 		USES_PARENT_SCOPE = 0x10 ,//mixined blocks [> <] use parent scope to define definitons and they return the last expression
+		OPTIMIZATION_CONSTRUCTS_VARIABLE = 0x20,// Foo() -> { var _ Foo; construct(&_); _ }
 	};
     BlockExpression();
 	BlockExpression(Scope* scope);

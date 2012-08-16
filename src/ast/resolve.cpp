@@ -351,28 +351,10 @@ Node* callConstructorFromTypeCall(Resolver* resolver,TypeDeclaration* typeDecl,N
 	} else param = new TupleExpression(self,param);
 	block->addChild(createConstructorCall(typeDecl,param));
 	block->addChild(new VariableReference(var));
+	block->setFlag(BlockExpression::OPTIMIZATION_CONSTRUCTS_VARIABLE);
 	//addInDestructorCall(resolver,typeDecl,var);
 	return block;
 }
-
-// var x = Foo(arg) -> { ... { var x Foo; construct(&x,arg); } :: Nothing ... destroy(&x) }
-Node* fuzeVariableConstructorAssignment(Resolver* resolver,TypeDeclaration* typeDecl,Variable* var,Node* param){
-	auto block = new BlockExpression(resolver->currentScope());
-	block->setFlag(BlockExpression::USES_PARENT_SCOPE);
-	block->addChild(var);
-	auto self = new PointerOperation(new VariableReference(var),PointerOperation::ADDRESS);
-	if(param && (!param->asUnitExpression()) ){
-		if(auto tuple = param->asTupleExpression()){
-			tuple->children.insert(tuple->children.begin(),self);
-			tuple->flags &= (~Node::CONSTANT);
-			tuple->flags &= (~Node::RESOLVED);
-		} else param = new TupleExpression(self,param);
-	}	else param = self;
-	block->addChild(createConstructorCall(typeDecl,param));
-	//addInDestructorCall(resolver,typeDecl,var);
-	return block;
-}
-
 
 Node* resolveIS(Resolver* resolver,CallExpression* node){
 	auto obj = node->arg->asTupleExpression()->childrenPtr();
@@ -409,19 +391,19 @@ bool resolveDestructorCall(Resolver* resolver,CallExpression* node){
 	return false;
 }
 
-Node* resolveTypeCall(Resolver* resolver,CallExpression* node,TypeReference* typeRef,Node* prevNode){
+Node* resolveTypeCall(Resolver* resolver,CallExpression* node,TypeReference* typeRef){
 	auto type = typeRef->type;
 	if(auto record = type->asRecord()){
-		if(!prevNode || !prevNode->asAssignmentExpression()){
-			return resolver->resolve(node->copyLocationSymbol(callConstructorFromTypeCall(resolver,record->declaration,node->arg)));
-		}
+		return resolver->resolve(node->copyLocationSymbol(callConstructorFromTypeCall(resolver,record->declaration,node->arg)));
 	}
-	resolver->markResolved(node);
-	return node;
+	else if(type->isInteger() || type->isFloat() || type->isChar() || type->isPlatformInteger() || type->isUintptr()){
+		return resolver->resolve(node->copyLocationSymbol(new CastExpression(node->arg,type)));
+	}
+	error(node,"Can't create an object of type '%s'",type);
+	return ErrorExpression::getInstance();
 }
 
 Node* CallExpression::resolve(Resolver* resolver){
-	auto prevNode = resolver->previousNode();
 
 	if(object == nullptr){
 		arg  = resolver->resolve(arg);
@@ -534,7 +516,7 @@ Node* CallExpression::resolve(Resolver* resolver){
 	else if(auto type = object->asTypeReference()){
 		if(!type->type->isResolved()) return this;
 		if(!type->type->asTrait()){
-			return resolveTypeCall(resolver,this,type,prevNode);
+			return resolveTypeCall(resolver,this,type);
 		}
 	}
 	else if(object->asVariableReference() && object->returnType()->isFunctionPointer()){
@@ -670,12 +652,12 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 	}
 
 	//assign
-	value = resolver->resolve(value,this);
+	value = resolver->resolve(value);
 	if(!value->isResolved()) return this;
 
 
 	//non tuple object
-	object = resolver->resolve(object,this);
+	object = resolver->resolve(object);
 
 	auto valuesType = value->returnType();
 
@@ -713,7 +695,7 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 		//type inferring
 		if(variable->type.isPattern()){
 			inferVariablesType(resolver,variable,this,valuesType);
-			object = resolver->resolve(object,this);
+			object = resolver->resolve(object);
 		}
 		
 		if(!variable->type.isResolved()) return this;
@@ -721,19 +703,6 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 		//def - dissallow assignments to references
 		if(variable->isFlagSet(Variable::IS_IMMUTABLE)){
 			if(!object->asVariable()) error(value,"Can't assign %s to a constant variable %s!",value,object);
-		}
-
-		if(typeCall){
-			if(object->asVariable()){
-				auto type = typeCall->object->asTypeReference()->type;
-				TypeDeclaration* decl;
-				if(auto record = type->asRecord()) decl = record->declaration;
-				return fuzeVariableConstructorAssignment(resolver,decl,variable,typeCall->arg);
-			}
-			else {
-				value->flags &= (~Node::RESOLVED);
-				value = resolver->resolve(value);
-			}
 		}
 
 		//perform the actual assignment
@@ -751,10 +720,6 @@ Node* AssignmentExpression::resolve(Resolver* resolver){
 		}
 	}
 	else if(object->isResolved()) {
-		if(typeCall){
-			value->flags &= (~Node::RESOLVED);
-			value = resolver->resolve(value);
-		}
 
 		auto objectsType = object->returnType();
 		if(objectsType->hasConstQualifier()){

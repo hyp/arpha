@@ -152,11 +152,13 @@ struct Analyzer : NodeVisitor {
 		localInitializationState.insert(var);
 	}
 
-	void markLocalVariableAssignment(Variable* var){
+	bool markLocalVariableAssignment(Variable* var){
 		auto r = localInitializationState.find(var);
 		if(r != localInitializationState.end()){
 			localInitializationState.erase(r);
+			return true;
 		}
+		return false;
 	}
 
 	void markLocalVariableUsage(VariableReference* vref,Variable* var){
@@ -221,15 +223,23 @@ struct Analyzer : NodeVisitor {
 		node->value->accept(this);
 		Variable* variable = nullptr;
 
+		bool nonRef = true;
 		if(auto var = node->object->asVariable()) variable = var;
-		else if(auto vref = node->object->asVariableReference()) variable = vref->variable;
-		node->object->accept(this);
-
-		if(variable){
-			if(variable->functionOwner() == functionOwner && !variable->asArgument() && needsConstruction(variable->type.type())){
-				markLocalVariableAssignment(variable);
-			}
+		else if(auto vref = node->object->asVariableReference()){
+			variable = vref->variable;
+			nonRef = false;
 		}
+		
+		
+		if(variable){
+			if(nonRef) node->object->accept(this);
+			if(variable->functionOwner() == functionOwner && !variable->asArgument() && needsConstruction(variable->type.type())){
+				if(markLocalVariableAssignment(variable))
+					node->setFlag(AssignmentExpression::INITIALIZATION_ASSIGNMENT);
+			}
+			if(!nonRef) node->object->accept(this);
+		} else node->object->accept(this);
+		
 		
 		if(auto vref= node->object->asVariableReference()){
 			if(auto arg = vref->variable->asArgument()){

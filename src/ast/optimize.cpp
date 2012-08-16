@@ -166,7 +166,75 @@ Node* FieldAccessExpression::optimize(Optimizer* optimizer){
 	OPTIMIZE(object);
 	return nullptr;
 }
+
+// var x = { var _ Foo; construct(&_); _ } -> { var _; construct(&x) }
+Node* optimizeInitialization(Optimizer* optimizer,Node* object,BlockExpression* block){
+	Node* vref = object->asVariableReference();
+	bool assigningToVariable = vref == nullptr;
+	if(!vref) vref = new VariableReference(object->asVariable());
+	auto construct = block->childrenPtr()[1]->asCallExpression();
+	if(auto tuple = construct->arg->asTupleExpression()) (*tuple->begin())->asPointerOperation()->expression = vref;
+	else construct->arg->asPointerOperation()->expression = vref;
+	if(!assigningToVariable) return construct;
+	block->childrenPtr()[0] = object;
+	block->childrenPtr()[2] = new UnitExpression();
+	block->flags &= (~BlockExpression::RETURNS_LAST_EXPRESSION);
+	block->setFlag(BlockExpression::USES_PARENT_SCOPE);
+	block->scope = optimizer->currentScope;
+	return block;
+}
+
+bool checkOptimizeInitialization(IfExpression* ifchain){
+	bool match = false;
+	if(auto block= ifchain->consequence->asBlockExpression()){
+		match = block->isFlagSet(BlockExpression::OPTIMIZATION_CONSTRUCTS_VARIABLE);
+	}
+	if(!match) return false;
+	if(auto block= ifchain->alternative->asBlockExpression()){
+		match = block->isFlagSet(BlockExpression::OPTIMIZATION_CONSTRUCTS_VARIABLE);
+	}
+	if(!match){
+		if(auto ifexpr = ifchain->alternative->asIfExpression())
+			return checkOptimizeInitialization(ifexpr);
+		return false;
+	}
+	return true;
+}
+
+// var x  = if(cond) Foo(0) else Foo(1) -> { var x; if(cond) construct(&x,0) else construct(&x,1) }
+Node* optimizeInitialization(Optimizer* optimizer,Node* object,IfExpression* ifchain){
+	bool assigningToVariable = object->asVariable() != nullptr;
+
+	if(auto block= ifchain->consequence->asBlockExpression()){
+		ifchain->consequence =  optimizeInitialization(optimizer,object,block);
+	}
+
+	if(auto block= ifchain->alternative->asBlockExpression()){
+		ifchain->alternative =  optimizeInitialization(optimizer,object,block);
+	}
+	else if(auto ifexpr = ifchain->alternative->asIfExpression()){
+		optimizeInitialization(optimizer,object,ifchain);
+	}
+	return ifchain;
+}
+
+
 Node* AssignmentExpression::optimize(Optimizer* optimizer){
+	
+	if(isFlagSet(AssignmentExpression::INITIALIZATION_ASSIGNMENT)){
+
+		// var x = { var _ Foo; construct(&_); _ } -> { var _; construct(&x) }
+		if(auto block= value->asBlockExpression()){
+			if(block->isFlagSet(BlockExpression::OPTIMIZATION_CONSTRUCTS_VARIABLE)){
+				return optimizeInitialization(optimizer,object,block);
+			}
+		}
+		else if(auto ifexpr = value->asIfExpression()){
+			if(!ifexpr->returnType()->isVoid()){
+				if(checkOptimizeInitialization(ifexpr)) return optimizeInitialization(optimizer,object,ifexpr);
+			}
+		}
+	}
 	OPTIMIZE(object);
 	OPTIMIZE(value);
 	return nullptr;

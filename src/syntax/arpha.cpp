@@ -284,7 +284,6 @@ struct VarParser: IntrinsicPrefixMacro {
 			parser->ignoreNewlines();//NB: for consistency with other usages of '='
 			auto assign = new AssignmentExpression(result,parser->parse(arpha::Precedence::Assignment-1)); 
 			assign->_location = parser->previousLocation();
-			assign->isInitializingAssignment = true;
 			return assign;
 		}
 		else return result;
