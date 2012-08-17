@@ -241,6 +241,7 @@ void TypeDeclaration::dumpImplementation(Dumper& dumper) const {
 		dumper.print("type ");
 		dumper.print(label());
 		if(dumper.refDeclPointers() && record->variant()) dumper.print(format("[owner: %d] ",(void*)record->variant()));
+		if(dumper.isVerbose() && record->requiresDestructorCall()) dumper.print("[destructor]");
 		dumper.print(" {\n");
 		dumper.incIndentation();
 		for(auto i = record->fields.begin();i!=record->fields.end();i++){
@@ -259,6 +260,7 @@ void TypeDeclaration::dumpImplementation(Dumper& dumper) const {
 		dumper.print("variant ");
 		dumper.print(label());
 		if(dumper.refDeclPointers()) dumper.print(format("[%d] ",(void*)type));
+		if(dumper.isVerbose() && variant->requiresDestructorCall()) dumper.print("[destructor]");
 		dumper.print(" {\n");
 		dumper.incIndentation();
 		for(auto i = optionalStaticBlock->begin();i!=optionalStaticBlock->end();++i){

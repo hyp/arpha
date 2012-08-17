@@ -13,3 +13,13 @@ def rand () int32
 
 def abort ()
 def exit  (code int32)
+
+def fopen (filename *uint8,mode *uint8) *Nothing
+def fflush(file *Nothing) int32
+def fclose(file *Nothing) int32
+
+def fgetc (file *Nothing) int32
+def fputc (character int32,file *Nothing) int32
+def fputs (string *uint8,file *Nothing) int32
+def fread (ptr *Nothing,size natural,count natural,file *Nothing) natural
+def fwrite(ptr *Nothing,size natural,count natural,file *Nothing) natural

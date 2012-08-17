@@ -195,6 +195,8 @@ struct Function: public PrefixDefinition {
 	Node* resolve(Resolver* evaluator);
 	Node* optimize(Optimizer* optimizer);
 
+	Type* returnType() const;
+
 	void makeAllArgumentsExpendable(); //Makes all arguments to be expendable, essentialy making this function a template.
 
 	//Calling convention
@@ -203,7 +205,7 @@ struct Function: public PrefixDefinition {
 	data::ast::Function::CallConvention callingConvention() const;
 	bool isTest() const;
 
-	Type* argumentType();
+	Type* argumentType() const;
 	Type* returns() const;
 	Scope* owner() const;
 	Scope* parameterPatternMatchingScope() const;

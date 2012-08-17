@@ -178,7 +178,7 @@ struct Analyzer : NodeVisitor {
 	}
 
 	static bool needsConstruction(Type* type){
-		return true;//type->isRecord();
+		return !type->isStaticArray();
 	}
 	Node* visit(Variable* node){
 		//map local vars
@@ -407,9 +407,96 @@ struct Analyzer : NodeVisitor {
 		return node;
 	}
 
+	static Variable* matchImmutableVariable(Node* node){
+		if(auto v = node->asVariable()){
+			if(v->isFlagSet(Variable::IS_IMMUTABLE)) return v;
+		}
+		return nullptr;
+	}
+	static Variable* matchImmutableReferenceVariable(Node* node){
+		if(auto var = matchImmutableVariable(node)){
+			auto t = var->type.type()->stripQualifiers();
+			if(t->isReference()) return var;
+		}
+		return nullptr;
+	}
+	//&(*(_::ref)))::ref -> _
+	static Node* stripRef(Node* node){
+		if(auto ptrop = node->asPointerOperation()){
+			if(ptrop->isAddress()){
+				if(ptrop = ptrop->expression->asPointerOperation()){
+					if(ptrop->isDereference()) return ptrop->expression;
+				}
+			}
+		}
+		return node;
+	}
+	static bool matchSelfCall(Node* node,SymbolID function,Node* self){
+		if(auto call = node->asCallExpression()){
+			if(auto fref =call->object->asFunctionReference()){
+				if(fref->function->label() == function){
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	static bool matchSelfCall(Node* node,data::ast::Operations::Kind op,Node* self){
+		if(auto call = node->asCallExpression()){
+			if(auto fref =call->object->asFunctionReference()){
+				if(!fref->function->isIntrinsicOperation()) return false;
+				if(fref->function->getOperation() == op) return true;
+			}
+		}
+		return false;
+	}
+
+	// Detects for loop over linear sequences
+	struct ForLoopInfo {
+		Variable* iref;
+		Node* body;
+	};
+	bool detectForLoop(Node* body,Node* self,ForLoopInfo& loop){
+
+		bool matches = true;
+		if(auto block = body->asBlockExpression()){
+			if(block->size() < 2) return false;
+			//if(range.empty) break else ()
+			if(auto cond = (*block->begin())->asIfExpression()){
+
+				if(auto cflow = cond->consequence->asControlFlowExpression()){
+					if(!cflow->isBreak()) matches = false;
+				} else matches = false;
+				if(!matches) return false;
+				if(!cond->alternative->asUnitExpression()) return false;
+				if(!matchSelfCall(cond->condition,data::ast::Operations::SEQUENCE_EMPTY,self)) return false;
+				if(!matches) return false;
+			}
+			// { def i = range.current; { } ; range.moveNext }
+			if(auto innerBlock = (*(block->begin()+1))->asBlockExpression()){
+				if(innerBlock->size() < 2) return false;
+				auto innerChildren = innerBlock->childrenPtr();
+				Variable* iref;
+				if(auto assigns = innerChildren[0]->asAssignmentExpression()){
+					if(!(iref = matchImmutableReferenceVariable(assigns->object))) matches = false;
+					if(!matchSelfCall(stripRef(assigns->value),data::ast::Operations::ELEMENT_GET,self)) matches = false;
+				} else matches= false;
+				if(!matches) return false;
+				if(!matchSelfCall(innerChildren[2],data::ast::Operations::SEQUENCE_MOVENEXT,self)) return false;
+				//Tis
+				loop.iref = iref;
+				loop.body = innerChildren[1];
+				return true;
+			}
+		}
+		return false;
+	}
+
 	Node* visit(LoopExpression* node){
 		FlaggedNode self(&lastWhileExpression,node);
 		
+		//ForLoopInfo loop;
+		//if(detectForLoop(node->body,nullptr,loop)) debug("For loop detected!");
 		node->body->accept(this);
 
 		if(self.flags==0){

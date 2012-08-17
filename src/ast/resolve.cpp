@@ -274,8 +274,10 @@ static Node* transformCallOnAccess(CallExpression* node,AccessExpression* acessi
 		node->arg = acessingObject->object;
 	//a.foo(bar)
 	else{
-		if(auto isArgRecord = node->arg->asTupleExpression())
+		if(auto isArgRecord = node->arg->asTupleExpression()){
 			isArgRecord->children.insert(isArgRecord->children.begin(),acessingObject->object);
+			isArgRecord->flags &= (~(Node::RESOLVED | Node::CONSTANT));
+		}
 		else {
 			auto tuple = new TupleExpression();
 			tuple->addChild(acessingObject->object);
@@ -299,8 +301,6 @@ bool isSimple(Node* node){
 * Object construction(stack):
 * Scenarios:
 * Foo(..)         -> { var _ Foo; construct(&_,..); _ }
-* var x = Foo(..) -> { var x Foo; construct(&x,..);   }
-* var x Foo       -> { var x Foo; construct(&x);      }
 */
 
 // nullptr if constructor isn't needed
@@ -419,17 +419,29 @@ Node* CallExpression::resolve(Resolver* resolver){
 		if(auto os = scope->lookupPrefix(callingOverloadSet->symbol)){
 			if(auto decl = os->asTypeDeclaration())
 				object= callingOverloadSet->copyLocationSymbol(resolver->resolve(decl->createReference()));
+			else if(auto var = os->asVariable()){
+				if(!var->isResolved()) return this;
+				if(var->type.type()->isFunctionPointer())
+					object = new VariableReference(var);
+			}
 		}
 	}
 
+	auto oldType = resolver->expectedTypeForEvaluatedExpression; //NB: allows FunctionPointer(x,y)
+	resolver->expectedTypeForEvaluatedExpression = nullptr;
 	arg  = resolver->resolve(arg);
+	resolver->expectedTypeForEvaluatedExpression = oldType;
 	if(!arg->isResolved()) return this;
+	
 
 	// symbol(arg)
 	if(auto callingOverloadSet = object->asUnresolvedSymbol()){
-		auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : resolver->currentScope());
+
 		
+		auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : resolver->currentScope());
+		resolver->expectedTypeForEvaluatedExpression = nullptr;
 		if(auto func =  resolver->resolveFunctionCall(scope,callingOverloadSet->symbol,&arg,isFlagSet(DOT_SYNTAX))){
+			resolver->expectedTypeForEvaluatedExpression = oldType;
 			//macro
 			if(func->isFlagSet(Function::MACRO_FUNCTION)){
 				if(func->intrinsicCTFEbinder){
@@ -485,6 +497,7 @@ Node* CallExpression::resolve(Resolver* resolver){
 				}
 			}
 		}
+		else resolver->expectedTypeForEvaluatedExpression = oldType;
 	} 
 	else if(auto callingFunc = object->asFunctionReference()){
 		if(!callingFunc->function->isResolved()){
@@ -754,7 +767,7 @@ Node* PointerOperation::resolve(Resolver* resolver){
 		if(isDereferenceOrType()){
 			if(auto tref = expression->asTypeReference()){
 				if(tref->type->isTrait()) return this;
-				if(!tref->type->canBeContainedInOther()){
+				if(!tref->type->isVoid() && !tref->type->canBeContainedInOther()){
 					error(this,"Can't create a pointer type to %s!",tref->type);
 					return ErrorExpression::getInstance();
 				}
@@ -1440,7 +1453,7 @@ DeclaredType* Trait::resolve(Resolver* resolver){
 		resolver->currentScope(templateDeclaration->parent);
 	resolver->currentTrait = nullptr;
 
-	if(allResolved && (declaration->optionalStaticBlock == nullptr || declaration->optionalStaticBlock->isResolved())){
+	if(allResolved){
 		if(verify())
 			setFlag(IS_RESOLVED);
 	}
@@ -1448,9 +1461,7 @@ DeclaredType* Trait::resolve(Resolver* resolver){
 }
 
 DeclaredType* Variant::resolve(Resolver* resolver){
-	if(!declaration->optionalStaticBlock || declaration->optionalStaticBlock->isResolved()){
-		setFlag(IS_RESOLVED);
-	}
+	setFlag(IS_RESOLVED);
 	return this;
 }
 
@@ -1499,6 +1510,20 @@ bool fillDestructor(BlockExpression* destructorBody,Node* self,TypeDeclaration* 
 	return addedStuff;
 }
 
+
+bool resolveDestructorStatus(Record* record){
+	bool needs = false;
+	for(auto i = record->fields.begin();i!=record->fields.end();i++){
+		auto s = (*i).type.type()->requiresDestructorCall();
+		if(s == data::ast::Search::NotAllElementsResolved) return false;
+		else if(s == data::ast::Search::Found) needs= true;
+	}
+	record->setFlag(Type::DESTRUCTOR_STATUS_RESOLVED);
+	if(needs) record->setFlag(Type::NEEDS_DESTRUCTOR);
+	return true;
+}
+
+
 //static block parent
 Node* TypeDeclaration::resolve(Resolver* resolver){
 	parentNode = resolver->currentParentNode();
@@ -1513,9 +1538,11 @@ Node* TypeDeclaration::resolve(Resolver* resolver){
 			resolver->currentParentNode(oldParent);
 		}
 	}
-	if(!_type->isResolved())
+
+	if(!_type->isFlagSet(Type::IS_RESOLVED))
 		_type = _type->resolve(resolver);
-	if(_type->isResolved() && (optionalStaticBlock? optionalStaticBlock->isResolved() : true)){
+	if(_type->isFlagSet(Type::IS_RESOLVED) && (optionalStaticBlock? optionalStaticBlock->isResolved() : true)){
+		_type->setFlag(Type::IS_FULLY_RESOLVED);
 
 		Function* destructor;
 		if(auto record = _type->asRecord()){
@@ -1524,6 +1551,12 @@ Node* TypeDeclaration::resolve(Resolver* resolver){
 			auto result = findDefaultDestructor(&destructor,resolver->currentScope(),record);
 			if(result == data::ast::Search::NotAllElementsResolved) return this;
 			else if(result == data::ast::Search::NotFound) {
+				if(!resolveDestructorStatus(record)) return this;
+				if(!record->isFlagSet(Type::NEEDS_DESTRUCTOR)){
+					//Don't generate a destructor where it's not necessarry
+					setFlag(RESOLVED);
+					return this;
+				}
 				auto block = resolver->currentParentNode();
 				destructor = new Function("destroy",location());
 				auto self = new Argument("self",location(),destructor);
@@ -1538,6 +1571,7 @@ Node* TypeDeclaration::resolve(Resolver* resolver){
 				destructor->body.flags &= (~Node::RESOLVED);
 				destructor->flags &= (~Node::RESOLVED);
 			}
+			record->setFlag(Type::DESTRUCTOR_STATUS_RESOLVED | Type::NEEDS_DESTRUCTOR);
 		}
 		setFlag(RESOLVED);
 	}
@@ -2087,7 +2121,7 @@ Node* Resolver::constructFittingArgument(Function** function,Node *arg,bool depe
 			determinedArguments[currentArg] = result[currentArg]->returnType();
 		}
 		else {
-			result[currentArg] = func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType(),Type::AllowAutoAddressof);
+			result[currentArg] = resolve(func->arguments[currentArg]->type.type()->assignableFrom(exprBegin[currentExpr],exprBegin[currentExpr]->returnType(),Type::AllowAutoAddressof));
 		}
 		currentArg++;resolvedArgs++;currentExpr++;	
 	}

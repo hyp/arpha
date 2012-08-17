@@ -89,8 +89,12 @@ struct LLVMgenerator: NodeVisitor {
 	llvm::Type* genType(Type* type);
 	void emitConstant(llvm::Value* value,bool neededPointer = false);
 	inline void emit(llvm::Value* value){ emmittedValue = value; }
+
+	void generateNonValuedExpression(Node* node);
 	llvm::Value* generateExpression(Node* node);
 	llvm::Value* generatePointerExpression(Node* node);
+	inline bool needsValue() { return emmittedValue == nullptr; }
+
 	std::pair<llvm::Value*,llvm::Value*> generateLinearSequencePair(Node* node);
 	static llvm::GlobalValue::LinkageTypes genLinkage(PrefixDefinition* def);
 
@@ -176,7 +180,7 @@ LLVMgenerator::LLVMgenerator(
 	this->module     = module;
 	this->passManager= passManager;
 
-	emmittedValue = nullptr;
+	emmittedValue = (llvm::Value*)0xDeadbeef;
 	emmittedValues = nullptr;
 	functionOwner = nullptr;
 	loopChain = nullptr;
@@ -218,17 +222,22 @@ llvm::Type* getRecordDeclaration(LLVMgenerator* generator,Record* record){
 	if(record->isFlagSet(Record::FIELD_ABI)) return generator->genType(record->fields[0].type.type());
 	if(record->generatorData) return generator->unmap(record);
 
+	
+
 	//mangle
 	gen::Mangler::Element mangler(generator->moduleMangler);
 	mangler.mangle(record->declaration);
+
+	auto t = llvm::StructType::create(generator->context,mangler.stream.str());
+	generator->map(record,t);
+
 
 	auto numberOfFields = record->fields.size();
 	std::vector<llvm::Type*> fields(numberOfFields);
 	for(size_t i = 0;i<numberOfFields;i++){
 		fields[i] = generator->genType(record->fields[i].type.type());
 	}
-	auto t = llvm::StructType::create(generator->context,fields,mangler.stream.str(),false);	
-	generator->map(record,t);
+	t->setBody(fields,false);
 	return t;
 }
 
@@ -275,6 +284,7 @@ llvm::Type* getVariantDeclaration(LLVMgenerator* generator,Variant* variant){
 }
 
 llvm::Type* generatePointerType(LLVMgenerator* generator,Type* next){
+	if(next->isVoid()) return llvm::Type::getInt8PtrTy(generator->context);
 	return llvm::PointerType::get(generator->genType(next),0);
 }
 
@@ -375,6 +385,9 @@ llvm::Value* LLVMgenerator::generateExpression(Node* node){
 	emmittedValue = nullptr;
 	node->accept(this);
 	return emmittedValue;
+}
+void LLVMgenerator::generateNonValuedExpression(Node* node){
+	node->accept(this);
 }
 llvm::Value* LLVMgenerator::generatePointerExpression(Node* node){
 	auto old= needsPointer;
@@ -1113,6 +1126,8 @@ Node* LLVMgenerator::visit(CastExpression* node){
 				return node;
 			}
 		}
+	} else if(dest->isFunctionPointer()){
+		cast = llvm::Instruction::BitCast;
 	}
 
 	if(cast != -1){
@@ -1307,11 +1322,13 @@ void LLVMgenerator::genStatements(BlockExpression* node,bool innermostInFunction
 
 	for(auto i = node->begin();i!=node->end();i++){
 		auto expr = *i;
+		bool ret = retLast && ((i+1) == node->end());
 		
-		if(retLast && ((i+1) == node->end()) && pointerNeeded){
-			generatePointerExpression(expr);
+		if(ret){
+			if(pointerNeeded) generatePointerExpression(expr);
+			else generateExpression(expr);
 		}
-		else generateExpression(expr);
+		else generateNonValuedExpression(expr);
 		if(expr->asReturnExpression() || expr->asControlFlowExpression()){
 			break;
 		}
@@ -1327,7 +1344,7 @@ void LLVMgenerator::genToplevelStatements(BlockExpression* node){
 			else continue;
 		}
 
-		if(expr->isDefinitionNode()) generateExpression(expr);
+		if(expr->isDefinitionNode()) generateNonValuedExpression(expr);
 		else if(auto assign = expr->asAssignmentExpression()){
 			assert(assign->object->asVariable());
 			globalVariableInitializer = assign->value;
@@ -1435,6 +1452,10 @@ Node* LLVMgenerator::visit(Function* function){
 	if(function->isExternal() || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro() || function->isIntrinsic() || 
 		function->isTypeTemplate() || function->isFlagSet(Function::CONSTRAINT_FUNCTION) || function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return function;
 
+	auto neededFP = needsValue();
+	auto neededPointer = needsPointer;
+	needsPointer = false;
+
 	//TODO: fix NB: optimization: Don't generate unused generated functions!
 	//if(function->generatedFunctionParent && !function->generatorData) return function;
 
@@ -1489,6 +1510,10 @@ Node* LLVMgenerator::visit(Function* function){
 	passManager->run(*func);
 	functionOwner = oldFunction;
 	builder.restoreIP(prev);
+
+	if(neededFP){
+		emit(func);
+	}
 
 	return function;
 }

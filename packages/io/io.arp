@@ -29,10 +29,12 @@ def print  (string Range(char8))
 	}
 }
 
+#
 macro print(parameters..)
 {
 	return [> for(i in $parameters) print(i) <]
 }
+#
 
 macro println(parameters..)
 {
@@ -44,3 +46,117 @@ macro println(parameters..)
 		print("\n")
 	<]
 }
+
+#
+	Buffer based I/O:
+#
+type OutputBuffer {
+	var buffer  LinearSequence (uint8)
+	var flusher FunctionPointer(*OutputBuffer,Nothing)
+}
+
+where self is *OutputBuffer, bytes is LinearSequence(uint8), string is LinearSequence(char8):
+
+var overflowBuffer Array(uint8,64)
+
+# TODO: buffer's length must be at least X bytes!
+# TODO: optimized string printing
+def init (self,buffer LinearSequence(uint8)) {
+	self.buffer  = buffer
+	self.flusher = def dummyFlusher(self) {
+		self.buffer = overflowBuffer 
+	}
+}
+def print(self,string){
+	var buf = self.buffer
+	for(c in string){
+		if(buf.empty){
+			def flush = self.flusher
+			flush(self)
+			buf = self.buffer
+		}
+		buf.current = c as uint8
+		buf.moveNext()
+	}
+	self.buffer= buf
+}
+#TODO: def print(self,boolean bool) = self.print(if(boolean) "true" else "false")
+def print(self,number uint32){
+	if(self.buffer.length < 12){
+		def flush = self.flusher
+		flush(self)
+	}
+	var buffer Array(uint8,16)
+	var i natural = 0
+	loop {
+		buffer[i] = ('0' + number % 10) as uint8
+		i++
+		number/=10
+	} until(number == 0)
+	loop {
+		i--
+		self.buffer.current = buffer[i]
+		self.buffer.moveNext()
+	} until(i==0)
+}
+def print(self,number int32) {
+	if(number < 0){
+		number = -number
+		self.buffer.current = '-'
+		self.buffer.moveNext()
+	}
+	self.print(number as uint32)
+}
+macro print(self,parameters..){
+	return [> for(i in $parameters) ($self).print(i) <]
+}
+
+#
+	File I/O:
+#
+type File {
+	private var filePtr *Nothing
+	
+	def init(self,file *Nothing) = self.filePtr = file
+	def destroy(self) {
+		fclose(self.filePtr)
+	}
+	def write(self,bytes){
+		fwrite(bytes as *uint8 as *Nothing,bytes.length,1,self.filePtr)
+	}
+	def read (self,bytes){
+		fread(bytes as *uint8 as *Nothing,bytes.length,1,self.filePtr)
+	}
+}
+
+def open(filename LinearSequence(char8),mode LinearSequence(char8)){
+	def ptr = fopen(filename as *char8 as *uint8,mode as *char8 as *uint8)
+	return File(ptr)
+}
+def open(filename LinearSequence(char8),write bool,append = false,text = true){
+	var mode
+	if(!append) mode = if(!text) "wb" else "w"
+	else mode = if(!text) "ab" else "a"
+	return open(filename,mode: mode)
+}
+
+#
+	A buffered output file stream.
+#
+type BufferedOutputStream {
+	extends var super OutputBuffer
+	var storage Array(uint8,32)
+	var file *File
+	
+	def init(self) {
+		self.super.init(self.storage)
+		self.super.flusher = def flush(self *BufferedOutputStream) {
+			putchar(65)
+			self.file.write(self.storage) #TODO self.storage[0..(storage.length - self.buffer.length)]
+			self.buffer = self.storage
+		}
+	}
+}
+
+
+

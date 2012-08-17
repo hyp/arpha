@@ -382,7 +382,7 @@ Type* CallExpression::returnType() const {
 		return typeRef->type;
 	}
 	else if( auto vref = object->asVariableReference()){
-		return vref->variable->type.type();//TODO function pointer type returns
+		return vref->variable->type.type()->asFunctionPointer()->returns();//TODO function pointer type returns
 	}
 
 	assert(false && "Invalid call expression - can't calculate the return type");

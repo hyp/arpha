@@ -198,12 +198,13 @@ struct Type {
 	bool isResolved() const;
 	bool isPartiallyResolved() const;
 
-	bool requiresDestructorCall() const;
 
 	bool isSame(Type* other);
 
 	void setFlag(uint16 flag);
 	bool isFlagSet(uint16 flag) const;
+
+	bool isPointerDerivativeOf(Type* other) const;
 
 
 	bool wasGenerated() const; //Is this a parametrized type?
@@ -240,6 +241,9 @@ public:
 	enum {
 		IS_RESOLVED = 0x1,
 		IS_VALUE = 0x2,
+		IS_FULLY_RESOLVED = 0x4,
+		DESTRUCTOR_STATUS_RESOLVED = 0x8,
+		NEEDS_DESTRUCTOR = 0x10,
 	};
 	uint16 type;
 	uint16 flags;
@@ -251,7 +255,8 @@ public:
 		int   bits;       //number of bits in an integer / character type
 	};
 
-	inline bool isValueType(){ return isFlagSet(IS_VALUE); }
+	data::ast::Search::Result requiresDestructorCall() const;
+	inline bool isValueType() const { return isFlagSet(IS_VALUE); }
 	friend std::ostream& operator<< (std::ostream& stream,Type* node);
 };
 
@@ -298,8 +303,8 @@ struct AnonymousAggregate: public Type {
 		Type*    type;
 	};
 	enum {
-		ALL_SAME = 0x8,
-		GEN_REWRITE_AS_VECTOR = 0x16,
+		ALL_SAME = 0x20,
+		GEN_REWRITE_AS_VECTOR = 0x40,
 	};
 
 	inline bool allElementsSameType(){ return isFlagSet(ALL_SAME); }
@@ -328,7 +333,6 @@ struct DeclaredType: public Type {
 	virtual DeclaredType* duplicate(DuplicationModifiers* mods) const = 0;
 	virtual DeclaredType* resolve(Resolver* resolver) = 0;
 	virtual void  onTemplateSpecialization(Resolver* resolver){}
-	inline  bool  isResolved() const { return isFlagSet(IS_RESOLVED); }
 	
 	
 
@@ -363,7 +367,7 @@ struct Trait: public DeclaredType {
 	Scope* templateDeclaration;
 private:
 	enum {
-		IS_IMPLICIT = 0x8,
+		IS_IMPLICIT = 0x20,
 	};
 	bool verify();
 public:
@@ -373,7 +377,7 @@ public:
 
 struct Variant: public DeclaredType {
 	enum {
-		NO_INNER_STRUCTURES = 0x10,//plain variant
+		NO_INNER_STRUCTURES = 0x20,//plain variant
 	};
 
 	Variant();
@@ -402,7 +406,7 @@ public:
 
 struct Record: public DeclaredType {
 	enum {
-		FIELD_ABI = 0x8,//when given a type { extends 1 field } use the abi of the underlying field
+		FIELD_ABI = 0x20,//when given a type { extends 1 field } use the abi of the underlying field
 	};
 	struct Field {
 		SymbolID name;

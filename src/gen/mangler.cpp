@@ -140,7 +140,7 @@ void Mangler::Element::mangle(Function* function){
 		stream<<(*i)->label().length()<<(*i)->label().ptr();
 		mangle((*i)->type.type());
 	}
-	mangle(function->returns());
+	//mangle(function->returns()); NB: can't do because function can return a type declared inside, which would cause infinite loop!
 }
 
 void Mangler::Element::mangle(Variable* variable){

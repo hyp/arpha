@@ -202,7 +202,7 @@ int    Function::findArgument(Variable* var) const{
 Node*  Function::createReference(){
 	return new FunctionReference(this);
 }
-Type*  Function::argumentType()  {
+Type*  Function::argumentType() const  {
 	assert(isFlagSet(Node::RESOLVED));
 	assert(!isFlagSet(HAS_PATTERN_ARGUMENTS));
 	auto args = arguments.size();
@@ -225,6 +225,12 @@ void   Function::makeAllArgumentsExpendable(){
 		(*i)->setFlag(Argument::IS_EXPENDABLE);
 	}
 	setFlag(HAS_EXPENDABLE_ARGUMENTS);
+}
+Type* Function::returnType() const {
+	if(owner()->functionOwner() && !isFlagSet(HAS_PATTERN_ARGUMENTS) && !isFlagSet(HAS_EXPENDABLE_ARGUMENTS)){
+		return FunctionPointer::get(argumentType(),returns(),callingConvention());
+	}
+	return Node::returnType();
 }
 
 //field access macro function

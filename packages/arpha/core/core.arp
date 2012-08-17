@@ -19,4 +19,5 @@ type Iota extends Range
 	def moveNext(self) = self.begin++
 }
 
+# Usage: for(index in "String".indices) { }
 def indices(self LinearSequence) = Iota(0,self.length)

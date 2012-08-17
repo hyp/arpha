@@ -603,16 +603,18 @@ void Type::setFlag(uint16 flag){
 bool Type::isFlagSet(uint16 flag) const {
 	return (flags & flag) == flag;
 }
-bool Type::requiresDestructorCall() const {
-	switch(type){
-		case RECORD:  return true;
-	}
-	return false;
+data::ast::Search::Result Type::requiresDestructorCall() const {
+	auto t = type;
+	if(t == QUALIFIER) t = this->next()->type;
+
+	if(t == RECORD)
+		return isFlagSet(DESTRUCTOR_STATUS_RESOLVED)? (isFlagSet(NEEDS_DESTRUCTOR) ? data::ast::Search::Found : data::ast::Search::NotFound) : data::ast::Search::NotAllElementsResolved;
+	return data::ast::Search::NotFound;
 }
 bool Type::isResolved() const {
 	switch(type){
-		case RECORD:  return isFlagSet(IS_RESOLVED);
-		case VARIANT: return isFlagSet(IS_RESOLVED);
+		case RECORD:  return isFlagSet(IS_FULLY_RESOLVED);
+		case VARIANT: return isFlagSet(IS_FULLY_RESOLVED);
 		case POINTER:
 		case REFERENCE:
 		case LINEAR_SEQUENCE:
@@ -621,7 +623,7 @@ bool Type::isResolved() const {
 		case FUNCTION_POINTER:
 			return argument->isResolved() && static_cast<const FunctionPointer*>(this)->returns()->isResolved();
 		case TRAIT:
-			return static_cast<const Trait*>(this)->isResolved();
+			return isFlagSet(IS_FULLY_RESOLVED);
 
 		case QUALIFIER:
 			return argument->isResolved();
@@ -932,6 +934,10 @@ Scenarios:
 
   def c char16 = char8
       c char32 = char8,char16
+
+  type Base { }
+  type Derived { var super Base }
+  var x FunctionPointer(*Base,Nothing) = def f(self *Derived) { }
 */
 int automaticTypeCast(Type* givenType,Node** node,Type* nodeType,bool doTransform){
 	int weight = -1;
@@ -972,9 +978,28 @@ int automaticTypeCast(Type* givenType,Node** node,Type* nodeType,bool doTransfor
 		if(nodeType->isStaticArray() && givenType->next()->isSame(nodeType->next()))
 			weight = CONVERSION_SAME_KIND;
 	}
+	else if(auto fp = givenType->asFunctionPointer()){
+		if(auto fp2 = nodeType->asFunctionPointer()){
+			if(fp2->argument->isPointerDerivativeOf(fp->argument)){
+				weight = CONVERSION_SAME_KIND;
+			}
+		}
+	}
 
 	if(weight != -1 && doTransform) *node = new CastExpression(*node,givenType);
 	return weight;
+}
+
+// type Base { }
+// type Derived { var super Base }
+// *Derived is derivate of *Base
+bool Type::isPointerDerivativeOf(Type* other) const {
+	if(this->isPointer() && other->isPointer()){
+		if(auto record = (const_cast<Type*>(this))->argument->asRecord()){
+			if(record->fields[0].type.type()->isSame(other->next())) return true;
+		}
+	}
+	return false;
 }
 
 
@@ -1015,6 +1040,14 @@ int recordSubtyping(Type* givenType,Node** node,Type* nodeType,bool doTransform)
 			}
 		}
 	}
+
+	// *Derived -> *Base
+	/*if(givenType->isPointer()){
+		if(auto assigns = recordSubtyping(givenType->next(),node,nodeType,doTransform)){
+			if(doTransform) *node = new PointerOperation(*node,PointerOperation::ADDRESS);
+			return assigns;
+		}
+	}*/
 	return -1;
 }
 void TypeMeaningsRange::getRecordSubtypes(Record* record,uint32 filters){
@@ -1028,8 +1061,8 @@ void TypeMeaningsRange::getRecordSubtypes(Record* record,uint32 filters){
 
 int referenceOf(Type* givenType, Node** node, Type* nodeType,bool doTransform,uint32 filters){
 	if((*node)->isConst()) return -1;//no &1 !
-	auto ptrType = givenType->isReference()? Type::getReferenceType(nodeType) : Type::getPointerType(nodeType);
-	int weight = givenType->assignFrom(node,ptrType,doTransform,filters);
+	//auto ptrType = givenType->next()//givenType->isReference()? Type::getReferenceType(nodeType) : Type::getPointerType(nodeType);
+	int weight = givenType->argument->assignFrom(node,nodeType,doTransform,filters);
 	if(weight != -1){
 		if(doTransform){
 			*node = new PointerOperation(*node,PointerOperation::ADDRESS);
@@ -1101,7 +1134,7 @@ int Type::assignFrom(Node** expression,Type* type,bool doTransform,uint32 filter
 			}
 		}
 	}
-	else if(isPointer() && !type->isPointer() && canAddressOf && (assigns = referenceOf(this,expression,type,doTransform,filters)) != -1 ){
+	else if(isPointer() && canAddressOf && (assigns = referenceOf(this,expression,type,doTransform,filters)) != -1 ){
 		return assigns;
 	}
 	else if(isReference()){
@@ -1199,6 +1232,7 @@ bool  Type::canCastTo(Type* other){
 		if(other->isPointer() &&
 			isIntOrChar(next()) && isIntOrChar(other->next()) &&
 			std::abs(next()->bits) == std::abs(other->next()->bits)) return true;
+		if(other->isPointer() && other->next()->isVoid()) return true;
 	}
 	else if(this->isLinearSequence()){
 		if(other->isUintptr()) return true;
@@ -1209,6 +1243,13 @@ bool  Type::canCastTo(Type* other){
 	}
 	else if(this->isStaticArray()){
 		if(other->isLinearSequence() && next()->isSame(other->next())) return true;
+	}
+	else if(auto fp2 = this->asFunctionPointer()){
+		if(auto fp = other->asFunctionPointer()){
+			if(fp2->argument->isPointerDerivativeOf(fp->argument)){
+				return true;
+			}
+		}
 	}
 	return false;
 }

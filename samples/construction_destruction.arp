@@ -5,12 +5,12 @@ import io
 type Foo {
 	var x int32
 	
-	def construct(self) = self.construct(0)
-	def construct(self,x int32){
+	def init(self) = self.init(0)
+	def init(self,x int32){
 		self.x = x
-		print("Constructing $(self.x)!")
+		print("Initializing $(self.x)!")
 	}
-	def destroy  (self){
+	def destroy(self){
 		print("Destroying $(self.x)!")
 	}
 }

@@ -284,6 +284,7 @@ namespace compiler {
 	}
 
 	void dumpModule(Node* module){
+		//return;
 		if(reportLevel >= ReportDebug){
 			auto console = Dumper::console();
 			console.flags |= Dumper::VERBOSE | Dumper::REF_DECL_POINTERS;
