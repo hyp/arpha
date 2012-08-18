@@ -88,6 +88,11 @@ namespace data {
 				ELEMENT_SET,
 				SEQUENCE_EMPTY,
 				SEQUENCE_MOVENEXT,
+				SLICE,
+
+				MEMCPY,
+				MEMMOVE,
+				MEMSET,
 
 				//vectors
 				VECTOR_SHUFFLE,

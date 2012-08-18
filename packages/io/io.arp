@@ -47,68 +47,107 @@ macro println(parameters..)
 	<]
 }
 
+def Bytes = LinearSequence (uint8)
+
 #
 	Buffer based I/O:
 #
-type OutputBuffer {
-	var buffer  LinearSequence (uint8)
-	var flusher FunctionPointer(*OutputBuffer,Nothing)
+type BufferedWriter {
+	var buffer  Bytes
+	var flusher FunctionPointer(*BufferedWriter,Nothing)
 }
 
-where self is *OutputBuffer, bytes is LinearSequence(uint8), string is LinearSequence(char8):
+where self is *BufferedWriter, bytes is Bytes, string is LinearSequence(char8):
 
-var overflowBuffer Array(uint8,64)
+var overflowBuffer Array(uint8,64) # This array is a reserved space for buffer overflow
 
 # TODO: buffer's length must be at least X bytes!
-# TODO: optimized string printing
-def init (self,buffer LinearSequence(uint8)) {
-	self.buffer  = buffer
+def init (self,bytes) {
+	self.buffer  = bytes
 	self.flusher = def dummyFlusher(self) {
 		self.buffer = overflowBuffer 
 	}
 }
-def print(self,string){
-	var buf = self.buffer
-	for(c in string){
-		if(buf.empty){
-			def flush = self.flusher
-			flush(self)
-			buf = self.buffer
-		}
-		buf.current = c as uint8
-		buf.moveNext()
-	}
-	self.buffer= buf
+def flush(self) {
+	def f = self.flusher
+	f(self)
 }
-#TODO: def print(self,boolean bool) = self.print(if(boolean) "true" else "false")
-def print(self,number uint32){
-	if(self.buffer.length < 12){
-		def flush = self.flusher
-		flush(self)
+def write(self,bytes) {
+	var bufLen  = self.buffer.length
+	var byteLen = bytes.length
+	
+	if(byteLen > bufLen){
+		memcpy(self.buffer,bytes,bufLen,advanceDestination: true,advanceSource: true)
+		self.flush
+		byteLen -= bufLen
+		if(byteLen > self.buffer.length) {
+			self.buffer= bytes
+			self.flush
+			return
+		}
+		fallthrough
 	}
-	var buffer Array(uint8,16)
-	var i natural = 0
-	loop {
-		buffer[i] = ('0' + number % 10) as uint8
-		i++
-		number/=10
-	} until(number == 0)
+	else memcpy(self.buffer,bytes,byteLen,advanceDestination: true)
+	return
+}
+
+# Writing binary data:
+
+#
+def write(self,number uint32) {
+}
+def write(self,number int32)     = self.write(number    as uint32)
+def write(self,character char32) = self.write(character as uint32)
+#
+
+# Text formatting:
+def print(self,string) {
+	self.write(string as Bytes)
+}
+def print(self,character char32){
+	#TODO:
+}
+#def print(self,boolean bool) = if(boolean == true) self.print("true") else self.print("false")
+
+macro formatIntegerMixin(number,radix,negative = false,bufSize = 64) = [>
+	var buffer Array(uint8,$bufSize)
+	var i natural = $bufSize
 	loop {
 		i--
-		self.buffer.current = buffer[i]
-		self.buffer.moveNext()
-	} until(i==0)
+		def n = $number % $radix
+		if(n < 10) buffer[i] = ('0' + n) as uint8
+		else buffer[i] = (55 + n) as uint8
+		$number /= $radix
+	} until(number == 0)
+	var bytes Bytes = buffer
+	bytes = bytes.slice(from: i)
+	self.write(bytes)
+<]
+
+def print(self,number uint32,radix uint32,negative bool){
+	formatIntegerMixin(number,radix,negative,32)
 }
-def print(self,number int32) {
+# print(self,number uint32) = self.print(number,radix: 10,negative: false)
+def print(self,number  int32) {
+	var lessThanZero = false
 	if(number < 0){
 		number = -number
-		self.buffer.current = '-'
-		self.buffer.moveNext()
+		lessThanZero = true
 	}
-	self.print(number as uint32)
+	self.print(number as uint32,radix: 10,negative: lessThanZero)
 }
-macro print(self,parameters..){
-	return [> for(i in $parameters) ($self).print(i) <]
+
+macro print  (self,parameters..){
+	return [> for(i in $parameters) $self.print(i) <]
+}
+macro println(self,parameters..){
+	return [>
+		match(typeof($parameters))
+		{|Tuple => for(i in $parameters) $self.print(i)
+		 |_ 	=> $self.print($parameters)
+		}
+		$self.print('\n')
+	<]
 }
 
 #
@@ -129,8 +168,9 @@ type File {
 	}
 }
 
+#TODO File | Nothing
 def open(filename LinearSequence(char8),mode LinearSequence(char8)){
-	def ptr = fopen(filename as *char8 as *uint8,mode as *char8 as *uint8)
+	def ptr = fopen(filename.toStringz,mode.toStringz)
 	return File(ptr)
 }
 def open(filename LinearSequence(char8),write bool,append = false,text = true){
@@ -144,19 +184,21 @@ def open(filename LinearSequence(char8),write bool,append = false,text = true){
 	A buffered output file stream.
 #
 type BufferedOutputStream {
-	extends var super OutputBuffer
+	extends var super BufferedWriter
 	var storage Array(uint8,32)
 	var file *File
 	
 	def init(self) {
 		self.super.init(self.storage)
 		self.super.flusher = def flush(self *BufferedOutputStream) {
-			putchar(65)
-			self.file.write(self.storage) #TODO self.storage[0..(storage.length - self.buffer.length)]
+			def bufLength = self.buffer.length
+			if(bufLength > self.storage.length) self.file.write(self.buffer)
+			else {
+				var st Bytes = self.storage
+				st = st[0 .. self.storage.length - bufLength]
+				self.file.write( st )
+			}
 			self.buffer = self.storage
 		}
 	}
 }
-
-
-

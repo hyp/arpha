@@ -45,6 +45,7 @@ uses precedence: precedence.index
 			return [> $sequence.slice(from: $i) <]
 		}
 		var e = parser.parse()
+		parser.expect("]")
 		return [> $sequence.slice(from: $i,to: $e) <]
 	}
 	parser.expect("]")

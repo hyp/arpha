@@ -1,0 +1,20 @@
+#
+TODO:
+#
+import qualified cstdlib
+
+where filename is LinearSequence(char8):
+
+macro enforce(condition) = [>
+	$condition
+<]
+
+def rename(from LinearSequence(char8),to LinearSequence(char8)){
+	enforce(cstdlib.rename(from.toStringz,to.toStringz))
+}
+def remove(filename){
+	enforce(cstdlib.remove(filename.toStringz))
+}
+def exists(filename){
+	#TODO
+}

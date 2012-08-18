@@ -5,21 +5,32 @@
 
 import arpha.external
 
-def putchar(character int32) int32
-def getchar() int32
+# TODO
+macro toStringz(string LinearSequence(char8)) = [> $string as *char8 <]
 
+# stdlib.h
 def srand(seed uint32)
 def rand () int32
 
 def abort ()
 def exit  (code int32)
 
-def fopen (filename *uint8,mode *uint8) *Nothing
-def fflush(file *Nothing) int32
-def fclose(file *Nothing) int32
+# stdio.h
+where filename is *char8, file is *Nothing:
 
-def fgetc (file *Nothing) int32
-def fputc (character int32,file *Nothing) int32
-def fputs (string *uint8,file *Nothing) int32
-def fread (ptr *Nothing,size natural,count natural,file *Nothing) natural
-def fwrite(ptr *Nothing,size natural,count natural,file *Nothing) natural
+def remove(filename) int32
+def rename(oldname *char8,newname *char8) int32
+
+def fopen (filename,mode *char8) *Nothing
+def fflush(file) int32
+def fclose(file) int32
+
+def fgetc (file) int32
+def fputc (character int32,file) int32
+def fread (bytes *Nothing,size natural,count natural,file) natural
+def fwrite(bytes *Nothing,size natural,count natural,file) natural
+
+def putchar(character int32) int32
+def getchar() int32
+
+def rewind(file)

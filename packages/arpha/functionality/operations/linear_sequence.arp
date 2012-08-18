@@ -9,17 +9,20 @@ def length (self *LinearSequence(_)) natural
 
 def element(self *LinearSequence(T: _),i natural) Reference(T)
 
-#
-TODO:
 def slice(self *LinearSequence(T: _),from natural)            LinearSequence(T)
 def slice(self *LinearSequence(T: _),to   natural)            LinearSequence(T)
 def slice(self *LinearSequence(T: _),from natural,to natural) LinearSequence(T)
-#
 
 # Sequence interface
 def empty    (self *LinearSequence(_)) bool
 def current  (self *LinearSequence(T: _)) Reference(T)
 def moveNext (self *LinearSequence(_))
+
+# TODO: move
+# TODO: internal alignment investigation for optimizations.
+# Copies the length bytes from source to the destination byte range.
+# Optionally advances the byte ranges by length bytes.
+def memcpy(destination *LinearSequence(uint8),source *LinearSequence(uint8),length natural,advanceDestination = false,advanceSource = false)
 
 def length (self *Array(_,_))
 def element(self *Array(T:_,_),i natural) Reference(T)

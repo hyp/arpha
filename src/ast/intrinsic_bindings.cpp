@@ -377,9 +377,15 @@ static void initMapping(){
 	MAPOP("length(*LinearSequence)",LENGTH);
 	MAPOP("element(*LinearSequence,natural)",ELEMENT_GET);
 
+	MAPOP("slice(self:*LinearSequence,from:natural)",SLICE);
+	MAPOP("slice(self:*LinearSequence,to:natural)",SLICE);
+	MAPOP("slice(self:*LinearSequence,from:natural,to:natural)",SLICE);
+
 	MAPOP("empty(*LinearSequence)",SEQUENCE_EMPTY);
 	MAPOP("current(*LinearSequence)",ELEMENT_GET);
 	MAPOP("moveNext(*LinearSequence)",SEQUENCE_MOVENEXT);
+
+	MAPOP("memcpy(*[]uint8,*[]uint8,natural,bool,bool)",MEMCPY);
 
 	MAP_PROP("length(*Array)",Function::MACRO_FUNCTION,{ 
 		invocation->ret(new IntegerLiteral((uint64)invocation->getNodeParameter(0)->returnType()->next()->asStaticArray()->length(),intrinsics::types::natural)); 
@@ -434,6 +440,7 @@ Type* Function::getIntrinsicOperationReturnType(Type* operand1,data::ast::Operat
 
 	if(operand1->isLinearSequence()){
 		if(op == ELEMENT_GET) return Type::getReferenceType(operand1->next());
+		if(op == SLICE) return operand1;
 	}
 	else if(auto arr = operand1->asStaticArray()){
 		if(op == ELEMENT_GET) return Type::getReferenceType(arr->next());
