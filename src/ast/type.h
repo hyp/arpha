@@ -25,6 +25,7 @@ struct TypePatternUnresolvedExpression {
 	inline TypePatternUnresolvedExpression(Type* expr) : kind(TYPE),_type(expr) {}
 	inline bool isResolved() const { return kind == TYPE;     }
 	inline bool isPattern() const  { return kind == PATTERN;  }
+	inline bool isEmptyPattern() const { return kind == PATTERN && pattern == nullptr; }
 	Type* type() const;
 
 	TypePatternUnresolvedExpression duplicate(DuplicationModifiers* mods) const;

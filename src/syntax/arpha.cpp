@@ -840,7 +840,7 @@ struct TypeParser: IntrinsicPrefixMacro {
 		auto decl = new TypeDeclaration(record,name,templateDeclaration != nullptr);
 		if(record->fields.size() == 0){
 			if(templateDeclaration && isIntrinsicImported(parser)){
-				templateDeclaration->setFlag(Function::IS_INTRINSIC);
+				templateDeclaration->makeIntrinsic();
 				Function::getIntrinsicTypeTemplateBinder(templateDeclaration);
 			}
 			else error(decl,"The type '%s' must have at least one field!",name);
@@ -1097,21 +1097,12 @@ struct CaptureParser : IntrinsicPrefixMacro {
 		Node* parse(Parser* parser){
 			//Give access to macroes variables
 			auto symbol = parser->expectName();
-			auto expr = parser->compilationUnit()->resolver->multipassResolve(new UnresolvedSymbol(parser->previousLocation(),symbol,parentScope));
+			auto expr = parser->compilationUnit()->resolver->multipassResolve(new UnresolvedSymbol(parser->previousLocation(),symbol,parentScope),true);
 			if(auto v = expr->asVariableReference()){
 				//TODO this safety check is required!
 				//if(v->variable->functionOwner() != parentScope->functionOwner()) error(v,"Can't $ a variable that is outside the current function!");
 			}else error(expr,"Expected a variable reference after '$'!");
 			return expr;
-			/*
-			auto oldScope = parser->currentScope();
-			parser->currentScope(parentScope);
-			auto res = parser->parse(1000);
-			if(auto v = res->asVariableReference()){
-				//if(v->variable->functionOwner() != parentScope->functionOwner()) error(v,"Can't $ a variable that is outside the current function!");
-			}else error(res,"Expected a variable reference after $!");
-			parser->currentScope(oldScope);
-			return res;*/
 		}
 	};
 

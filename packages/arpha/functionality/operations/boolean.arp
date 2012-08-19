@@ -4,4 +4,4 @@
 import arpha.intrinsic
 
 def not   (x bool) bool
-def equals(x bool,y bool) bool
+def ==(x bool,y bool) bool

@@ -123,21 +123,58 @@ SearchResult findFunctionByType(Scope* scope,SymbolID name,FunctionPointer* type
 
 }
 
-Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilationUnit),isRHS(false),reportUnevaluated(false),expectedTypeForEvaluatedExpression(nullptr) {
+Resolver::Resolver(CompilationUnit* compilationUnit) : _compilationUnit(compilationUnit),isRHS(false),expectedTypeForEvaluatedExpression(nullptr) {
 	unresolvedExpressions = 0;
 	treatUnresolvedTypesAsResolved = false;
 	currentFunction = nullptr;
 	currentTrait    = nullptr;
 	_currentParent  = nullptr;
 	currentVisibilityMode = data::ast::PUBLIC;
+	_reportUnresolved = false;
 }
 
+/**
+* Walk the already resolved AST(current scope only) to declare local variables.
+*/
+void NodeList::walkDefiningLocals(Resolver* resolver){
+	for(auto i = begin();i!=end();i++) (*i)->walkDefiningLocals(resolver);
+}
+void CallExpression::walkDefiningLocals(Resolver* resolver){
+	object->walkDefiningLocals(resolver);
+	arg->walkDefiningLocals(resolver);
+}
+void LogicalOperation::walkDefiningLocals(Resolver* resolver){
+	parameters[0]->walkDefiningLocals(resolver);
+	parameters[1]->walkDefiningLocals(resolver);
+}
+void FieldAccessExpression::walkDefiningLocals(Resolver* resolver){ object->walkDefiningLocals(resolver); }
+void AssignmentExpression::walkDefiningLocals(Resolver* resolver){
+	object->walkDefiningLocals(resolver);
+	value ->walkDefiningLocals(resolver);
+}
+void ReturnExpression::walkDefiningLocals(Resolver* resolver){ expression->walkDefiningLocals(resolver); }
+void ThrowExpression::walkDefiningLocals(Resolver* resolver){ expression->walkDefiningLocals(resolver); }
+void PointerOperation::walkDefiningLocals(Resolver* resolver){ expression->walkDefiningLocals(resolver); }
+void CastExpression::walkDefiningLocals(Resolver* resolver){ object->walkDefiningLocals(resolver); }
+void IfExpression::walkDefiningLocals(Resolver* resolver){ condition->walkDefiningLocals(resolver); }
+void BlockExpression::walkDefiningLocals(Resolver* resolver){ if(isFlagSet(USES_PARENT_SCOPE)) NodeList::walkDefiningLocals(resolver); }
+void AccessExpression::walkDefiningLocals(Resolver* resolver) { object->walkDefiningLocals(resolver); }
+void MatchResolver::walkDefiningLocals(Resolver* resolver) { object->walkDefiningLocals(resolver); }
+void Variable::walkDefiningLocals(Resolver* resolver){
+	resolver->makeDeclarationVisible(this);
+}
 
 Node* Resolver::resolve(Node* node){
 	_prevNode = nullptr;
-	if(node->isResolved()) return node;
+	if(node->isResolved()){
+		if(currentFunction) node->walkDefiningLocals(this);
+		return node;
+	}
 	auto result = node->resolve(this);
-	if(!result->isResolved()) markUnresolved(result);
+	if(!result->isResolved()){
+		unresolvedExpressions++;
+		if(isReportingUnresolvedNodes()) return reportUnresolvedNode(node);
+	}
 	else if(result->returnType()->isReference()){
 		auto ptr = result->asPointerOperation();
 		bool deref = ptr && ptr->isAddress();
@@ -155,7 +192,10 @@ Node* Resolver::resolve(Node* node,Node* previous){
 	_prevNode = previous;
 	if(node->isResolved()) return node;
 	auto result = node->resolve(this);
-	if(!result->isResolved()) markUnresolved(result);
+	if(!result->isResolved()){
+		unresolvedExpressions++;
+		if(isReportingUnresolvedNodes()) return reportUnresolvedNode(node);
+	}
 	else if(result->returnType()->isReference()){
 		auto ptr = result->asPointerOperation();
 		bool deref = ptr && ptr->isAddress();
@@ -168,6 +208,9 @@ Node* Resolver::resolve(Node* node,Node* previous){
 		}
 	}
 	return result;
+}
+void  Resolver::makeDeclarationVisible(PrefixDefinition* node){
+	node->makeDeclarationVisible(_pass);
 }
 
 //Resolves children and returns true if all are resolved!
@@ -325,6 +368,7 @@ Node* createDestructorCall(TypeDeclaration* typeDecl,Node* self){
 		call = new CallExpression(nullptr,self);
 	} else call = new CallExpression(new FunctionReference(destructor),self);
 	call->setFlag(CallExpression::CALL_TO_DESTRUCTOR);
+	call->_location = typeDecl->location();
 	return call;
 }
 
@@ -926,7 +970,7 @@ Node* BlockExpression::resolve(Resolver* resolver){
 Node* UnresolvedSymbol::resolve(Resolver* resolver){
 	//TODO fix
 	//{ Foo/*Should be type Foo */; var Foo int32 } type Foo <-- impossibru	
-	if(auto def = (explicitLookupScope ? explicitLookupScope : resolver->currentScope())->lookupPrefix(symbol)){
+	if(auto def = (explicitLookupScope ? explicitLookupScope : resolver->currentScope())->lookup(resolver,this)){
 		if(auto ref = def->createReference()){
 			return resolver->resolve(copyLocationSymbol(ref));
 		}
@@ -1060,59 +1104,8 @@ Node* ScopedCommand::resolve(Resolver* resolver){
 	else resolver->markResolved(this);
 	return this;
 }
-
+Node* ErrorExpression::resolve(Resolver* resolver) { return this; }
 #include "../base/system.h"
-
-// TODO better error reporting!
-void Resolver::reportUnresolvedNode(Node* node){
-	auto console = Dumper::console();
-
-	if(!node->asBlockExpression() && !node->asErrorExpression() && !node->asTupleExpression()){
-		std::string error;
-		if(auto unr = node->asUnresolvedSymbol()){
-			error = format("Can't resolve the symbol '%s'",unr->symbol);
-		} 
-		else if(auto call = node->asCallExpression()){
-
-			if(auto unr = call->object->asUnresolvedSymbol()) {
-				if(call->isFlagSet(CallExpression::DOT_SYNTAX)) 
-					 error = format("Can't find the matching overload for the call %s.(%s)",unr->symbol,call->arg);
-				else error = format("Can't find the matching overload for the call %s(%s)",unr->symbol,call->arg);
-				compiler::subError(node->location(),error);
-				auto scope = (unr->explicitLookupScope ? unr->explicitLookupScope : currentScope());
-				
-
-				bool header = false;
-				for(overloads::OverloadRange overloads(scope,unr->symbol,call->isFlagSet(CallExpression::DOT_SYNTAX));!overloads.isEmpty();overloads.advance()){
-					if(!overloads.currentFunction()->isResolved()) continue;
-					if(!header){
-						console.print(format("\tThe available overloads for the function '%s' are:",unr->symbol));
-						header = true;
-					}
-					console.print("\n\t\t");
-					overloads.currentFunction()->dumpDeclaration(console);
-				}
-				if(!header)
-					console.print(format("\tThere are no available overloads for the function '%s'! Perphaps you've misspelled the function?\n",unr->symbol));
-				else console.print("\n\n");
-				return;
-			}
-		} 
-		else if(auto var = node->asVariable()){
-			error = format("Can't resolve the variable '%s'",var->label());
-		}
-		else if(auto func = node->asFunction()){
-			error = format("Can't resolve the function '%s'",func->label());
-		}
-		else error = format("Can't resolve expression %s",node);
-		compiler::subError(node->location(),error);
-	}
-}
-
-void Resolver::markUnresolved(Node* node){
-	unresolvedExpressions++;
-	if(reportUnevaluated) reportUnresolvedNode(node);
-}
 
 bool TypePatternUnresolvedExpression::resolve(Resolver* resolver,PatternMatcher* patternMatcher){
 	assert(kind == UNRESOLVED);
@@ -1161,8 +1154,11 @@ void Resolver::applyCurrentVisibilityMode(DefinitionNode* node){
 }
 
 Node* Variable::resolve(Resolver* resolver){
-
 	_owner = resolver->currentScope();
+	if(resolver->currentFunction)
+		resolver->makeDeclarationVisible(this);
+	else
+		flags &= (~LOOKUP_HIDE_BEFORE_DECLARATION); //Global variables are visible everywhere.
 	parentNode = resolver->currentParentNode();
 	resolver->applyCurrentVisibilityMode(this);
 
@@ -1652,7 +1648,7 @@ Node* Function::resolve(Resolver* resolver){
 	}
 
 	//If this is a generic or expendable function don't resolve body and return type!
-	if( isFlagSet(HAS_EXPENDABLE_ARGUMENTS) || isFlagSet(HAS_PATTERN_ARGUMENTS) || isFlagSet(FIELD_ACCESS_FUNCTION)){
+	if( isFlagSet(HAS_EXPENDABLE_ARGUMENTS) || isFlagSet(HAS_PATTERN_ARGUMENTS) || this->isFieldAccessMacro()){
 		if(resolver->currentTrait){
 			if(_returnType.isPattern() && !_returnType.pattern) _returnType.specify(intrinsics::types::Void);
 			else if(!_returnType.resolve(resolver)) return this;
@@ -1736,14 +1732,16 @@ Node* InfixMacro::resolve(Resolver* resolver){
 /**
 * Misc
 */
-Node* Resolver::multipassResolve(Node* node){
+Node* Resolver::multipassResolve(Node* node,bool quasi){
 
 	size_t prevUnresolvedExpressions;
 	unresolvedExpressions = 0xDEADBEEF;
+	_pass = quasi? 0 : 1;
 	do{
 		prevUnresolvedExpressions = unresolvedExpressions;
 		unresolvedExpressions = 0;
 		node = resolve(node);
+		if(!quasi) _pass++;
 	}
 	while(prevUnresolvedExpressions != unresolvedExpressions && unresolvedExpressions != 0);
 	return node;
@@ -1759,25 +1757,20 @@ void  Resolver::resolveModule(BlockExpression* module){
 
 	size_t prevUnresolvedExpressions;
 	unresolvedExpressions = 0xDEADBEEF;
-	int pass = 1;
+	_pass = 1;
 	do{
 		prevUnresolvedExpressions = unresolvedExpressions;
 		unresolvedExpressions = 0;
 		resolve(module);
 
-		debug("After extra pass %d(%d,%d) the module is",pass,prevUnresolvedExpressions,unresolvedExpressions);
+		debug("After resolving pass %d(%d,%d) the module is",_pass,prevUnresolvedExpressions,unresolvedExpressions);
 		compiler::dumpModule(module);
-		pass++;
+		_pass++;
 	}
 	while(prevUnresolvedExpressions != unresolvedExpressions && unresolvedExpressions != 0);
 	if(unresolvedExpressions > 0 && !module->isResolved()){
-		compiler::headError(module->location(),format("Can't resolve %s expressions and definitions:",unresolvedExpressions));
-		//Do an extra pass gathering unresolved definitions
-		reportUnevaluated = true;
-		auto reportLevel = compiler::reportLevel;
-		compiler::reportLevel = compiler::Silent;
-		resolve(module);
-		compiler::reportLevel = reportLevel;
+		reportUnresolvedNodes(module);
+		return;
 	}
 	analyze(module,nullptr);
 	optimizeModule(module);

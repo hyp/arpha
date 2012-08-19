@@ -141,8 +141,101 @@ PrefixDefinition* Scope::lookupPrefix(SymbolID name){
 	if(parent2) return parent2->lookupPrefix(name); 
 	return nullptr;
 }
+
+PrefixDefinition* Scope::lookup(Resolver* resolver,UnresolvedSymbol* node){
+	Scope* lookup = this;
+	Scope* lookupP2 = nullptr;
+	PrefixDefinition* def = nullptr; 
+	auto name = node->symbol;
+
+	while(true){
+		auto r = lookup->prefixDefinitions.find(name);
+		if (r != lookup->prefixDefinitions.end() && !r->second->isHiddenBeforeDeclaration(resolver->_pass)){
+			return r->second;
+		}
+
+		//Check the imports
+		if(lookup->imports.size()){
+			PrefixDefinition* def = nullptr; 
+			for(auto i = lookup->imports.begin();i!=lookup->imports.end();++i){ 
+				auto d = (*i)->lookupImportedPrefix(name); 
+				if(d && !d->isHiddenBeforeDeclaration(resolver->_pass)){
+					if(def && !(def->asOverloadset() && d->asOverloadset()) ){
+						error(node,"Ambiguos import: symbol '%s' is defined in more than one scope.",name);//TODO
+					}
+					else def = d; 
+				}
+			}
+			if(def) return def;
+		}
+
+		if(lookup->parent2) lookupP2 = lookup->parent2;
+		lookup = lookup->parent;
+		if(!lookup){
+			if(lookupP2) lookup = lookupP2;
+			else break;
+		}
+	}
+	return nullptr;
+}
+
 InfixDefinition* Scope::lookupInfix(SymbolID name){
 	LOOKUP(infix,Infix);
+}
+
+
+#define ABS(x) (((x) < 0)   ? -(x) : (x))
+
+/** Returns the absolute similarity score for 's1' and 's2' */
+static int similarity(const char* s1, const char* s2)
+{
+	int score = 0;
+	size_t len1 = strlen(s1), len2 = strlen(s2), len = len1 > len2 ?  len1 : len2;
+	size_t i = 0;
+
+	while ((len--) > 0) {
+		int abs;
+
+		if (len1 >= i && len2 < i) {
+			int x = 0 - s1[i];
+			score += ABS(x);
+		} else if (len2 >= i && len1 < i) {
+			int x = 0 - s2[i];
+			score += ABS(x);
+		} else {
+			abs = ABS(strcmp(s1 + i, s2 + i));
+			score += abs;
+			while (s1[i] == s2[i] && len > 0) {
+				++i;
+				--len;
+			}
+			++i;
+		}
+	}
+	return score;
+}
+
+#undef ABS
+
+PrefixDefinition* Scope::lookupBestSimilar(SymbolID name,int threshold){
+	int minWeight = threshold;
+	PrefixDefinition* def = nullptr;
+
+	for(auto i = prefixDefinitions.begin();i!=prefixDefinitions.end();i++){
+		auto weight = similarity((*i).first.ptr(),name.ptr());
+		if(weight < minWeight){
+			minWeight = weight;
+			def= (*i).second;
+		}
+	}
+
+	if(parent){
+		if(auto p = parent->lookupBestSimilar(name,minWeight)) return p;
+	}
+	if(parent2){
+		if(auto p = parent2->lookupBestSimilar(name,minWeight)) return p;
+	}
+	return def;
 }
 
 #define CONTAINS(t) \
@@ -163,7 +256,10 @@ Overloadset* Scope::containsOverloadset(SymbolID name){
 void Scope::define(PrefixDefinition* definition){
 	auto id = definition->label();
 	auto alreadyDefined = containsPrefix(id);
-	if(alreadyDefined) error(definition,"'%s' is already (prefix)defined in the current scope",id);
+	if(alreadyDefined){
+		if(alreadyDefined->asOverloadset()) error(definition,"The name '%s' is already used in the current scope for function '%s'.",id,id);
+		else error(definition,"The name '%s' is already used in the current scope by '%s'.",id,alreadyDefined);
+	}
 	else prefixDefinitions[id] = definition;
 }
 void Scope::define(InfixDefinition* definition){

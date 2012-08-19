@@ -151,7 +151,8 @@ protected:
 public:
 	Node* copyLocationSymbol(Node* dest) const;//Doesn't copy the flags.. use when resolving between nodes of different types
 
-	virtual Node* resolve (Resolver* resolver);
+	virtual Node* resolve(Resolver* resolver);
+	virtual void  walkDefiningLocals(Resolver* resolver){ }
 	virtual Node* optimize(Optimizer* optimizer);
 	virtual bool  isSame  (Node* other){ return false; }
 
@@ -178,7 +179,7 @@ std::ostream& operator<< (std::ostream& stream,Node* node);
 * A definition node provides a mapping from a symbol in the source file into an custom expression for both parser and resolver.
 */
 struct DefinitionNode : Node { 
-	DefinitionNode() : generatorData(nullptr){}
+	DefinitionNode() : generatorData(nullptr) {}
 
 	uint8 visibilityMode() const;
 	bool  isPublic() const;
@@ -194,15 +195,21 @@ private:
 };
 
 struct PrefixDefinition : DefinitionNode {
+	enum {
+		LOOKUP_HIDE_BEFORE_DECLARATION = 0x4, //Hides local variables before they are declared.
+	};
 
 	PrefixDefinition(SymbolID name,Location& location);
 	virtual Node* parse(Parser* parser) = 0;
+
+	//Used to hide local variables until their declaration.
+	inline bool isHiddenBeforeDeclaration(int resolvingPass) { return isFlagSet(LOOKUP_HIDE_BEFORE_DECLARATION) && resolvingPass != this->generatorDataRound; }
+	inline void makeDeclarationVisible   (int resolvingPass) { this->generatorDataRound = resolvingPass; }
 
 	virtual Overloadset* asOverloadset(){ return nullptr; }
 
 	//For resolving symbols after parsing
 	virtual Node* createReference(){ return nullptr; }
-
 };
 
 struct InfixDefinition : DefinitionNode {
@@ -294,6 +301,7 @@ struct NodeList : Node {
 	inline void addChild(Node* child) { children.push_back(child); }
 	Node* duplicateChildren(NodeList* dest,DuplicationModifiers* mods) const ;
 
+	void  walkDefiningLocals(Resolver* resolver);
 	Node* optimize(Optimizer* optimizer);
 };
 
@@ -411,6 +419,7 @@ struct CallExpression : Node {
 
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 	Node* optimize(Optimizer* optimizer);
 
 	Node* object;
@@ -422,6 +431,7 @@ struct CallExpression : Node {
 struct LogicalOperation: Node {
 	LogicalOperation(Node* x,Node* y,bool isOr);
 	Type* returnType() const;
+	void  walkDefiningLocals(Resolver* resolver);
 	Node* resolve(Resolver* resolver);
 	Node* optimize(Optimizer* optimizer);
 
@@ -443,6 +453,7 @@ struct FieldAccessExpression : Node {
 	FieldAccessExpression(Node* object,int field);
 	
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 	Node* optimize(Optimizer* optimizer);
 	Type* returnType() const;
 
@@ -464,6 +475,7 @@ struct AssignmentExpression : Node {
 	Type* returnType() const;
 	Node* optimize(Optimizer* optimizer);
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 
 	Node* object;
 	Node* value;
@@ -475,6 +487,7 @@ struct ReturnExpression : Node {
 	ReturnExpression(Node* expression);
 
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 	Node* optimize(Optimizer* optimizer);
 
 	Node* expression;
@@ -499,6 +512,7 @@ struct ThrowExpression: Node {
 	ThrowExpression(Node* node);
 
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 
 	Node* expression;
 	DECLARE_NODE(ThrowExpression);
@@ -511,6 +525,7 @@ struct PointerOperation : Node {
 
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 	Node* optimize(Optimizer* optimizer);
 
 
@@ -540,6 +555,7 @@ struct IfExpression : Node {
 
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 	Node* optimize(Optimizer* optimizer);
 
 	Node* condition;
@@ -560,6 +576,7 @@ struct BlockExpression : NodeList {
 
 	Type* returnType() const;
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 	Node* optimize(Optimizer* optimizer);
 
 	void _duplicate(BlockExpression* dest,DuplicationModifiers* mods) const;
@@ -595,6 +612,7 @@ struct CastExpression : Node {
 	CastExpression(Node* object,Type* type);
 
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 	Type* returnType() const;
 	Node* optimize(Optimizer* optimizer);
 
@@ -666,6 +684,7 @@ struct AccessExpression : AlwaysUnresolved {
 	AccessExpression(Node* object,SymbolID symbol);
 	
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 
 	Node* object;
 	SymbolID symbol;
@@ -678,6 +697,7 @@ struct MatchResolver : NodeList {
 	MatchResolver(Node* object);
 
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 
 	Node* object;
 	DECLARE_TEMPNODE(MatchResolver);
@@ -687,6 +707,7 @@ struct MatchResolver : NodeList {
 // N.B. use getInstance instead of new for creation!
 struct ErrorExpression : AlwaysUnresolved {
 	static ErrorExpression* getInstance(); //avoid multiple creations
+	Node* resolve(Resolver* resolver);
 
 	DECLARE_TEMPNODE(ErrorExpression);
 private:
@@ -700,9 +721,7 @@ struct PrefixMacro: PrefixDefinition {
 	PrefixMacro(Function* f);
 
 	Node* parse(Parser* parser);
-
 	Node* resolve(Resolver* resolver);
-
 	inline Function* func(){ return function; }
 
 	DECLARE_NODE(PrefixMacro);
@@ -715,9 +734,7 @@ struct InfixMacro: InfixDefinition {
 	bool applyProperty(SymbolID name,Node* value);
 
 	Node* parse(Parser* parser,Node* node);
-
 	Node* resolve(Resolver* resolver);
-
 	inline Function* func(){ return function; }
 
 	DECLARE_NODE(InfixMacro);

@@ -188,7 +188,6 @@ struct Analyzer : NodeVisitor {
 			}
 			node->ctfeRegisterID = (uint16)mappingOffset;
 			mappingOffset++;
-			node->setFlag(Variable::ANALYSIS_DECLARED);
 
 			if(!node->asArgument() && needsConstruction(node->type.type())){
 				markLocalVariableUnitialized(node);
@@ -210,9 +209,6 @@ struct Analyzer : NodeVisitor {
 			addInliningWeight(10);
 		}
 		else {
-			if(!node->variable->isFlagSet(Variable::ANALYSIS_DECLARED)){
-				error(node,"Variable usage before declaration!");
-			}
 			markLocalVariableUsage(node,node->variable);
 			addInliningWeight(2);
 		}

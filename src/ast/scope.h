@@ -17,6 +17,7 @@ struct Resolver;
 struct DuplicationModifiers;
 struct PrefixDefinition;
 struct InfixDefinition;
+struct UnresolvedSymbol;
 
 //Scope resolves symbols to corresponding definitions, which tells parser how to parse the encountered symbol
 struct Scope {
@@ -37,6 +38,12 @@ struct Scope {
 	PrefixDefinition* containsPrefix(SymbolID name);
 	void define(PrefixDefinition* definition);
 	void remove(PrefixDefinition* definition);
+
+	//
+	PrefixDefinition* lookup(Resolver* resolver,UnresolvedSymbol* node);
+
+	//not found
+	PrefixDefinition* lookupBestSimilar(SymbolID name,int threshold);
 
 	Overloadset* containsOverloadset(SymbolID name);
 

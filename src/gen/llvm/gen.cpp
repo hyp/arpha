@@ -103,9 +103,10 @@ struct LLVMgenerator: NodeVisitor {
 		def->generatorDataRound = currentGeneratingRound;
 	}
 	inline llvm::Value* unmap(DefinitionNode* def){
+		auto value = reinterpret_cast<llvm::Value*>(def->generatorData);
 		auto round = def->generatorDataRound;
-		if(round != currentGeneratingRound) return nullptr;
-		return reinterpret_cast<llvm::Value*>(def->generatorData);
+		if(!value || round != currentGeneratingRound) return nullptr;
+		return value;
 	}
 	inline static void map(DeclaredType* type,llvm::Type* value){
 		type->generatorData = value;
@@ -1836,7 +1837,7 @@ namespace gen {
 		
 		LLVMgenerator generator(getGlobalContext(),roots,rootCount,module,passManager,round);
 		round++;
-		module->dump();
+		//module->dump();
 		
 		bool isWinMSVS = target->platform == data::gen::AbstractTarget::Platform::WINDOWS || target->platform == data::gen::AbstractTarget::Platform::WINDOWS_RT;
 		std::string path;

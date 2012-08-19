@@ -83,11 +83,11 @@ void mapIntegerOperations(const char* t1){
 	MAPOP(std::string("shl")+base2,data::ast::Operations::LEFT_SHIFT);
 	MAPOP(std::string("shr")+base2,data::ast::Operations::RIGHT_SHIFT);
 
-	MAPOP(std::string("equals")+base2,data::ast::Operations::EQUALITY_COMPARISON);
-	MAPOP(std::string("less")+base2,data::ast::Operations::LESS_COMPARISON);
-	MAPOP(std::string("greater")+base2,data::ast::Operations::GREATER_COMPARISON);
-	MAPOP(std::string("lessEquals")+base2,data::ast::Operations::LESS_EQUALS_COMPARISON);
-	MAPOP(std::string("greaterEquals")+base2,data::ast::Operations::GREATER_EQUALS_COMPARISON);
+	MAPOP(std::string("==")+base2,data::ast::Operations::EQUALITY_COMPARISON);
+	MAPOP(std::string("<")+base2,data::ast::Operations::LESS_COMPARISON);
+	MAPOP(std::string(">")+base2,data::ast::Operations::GREATER_COMPARISON);
+	MAPOP(std::string("<=")+base2,data::ast::Operations::LESS_EQUALS_COMPARISON);
+	MAPOP(std::string(">=")+base2,data::ast::Operations::GREATER_EQUALS_COMPARISON);
 }
 void mapRealOperations(const char* t1){
 	std::string base1 = std::string("(") + t1 + ")";
@@ -100,11 +100,11 @@ void mapRealOperations(const char* t1){
 	MAPOP(std::string("divide")+base2,data::ast::Operations::DIVISION);
 	MAPOP(std::string("remainder")+base2,data::ast::Operations::REMAINDER);
 
-	MAPOP(std::string("equals")+base2,data::ast::Operations::EQUALITY_COMPARISON);
-	MAPOP(std::string("less")+base2,data::ast::Operations::LESS_COMPARISON);
-	MAPOP(std::string("greater")+base2,data::ast::Operations::GREATER_COMPARISON);
-	MAPOP(std::string("lessEquals")+base2,data::ast::Operations::LESS_EQUALS_COMPARISON);
-	MAPOP(std::string("greaterEquals")+base2,data::ast::Operations::GREATER_EQUALS_COMPARISON);
+	MAPOP(std::string("==")+base2,data::ast::Operations::EQUALITY_COMPARISON);
+	MAPOP(std::string("<")+base2,data::ast::Operations::LESS_COMPARISON);
+	MAPOP(std::string(">")+base2,data::ast::Operations::GREATER_COMPARISON);
+	MAPOP(std::string("<=")+base2,data::ast::Operations::LESS_EQUALS_COMPARISON);
+	MAPOP(std::string(">=")+base2,data::ast::Operations::GREATER_EQUALS_COMPARISON);
 
 	MAPOP(std::string("abs")+base1,data::ast::Operations::MATH_ABS);
 	MAPOP(std::string("pow")+base2,data::ast::Operations::MATH_POW);
@@ -124,7 +124,7 @@ void mapCharOperations(const char* t1){
 	std::string base1 = std::string("(") + t1 + ")";
 	std::string base2 = std::string("(") + t1 + "," + t1 + ")";
 
-	MAPOP(std::string("equals")+base2,data::ast::Operations::EQUALITY_COMPARISON);
+	MAPOP(std::string("==")+base2,data::ast::Operations::EQUALITY_COMPARISON);
 }
 
 void mapStandartOperations(Type* t){
@@ -140,7 +140,7 @@ void mapStandartOperations(Type* t){
 	}
 	else if(t->isBool()){
 		MAPOP("not(bool)",data::ast::Operations::NEGATION);
-		MAPOP("equals(bool,bool)",data::ast::Operations::EQUALITY_COMPARISON);
+		MAPOP("==(bool,bool)",data::ast::Operations::EQUALITY_COMPARISON);
 	}
 }
 
@@ -168,7 +168,7 @@ static void initMapping(){
 	/**
 	* arpha.types
 	*/
-	MAP("equals(Type,Type)",   { invocation->ret(invocation->getTypeParameter(0)->isSame(invocation->getTypeParameter(1))); });
+	MAP("==(Type,Type)",   { invocation->ret(invocation->getTypeParameter(0)->isSame(invocation->getTypeParameter(1))); });
 	MAP("isParametrized(Type)",{ invocation->ret(invocation->getTypeParameter(0)->wasGenerated()); });
 
 	//arpha.ast.ast

@@ -17,15 +17,20 @@ private:
 	Scope* _currentScope;
 	Node* _currentParent;
 	Node* _prevNode;
-	bool reportUnevaluated;
 	size_t unresolvedExpressions;
+
 public:
+	int   _pass;
+	bool _reportUnresolved;
 	bool treatUnresolvedTypesAsResolved; //Used to resolve circular type definitions or type definitions which depend on self
 	bool isRHS; // = false
 	Trait* currentTrait;       // Required for the trait prerequisuite.
 	Function* currentFunction; // The function we are currently resolving. Can be null.
 	data::ast::VisibilityMode currentVisibilityMode;
 	std::vector<ScopedCommand*> whereStack;
+
+	//Varios stages.
+	inline bool isReportingUnresolvedNodes() { return _reportUnresolved; }
  
 
 	// Sometimes we know that we want an expression of certain type at a given place e.g. var x Foo <- we expect Foo to be TypeExpression
@@ -44,7 +49,7 @@ public:
 	Node* resolve(Node* node);
 	Node* resolve(Node* node,Node* previous);
 
-	Node* multipassResolve(Node* node);
+	Node* multipassResolve(Node* node,bool quasi = false);
 
 	// Resolves expressions and definitions in a module using multiple passes
 	void resolveModule(BlockExpression* module);
@@ -57,10 +62,10 @@ public:
 
 	Node* inlineCall(Function* function,Node* parameters);
 
-	void reportUnresolvedNode(Node* node);
-
 	inline Scope* currentScope() const        { return _currentScope;  }
 	inline void currentScope(Scope* scope)    { _currentScope = scope; }
+
+	void makeDeclarationVisible(PrefixDefinition* node);
 
 	inline void currentParentNode(Node* node) { _currentParent = node; }
 	inline Node* currentParentNode() const    { return _currentParent; }
@@ -68,7 +73,6 @@ public:
 	inline Node* previousNode() const { return _prevNode; }
 
 	inline void markResolved(Node* node){ node->setFlag(Node::RESOLVED); }
-	void markUnresolved(Node* node);
 
 	//function overloads resolving
 
@@ -81,9 +85,19 @@ public:
 
 	Function* resolveFunctionCall(Scope* scope,SymbolID function,Node** parameter,bool dotSyntax = false,bool reportMultipleOverloads = false);
 
+
+
 private:
 	void onFirstMultipleOverload(Function* function,int distance,Node* arg);
 	void onMultipleOverload(Function* function);
+
+	//Unresolved node error reporting
+	void reportUnresolved(UnresolvedSymbol* node);
+	void reportUnresolved(CallExpression* node);
+	void reportUnresolved(Function* node);
+	Node* reportUnresolvedNode(Node* node);
+
+	void reportUnresolvedNodes(Node* root);
 };
 
 namespace overloads {

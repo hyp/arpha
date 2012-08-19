@@ -26,6 +26,21 @@ namespace data {
 			enum Flags {
 				NONTHROW = 0x1,
 			};
+
+			//internal flags used only for function declarations
+			namespace Internal {
+				enum  Flags {
+					UNITTEST = 0x100,
+					EXTERNAL = 0x200,
+					INTRINSIC = 0x400,
+					INTRINSIC_RETURNS_PATTERN = 0x800,
+					INTRINSIC_OPERATION = 0x1000,
+					//Type's fields are hidden behind macro getters.
+					MACRO_FIELD_ACCESS = 0x2000,
+					//This function generates a type as a result of it's invocation. It allows it to act as a type in type patterns.
+					TYPE_TEMPLATE = 0x4000,
+				};
+			};
 		}
 
 		namespace Search {

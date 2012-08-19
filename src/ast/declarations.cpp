@@ -20,9 +20,15 @@ IntrinsicInfixMacro::IntrinsicInfixMacro(SymbolID name,int stickiness) : InfixDe
 
 //variable
 Variable::Variable(SymbolID name,Location& location) : PrefixDefinition(name,location),value(nullptr) {
+	setFlag(LOOKUP_HIDE_BEFORE_DECLARATION);
+	generatorDataRound = 0;
+
 	_owner = nullptr;
 }
 Variable::Variable(SymbolID name,Location& location,Scope* owner,Node* value) : PrefixDefinition(name,location){
+	setFlag(LOOKUP_HIDE_BEFORE_DECLARATION);
+	generatorDataRound = 0;
+
 	_owner = owner;
 	specifyType(value->returnType());
 	setFlag(IS_IMMUTABLE);
@@ -85,6 +91,7 @@ Argument* Variable::asArgument(){ return nullptr; }
 Argument* Argument::asArgument(){ return this; }
 
 Argument::Argument(SymbolID name,Location& location,Function* owner) : Variable(name,location),	_defaultValue(nullptr),_hiddenType(nullptr) {
+	flags &= (~LOOKUP_HIDE_BEFORE_DECLARATION);//Not required
 	_owner = owner->body.scope;
 }
 void Argument::hideType(Type* givenType){
@@ -122,14 +129,14 @@ bool Argument::isDependent() const {
 Overloadset::Overloadset(Function* firstFunction) : PrefixDefinition(firstFunction->label(),firstFunction->location()) {
 	visibilityMode(firstFunction->visibilityMode());
 	functions.push_back(firstFunction);
-	if(firstFunction->isFlagSet(Function::TYPE_GENERATOR_FUNCTION)) setFlag(TYPE_GENERATOR_SET);
+	if(firstFunction->isTypeTemplate()) setFlag(TYPE_GENERATOR_SET);
 	setFlag(Node::RESOLVED);
 }
 Overloadset* Overloadset::asOverloadset(){
 	 return this;
 }
 void Overloadset::push_back(Function* function){
-	if(isFlagSet(TYPE_GENERATOR_SET) && !function->isFlagSet(Function::TYPE_GENERATOR_FUNCTION)){
+	if(isFlagSet(TYPE_GENERATOR_SET) && !function->isTypeTemplate()){
 		error(function,"Can't add the function %s to type overload set",function->label());
 		return;
 	}
@@ -149,28 +156,19 @@ Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,loc
 
 bool   Function::applyProperty(SymbolID name,Node* value){
 	if(name == "intrinsic"){
-		setFlag(IS_INTRINSIC);
+		miscFlags |= data::ast::Function::Internal::INTRINSIC;
 		return true;
 	} else if(name == "external"){
-		setFlag(IS_EXTERNAL);
+		miscFlags |= data::ast::Function::Internal::EXTERNAL;
 		return true;
 	} else if(name == "nonthrow"){
 		setNonthrow();
 		return true;
 	} else if(name == "unittest"){
-		miscFlags |= 0x80;//TODO: change for proper flag
+		miscFlags |= data::ast::Function::Internal::UNITTEST;
 		return true;
 	}
 	return false;
-}
-bool  Function::isTest() const {
-	return (miscFlags & 0x80) != 0;
-}
-bool   Function::isIntrinsic() const {
-	return isFlagSet(IS_INTRINSIC);
-}
-bool   Function::isExternal() const {
-	return isFlagSet(IS_EXTERNAL);
 }
 data::ast::Function::CallConvention Function::callingConvention() const {
 	return (data::ast::Function::CallConvention)cc;
@@ -234,30 +232,32 @@ Type* Function::returnType() const {
 }
 
 //field access macro function
+#define IMPL_PROP_SET(flag) { miscFlags |= flag; }
+
+void Function::makeIntrinsic()                 IMPL_PROP_SET(data::ast::Function::Internal::INTRINSIC)
+void Function::makeIntrinsicReturningPattern() IMPL_PROP_SET(data::ast::Function::Internal::INTRINSIC_RETURNS_PATTERN)
+void Function::makeIntrinsicOperation(data::ast::Operations::Kind op){
+	IMPL_PROP_SET(data::ast::Function::Internal::INTRINSIC_OPERATION);
+	ctfeRegisterCount = op;
+}
 void Function::makeFieldAccess(int fieldId) {
-	setFlag(FIELD_ACCESS_FUNCTION);
+	IMPL_PROP_SET(data::ast::Function::Internal::MACRO_FIELD_ACCESS);
+	assert(fieldId <= std::numeric_limits<uint16>::max());
 	ctfeRegisterCount = fieldId;
 }
 int  Function::getField() const {
 	return ctfeRegisterCount;
 }
-void Function::makeIntrinsicOperation(data::ast::Operations::Kind op){
-	setFlag(IS_INTRINSIC_OPERATION);
-	ctfeRegisterCount = op;
-}
-void Function::makeIntrinsicReturningPattern(){
-	setFlag(INTRINSIC_FUNCTION_RETURNS_PATTERNED_DEFINITION);
-	//_returnType.kind =  TypePatternUnresolvedExpression::TYPE;
-	//_returnType._type = intrinsics::types::Void;
-}
 void Function::makeTypeTemplate(TypeDeclaration* node){
 	makeAllArgumentsExpendable();
-	setFlag(TYPE_GENERATOR_FUNCTION);
+	IMPL_PROP_SET(data::ast::Function::Internal::TYPE_TEMPLATE)
 	body.addChild(node);
 }
 TypeDeclaration* Function::getTemplateTypeDeclaration(){
 	return (*body.begin())->asTypeDeclaration();
 }
+
+#undef IMPL_PROP_SET
 
 Node*  Function::duplicate(DuplicationModifiers* mods) const{
 	return const_cast<Function*>(this)->reallyDuplicate(mods);
@@ -302,7 +302,11 @@ ImportedScope::ImportedScope(SymbolID name,Location& location) : PrefixDefinitio
 }
 
 //Macroes
-PrefixMacro::PrefixMacro(Function* f) : PrefixDefinition(f->label(),f->location()),function(f) {}
+PrefixMacro::PrefixMacro(Function* f) : PrefixDefinition(f->label(),f->location()),function(f) {
+	//NB: makes this invisible at resolving stage.
+	setFlag(LOOKUP_HIDE_BEFORE_DECLARATION);
+	generatorDataRound =0;
+}
 Node* PrefixMacro::duplicate(DuplicationModifiers* mods) const {
 	auto macro = new PrefixMacro(function->reallyDuplicate(mods,false));
 	mods->duplicateDefinition(const_cast<PrefixMacro*>(this),macro);

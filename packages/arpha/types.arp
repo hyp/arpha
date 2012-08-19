@@ -79,5 +79,5 @@ type Array(T,N natural)
 	
 	isParametrized returns true if a type is parametrize e.g. Pointer(int32) is parametrized by int32
 #
-def equals(type Type,other Type) bool
+def ==(type Type,other Type)  bool
 def isParametrized(type Type) bool

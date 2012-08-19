@@ -42,12 +42,11 @@ struct Variable : PrefixDefinition  {
 	enum {
 		//The type that the variable returns isn't equal to the type that the variable was defined with 
 		// e.g. macro foo(x) = x  , x will be _ pattern on declaration, but really it is a *ast.Expression
-		HIDDEN_TYPE = 0x4 ,
-		IS_IMMUTABLE = 0x8,//def
-		CONSTANT_SUBSTITUTE = 0x10,//def a = 1 => an occurence of a will be replaced by 1. Make sure value is set before setting this flag.
-		ANALYSIS_DECLARED = 0x20,
-		IS_THREADLOCAL = 0x40,
-		ANALYSIS_USED = 0x80,
+		HIDDEN_TYPE = 0x10 ,
+		IS_IMMUTABLE = 0x20,//def
+		CONSTANT_SUBSTITUTE = 0x40,//def a = 1 => an occurence of a will be replaced by 1. Make sure value is set before setting this flag.
+		IS_THREADLOCAL = 0x80,
+		ANALYSIS_USED = 0x100,
 	};
 	Variable(SymbolID name,Location& location);
 	Variable(SymbolID name,Location& location,Scope* owner,Node* value);//constant injection
@@ -61,6 +60,7 @@ struct Variable : PrefixDefinition  {
 	inline Node* asConstantSubstitute(){ return isFlagSet(CONSTANT_SUBSTITUTE) ? value : nullptr; }
 
 	Node* resolve(Resolver* resolver);
+	void  walkDefiningLocals(Resolver* resolver);
 	//Use at variable's definition when a type is specified
 	void specifyType(Type* givenType);
 	//Matches a type to a patterned type and resolves the patterned type. Returns an error if match fails.
@@ -84,7 +84,7 @@ struct Variable : PrefixDefinition  {
 
 struct Argument : Variable {
 	enum {
-		IS_EXPENDABLE = 0x10, //Is this argument expendable?
+		IS_EXPENDABLE = 0x80, //Is this argument expendable?
 		IS_VARARG = 0x40
 	};
 
@@ -140,55 +140,38 @@ struct Function: public PrefixDefinition {
 	enum {
 		//Indicates whether some function, which can be evaluated at compile time,
 		//is allowed to be interpreted only when it's owner function is being interpreted
-		INTERPRET_ONLY_INSIDE = 0x4,
+		INTERPRET_ONLY_INSIDE = 0x10,
 
 		//This function is a body of constraint, it allows it to act as a type in type patterns
-		CONSTRAINT_FUNCTION = 0x8,
+		CONSTRAINT_FUNCTION = 0x20,
 
 		//This function is a body of a macro
-		MACRO_FUNCTION = 0x10,
+		MACRO_FUNCTION = 0x40,
 
 		//Is there a return expression present?
-		CONTAINS_RETURN = 0x20,
+		CONTAINS_RETURN = 0x80,
 
 		//This function can't be interpreted at compile time
-		CANT_CTFE = 0x40,
+		CANT_CTFE = 0x100,
 
 		//This function is pure
-		PURE = 0x80,
-
-		//This function generates a type as a result of it's invocation. It allows it to act as a type in type patterns.
-		TYPE_GENERATOR_FUNCTION = 0x100,
+		PURE = 0x200,
 
 		//Does this function have at least one pattern argument? 
 		// (If it does this function can be specialized)
-		HAS_PATTERN_ARGUMENTS = 0x200,
+		HAS_PATTERN_ARGUMENTS = 0x400,
 
 		//Does this function have at least one expendable argument? 
 		// (If it does this function can be simplified by bringing the arguments like types from the invocation into the function itself)
 		// The function expansion based on expendable arguments is very similar to templates!
-		HAS_EXPENDABLE_ARGUMENTS = 0x400,
+		HAS_EXPENDABLE_ARGUMENTS = 0x800,
 
-		//Use intrinsic
-		IS_INTRINSIC = 0x800,
-
-		//use external
-		IS_EXTERNAL = 0x1000,
-
-		FIELD_ACCESS_FUNCTION = 0x2000, //optimization
-
-		IS_INTRINSIC_OPERATION = 0x4000,
-
-		INTRINSIC_FUNCTION_RETURNS_PATTERNED_DEFINITION = 0x8000,
 	};
 
 	Function(SymbolID name,Location& location);
 
-	bool applyProperty(SymbolID name,Node* value);
-
 	void dumpDeclaration(Dumper& dumper) const;
 
-	
 	Node* parse(Parser* parser);
 	Node* createReference();
 
@@ -197,15 +180,42 @@ struct Function: public PrefixDefinition {
 
 	Type* returnType() const;
 
+	//Properties:
+	bool applyProperty(SymbolID name,Node* value);
 	void makeAllArgumentsExpendable(); //Makes all arguments to be expendable, essentialy making this function a template.
 
-	//Calling convention
-	bool isExternal() const;
-	bool isIntrinsic() const;
-	data::ast::Function::CallConvention callingConvention() const;
-	bool isTest() const;
+#define IMPL_PROP_GET(flag) const { return (miscFlags & flag) != 0; }
 
-	Type* argumentType() const;
+	void setNonthrow();
+	inline bool isNonthrow()    IMPL_PROP_GET(data::ast::Function::NONTHROW)
+
+	inline bool isTest()        IMPL_PROP_GET(data::ast::Function::Internal::UNITTEST)
+	inline bool isExternal()    IMPL_PROP_GET(data::ast::Function::Internal::EXTERNAL)
+
+	inline bool isIntrinsic()   IMPL_PROP_GET(data::ast::Function::Internal::INTRINSIC)
+	inline bool isIntrinsicReturningPattern() IMPL_PROP_GET(data::ast::Function::Internal::INTRINSIC_RETURNS_PATTERN)
+	inline bool isIntrinsicOperation() IMPL_PROP_GET(data::ast::Function::Internal::INTRINSIC_OPERATION)
+	inline data::ast::Operations::Kind getOperation() const { return (data::ast::Operations::Kind)ctfeRegisterCount; }
+	void makeIntrinsic();
+	void makeIntrinsicReturningPattern();
+	void makeIntrinsicOperation(data::ast::Operations::Kind op);
+	static Type* getIntrinsicOperationReturnType(Type* operand1,data::ast::Operations::Kind op);
+
+	inline bool isFieldAccessMacro() IMPL_PROP_GET(data::ast::Function::Internal::MACRO_FIELD_ACCESS)
+	void makeFieldAccess(int fieldId);
+	int  getField() const;
+
+	inline bool isTypeTemplate() IMPL_PROP_GET(data::ast::Function::Internal::TYPE_TEMPLATE)
+	void makeTypeTemplate(TypeDeclaration* node);
+	TypeDeclaration* getTemplateTypeDeclaration();
+
+#undef IMPL_PROP_GET
+
+	data::ast::Function::CallConvention callingConvention() const;
+
+	//..
+
+	Type* argumentType() const;//Packs all arguments into a tuple.
 	Type* returns() const;
 	Scope* owner() const;
 	Scope* parameterPatternMatchingScope() const;
@@ -216,40 +226,20 @@ struct Function: public PrefixDefinition {
 
 	Function* reallyDuplicate(DuplicationModifiers* mods,bool redefine = true);
 
-	void setNonthrow();
-	inline bool isNonthrow(){ return (miscFlags & data::ast::Function::NONTHROW) != 0; }
-
 	//Returns -1 when an argument isn't found
 	int findArgument(Variable* var) const;
 	void addArgument(Argument* arg);
 	void specifyReturnType(Type* givenType);
-
-	void makeFieldAccess(int fieldId);
-	inline bool isFieldAccessMacro(){ return isFlagSet(FIELD_ACCESS_FUNCTION); }
-	int  getField() const;
-
-	void makeIntrinsicOperation(data::ast::Operations::Kind op);
-	inline bool isIntrinsicOperation() const { return isFlagSet(IS_INTRINSIC_OPERATION); }
-	inline data::ast::Operations::Kind getOperation() const { return (data::ast::Operations::Kind)ctfeRegisterCount; }
-	static Type* getIntrinsicOperationReturnType(Type* operand1,data::ast::Operations::Kind op);
-
-	inline bool isTypeTemplate() const { return isFlagSet(TYPE_GENERATOR_FUNCTION); }
-	void makeTypeTemplate(TypeDeclaration* node);
-	TypeDeclaration* getTemplateTypeDeclaration();
-
-	void makeIntrinsicReturningPattern();
-	inline bool isIntrinsicReturningPattern() const { return isFlagSet(INTRINSIC_FUNCTION_RETURNS_PATTERNED_DEFINITION); }
 
 	std::vector<Argument*> arguments;
 	TypePatternUnresolvedExpression _returnType;
 	BlockExpression body;
 	TypePatternUnresolvedExpression::PatternMatcher allArgMatcher; //a fused matcher is used so that a patterned argument will be able to acess introduced definitons from other patterns
 	//expanded
+	uint32 miscFlags;
 	uint16 ctfeRegisterCount;
 	uint16 inliningWeight;
 	uint8  cc;
-	uint8  miscFlags;
-
 
 
 	typedef void (*CTFE_Binder)(CTFEintrinsicInvocation* invocation);
@@ -267,6 +257,7 @@ struct Function: public PrefixDefinition {
 	
 	DECLARE_NODE(Function);
 private:
+
 	Function* duplicateReturnBody(DuplicationModifiers* mods,Function* func) const;
 	
 	
@@ -290,11 +281,5 @@ struct ImportedScope : PrefixDefinition {
 	Node* duplicate(DuplicationModifiers* mods) const { assert(false); return nullptr; }
 	Node* accept(NodeVisitor* visitor){ return this; }
 };
-
-//Macroes
-
-
-
-
 
 #endif

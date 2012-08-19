@@ -4,7 +4,7 @@
 import arpha.intrinsic
 
 macro defineCharacterOperations(T Type) = [>
-	def equals(x $T,y $T) bool
+	def ==(x $T,y $T) bool
 <]
 
 defineCharacterOperations(char8)

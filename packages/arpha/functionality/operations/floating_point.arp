@@ -12,11 +12,11 @@ macro defineRealOperations(T Type) = [>
 	def divide(x $T,y $T) $T
 	def remainder(x $T,y $T) $T
 	
-	def equals(x $T,y $T) bool
-	def less(x $T,y $T) bool
-	def greater(x $T,y $T) bool
-	def lessEquals(x $T,y $T) bool
-	def greaterEquals(x $T,y $T) bool
+	def ==(x $T,y $T) bool
+	def <(x $T,y $T) bool
+	def >(x $T,y $T) bool
+	def <=(x $T,y $T) bool
+	def >=(x $T,y $T) bool
 <]
 
 defineRealOperations(float)
