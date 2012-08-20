@@ -166,6 +166,8 @@ struct Function: public PrefixDefinition {
 		// The function expansion based on expendable arguments is very similar to templates!
 		HAS_EXPENDABLE_ARGUMENTS = 0x800,
 
+		ARGUMENTS_RESOLVED = 0x1000,
+
 	};
 
 	Function(SymbolID name,Location& location);
@@ -181,6 +183,8 @@ struct Function: public PrefixDefinition {
 	Type* returnType() const;
 
 	//Properties:
+	inline bool areArgumentsResolved() const { return isFlagSet(ARGUMENTS_RESOLVED); }
+
 	bool applyProperty(SymbolID name,Node* value);
 	void makeAllArgumentsExpendable(); //Makes all arguments to be expendable, essentialy making this function a template.
 
@@ -191,6 +195,7 @@ struct Function: public PrefixDefinition {
 
 	inline bool isTest()        IMPL_PROP_GET(data::ast::Function::Internal::UNITTEST)
 	inline bool isExternal()    IMPL_PROP_GET(data::ast::Function::Internal::EXTERNAL)
+	inline bool isDllimport()   IMPL_PROP_GET(data::ast::Function::Internal::EXTERNAL_DLLIMPORT)
 
 	inline bool isIntrinsic()   IMPL_PROP_GET(data::ast::Function::Internal::INTRINSIC)
 	inline bool isIntrinsicReturningPattern() IMPL_PROP_GET(data::ast::Function::Internal::INTRINSIC_RETURNS_PATTERN)

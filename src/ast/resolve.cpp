@@ -479,90 +479,20 @@ Node* CallExpression::resolve(Resolver* resolver){
 	
 
 	// symbol(arg)
+	bool functionJustFound = false;
+	Function* func = nullptr;
 	if(auto callingOverloadSet = object->asUnresolvedSymbol()){
-
-		
 		auto scope = (callingOverloadSet->explicitLookupScope ? callingOverloadSet->explicitLookupScope : resolver->currentScope());
 		resolver->expectedTypeForEvaluatedExpression = nullptr;
-		if(auto func =  resolver->resolveFunctionCall(scope,callingOverloadSet->symbol,&arg,isFlagSet(DOT_SYNTAX))){
+		if(auto f =  resolver->resolveFunctionCall(scope,callingOverloadSet->symbol,&arg,isFlagSet(DOT_SYNTAX))){
 			resolver->expectedTypeForEvaluatedExpression = oldType;
-			//macro
-			if(func->isFlagSet(Function::MACRO_FUNCTION)){
-				if(func->intrinsicCTFEbinder){
-					CTFEintrinsicInvocation i(resolver->compilationUnit());
-					i.invoke(func,arg);
-					if(auto err = i.result()->asErrorExpression()) return err;
-					auto result = i.result()->asNodeReference()->node();
-					if(auto block = result->asBlockExpression()) block->scope->parent = resolver->currentScope();
-					return resolver->resolve(copyLocationSymbol(result));
-				}
-				else return resolver->executeAndMixinMacro(func,arg);
-			}
-			else if(func->isTypeTemplate() && !func->isIntrinsic()){
-				debug("Type generation functions booyah!");
-				return resolver->resolve(copyLocationSymbol(func->getTemplateTypeDeclaration()->createReference()));
-			}
-			else if(func->isFieldAccessMacro()){
-				if(auto t = arg->asTupleExpression()){
-					assert(t->size() == 2);
-					return resolver->resolve(copyLocationSymbol(new AssignmentExpression( new FieldAccessExpression(*t->begin(),func->getField()) , *(t->begin()+1) )));
-				}
-				return resolver->resolve(copyProperties(new FieldAccessExpression(arg,func->getField())));
-			} else if(func->isIntrinsicOperation()){
-				if(func->getOperation() == data::ast::Operations::TYPE_IS){
-					auto result = resolveIS(resolver,this);
-					if(result != this) return result;
-				}
-				else if(arg->isConst()) return resolver->resolve(copyLocationSymbol(evaluateConstantOperation(func->getOperation(),arg)));
-			}
-			object = resolver->resolve(new FunctionReference(func));
-			if(!func->isResolved()){
-				assert(func->generatedFunctionParent);
-				return this;
-			}
-			resolver->markResolved(this);
-			if(func->intrinsicCTFEbinder && !func->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && arg->isConst()){
-				CTFEintrinsicInvocation i(resolver->compilationUnit());
-				i.invoke(func,arg);
-				return resolver->resolve(copyLocationSymbol(i.result()));
-			}
-			if(func->isIntrinsicOperation() && func->getOperation() == data::ast::Operations::ELEMENT_GET){
-				auto tuple = arg->asTupleExpression();
-				if(tuple){
-					auto ret = (*tuple->begin())->returnType();
-					if(ret->isPointer() && ret->next()->isStaticArray()){
-						if(auto lit = (*(arg->asTupleExpression()->begin()+1))->asIntegerLiteral()){
-							if(lit->integer.isNegative() || lit->integer.u64 >= ret->next()->asStaticArray()->length()){
-								error(this,"Array index %s is out of bounds!",lit->integer.u64);
-								return ErrorExpression::getInstance();
-							}
-						}
-					}
-				}
-			}
+			func= f;
+			functionJustFound = true;
 		}
 		else resolver->expectedTypeForEvaluatedExpression = oldType;
 	} 
 	else if(auto callingFunc = object->asFunctionReference()){
-		if(!callingFunc->function->isResolved()){
-			/**
-			NB: given the situation:
-			    type Bar(T) { var x T; def foo(self) = self.x }
-			    var bar Bar(int32)
-			    bar.foo
-			where the expansion of foo(x *Bar(int32)) can't be resolved straight away, we resolve the function ourselves
-			*/
-			assert(callingFunc->function->generatedFunctionParent);
-			if(!resolver->resolveSpecialization(callingFunc->function))
-				return this;
-		}
-		resolver->markResolved(this);
-		auto func = callingFunc->function;
-		if(func->intrinsicCTFEbinder && !func->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && arg->isConst()){
-			CTFEintrinsicInvocation i(resolver->compilationUnit());
-			i.invoke(func,arg);
-			return resolver->resolve(copyLocationSymbol(i.result()));
-		}
+		func = callingFunc->function;
 	}
 	else if(auto callingAccess = object->asAccessExpression()){
 		return resolver->resolve(transformCallOnAccess(this,callingAccess));
@@ -577,8 +507,86 @@ Node* CallExpression::resolve(Resolver* resolver){
 		resolver->markResolved(this);
 	}
 	else {
-		error(object,"Invalid call expression - the object '%s' isn't callable with parameter %s!",object,arg);
+		if(!object->asErrorExpression()) error(object,"Invalid call expression - the object '%s' isn't callable with parameter %s!",object,arg);
 		return ErrorExpression::getInstance();
+	}
+
+	if(func){
+		if(!func->isResolved()){
+			if(func->generatedFunctionParent){
+				/**
+				NB: given the situation:
+					type Bar(T) { var x T; def foo(self) = self.x }
+					var bar Bar(int32)
+					bar.foo
+				where the expansion of foo(x *Bar(int32)) can't be resolved straight away, we resolve the function ourselves
+				*/
+				if(functionJustFound){
+					object = new FunctionReference(func);
+					return this;
+				}
+				else if(!resolver->resolveSpecialization(func))
+					return this;
+			}
+			else return this;
+		}
+
+		if(func->isFlagSet(Function::MACRO_FUNCTION)){
+			if(func->intrinsicCTFEbinder){
+				CTFEintrinsicInvocation i(resolver->compilationUnit());
+				i.invoke(func,arg);
+				if(auto err = i.result()->asErrorExpression()) return err;
+				auto result = i.result()->asNodeReference()->node();
+				if(auto block = result->asBlockExpression()) block->scope->parent = resolver->currentScope();
+				return resolver->resolve(copyLocationSymbol(result));
+			}
+			else return resolver->executeAndMixinMacro(func,arg);
+		}
+		else if(func->isTypeTemplate() && !func->isIntrinsic()){
+			debug("Type generation functions booyah!");
+			return resolver->resolve(copyLocationSymbol(func->getTemplateTypeDeclaration()->createReference()));
+		}
+		else if(func->isFieldAccessMacro()){
+			if(auto t = arg->asTupleExpression()){
+				assert(t->size() == 2);
+				return resolver->resolve(copyLocationSymbol(new AssignmentExpression( new FieldAccessExpression(*t->begin(),func->getField()) , *(t->begin()+1) )));
+			}
+			return resolver->resolve(copyProperties(new FieldAccessExpression(arg,func->getField())));
+		} else if(func->isIntrinsicOperation()){
+			if(func->getOperation() == data::ast::Operations::TYPE_IS){
+				auto result = resolveIS(resolver,this);
+				if(result != this) return result;
+			}
+			else if(arg->isConst()) return resolver->resolve(copyLocationSymbol(evaluateConstantOperation(func->getOperation(),arg)));
+		}
+		
+		if(functionJustFound) object = resolver->resolve(new FunctionReference(func));
+		if(!func->isResolved()){
+			assert(func->generatedFunctionParent);
+			return this;
+		}
+		resolver->markResolved(this);
+		if(func->intrinsicCTFEbinder && !func->isFlagSet(Function::INTERPRET_ONLY_INSIDE) && arg->isConst()){
+			CTFEintrinsicInvocation i(resolver->compilationUnit());
+			i.invoke(func,arg);
+			return resolver->resolve(copyLocationSymbol(i.result()));
+		}
+
+		//Verify op
+		if(func->isIntrinsicOperation() && func->getOperation() == data::ast::Operations::ELEMENT_GET){
+			auto tuple = arg->asTupleExpression();
+			if(tuple){
+			auto ret = (*tuple->begin())->returnType();
+				if(ret->isPointer() && ret->next()->isStaticArray()){
+					if(auto lit = (*(arg->asTupleExpression()->begin()+1))->asIntegerLiteral()){
+						if(lit->integer.isNegative() || lit->integer.u64 >= ret->next()->asStaticArray()->length()){
+							error(this,"Array index %s is out of bounds!",lit->integer.u64);
+							return ErrorExpression::getInstance();
+						}
+					}
+				}
+			}
+		}
 	}
 
 	return this;
@@ -1647,6 +1655,7 @@ Node* Function::resolve(Resolver* resolver){
 		}
 	}
 
+	setFlag(ARGUMENTS_RESOLVED);
 	//If this is a generic or expendable function don't resolve body and return type!
 	if( isFlagSet(HAS_EXPENDABLE_ARGUMENTS) || isFlagSet(HAS_PATTERN_ARGUMENTS) || this->isFieldAccessMacro()){
 		if(resolver->currentTrait){
@@ -2359,9 +2368,7 @@ Function* Resolver::resolveFunctionCall(Scope* scope,SymbolID function,Node** pa
 		if(foundOverload && overload.currentDistance() > foundDistance) break;
 
 		//TODO: recurive calls
-		if(!overload.currentFunction()->isResolved()){
-			if(overload.currentFunction() != this->currentFunction) return nullptr;
-		}
+		if(!overload.currentFunction()->areArgumentsResolved()) return nullptr;
 
 		if(match(this,overload.currentFunction(),arg,weight)){
 

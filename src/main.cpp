@@ -490,7 +490,7 @@ struct ClOptionApplier {
 	}
 };
 
-void buildPackages(gen::LLVMBackend& backend,std::vector<std::string>& files){
+void buildPackages(gen::LLVMBackend& backend,gen::Linker* linker,gen::DllDefGenerator& dllDefGenerator,std::vector<std::string>& files){
 	std::vector<Node*> modules;
 	for(auto i = compiler::packages.begin(); i!=compiler::packages.end();++i){
 		
@@ -501,6 +501,20 @@ void buildPackages(gen::LLVMBackend& backend,std::vector<std::string>& files){
 		for(size_t j = 0;j<moduleCount;j++) modules[j] = i->second.modules[j]->second.body;
 		files.push_back(backend.generateModule(modules.begin()._Ptr,modules.size(),i->first.c_str(),"arpha_cache"));
 		modules.clear();
+
+		if(linker){
+			
+			std::string libs = i->first + "/";
+			dllDefGenerator.gen(libs.c_str());
+			if(dllDefGenerator.generatedDefFiles.size()){
+				size_t index = files.size();
+				for(auto f = dllDefGenerator.generatedDefFiles.begin();f!=dllDefGenerator.generatedDefFiles.end();f++){
+					files.push_back(i->first + "/" + System::path::filename((*f).c_str()) + ".lib");
+				}
+				linker->generateDllDefLibs(dllDefGenerator.generatedDefFiles,&files[index]);
+				dllDefGenerator.generatedDefFiles.clear();
+			}
+		}
 	}
 }
 
@@ -569,9 +583,9 @@ int main(int argc, const char * argv[]){
 	}
 
 	//initialize backend and frontend
-	gen::LLVMBackend backend(&target,&genOptions);
-
-	gen::Linker linker(&target,&genOptions);
+	gen::DllDefGenerator dllDefGenerator;
+	gen::LLVMBackend     backend(&target,&genOptions,&dllDefGenerator);
+	gen::Linker          linker(&target,&genOptions);
 
 	compiler::init(&options);
 	//runTests();
@@ -609,7 +623,7 @@ int main(int argc, const char * argv[]){
 		}
 		if(hasErrors) return -1;
 
-		buildPackages(backend,files);
+		buildPackages(backend,link? &linker : nullptr,dllDefGenerator,files);
 		if(compiler::generatedFunctions){
 
 			files.push_back(backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen"));
@@ -639,13 +653,15 @@ int main(int argc, const char * argv[]){
 
 				mod->second.body->label("source");
 				auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src",data::gen::native::ASSEMBLY);
-				buildPackages(backend,files);
+				buildPackages(backend,&linker,dllDefGenerator,files);
 				if(compiler::generatedFunctions){
 					backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen");
 				}
-				/*auto src = srcf.c_str();
+				/*
+				auto src = srcf.c_str();
 				linker.link(&src,1,"D:/Alex/projects/parser/build/src",data::gen::native::PackageLinkingFormat::EXECUTABLE);
 				*/
+				
 
 				source = "";
 				continue;

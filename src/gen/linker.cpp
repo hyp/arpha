@@ -83,6 +83,7 @@ static void visualStudioLinkerDriver(Target* target,data::gen::Options* options,
 		cmd<<*files;
 		cmd<<"\" ";
 	}
+	cmd<<" kernel32.lib user32.lib ";
 	//target
 	using namespace data::gen::native;
 	const char* machine = "QUANTUM_COMPUTER";
@@ -123,6 +124,33 @@ static void visualStudioLinkerDriver(Target* target,data::gen::Options* options,
 	System::print("\n\n");
 	System::execute(outputFormat != LIBRARY ? linker.file.c_str() : linker.libExeFile.c_str(),cmdString.c_str(),linker.executionDirectory.c_str());
 }
+static void visualStudioLinkerDriverDefToLib(Target* target,data::gen::Options* options,const char* src,const char* dest){
+	VSLinker linker;
+	findVSLinker(linker);
+	if(linker.file.empty()){
+		return;
+	}
+	std::stringstream cmd;
+	cmd<<" /DEF:\""<<src<<"\" /OUT:\""<<dest<<"\" ";
+	//target
+	using namespace data::gen::native;
+	const char* machine = "QUANTUM_COMPUTER";
+	if(target->cpuArchitecture == Target::X86){
+		if(target->cpuMode == Target::M32) machine = "X86";
+		else machine = "X64";
+	} else if(target->cpuArchitecture == Target::ARM){
+		machine = "ARM";
+	}
+	cmd<<" /MACHINE:"<<machine;
+
+	auto cmdString = cmd.str();
+	System::print("\nGenerating libfile: ");
+	System::print(cmdString);
+	System::print("\n\n");
+	System::execute(linker.libExeFile.c_str(),cmdString.c_str(),linker.executionDirectory.c_str());
+}
+
+
 #endif
 
 
@@ -155,6 +183,17 @@ using namespace gen;
 Linker::Linker(data::gen::native::Target* target,data::gen::Options* options){
 	this->target  = target;
 	this->options = options;
+}
+void Linker::generateDllDefLibs(std::vector<std::string>& src,std::string* outputFiles){
+#ifdef _WIN32
+	assert(this->target->platform != data::gen::native::Target::WINDOWS_MINGW && "'.def' -> '.lib' generation is supported only on windows with msvc compiler toolchain.");
+	size_t i = 0;
+	for(;i < src.size();i++){
+		visualStudioLinkerDriverDefToLib(target,options,src[i].c_str(),outputFiles[i].c_str());
+	}
+#else
+	assert(false && "'.def' -> '.lib' generation is supported only on windows");
+#endif
 }
 std::string Linker::link(const char** files,size_t fileCount,const char* outputFile,data::gen::native::PackageLinkingFormat outputFormat){
 #ifdef _WIN32

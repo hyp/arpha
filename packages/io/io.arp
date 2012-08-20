@@ -93,12 +93,11 @@ def write(self,bytes) {
 
 # Writing binary data:
 
-#
 def write(self,number uint32) {
 }
 def write(self,number int32)     = self.write(number    as uint32)
 def write(self,character char32) = self.write(character as uint32)
-#
+
 
 # Text formatting:
 def print(self,string) {
@@ -107,7 +106,7 @@ def print(self,string) {
 def print(self,character char32){
 	#TODO:
 }
-#def print(self,boolean bool) = if(boolean == true) self.print("true") else self.print("false")
+def print(self,boolean bool) = if(boolean) self.print("true") else self.print("false")
 
 macro formatIntegerMixin(number,radix,negative = false,bufSize = 64) = [>
 	var buffer Array(uint8,$bufSize)
@@ -127,7 +126,7 @@ macro formatIntegerMixin(number,radix,negative = false,bufSize = 64) = [>
 def print(self,number uint32,radix uint32,negative bool){
 	formatIntegerMixin(number,radix,negative,32)
 }
-# print(self,number uint32) = self.print(number,radix: 10,negative: false)
+def print(self,number uint32) = self.print(number,radix: 10,negative: false)
 def print(self,number  int32) {
 	var lessThanZero = false
 	if(number < 0){

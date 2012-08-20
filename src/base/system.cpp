@@ -119,6 +119,12 @@ const char* System::fileToString(const char* filename){
 	fclose(file);
 	return (const char*)data;
 }
+FILE* System::open(const char* filename,bool write){
+	assert(filename);
+	FILE* file = fopen(filename, write? "w" : "r");
+	assert(file);
+	return file;
+}
 
 int System::execute(const char* file,const char* param,const char* dir){
 	#ifdef  _WIN32

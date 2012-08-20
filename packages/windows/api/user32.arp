@@ -1,0 +1,7 @@
+#
+
+#
+where hwnd is uintptr:
+
+def MessageBoxA(hwnd,text *char8,caption *char8,type uint32) uses dllimport = 0
+def MessageBoxW(hwnd,text *char16,caption *char16,type uint32) uses dllimport = 0

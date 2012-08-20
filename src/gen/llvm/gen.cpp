@@ -52,6 +52,14 @@ namespace {
 	llvm::TargetMachine* targetMachine;
 };
 
+size_t llvmSizeof(const llvm::TargetData* targetData,llvm::Type* type){
+	if(auto structure = llvm::dyn_cast<llvm::StructType>(type)){
+		return (size_t)targetData->getStructLayout(structure)->getSizeInBytes();
+	} else {
+		return targetData->getTypeAllocSize(type);
+	}
+}
+
 /**
 * LLVM IR construction.
 */
@@ -84,8 +92,9 @@ struct LLVMgenerator: NodeVisitor {
 	bool ifFallthrough;
 
 	llvm::FunctionPassManager* passManager;
+	gen::DllDefGenerator* dllDefGenerator;
 
-	LLVMgenerator(llvm::LLVMContext& _context,Node** roots,size_t rootCount,llvm::Module* module,llvm::FunctionPassManager* passManager,int round);
+	LLVMgenerator(llvm::LLVMContext& _context,Node** roots,size_t rootCount,llvm::Module* module,llvm::FunctionPassManager* passManager,int round,gen::DllDefGenerator* dllGen);
 	llvm::Type* genType(Type* type);
 	void emitConstant(llvm::Value* value,bool neededPointer = false);
 	inline void emit(llvm::Value* value){ emmittedValue = value; }
@@ -174,7 +183,8 @@ LLVMgenerator::LLVMgenerator(
 	llvm::LLVMContext& _context,
 	Node** roots,size_t rootCount,llvm::Module* module,
 	llvm::FunctionPassManager* passManager,
-	int round) : 
+	int round,
+	gen::DllDefGenerator* dllGen) : 
 	context(_context),
 	builder(_context) 
 {
@@ -190,6 +200,8 @@ LLVMgenerator::LLVMgenerator(
 	needsPointer = false;
 	globalVariableInitializer = nullptr;
 	needsRangeAsPointerPair = false;
+
+	dllDefGenerator = dllGen;
 
 	//create a module initializer
 	for(auto i = roots;i!= roots+rootCount;i++)
@@ -1016,6 +1028,7 @@ llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind o
 llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention cc){
 	switch(cc){
 	case data::ast::Function::ARPHA:   return llvm::CallingConv::Fast;
+	case data::ast::Function::COLD:	   return llvm::CallingConv::Cold;
 	case data::ast::Function::CCALL:   return llvm::CallingConv::C;
 	case data::ast::Function::STDCALL: return llvm::CallingConv::X86_StdCall;
 	}
@@ -1246,6 +1259,10 @@ Node* LLVMgenerator::visit(IfExpression* node){
 	
 	//condition
 	auto cond = generateExpression(node->condition);
+	//NB: if(boolValue) = > if(boolValue == true)
+	if(!llvm::isa<llvm::CmpInst>(cond)){
+		cond = builder.CreateICmpEQ(cond,builder.getInt1(true));
+	}
 
 	//if(true) 1 else 2
 	if(isSelect){
@@ -1491,6 +1508,8 @@ llvm::Function* LLVMgenerator::getIntrinsicFunctionDeclaration(const char* name,
 	return func;
 }
 
+#include "llvm/Target/Mangler.h"
+
 //TODO unnamed function?
 llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 	if(auto unmapped = unmap(function)) return static_cast<llvm::Function*>(unmapped);
@@ -1502,6 +1521,7 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 	//create the actual declaration
 	llvm::FunctionType* t;
 	bool optimizeSequences = function->arguments.size() < 3;
+
 	if(function->arguments.size() == 0){
 		t = llvm::FunctionType::get(genType(function->_returnType.type()),false);
 	} else {
@@ -1514,12 +1534,20 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 				args.push_back(pt);
 				args.push_back(pt);
 			}
-			else args.push_back(genType((*i)->type.type()));
+			else {
+				args.push_back(genType((*i)->type.type()));
+			}
 		}
 		t = llvm::FunctionType::get(genType(function->_returnType.type()),args,false);
 	}
 
-	auto func = llvm::Function::Create(t,genLinkage(function),function->isExternal() || function->label() == "main" ? function->label().ptr() : mangler.stream.str(),module);
+	llvm::GlobalValue::LinkageTypes linkage;
+	if(function->isDllimport()) linkage = llvm::GlobalValue::DLLImportLinkage;
+	else linkage = genLinkage(function);
+
+
+
+	auto func = llvm::Function::Create(t,linkage,function->isExternal() || function->label() == "main" ? function->label().ptr() : mangler.stream.str(),module);
 	func->setCallingConv(genCallingConvention(function->label() == "main"? data::ast::Function::CCALL : function->callingConvention()));
 	if(function->isNonthrow()){
 		func->setDoesNotThrow(true);
@@ -1528,9 +1556,22 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 	return func;
 }
 
+void addFunctionToDllDef(LLVMgenerator* generator,Function* function){
+	auto func = generator->getFunctionDeclaration(function);
+	auto type = func->getFunctionType();
+	size_t psize = 0;
+	for(auto i = type->param_begin();i!=type->param_end();++i){
+		psize += llvmSizeof(generator->targetMachine()->getTargetData(),(*i));
+	}
+	generator->dllDefGenerator->addStdCall(function,psize);
+}
+
 Node* LLVMgenerator::visit(Function* function){
 	if(function->isExternal() || function->isFlagSet(Function::MACRO_FUNCTION) || function->isFieldAccessMacro() || function->isIntrinsic() || 
-		function->isTypeTemplate() || function->isFlagSet(Function::CONSTRAINT_FUNCTION) || function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)) return function;
+		function->isTypeTemplate() || function->isFlagSet(Function::CONSTRAINT_FUNCTION) || function->isFlagSet(Function::HAS_PATTERN_ARGUMENTS) || function->isFlagSet(Function::HAS_EXPENDABLE_ARGUMENTS)){
+		if(function->isDllimport()) addFunctionToDllDef(this,function);
+		return function;
+	}
 
 	auto neededFP = needsValue();
 	auto neededPointer = needsPointer;
@@ -1647,9 +1688,10 @@ namespace gen {
 
 	}
 
-	LLVMBackend::LLVMBackend(data::gen::native::Target* target,data::gen::Options* options){
+	LLVMBackend::LLVMBackend(data::gen::native::Target* target,data::gen::Options* options,DllDefGenerator* dllGen){
 		this->target  = target;
 		this->options = options;
+		this->dllDefGenerator = dllGen;
 
 		llvm::LLVMContext& context = llvm::getGlobalContext();
 
@@ -1835,9 +1877,10 @@ namespace gen {
 		addOptimizationPasses(passManager,options);
 		passManager->doInitialization();
 		
-		LLVMgenerator generator(getGlobalContext(),roots,rootCount,module,passManager,round);
+		LLVMgenerator generator(getGlobalContext(),roots,rootCount,module,passManager,round,dllDefGenerator);
 		round++;
-		//module->dump();
+		module->dump();
+		
 		
 		bool isWinMSVS = target->platform == data::gen::AbstractTarget::Platform::WINDOWS || target->platform == data::gen::AbstractTarget::Platform::WINDOWS_RT;
 		std::string path;

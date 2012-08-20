@@ -39,6 +39,9 @@ namespace data {
 					MACRO_FIELD_ACCESS = 0x2000,
 					//This function generates a type as a result of it's invocation. It allows it to act as a type in type patterns.
 					TYPE_TEMPLATE = 0x4000,
+
+					EXTERNAL_DLLIMPORT = 0x8000,
+					EXTERNAL_DLLEXPORT = 0x10000,
 				};
 			};
 		}

@@ -157,18 +157,19 @@ Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,loc
 bool   Function::applyProperty(SymbolID name,Node* value){
 	if(name == "intrinsic"){
 		miscFlags |= data::ast::Function::Internal::INTRINSIC;
-		return true;
 	} else if(name == "external"){
 		miscFlags |= data::ast::Function::Internal::EXTERNAL;
-		return true;
+	} else if(name == "dllimport"){
+		miscFlags |= data::ast::Function::Internal::EXTERNAL;
+		miscFlags |= data::ast::Function::Internal::EXTERNAL_DLLIMPORT; //todo use 'external("kernel32.dll")'
+		cc = data::ast::Function::STDCALL;
 	} else if(name == "nonthrow"){
 		setNonthrow();
-		return true;
 	} else if(name == "unittest"){
 		miscFlags |= data::ast::Function::Internal::UNITTEST;
-		return true;
 	}
-	return false;
+	else return false;
+	return true;
 }
 data::ast::Function::CallConvention Function::callingConvention() const {
 	return (data::ast::Function::CallConvention)cc;
