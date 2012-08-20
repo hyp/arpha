@@ -41,7 +41,6 @@ namespace data {
 					TYPE_TEMPLATE = 0x4000,
 
 					EXTERNAL_DLLIMPORT = 0x8000,
-					EXTERNAL_DLLEXPORT = 0x10000,
 				};
 			};
 		}

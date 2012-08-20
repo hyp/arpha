@@ -13,14 +13,13 @@ namespace gen {
 		enum {
 			OUTPUT_BC = 0x4,
 		};
-		LLVMBackend(data::gen::native::Target* target,data::gen::Options* options,DllDefGenerator* dllGen);
+		LLVMBackend(data::gen::native::Target* target,data::gen::Options* options);
 
 		std::string generateModule(Node* root,const char* outputDirectory,const char* moduleName,int outputFormat = data::gen::native::OBJECT);
-		std::string generateModule(Node** roots,size_t rootCount,const char* outputDirectory,const char* moduleName,int outputFormat = data::gen::native::OBJECT);
+		std::string generateModule(Node** roots,size_t rootCount,const char* outputDirectory,const char* moduleName,int outputFormat = data::gen::native::OBJECT,DllDefGenerator* dllGen = nullptr);
 	private:
 		data::gen::Options* options;
 		data::gen::native::Target* target;
-		DllDefGenerator* dllDefGenerator;
 	};
 };
 

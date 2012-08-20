@@ -158,12 +158,32 @@ bool   Function::applyProperty(SymbolID name,Node* value){
 	if(name == "intrinsic"){
 		miscFlags |= data::ast::Function::Internal::INTRINSIC;
 	} else if(name == "external"){
+		if(isIntrinsic()){
+			return false;
+		}
 		miscFlags |= data::ast::Function::Internal::EXTERNAL;
-	} else if(name == "dllimport"){
-		miscFlags |= data::ast::Function::Internal::EXTERNAL;
-		miscFlags |= data::ast::Function::Internal::EXTERNAL_DLLIMPORT; //todo use 'external("kernel32.dll")'
-		cc = data::ast::Function::STDCALL;
-	} else if(name == "nonthrow"){
+		if(value){
+			auto str = value->asStringLiteral();
+			if(!str) return false;
+			externalLib = str->block.ptr();
+			
+					miscFlags |= data::ast::Function::Internal::EXTERNAL_DLLIMPORT;
+					cc = data::ast::Function::STDCALL;
+			auto ext = System::path::extension(externalLib);
+			if(ext){
+				if(!strcmp(ext,"dll")){
+					miscFlags |= data::ast::Function::Internal::EXTERNAL_DLLIMPORT;
+					cc = data::ast::Function::STDCALL;
+				} else if(!strcmp(ext,"so") && !strcmp(ext,"lib") && !strcmp(ext,"a")){
+					return false;
+				}
+			}
+		}
+	} 
+	else if(name == "callingConvention"){
+		cc = data::ast::Function::CCALL;//TODO
+	}
+	else if(name == "nonthrow"){
 		setNonthrow();
 	} else if(name == "unittest"){
 		miscFlags |= data::ast::Function::Internal::UNITTEST;

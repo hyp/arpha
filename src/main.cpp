@@ -490,8 +490,12 @@ struct ClOptionApplier {
 	}
 };
 
-void buildPackages(gen::LLVMBackend& backend,gen::Linker* linker,gen::DllDefGenerator& dllDefGenerator,std::vector<std::string>& files){
+void buildPackages(data::gen::native::Target* target,gen::LLVMBackend& backend,gen::Linker* linker,std::vector<std::string>& files){
+	
+	
 	std::vector<Node*> modules;
+	gen::DllDefGenerator dllDefGenerator;
+
 	for(auto i = compiler::packages.begin(); i!=compiler::packages.end();++i){
 		
 		System::print(format("Compiling the package '%s' for the first time... \n",i->first));
@@ -499,21 +503,13 @@ void buildPackages(gen::LLVMBackend& backend,gen::Linker* linker,gen::DllDefGene
 		auto moduleCount = i->second.modules.size();
 		modules.resize(moduleCount);
 		for(size_t j = 0;j<moduleCount;j++) modules[j] = i->second.modules[j]->second.body;
-		files.push_back(backend.generateModule(modules.begin()._Ptr,modules.size(),i->first.c_str(),"arpha_cache"));
+		files.push_back(backend.generateModule(modules.begin()._Ptr,modules.size(),i->first.c_str(),"arpha_cache",data::gen::native::OBJECT,&dllDefGenerator));
 		modules.clear();
 
 		if(linker){
-			
 			std::string libs = i->first + "/";
-			dllDefGenerator.gen(libs.c_str());
-			if(dllDefGenerator.generatedDefFiles.size()){
-				size_t index = files.size();
-				for(auto f = dllDefGenerator.generatedDefFiles.begin();f!=dllDefGenerator.generatedDefFiles.end();f++){
-					files.push_back(i->first + "/" + System::path::filename((*f).c_str()) + ".lib");
-				}
-				linker->generateDllDefLibs(dllDefGenerator.generatedDefFiles,&files[index]);
-				dllDefGenerator.generatedDefFiles.clear();
-			}
+			//Generates the '.lib' files from dll imports in the current package which can be linked with microsoft linker.
+			dllDefGenerator.gen(libs.c_str(),target,linker,files);
 		}
 	}
 }
@@ -583,8 +579,7 @@ int main(int argc, const char * argv[]){
 	}
 
 	//initialize backend and frontend
-	gen::DllDefGenerator dllDefGenerator;
-	gen::LLVMBackend     backend(&target,&genOptions,&dllDefGenerator);
+	gen::LLVMBackend     backend(&target,&genOptions);
 	gen::Linker          linker(&target,&genOptions);
 
 	compiler::init(&options);
@@ -623,11 +618,12 @@ int main(int argc, const char * argv[]){
 		}
 		if(hasErrors) return -1;
 
-		buildPackages(backend,link? &linker : nullptr,dllDefGenerator,files);
+		buildPackages(&target,backend,link? &linker : nullptr,files);
 		if(compiler::generatedFunctions){
 
 			files.push_back(backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen"));
 		}
+		//files.push_back("D:/Alex/projects/linking/user32.lib");
 
 		if(files.size() && link){
 			std::vector<const char*> binaryFilesPtr(files.size(),nullptr);
@@ -653,7 +649,7 @@ int main(int argc, const char * argv[]){
 
 				mod->second.body->label("source");
 				auto srcf = backend.generateModule((*mod).second.body,"D:/Alex/projects/parser/build","src",data::gen::native::ASSEMBLY);
-				buildPackages(backend,&linker,dllDefGenerator,files);
+				buildPackages(&target,backend,&linker,files);
 				if(compiler::generatedFunctions){
 					backend.generateModule(compiler::generatedFunctions,"D:/Alex/projects/parser/build","gen");
 				}

@@ -245,11 +245,11 @@ struct Function: public PrefixDefinition {
 	uint16 ctfeRegisterCount;
 	uint16 inliningWeight;
 	uint8  cc;
-
-
 	typedef void (*CTFE_Binder)(CTFEintrinsicInvocation* invocation);
-
-	CTFE_Binder intrinsicCTFEbinder;
+	union {
+		const char* externalLib; //NB: Don't use extern on intrinsic functions!
+		CTFE_Binder intrinsicCTFEbinder;
+	};
 
 	//Bindings to compile time evaluator
 	static void getIntrinsicFunctionBinder(Function* function);

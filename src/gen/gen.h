@@ -12,6 +12,8 @@ namespace gen {
 		void onFatalError(const char*  str);
 	};
 
+	struct Linker;
+
 };
 
 #endif

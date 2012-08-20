@@ -9,19 +9,15 @@ namespace gen {
 struct DllDefGenerator {
 	struct Declaration {
 		Function* function;
-		uint32 libID;
 		uint32 stdCallParamSize;
 	};
 
 	void addStdCall(Function* func,size_t paramSize);
 	void add       (Function* func);
 
-	void gen(const char* outputDirectory);
+	void gen(const char* outputDirectory,data::gen::native::Target* target,gen::Linker* linker,std::vector<std::string>& files);
 private:
 	std::vector<Declaration> declarations;
-	std::vector<const char*> libs;
-public:
-	std::vector<std::string> generatedDefFiles;
 };
 
 }

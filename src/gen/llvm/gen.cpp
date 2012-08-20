@@ -1545,8 +1545,6 @@ llvm::Function* LLVMgenerator::getFunctionDeclaration(Function* function){
 	if(function->isDllimport()) linkage = llvm::GlobalValue::DLLImportLinkage;
 	else linkage = genLinkage(function);
 
-
-
 	auto func = llvm::Function::Create(t,linkage,function->isExternal() || function->label() == "main" ? function->label().ptr() : mangler.stream.str(),module);
 	func->setCallingConv(genCallingConvention(function->label() == "main"? data::ast::Function::CCALL : function->callingConvention()));
 	if(function->isNonthrow()){
@@ -1688,10 +1686,9 @@ namespace gen {
 
 	}
 
-	LLVMBackend::LLVMBackend(data::gen::native::Target* target,data::gen::Options* options,DllDefGenerator* dllGen){
+	LLVMBackend::LLVMBackend(data::gen::native::Target* target,data::gen::Options* options){
 		this->target  = target;
 		this->options = options;
-		this->dllDefGenerator = dllGen;
 
 		llvm::LLVMContext& context = llvm::getGlobalContext();
 
@@ -1863,7 +1860,7 @@ namespace gen {
 		}
 	}
 	
-	std::string LLVMBackend::generateModule(Node** roots,size_t rootCount,const char* outputDirectory,const char* moduleName,int outputFormat){
+	std::string LLVMBackend::generateModule(Node** roots,size_t rootCount,const char* outputDirectory,const char* moduleName,int outputFormat,DllDefGenerator* dllGen){
 		using namespace llvm;
 		auto module = new Module(StringRef(moduleName),getGlobalContext());
 		auto passManager = new FunctionPassManager(module);
@@ -1877,7 +1874,7 @@ namespace gen {
 		addOptimizationPasses(passManager,options);
 		passManager->doInitialization();
 		
-		LLVMgenerator generator(getGlobalContext(),roots,rootCount,module,passManager,round,dllDefGenerator);
+		LLVMgenerator generator(getGlobalContext(),roots,rootCount,module,passManager,round,dllGen);
 		round++;
 		module->dump();
 		

@@ -1,0 +1,6 @@
+import windows.api
+
+def main(){
+	var s = "Hello world"
+	MessageBoxA(0,s as *char8,s as *char8,MB_YESNO)
+}

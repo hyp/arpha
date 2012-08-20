@@ -256,6 +256,7 @@ struct VarParser: IntrinsicPrefixMacro {
 		parser->introduceDefinition(var);
 		vars.push_back(var);
 		while(parser->match(",")){
+			parser->ignoreNewlines();
 			auto name = parser->expectName();
 			var = new Variable(name,parser->previousLocation());
 			if(!isMutable) var->setFlag(Variable::IS_IMMUTABLE);

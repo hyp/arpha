@@ -67,7 +67,7 @@ static void findVSLinker(VSLinker& linker){
 	}
 }
 
-static void visualStudioLinkerDriver(Target* target,data::gen::Options* options,const char** files,size_t count,const char* output,PackageLinkingFormat outputFormat){
+static void visualStudioLinkerDriver(Target* target,data::gen::Options* options,const char** files,size_t count,const char* output,PackageLinkingFormat outputFormat,const char* linkerOptions){
 	VSLinker linker;
 	findVSLinker(linker);
 	if(linker.file.empty()){
@@ -77,13 +77,13 @@ static void visualStudioLinkerDriver(Target* target,data::gen::Options* options,
 	}
 
 	std::stringstream cmd;
+	if(linkerOptions) cmd<<linkerOptions<<" ";
 	cmd<<" /OUT:\""<<output<<"\" /NOLOGO /ERRORREPORT:QUEUE ";
 	for(auto endFiles = files+count;files!=endFiles;files++){
 		cmd<<'"';
 		cmd<<*files;
 		cmd<<"\" ";
 	}
-	cmd<<" kernel32.lib user32.lib ";
 	//target
 	using namespace data::gen::native;
 	const char* machine = "QUANTUM_COMPUTER";
@@ -98,13 +98,13 @@ static void visualStudioLinkerDriver(Target* target,data::gen::Options* options,
 	if(outputFormat == LIBRARY){
 		cmd<<" /SUBSYSTEM:CONSOLE";//LIST for debugging
 	} 
-	else{
+	else if(!linkerOptions) {
 		cmd<<" /NXCOMPAT /INCREMENTAL ";
 		if(outputFormat == EXECUTABLE){
-			cmd<<" /STACK:\"10000000\" /SUBSYSTEM:CONSOLE";
+			cmd<<" /STACK:\"10000000\" /SUBSYSTEM:CONSOLE ";
 		}
 		else if(outputFormat == SHARED_LIBRARY){
-			cmd<<" /DLL";
+			cmd<<" /DLL /SUBSYSTEM:WINDOWS ";
 		}
 	
 		//link c lib
@@ -124,37 +124,12 @@ static void visualStudioLinkerDriver(Target* target,data::gen::Options* options,
 	System::print("\n\n");
 	System::execute(outputFormat != LIBRARY ? linker.file.c_str() : linker.libExeFile.c_str(),cmdString.c_str(),linker.executionDirectory.c_str());
 }
-static void visualStudioLinkerDriverDefToLib(Target* target,data::gen::Options* options,const char* src,const char* dest){
-	VSLinker linker;
-	findVSLinker(linker);
-	if(linker.file.empty()){
-		return;
-	}
-	std::stringstream cmd;
-	cmd<<" /DEF:\""<<src<<"\" /OUT:\""<<dest<<"\" ";
-	//target
-	using namespace data::gen::native;
-	const char* machine = "QUANTUM_COMPUTER";
-	if(target->cpuArchitecture == Target::X86){
-		if(target->cpuMode == Target::M32) machine = "X86";
-		else machine = "X64";
-	} else if(target->cpuArchitecture == Target::ARM){
-		machine = "ARM";
-	}
-	cmd<<" /MACHINE:"<<machine;
-
-	auto cmdString = cmd.str();
-	System::print("\nGenerating libfile: ");
-	System::print(cmdString);
-	System::print("\n\n");
-	System::execute(linker.libExeFile.c_str(),cmdString.c_str(),linker.executionDirectory.c_str());
-}
 
 
 #endif
 
 
-static void gccLinkerDriver(const char** files,size_t count,const char* output,data::gen::native::PackageLinkingFormat outputFormat){
+static void gccLinkerDriver(const char** files,size_t count,const char* output,data::gen::native::PackageLinkingFormat outputFormat,const char* linkerOptions){
 	std::string gccPath = "gcc";
 	//TODO
 	std::stringstream cmd;
@@ -184,18 +159,7 @@ Linker::Linker(data::gen::native::Target* target,data::gen::Options* options){
 	this->target  = target;
 	this->options = options;
 }
-void Linker::generateDllDefLibs(std::vector<std::string>& src,std::string* outputFiles){
-#ifdef _WIN32
-	assert(this->target->platform != data::gen::native::Target::WINDOWS_MINGW && "'.def' -> '.lib' generation is supported only on windows with msvc compiler toolchain.");
-	size_t i = 0;
-	for(;i < src.size();i++){
-		visualStudioLinkerDriverDefToLib(target,options,src[i].c_str(),outputFiles[i].c_str());
-	}
-#else
-	assert(false && "'.def' -> '.lib' generation is supported only on windows");
-#endif
-}
-std::string Linker::link(const char** files,size_t fileCount,const char* outputFile,data::gen::native::PackageLinkingFormat outputFormat){
+std::string Linker::link(const char** files,size_t fileCount,const char* outputFile,data::gen::native::PackageLinkingFormat outputFormat,const char* linkerOptions){
 #ifdef _WIN32
 	const char* extensions[] = { ".exe" , this->target->platform != data::gen::native::Target::WINDOWS_MINGW ? ".lib" : ".a" , ".dll" };
 #else
@@ -209,10 +173,10 @@ std::string Linker::link(const char** files,size_t fileCount,const char* outputF
 
 #ifdef _WIN32
 	if(this->target->platform != data::gen::native::Target::WINDOWS_MINGW)
-		visualStudioLinkerDriver(target,options,files,fileCount,fullOutputName.c_str(),outputFormat);
-	else gccLinkerDriver(files,fileCount,fullOutputName.c_str(),outputFormat);
+		visualStudioLinkerDriver(target,options,files,fileCount,fullOutputName.c_str(),outputFormat,linkerOptions);
+	else gccLinkerDriver(files,fileCount,fullOutputName.c_str(),outputFormat,linkerOptions);
 #else
-	gccLinkerDriver(files,fileCount,fullOutputName.c_str(),outputFormat);
+	gccLinkerDriver(files,fileCount,fullOutputName.c_str(),outputFormat,linkerOptions);
 #endif
 	return fullOutputName;
 }
