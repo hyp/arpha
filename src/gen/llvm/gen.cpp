@@ -40,7 +40,6 @@ enum {
 	GEN_TYPE_I16,
 	GEN_TYPE_I32,
 	GEN_TYPE_I64,
-	GEN_TYPE_SIZE_T,
 	GEN_TYPE_VOID,
 	GEN_TYPE_FLOAT,
 	GEN_TYPE_DOUBLE,
@@ -49,7 +48,6 @@ enum {
 
 namespace {
 	llvm::Type* coreTypes[GEN_MAX_CORE_TYPES];
-	llvm::TargetMachine* targetMachine;
 };
 
 size_t llvmSizeof(const llvm::TargetData* targetData,llvm::Type* type){
@@ -75,6 +73,7 @@ struct LLVMgenerator: NodeVisitor {
 	int currentGeneratingRound;
 	bool needsPointer;
 	bool needsRangeAsPointerPair;
+	bool _m64;
 	Node* globalVariableInitializer;
 
 	/**
@@ -93,8 +92,9 @@ struct LLVMgenerator: NodeVisitor {
 
 	llvm::FunctionPassManager* passManager;
 	gen::DllDefGenerator* dllDefGenerator;
+	llvm::TargetMachine* _targetMachine;
 
-	LLVMgenerator(llvm::LLVMContext& _context,Node** roots,size_t rootCount,llvm::Module* module,llvm::FunctionPassManager* passManager,int round,gen::DllDefGenerator* dllGen);
+	LLVMgenerator(data::gen::native::Target* target,llvm::TargetMachine* targetMachine,llvm::LLVMContext& _context,Node** roots,size_t rootCount,llvm::Module* module,llvm::FunctionPassManager* passManager,int round,gen::DllDefGenerator* dllGen);
 	llvm::Type* genType(Type* type);
 	void emitConstant(llvm::Value* value,bool neededPointer = false);
 	inline void emit(llvm::Value* value){ emmittedValue = value; }
@@ -106,6 +106,7 @@ struct LLVMgenerator: NodeVisitor {
 
 	std::pair<llvm::Value*,llvm::Value*> generateLinearSequencePair(Node* node);
 	static llvm::GlobalValue::LinkageTypes genLinkage(PrefixDefinition* def);
+	llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention cc);
 
 	inline void map(DefinitionNode* def,llvm::Value* value){
 		def->generatorData = value;
@@ -129,7 +130,8 @@ struct LLVMgenerator: NodeVisitor {
 	inline void emitStore(llvm::Value* var,llvm::Value* val){
 		emmittedValue = builder.CreateStore(val,var);
 	}
-	inline llvm::TargetMachine* targetMachine() { return ::targetMachine; }
+	inline llvm::TargetMachine* targetMachine() { return _targetMachine; }
+	inline bool mode64(){ return _m64; }
 
 	
 	llvm::AllocaInst *genLocalVariable(Type* type);
@@ -180,6 +182,7 @@ struct LLVMgenerator: NodeVisitor {
 
 
 LLVMgenerator::LLVMgenerator(
+	data::gen::native::Target* target,llvm::TargetMachine* targetMachine,
 	llvm::LLVMContext& _context,
 	Node** roots,size_t rootCount,llvm::Module* module,
 	llvm::FunctionPassManager* passManager,
@@ -202,6 +205,8 @@ LLVMgenerator::LLVMgenerator(
 	needsRangeAsPointerPair = false;
 
 	dllDefGenerator = dllGen;
+	_m64 = target->cpuMode == data::gen::native::Target::M64;
+	_targetMachine = targetMachine;
 
 	//create a module initializer
 	for(auto i = roots;i!= roots+rootCount;i++)
@@ -350,9 +355,9 @@ llvm::Type* LLVMgenerator::genType(Type* type){
 		return coreTypes[bits == 32? GEN_TYPE_I32 : (bits == 16? GEN_TYPE_I16 : (bits == 64? GEN_TYPE_I64 : GEN_TYPE_I8))];
 		}
 	case Type::NATURAL: 
-		return coreTypes[GEN_TYPE_SIZE_T];
+		return coreTypes[mode64()? GEN_TYPE_I64:GEN_TYPE_I32];
 	case Type::UINTPTRT:
-		return coreTypes[GEN_TYPE_SIZE_T];//TODO
+		return coreTypes[mode64()? GEN_TYPE_I64:GEN_TYPE_I32];
 	case Type::FLOAT:
 		return type->bits == 32? llvm::Type::getFloatTy(context) : llvm::Type::getDoubleTy(context);
 	case Type::CHAR:
@@ -844,7 +849,7 @@ llvm::Value* genLinearSequenceOperation(LLVMgenerator* generator,data::ast::Oper
 	// (natural) ( (end - begin) / sizeof(*begin) )
 	case LENGTH:
 		loadLinearSequence(generator,operand1,sequence,true,true);
-		return generator->builder.CreateCast(llvm::Instruction::Trunc,generator->builder.CreatePtrDiff(sequence.end,sequence.begin),coreTypes[GEN_TYPE_SIZE_T]);
+		return generator->builder.CreateCast(llvm::Instruction::Trunc,generator->builder.CreatePtrDiff(sequence.end,sequence.begin),coreTypes[generator->mode64()? GEN_TYPE_I64:GEN_TYPE_I32 ]);
 	
 	// begin + i
 	case ELEMENT_GET:
@@ -1025,12 +1030,12 @@ llvm::Value* genOperation(LLVMgenerator* generator,data::ast::Operations::Kind o
 	assert(false && "Invalid operation");
 }
 
-llvm::CallingConv::ID genCallingConvention(data::ast::Function::CallConvention cc){
+llvm::CallingConv::ID LLVMgenerator::genCallingConvention(data::ast::Function::CallConvention cc){
 	switch(cc){
 	case data::ast::Function::ARPHA:   return llvm::CallingConv::Fast;
 	case data::ast::Function::COLD:	   return llvm::CallingConv::Cold;
 	case data::ast::Function::CCALL:   return llvm::CallingConv::C;
-	case data::ast::Function::STDCALL: return llvm::CallingConv::X86_StdCall;
+	case data::ast::Function::STDCALL: return mode64()? llvm::CallingConv::C : llvm::CallingConv::X86_StdCall;
 	}
 }
 
@@ -1686,6 +1691,8 @@ namespace gen {
 
 	}
 
+	llvm::TargetMachine* targetMachine;
+
 	LLVMBackend::LLVMBackend(data::gen::native::Target* target,data::gen::Options* options){
 		this->target  = target;
 		this->options = options;
@@ -1726,7 +1733,7 @@ namespace gen {
 		Options.NoFramePointerElim = false;
 		Options.NoFramePointerElimNonLeaf = false;
 		Options.NoExcessFPPrecision = false;
-		Options.UnsafeFPMath = false;
+		Options.UnsafeFPMath = options->unsafeFPmath;
 		Options.NoInfsFPMath = false;
 		Options.NoNaNsFPMath = false;
 		Options.HonorSignDependentRoundingFPMathOption = 0;
@@ -1745,21 +1752,10 @@ namespace gen {
 		targetMachine = TheTarget->createTargetMachine(TheTriple.getTriple(),MCPU,FeaturesStr.c_str(),Options,RelocModel,CMModel,OLvl);
 
 		//typesystem
-		if(target->cpuMode == data::gen::native::Target::Mode::M32){
-			target->typeSystemState.pointerSizeof = 4;
-			target->typeSystemState.functionPointerSizeof = 4;
-			target->typeSystemState.sizetSizeof = 4;
-		} else {
-			target->typeSystemState.pointerSizeof = 8;
-			target->typeSystemState.functionPointerSizeof = 8;
-			target->typeSystemState.sizetSizeof = 8;
-		}
-
-		coreTypes[GEN_TYPE_I8]  = llvm::Type::getInt8Ty(context);
-		coreTypes[GEN_TYPE_I16] = llvm::Type::getInt16Ty(context);
-		coreTypes[GEN_TYPE_I32] = llvm::Type::getInt32Ty(context);
-		coreTypes[GEN_TYPE_I64] = llvm::Type::getInt64Ty(context);
-		coreTypes[GEN_TYPE_SIZE_T] = target->typeSystemState.sizetSizeof == 8 ? llvm::Type::getInt64Ty(context) : llvm::Type::getInt32Ty(context);
+		coreTypes[GEN_TYPE_I8]     = llvm::Type::getInt8Ty(context);
+		coreTypes[GEN_TYPE_I16]    = llvm::Type::getInt16Ty(context);
+		coreTypes[GEN_TYPE_I32]    = llvm::Type::getInt32Ty(context);
+		coreTypes[GEN_TYPE_I64]    = llvm::Type::getInt64Ty(context);
 		coreTypes[GEN_TYPE_VOID]   = llvm::Type::getVoidTy(context);
 		coreTypes[GEN_TYPE_FLOAT]  = llvm::Type::getFloatTy(context);
 		coreTypes[GEN_TYPE_DOUBLE] = llvm::Type::getDoubleTy(context);
@@ -1874,7 +1870,7 @@ namespace gen {
 		addOptimizationPasses(passManager,options);
 		passManager->doInitialization();
 		
-		LLVMgenerator generator(getGlobalContext(),roots,rootCount,module,passManager,round,dllGen);
+		LLVMgenerator generator(target,targetMachine,getGlobalContext(),roots,rootCount,module,passManager,round,dllGen);
 		round++;
 		module->dump();
 		

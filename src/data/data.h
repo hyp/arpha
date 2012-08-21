@@ -41,6 +41,8 @@ namespace data {
 					TYPE_TEMPLATE = 0x4000,
 
 					EXTERNAL_DLLIMPORT = 0x8000,
+					NO_BODY = 0x10000,
+					ALLOW_NO_BODY = 0x20000,
 				};
 			};
 		}
@@ -138,6 +140,7 @@ namespace data {
 			bool generate;
 			bool generateDebugInfo;  
 			bool generateRuntimeBoundsChecks;
+			bool unsafeFPmath;
 		};
 
 		struct AbstractTarget {
@@ -152,10 +155,6 @@ namespace data {
 			};
 			Platform  platform;
 			int       platformVersion; //TODO int/2 int/3 int???
-			struct TypeSystemState  {
-				uint32 pointerSizeof, functionPointerSizeof, sizetSizeof;
-			};
-			TypeSystemState typeSystemState;
 		};
 
 		namespace native {

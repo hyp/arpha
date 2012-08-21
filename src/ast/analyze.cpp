@@ -172,7 +172,7 @@ struct Analyzer : NodeVisitor {
 	void blockRemoveUnitializedLocals(Scope* scope){
 		for(auto i = localInitializationState.begin();i!=localInitializationState.end();++i){
 			if((*i)->_owner == scope){
-				if(!(*i)->isFlagSet(Variable::ANALYSIS_USED)) warning((*i)->location(),"The variable '%s' isn't used.",(*i)->label());
+				if(!(*i)->isFlagSet(Variable::ANALYSIS_USED) && !(*i)->asConstantSubstitute()) warning((*i)->location(),"The variable '%s' isn't used.",(*i)->label());
 			}
 		}
 	}

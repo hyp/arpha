@@ -1656,6 +1656,11 @@ Node* Function::resolve(Resolver* resolver){
 	}
 
 	setFlag(ARGUMENTS_RESOLVED);
+	if(hasNoBody()){
+		if(!isNoBodyAllowed())
+			error(this,"The function '%s' needs to have a body( You can use either '=' expression or '{' body '}')!",label());
+	}
+
 	//If this is a generic or expendable function don't resolve body and return type!
 	if( isFlagSet(HAS_EXPENDABLE_ARGUMENTS) || isFlagSet(HAS_PATTERN_ARGUMENTS) || this->isFieldAccessMacro()){
 		if(resolver->currentTrait){
@@ -2280,7 +2285,7 @@ bool match(Resolver* evaluator,Function* func,Node* arg,int& weight){
 					//All must be type
 					for(auto i = argsCount - 1;i < expressionCount;i++) if(!exprBegin[i]->returnType()->isType()) return false;
 				}
-				return false;
+				else return false;
 			}
 			argsCount--;
 			checked[argsCount] = true;

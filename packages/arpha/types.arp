@@ -19,8 +19,13 @@ import arpha.intrinsic
 
 import export core.type_qualifiers
 
-# Represents a tuple
+# Represents a tuple (anonymous type)
 type Tuple(Types..)
+{
+}
+
+# Represents an anonymous variant.
+type Union(Types..)
 {
 }
 

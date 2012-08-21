@@ -165,6 +165,7 @@ public:
 
 	//Dynamic casts
 	virtual bool isDefinitionNode(){ return false; }
+	virtual PrefixDefinition* asPrefixDefinition() { return nullptr; }
 	virtual bool isUntypedLiteral() const { return false; }
 #define CAST(T) virtual T* as##T() { return nullptr; }
 	NODE_LIST(CAST)
@@ -201,6 +202,7 @@ struct PrefixDefinition : DefinitionNode {
 
 	PrefixDefinition(SymbolID name,Location& location);
 	virtual Node* parse(Parser* parser) = 0;
+	PrefixDefinition* asPrefixDefinition() { return this; }
 
 	//Used to hide local variables until their declaration.
 	inline bool isHiddenBeforeDeclaration(int resolvingPass) { return isFlagSet(LOOKUP_HIDE_BEFORE_DECLARATION) && resolvingPass != this->generatorDataRound; }
@@ -340,6 +342,9 @@ struct ImportedScopeReference : Node {
 };
 
 struct NodeReference : Node {
+	enum {
+		DONT_DUPLICATE_OBJECT = 0x8,
+	};
 	NodeReference(Node* node);
         
 	Type* returnType() const;

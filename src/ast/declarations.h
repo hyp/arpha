@@ -196,6 +196,10 @@ struct Function: public PrefixDefinition {
 	inline bool isTest()        IMPL_PROP_GET(data::ast::Function::Internal::UNITTEST)
 	inline bool isExternal()    IMPL_PROP_GET(data::ast::Function::Internal::EXTERNAL)
 	inline bool isDllimport()   IMPL_PROP_GET(data::ast::Function::Internal::EXTERNAL_DLLIMPORT)
+	inline bool hasNoBody()     IMPL_PROP_GET(data::ast::Function::Internal::NO_BODY)
+	inline bool isNoBodyAllowed() IMPL_PROP_GET(data::ast::Function::Internal::ALLOW_NO_BODY)
+	void makeNoBody();
+	void makeNoBodyAllowed();
 
 	inline bool isIntrinsic()   IMPL_PROP_GET(data::ast::Function::Internal::INTRINSIC)
 	inline bool isIntrinsicReturningPattern() IMPL_PROP_GET(data::ast::Function::Internal::INTRINSIC_RETURNS_PATTERN)

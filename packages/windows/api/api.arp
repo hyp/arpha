@@ -1,2 +1,3 @@
 
+import export kernel32
 import export user32

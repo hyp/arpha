@@ -1,0 +1,3 @@
+
+def ZeroTerminatedAsciiString = *char8
+def ZeroTerminatedUtf16String = *char16

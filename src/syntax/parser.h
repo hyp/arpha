@@ -49,6 +49,9 @@ public:
 		Parser* parser;
 	};
 
+	void parseAttributes(int precedenceAfterColon);
+	void applyAttributes(Node* node);
+
 	//introducing definitions
 	void introduceDefinition(Variable* variableDefinition);
 	void introduceDefinition(Function* functionDefinition);
@@ -60,9 +63,10 @@ public:
 	Token  lookedUpToken;
 	Scope* _outerMacroOuterScope;//the [> <] inside a macro will be parsed using this scope
 	std::vector<Node*> mixinedExpressions;
+	
 private:
 	Scope* _currentScope;
-	
+	std::vector<std::pair<SymbolID,Node*>> attributesStrorage;
 public:
 	inline Scope* currentScope() const { return _currentScope; }
 	void currentScope(Scope* scope);

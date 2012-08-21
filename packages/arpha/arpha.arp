@@ -8,6 +8,7 @@ import export types
 
 import export qualified compiler
 import export qualified environment
+import export qualified abi
 
 import export syntax.conditional
 import export syntax.logical

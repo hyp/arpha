@@ -545,6 +545,7 @@ Function* Type::generators::functionPointer = nullptr;
 Function* Type::generators::staticArray = nullptr;
 Function* Type::generators::vector = nullptr;
 Function* Type::generators::tuple = nullptr;
+Function* Type::generators::unionVariant = nullptr;
 
 Function* Type::generators::constQualifier = nullptr;
 
@@ -1463,6 +1464,9 @@ AnonymousAggregate* AnonymousAggregate::create(Field* fields,size_t fieldsCount,
 		anonymousRecordFields.push_back(std::make_pair(symbolArray,fieldsCount));
 	}
 	return new AnonymousAggregate(typeArray,symbolArray,fieldsCount,isVariant);
+}
+AnonymousAggregate* AnonymousAggregate::create(AnonymousAggregate* other,bool isVariant){
+	return new AnonymousAggregate(other->types,other->fields,other->numberOfFields,isVariant);
 }
 AnonymousAggregate* AnonymousAggregate::getVector(Type* type,size_t elementsCount){
 	std::vector<Field> fields;

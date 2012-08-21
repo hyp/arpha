@@ -1,0 +1,228 @@
+#
+	Kernel32.dll stuff goes here.
+#
+import helpers
+
+def ALL_PROCESSOR_GROUPS = 0xffff
+type PROCESSOR_NUMBER {
+	var Group uint16
+	var Number,Reserved uint8
+}
+type GROUP_AFFINITY {
+	var mask uintptr
+	var Group uint16
+	var Reserved0,Reserved1,Reserved2 uint16
+}
+
+def APPLICATION_ERROR_MASK,
+	ERROR_SEVERITY_SUCCESS,
+	ERROR_SEVERITY_INFORMATIONAL,
+	ERROR_SEVERITY_WARNING,
+	ERROR_SEVERITY_ERROR = 0x2000_0000,0,0x4000_0000,0x8000_0000,0xC000_0000
+
+where hwnd is uintptr,module is uintptr:
+
+def(external: "kernel32.dll",winapi) CloseHandle(handle uintptr) uint32
+def(external: "kernel32.dll",winapi) GetProcAddress(module,name ZeroTerminatedAsciiString) uintptr
+def(external: "kernel32.dll",winapi) LoadLibraryA(name ZeroTerminatedAsciiString) uintptr
+def(external: "kernel32.dll",winapi) LoadLibraryW(name ZeroTerminatedUtf16String) uintptr
+def(external: "kernel32.dll",winapi) GetModuleHandleA(name ZeroTerminatedAsciiString) uintptr
+def(external: "kernel32.dll",winapi) GetModuleHandleW(name ZeroTerminatedUtf16String) uintptr
+def(external: "kernel32.dll",winapi) GetModuleFileNameA(module,filename ZeroTerminatedAsciiString,size uint32) uint32
+def(external: "kernel32.dll",winapi) GetModuleFileNameW(module,filename ZeroTerminatedUtf16String,size uint32) uint32
+def(external: "kernel32.dll",winapi) FreeLibrary(module) uint32
+def(external: "kernel32.dll",winapi) EncodePointer(ptr uintptr) uintptr
+def(external: "kernel32.dll",winapi) DecodePointer(ptr uintptr) uintptr
+def(external: "kernel32.dll",winapi) TlsAlloc() uint32
+def(external: "kernel32.dll",winapi) TlsFree(index uint32) uint32
+def(external: "kernel32.dll",winapi) TlsGetValue(index uint32) uintptr
+def(external: "kernel32.dll",winapi) TlsSetValue(index uint32,value uintptr) uint32
+def(external: "kernel32.dll",winapi) FlsAlloc(callback uintptr) uint32
+def(external: "kernel32.dll",winapi) FlsCallback(data uintptr)
+def(external: "kernel32.dll",winapi) FlsFree(index uint32) uint32
+def(external: "kernel32.dll",winapi) FlsGetValue(index uint32) uintptr
+def(external: "kernel32.dll",winapi) FlsSetValue(index uint32,value uintptr) uint32
+def(external: "kernel32.dll",winapi) GetCurrentProcess() uintptr
+def(external: "kernel32.dll",winapi) GetCurrentProcessId() uint32
+def(external: "kernel32.dll",winapi) GetCurrentThread() uintptr
+def(external: "kernel32.dll",winapi) GetCurrentThreadId() uint32
+def(external: "kernel32.dll",winapi) GetCurrentProcessorNumber() uint32
+def(external: "kernel32.dll",winapi) ExitProcess(code uint32)
+def(external: "kernel32.dll",winapi) ExitThread(code uint32)
+def(external: "kernel32.dll",winapi) TerminateProcess(handle uintptr,code uint32) uint32
+def(external: "kernel32.dll",winapi) TerminateThread(handle uintptr,code uint32) uint32
+def(external: "kernel32.dll",winapi) SwitchToThread() uint32
+def(external: "kernel32.dll",winapi) SuspendThread(handle uintptr) uint32
+def(external: "kernel32.dll",winapi) Sleep(milliseconds uint32)
+def(external: "kernel32.dll",winapi) SleepEx(milliseconds uint32,alertable uint32) uint32
+def(external: "kernel32.dll",winapi) GetStartupInfoA(startupInfo uintptr) #TODO
+def(external: "kernel32.dll",winapi) GetStartupInfoW(startupInfo uintptr) #TODO
+
+type CRITICAL_SECTION {
+	var lockCount,recursionCount uint32
+	var owningThread,lockSemaphore,spinCount uintptr
+}
+where criticalSection is *CRITICAL_SECTION:
+def(external: "kernel32.dll",winapi) InitializeCriticalSection(criticalSection)
+def(external: "kernel32.dll",winapi) InitializeCriticalSectionAndSpinCount(criticalSection,spinCount uint32) uint32
+def(external: "kernel32.dll",winapi) EnterCriticalSection(criticalSection)
+def(external: "kernel32.dll",winapi) TryEnterCriticalSection(criticalSection) uint32
+def(external: "kernel32.dll",winapi) LeaveCriticalSection(criticalSection)
+def(external: "kernel32.dll",winapi) DeleteCriticalSection(criticalSection)
+#TODO interlocked functions have c calling convention
+def(external: "kernel32.dll",winapi) InterlockedIncrement(value *uint32) uint32
+def(external: "kernel32.dll",winapi) InterlockedIncrement64(value *uint64) uint64
+def(external: "kernel32.dll",winapi) InterlockedDecrement(value *uint32) uint32
+def(external: "kernel32.dll",winapi) InterlockedDecrement64(value *uint64) uint64
+def(external: "kernel32.dll",winapi) InterlockedExchange(target *uint32,value uint32) uint32
+
+def(external: "kernel32.dll",winapi) GetVersion() uint32
+def(external: "kernel32.dll",winapi) GetTickCount() uint32
+def(external: "kernel32.dll",winapi) GetTickCount64() uint64
+def(external: "kernel32.dll",winapi) GetSystemTimeAsFileTime(systemTime uintptr) #TODO
+def(external: "kernel32.dll",winapi) IsProcessorFeaturePresent(feature uint32) uint32
+def(external: "kernel32.dll",winapi) QueryPerformanceCounter(counter *uint64) uint32
+def(external: "kernel32.dll",winapi) QueryPerformanceFrequency(frequency *uint64) uint32
+def(external: "kernel32.dll",winapi) IsDebuggerPresent() uint32
+
+where heap is uintptr, flags is uint32:
+
+def(external: "kernel32.dll",winapi) GetProcessHeap() uintptr
+def(external: "kernel32.dll",winapi) HeapAlloc  (heap,flags,size natural) uintptr
+def(external: "kernel32.dll",winapi) HeapReAlloc(heap,flags,ptr uintptr,size natural) uintptr
+def(external: "kernel32.dll",winapi) HeapCompact(heap,flags) natural
+def(external: "kernel32.dll",winapi) HeapCreate (options uint32,initial natural,maximum natural) uintptr
+def(external: "kernel32.dll",winapi) HeapDestroy(heap) uint32
+def(external: "kernel32.dll",winapi) HeapFree(heap,flags,ptr uintptr) uint32
+def(external: "kernel32.dll",winapi) HeapSize(heap,flags,ptr uintptr) natural
+def(external: "kernel32.dll",winapi) HeapSetInformation(heap,class uint32,information uintptr,length natural) uint32
+def(external: "kernel32.dll",winapi) IsBadCodePtr(ptr uintptr) uint32
+
+where file is uintptr:
+def(external: "kernel32.dll",winapi) GetFileType(file) uint32
+def(external: "kernel32.dll",winapi) WriteFile(file,buffer uintptr,size uint32,written *uint32,overlapped uintptr = 0) uint32
+def(external: "kernel32.dll",winapi) ReadFile(file,buffer uintptr,size uint32,read *uint32,overlapped uintptr = 0) uint32
+def(external: "kernel32.dll",winapi) SetFilePointer(file,distanceLow uint32,distanceHigh uint32,method uint32) uint32
+def(external: "kernel32.dll",winapi) SetEndOfFile(file) uint32
+def(external: "kernel32.dll",winapi) FlushFileBuffers(file) uint32
+
+def GENERIC_READ,
+	GENERIC_WRITE,
+	GENERIC_EXECUTE,
+	GENERIC_ALL = 0x8000_000,0x4000_0000,0x2000_0000,0x1000_0000
+	
+def FILE_SHARE_READ,
+	FILE_SHARE_WRITE,
+	FILE_SHARE_DELETE = 1,2,4
+	
+def CREATE_NEW,
+	CREATE_ALWAYS,
+	OPEN_EXISTING,
+	OPEN_ALWAYS,
+	TRUNCATE_EXISTING = 1,2,3,4,5
+	
+def FILE_ATTRIBUTE_READONLY,
+	FILE_ATTRIBUTE_HIDDEN,
+	FILE_ATTRIBUTE_SYSTEM,
+	FILE_ATTRIBUTE_ARCHIVE,
+	FILE_ATTRIBUTE_NORMAL,
+	FILE_ATTRIBUTE_TEMPORARY,
+	FILE_ATTRIBUTE_OFFLINE,
+	FILE_ATTRIBUTE_ENCRYPTED = 1,2,4,0x20,0x80,0x100,0x1000,0x4000
+	
+def FILE_FLAG_OPEN_NO_RECALL,
+	FILE_FLAG_OPEN_REPARSE_POINT,
+	FILE_FLAG_SESSION_AWARE,
+	FILE_FLAG_POSIX_SEMANTICS,
+	FILE_FLAG_BACKUP_SEMANTICS,
+	FILE_FLAG_DELETE_ON_CLOSE,
+	FILE_FLAG_SEQUENTIAL_SCAN,
+	FILE_FLAG_RANDOM_ACCESS,
+	FILE_FLAG_NO_BUFFERING,
+	FILE_FLAG_OVERLAPPED,
+	FILE_FLAG_WRITE_THROUGH = 0x0010_0000,0x0020_0000,0x0080_0000,0x0100_0000,0x0200_0000,0x0400_0000,0x0800_0000,0x1000_0000,0x2000_0000,0x4000_0000,0x8000_0000
+def(external: "kernel32.dll",winapi) CreateFileW(filename ZeroTerminatedUtf16String,access uint32,shareMode uint32,securityAttributes uintptr,creationDisposition uint32,flags uint32,template uintptr = 0) uintptr
+def(external: "kernel32.dll",winapi) CreateFileA(filename ZeroTerminatedAsciiString,access uint32,shareMode uint32,securityAttributes uintptr,creationDisposition uint32,flags uint32,template uintptr = 0) uintptr
+def(external: "kernel32.dll",winapi) DeleteFileW(filename ZeroTerminatedUtf16String) uint32
+def(external: "kernel32.dll",winapi) DeleteFileA(filename ZeroTerminatedAsciiString) uint32
+
+def(external: "kernel32.dll",winapi) GetConsoleCP() uint32
+def(external: "kernel32.dll",winapi) SetConsoleCP(codepage uint32) uint32
+def(external: "kernel32.dll",winapi) GetConsoleMode(console uintptr,mode *uint32) uint32
+def(external: "kernel32.dll",winapi) SetConsoleCtrlHandler(handle uintptr,add uint32) uint32
+def(external: "kernel32.dll",winapi) WriteConsoleW(handle uintptr,buffer uintptr,size uint32,written *uint32,reserved uintptr) uint32
+def(external: "kernel32.dll",winapi) WriteConsoleA(handle uintptr,buffer uintptr,size uint32,written *uint32,reserved uintptr) uint32
+def(external: "kernel32.dll",winapi) GetStdHandle(stdHandle uint32) uintptr
+def(external: "kernel32.dll",winapi) SetStdHandle(stdHandle uint32,handle uintptr) uint32
+def(external: "kernel32.dll",winapi) SetHandleCount(count uint32) uint32
+
+def LCID = uint32
+def LCTYPE = uint32
+type CPINFO {
+	var MaxCharSize uint32
+	#TODO
+}
+
+where codepage is uint32,locale is LCID:
+def(external: "kernel32.dll",winapi) GetACP() uint32
+def(external: "kernel32.dll",winapi) GetOEMCP() uint32
+def(external: "kernel32.dll",winapi) GetCPInfo(codepage,info *CPINFO) uint32
+def(external: "kernel32.dll",winapi) GetLocaleInfoA(locale,localeType LCTYPE,dest ZeroTerminatedAsciiString,cchDest int32) int32
+def(external: "kernel32.dll",winapi) GetLocaleInfoW(locale,localeType LCTYPE,dest ZeroTerminatedUtf16String,cchDest int32) int32
+def(external: "kernel32.dll",winapi) GetUserDefaultLCID() LCID
+def(external: "kernel32.dll",winapi) EnumSystemLocalesA(func uintptr,flags uint32) uint32
+def(external: "kernel32.dll",winapi) EnumSystemLocalesW(func uintptr,flags uint32) uint32
+def(external: "kernel32.dll",winapi) IsValidCodePage(codepage) uint32
+def(external: "kernel32.dll",winapi) IsValidLocale(locale,flags uint32) uint32
+def(external: "kernel32.dll",winapi) GetStringTypeA(locale,infoType uint32,source ZeroTerminatedAsciiString,cchSrc int32,charType *uint16)
+def(external: "kernel32.dll",winapi) GetStringTypeW(infoType uint32,source ZeroTerminatedUtf16String,cchSrc int32,charType *uint16)
+def(external: "kernel32.dll",winapi) LCMapStringA(locale,flags uint32,source ZeroTerminatedAsciiString,cchSrc int32,dest ZeroTerminatedAsciiString,cchDest int32) int32
+def(external: "kernel32.dll",winapi) LCMapStringW(locale,flags uint32,source ZeroTerminatedUtf16String,cchSrc int32,dest ZeroTerminatedUtf16String,cchDest int32) int32
+def(external: "kernel32.dll",winapi) MultiByteToWideChar(codepage,flags uint32,source ZeroTerminatedAsciiString,cchSrc int32,dest ZeroTerminatedUtf16String,cchDest int32) int32
+def(external: "kernel32.dll",winapi) WideCharToMultiByte(codepage,flags uint32,source ZeroTerminatedUtf16String,cchSrc int32,dest ZeroTerminatedAsciiString,cchDest int32,defaultChar ZeroTerminatedUtf16String,usedDefaultChar *uint32) int32
+
+def EXCEPTION_NONCONTINUABLE,
+	EXCEPTION_MAXIMUM_PARAMETERS = 0x1,15
+type EXCEPTION_RECORD {
+	var ExceptionCode,ExceptionFlags uint32
+	var ExceptionRecord *EXCEPTION_RECORD
+	var ExceptionAddress uintptr
+	var NumberParameters uint32
+	var ExceptionInformation Array(uintptr,EXCEPTION_MAXIMUM_PARAMETERS)
+}
+type EXCEPTION_POINTERS {
+	var ExceptionRecord *EXCEPTION_RECORD
+	var ContextRecord   uintptr #*CONTEXT
+}
+type FRAME_POINTERS {
+	var MemoryStackFp,BackingStoreFP uint64
+}
+def(external: "kernel32.dll",winapi) RaiseException(code uint32,flags uint32,args uint32,arguments *uintptr)
+def(external: "kernel32.dll",winapi) SetUnhandledExceptionFilter(topLevelExceptionFilter uintptr) uintptr
+def(external: "kernel32.dll",winapi) UnhandledExceptionFilter(exceptionInfo *EXCEPTION_POINTERS) uint32
+def(external: "kernel32.dll",winapi) RtlUnwind(targetFrame uintptr,targetIp uintptr,exceptionRecord *EXCEPTION_RECORD,returnValue uintptr)
+def(external: "kernel32.dll",winapi) RtlUnwindEx(targetFrame FRAME_POINTERS,targetIP uintptr,ExceptionRecord *EXCEPTION_RECORD,returnValue uintptr,originalContext uintptr,history uintptr)
+def(external: "kernel32.dll",winapi) RtlCaptureContext(context uintptr)
+# TODO: this is defined only on x64 and arm
+def(external: "kernel32.dll",winapi) RtlVirtualUnwind(handlerType uint32,imageBase uint64,controlPC uint64,functionEntry uintptr,contextRecord uintptr,data uintptr,frame *uint64,pointers uintptr) uintptr
+def(external: "kernel32.dll",winapi) RtlLookupFunctionEntry(controlPC uint64,imageBase *uint64,targetGP *uint64) uintptr
+def(external: "kernel32.dll",winapi) CaptureStackBackTrace(framesToSkip uint32,framesToCapture uint32,backTrace uintptr,hash *uint32) uint16
+
+def(external: "kernel32.dll",winapi) GetEnvironmentStringsA() ZeroTerminatedAsciiString
+def(external: "kernel32.dll",winapi) GetEnvironmentStringsW() ZeroTerminatedUtf16String
+def(external: "kernel32.dll",winapi) FreeEnvironmentStringsA(strings ZeroTerminatedAsciiString) uint32
+def(external: "kernel32.dll",winapi) FreeEnvironmentStringsW(strings ZeroTerminatedUtf16String) uint32
+def(external: "kernel32.dll",winapi) GetCommandLineA() ZeroTerminatedAsciiString
+def(external: "kernel32.dll",winapi) GetCommandLineW() ZeroTerminatedUtf16String
+
+def(external: "kernel32.dll",winapi) Beep(frequency uint32,duration uint32) uint32
+def(external: "kernel32.dll",winapi) FatalAppExitA(action uint32,message ZeroTerminatedAsciiString)
+def(external: "kernel32.dll",winapi) FatalAppExitW(action uint32,message ZeroTerminatedUtf16String)
+def(external: "kernel32.dll",winapi) FlashWindow(hwnd,invert uint32)
+def(external: "kernel32.dll",winapi) GetErrorMode() uint32
+def(external: "kernel32.dll",winapi) GetThreadErrorMode() uint32
+def(external: "kernel32.dll",winapi) MessageBeep(type uint32) uint32
+def(external: "kernel32.dll",winapi) GetLastError() uint32
+def(external: "kernel32.dll",winapi) SetErrorMode(mode uint32) uint32
+def(external: "kernel32.dll",winapi) SetLastError(errorCode uint32)
+def(external: "kernel32.dll",winapi) SetThreadErrorMode(newMode uint32,oldMode *uint32) uint32

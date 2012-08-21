@@ -119,9 +119,9 @@ const char* System::fileToString(const char* filename){
 	fclose(file);
 	return (const char*)data;
 }
-FILE* System::open(const char* filename,bool write){
+FILE* System::open(const char* filename,bool write,bool binary){
 	assert(filename);
-	FILE* file = fopen(filename, write? "w" : "r");
+	FILE* file = fopen(filename, write? (binary? "wb" : "w") : "r");
 	assert(file);
 	return file;
 }

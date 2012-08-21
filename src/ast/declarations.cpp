@@ -62,7 +62,7 @@ bool Variable::deduceType(Type* givenType){
 void Variable::setImmutableValue(Node* value){
 	assert(isFlagSet(IS_IMMUTABLE));
 	assert(value->isResolved() && value->isConst());
-	assert(!this->value);
+	//assert(!this->value);
 	this->value = value;
 	setFlag(CONSTANT_SUBSTITUTE);
 
@@ -154,26 +154,26 @@ Function::Function(SymbolID name,Location& location) : PrefixDefinition(name,loc
 	miscFlags = 0;
 }
 
+#define IMPL_PROP_SET(flag) { miscFlags |= flag; }
+
 bool   Function::applyProperty(SymbolID name,Node* value){
 	if(name == "intrinsic"){
-		miscFlags |= data::ast::Function::Internal::INTRINSIC;
+		IMPL_PROP_SET(data::ast::Function::Internal::INTRINSIC);
+		IMPL_PROP_SET(data::ast::Function::Internal::ALLOW_NO_BODY);
 	} else if(name == "external"){
 		if(isIntrinsic()){
 			return false;
 		}
-		miscFlags |= data::ast::Function::Internal::EXTERNAL;
+		IMPL_PROP_SET(data::ast::Function::Internal::EXTERNAL);
+		IMPL_PROP_SET(data::ast::Function::Internal::ALLOW_NO_BODY);
 		if(value){
 			auto str = value->asStringLiteral();
 			if(!str) return false;
 			externalLib = str->block.ptr();
-			
-					miscFlags |= data::ast::Function::Internal::EXTERNAL_DLLIMPORT;
-					cc = data::ast::Function::STDCALL;
 			auto ext = System::path::extension(externalLib);
 			if(ext){
 				if(!strcmp(ext,"dll")){
-					miscFlags |= data::ast::Function::Internal::EXTERNAL_DLLIMPORT;
-					cc = data::ast::Function::STDCALL;
+					IMPL_PROP_SET(data::ast::Function::Internal::EXTERNAL_DLLIMPORT);
 				} else if(!strcmp(ext,"so") && !strcmp(ext,"lib") && !strcmp(ext,"a")){
 					return false;
 				}
@@ -181,7 +181,18 @@ bool   Function::applyProperty(SymbolID name,Node* value){
 		}
 	} 
 	else if(name == "callingConvention"){
-		cc = data::ast::Function::CCALL;//TODO
+		if(!value) return false;
+		if(auto access= value->asAccessExpression()){
+			if(access->symbol == "fast") cc = data::ast::Function::ARPHA;
+			else if(access->symbol == "cold") cc = data::ast::Function::COLD;
+			else if(access->symbol == "c") cc = data::ast::Function::CCALL;
+			else if(access->symbol == "stdcall") cc = data::ast::Function::STDCALL;
+			else return false;
+		}
+		else return false;
+	}
+	else if(name == "winapi"){
+		cc = data::ast::Function::STDCALL;
 	}
 	else if(name == "nonthrow"){
 		setNonthrow();
@@ -253,8 +264,9 @@ Type* Function::returnType() const {
 }
 
 //field access macro function
-#define IMPL_PROP_SET(flag) { miscFlags |= flag; }
 
+void Function::makeNoBody()                    IMPL_PROP_SET(data::ast::Function::Internal::NO_BODY)
+void Function::makeNoBodyAllowed()             IMPL_PROP_SET(data::ast::Function::Internal::ALLOW_NO_BODY)
 void Function::makeIntrinsic()                 IMPL_PROP_SET(data::ast::Function::Internal::INTRINSIC)
 void Function::makeIntrinsicReturningPattern() IMPL_PROP_SET(data::ast::Function::Internal::INTRINSIC_RETURNS_PATTERN)
 void Function::makeIntrinsicOperation(data::ast::Operations::Kind op){

@@ -219,6 +219,7 @@ struct Type {
 		static Function* staticArray;
 		static Function* vector;
 		static Function* tuple;
+		static Function* unionVariant;
 
 		static Function* constQualifier;
 	};
@@ -317,6 +318,7 @@ struct AnonymousAggregate: public Type {
 
 	//Unique anonymous record construction
 	static AnonymousAggregate* create(Field* fields,size_t fieldsCount,bool isVariant = false);
+	static AnonymousAggregate* create(AnonymousAggregate* other,bool isVariant = false);
 
 	static AnonymousAggregate* getVector(Type* type,size_t elementsCount);
 private:

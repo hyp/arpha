@@ -436,7 +436,7 @@ unittest(cl){
 	assert(stringsEqualAnyCase("foo1","FoO1"));
 }
 
-ClOption clOptions[]={ClOption("m32","m64"),ClOption("m64","m32"),ClOption("arch",1),ClOption("o",1),ClOption("asm"),ClOption("llvmbc")};
+ClOption clOptions[]={ClOption("m32","m64"),ClOption("m64","m32"),ClOption("arch",1),ClOption("o",1),ClOption("asm"),ClOption("llvmbc"),ClOption("enable-unsafe-fp-math")};
 ClOption* findOption(const char* cl){
 	auto end = clOptions+ (sizeof(clOptions) / sizeof(ClOption));
 	for(auto i = clOptions;i!=end;i++){
@@ -487,6 +487,7 @@ struct ClOptionApplier {
 		}
 		else if(stringsEqualAnyCase(option,"asm"))    *outputFormat |= data::gen::native::ASSEMBLY;
 		else if(stringsEqualAnyCase(option,"llvmbc")) *outputFormat |= gen::LLVMBackend::OUTPUT_BC;
+		else if(stringsEqualAnyCase(option,"enable-unsafe-fp-math")) genOptions->unsafeFPmath = true;
 	}
 };
 
@@ -515,7 +516,7 @@ void buildPackages(data::gen::native::Target* target,gen::LLVMBackend& backend,g
 }
 
 int main(int argc, const char * argv[]){
-	
+
 	System::init();
 	memory::init();
 
@@ -526,6 +527,7 @@ int main(int argc, const char * argv[]){
 	data::gen::Options genOptions;
 	genOptions.optimizationLevel = -1;
 	genOptions.generate = true;
+	genOptions.unsafeFPmath = false;
 
 	data::gen::native::Target target;
 	createDefaultTarget(target);

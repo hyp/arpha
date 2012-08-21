@@ -200,6 +200,7 @@ static void initMapping(){
 	MAP_NODETYPE("Variable",Variable);
 	MAP_NODETYPE("Function",Function);
 	MAP_NODETYPE("ExpressionReference",NodeReference);
+	MAP_NODETYPE("PrefixMacro",PrefixMacro);
 
 	MAP("returnType(Expression)",{ invocation->ret(invocation->getNodeParameter(0)->returnType()); });
 	MAP("isConst(Expression)",{ invocation->ret(invocation->getNodeParameter(0)->isConst()); });
@@ -254,7 +255,7 @@ static void initMapping(){
 		invocation->getNodeParameter(0)->applyProperty(invocation->getStringParameterAsSymbol(1),nullptr);
 		invocation->ret();
 	});
-	MAP_PROP("applyProperty(Expression,[]char8,Expression)",Function::INTERPRET_ONLY_INSIDE,{
+	MAP_PROP("applyProperty(Expression,[]char8,_)",Function::INTERPRET_ONLY_INSIDE,{
 		invocation->getNodeParameter(0)->applyProperty(invocation->getStringParameterAsSymbol(1),invocation->getNodeParameter(2));
 		invocation->ret();
 	});
@@ -266,6 +267,11 @@ static void initMapping(){
 		auto parser = invocation->getParser();
 		if(invocation->getBoolParameter(1)) parser->ignoreNewlines();
 		invocation->ret(parser->parse(invocation->getInt32Parameter(0))); 
+	});
+	MAP_PROP("parse(Expression)",Function::INTERPRET_ONLY_INSIDE,{ 
+		auto parser = invocation->getParser();
+		auto node = invocation->getNodeParameter(0)->asPrefixDefinition();
+		invocation->ret(node->parse(parser)); 
 	});
 	MAP_PROP("expect([]char8,bool)",Function::INTERPRET_ONLY_INSIDE,{
 		auto parser = invocation->getParser();
@@ -553,6 +559,10 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 		static void tuple(CTFEintrinsicInvocation* invocation){
 			invocation->ret(invocation->getTypeParameter(0));
 		}
+		static void unionVariant(CTFEintrinsicInvocation* invocation){
+			
+			invocation->ret(AnonymousAggregate::create(invocation->getTypeParameter(0)->asAnonymousRecord(),true));
+		}
 		static void constQualifier(CTFEintrinsicInvocation* invocation){
 			auto t = invocation->getTypeParameter(0);
 			if(!t->hasConstQualifier()){
@@ -586,6 +596,10 @@ void Function::getIntrinsicTypeTemplateBinder(Function* function){
 	else if(function->label() == "Tuple" && !Type::generators::tuple){
 		Type::generators::tuple = function;
 		function->intrinsicCTFEbinder = Generator::tuple;
+	}
+	else if(function->label() == "Union" && !Type::generators::unionVariant){
+		Type::generators::unionVariant = function;
+		function->intrinsicCTFEbinder = Generator::unionVariant;
 	}
 	else if(function->label() == "Const" && !Type::generators::constQualifier){
 		Type::generators::constQualifier = function;

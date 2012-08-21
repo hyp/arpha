@@ -137,10 +137,10 @@ void dummyDecl(FILE* file,DllDefGenerator::Declaration& decl,std::vector<char>& 
 	memset(&symbol,0,sizeof(symbol));
 
 	std::stringstream mangler;
-	mangler<<'_'<<decl.function->label().ptr()<<'@'<<decl.stdCallParamSize;
+	mangler<<"_"<<decl.function->label().ptr()<<'@'<<decl.stdCallParamSize;
 	auto str = mangler.str();
 	if(str.size() <= 8){
-		strcpy(symbol.name,str.c_str());
+		memcpy(symbol.name,str.c_str(),str.size());
 	} else {
 		*(uint32*)(symbol.name + 4) = (uint32)(4 + stringTable.size());
 		for(auto c = str.begin();c!=str.end();++c) stringTable.push_back(*c);
@@ -160,16 +160,27 @@ void genDecl(FILE* file,DllDefGenerator::Declaration& decl){
 	auto func = decl.function;
 	fprintf(file,"%s\n",decl.function->label().ptr());
 }
+void genDeclM64(FILE* file,DllDefGenerator::Declaration& decl){
+	auto func = decl.function;
+	fprintf(file,"%s= _%s@%d\n",decl.function->label().ptr(),decl.function->label().ptr(),decl.stdCallParamSize);
+}
 
 void DllDefGenerator::gen(const char* outputDirectory,data::gen::native::Target* target,gen::Linker* linker,std::vector<std::string>& objectFiles){
 	if(!declarations.size()) return;
-	std::set<const char*> libs;
+	std::set<std::string> libs;
+	uint32 libID = 0;
 	for(auto decl = declarations.begin();decl != declarations.end();decl++){
+		if(auto ext = System::path::extension(decl->function->externalLib)){
+			assert(!strcmp(ext,"dll"));
+			auto len = strlen(decl->function->externalLib) - strlen(ext) - 1;
+			assert(len);
+			const_cast<char*>(decl->function->externalLib)[len] = '\0';
+		}
 		libs.insert(decl->function->externalLib);
 	}
+	bool m64= target->cpuMode == data::gen::native::Target::M64;
 
 	FILE* file;
-	uint32 libID = 0;
 
 	uint32 symbols;
 	std::vector<char> stringTable;
@@ -177,7 +188,7 @@ void DllDefGenerator::gen(const char* outputDirectory,data::gen::native::Target*
 
 		symbols = 0;
 
-		auto libname  = (*i);
+		auto libname  = (*i).c_str();
 		std::string defFile = std::string(outputDirectory)+libname+".def";
 		file = System::open(defFile.c_str(),true);
 		if(!file){
@@ -186,7 +197,8 @@ void DllDefGenerator::gen(const char* outputDirectory,data::gen::native::Target*
 		fprintf(file,"LIBRARY %s\nEXPORTS\n",libname);
 		for(auto decl = declarations.begin();decl != declarations.end();decl++){
 			if(!strcmp(libname,decl->function->externalLib)){
-				genDecl(file,*decl);
+				if(m64) genDeclM64(file,*decl);
+				else genDecl(file,*decl);
 				symbols++;
 			}
 		}
@@ -194,7 +206,7 @@ void DllDefGenerator::gen(const char* outputDirectory,data::gen::native::Target*
 
 		//Dummy obj
 		std::string objFile = std::string(outputDirectory)+libname+".obj";
-		file = System::open(objFile.c_str(),true);
+		file = System::open(objFile.c_str(),true,true);
 		if(!file){
 			continue;
 		}

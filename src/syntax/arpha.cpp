@@ -307,7 +307,6 @@ void parseProperties(Parser* parser,Node* applicant){
 		applicant->applyProperty(prop,value);
 	} while(parser->match(","));
 }
-
 struct ParameterTypeSuggestion {
 	SymbolID name;
 	Node* expression;
@@ -365,19 +364,19 @@ void parseFunctionParameters(Parser* parser,Function* func,Type* defaultType = n
 
 /// functionBody   ::= nothing | '=' expression | '{' block '}'
 //TODO: maybe make this more eficcient by moving up the '=' test
-bool parseFunctionBody(Parser* parser,Function* func,bool allowNoBody = false){
+void parseFunctionBody(Parser* parser,Function* func){
 	//NB: need to take \n '{' into account!
 #ifdef SYNTAX_ALLOW_NEWLINES_BEFORE_BRACE
 	Parser::NewlineIgnorer i(true,parser);
 	if(parser->match("{")){
 		blockParser->body(parser,BlockParser::BlockChildParser(&func->body));
-		return true;
+		return;
 	}
 	else i.rollback();
 #endif
 	if(isEndExpression(parser->peek())){
-		if(!allowNoBody) error(parser->previousLocation(),"The function %s needs to have a body( You can use either '=' expression or '{' body '}')!",func->label());
-		return false;
+		func->makeNoBody();
+		return;
 	}
 
 	if(parser->match("=")){
@@ -390,7 +389,6 @@ bool parseFunctionBody(Parser* parser,Function* func,bool allowNoBody = false){
 		parser->expect("{");
 		blockParser->body(parser,BlockParser::BlockChildParser(&func->body));
 	}
-	return true;
 }
 
 inline bool isIntrinsicImported(Parser* parser){
@@ -401,6 +399,7 @@ inline bool isIntrinsicImported(Parser* parser){
 static Function* parseFunction(SymbolID name,Parser* parser){
 	//Function
 	auto func = new Function(name,parser->previousLocation());
+	parser->applyAttributes(func);
 	//
 	if(isIntrinsicImported(parser)) func->applyProperty("intrinsic",nullptr);
 	else if(parser->compilationUnit()->moduleBody->scope->importsArphaExternal){
@@ -417,8 +416,7 @@ static Function* parseFunction(SymbolID name,Parser* parser){
 	if(!isEndExpression(token) && !(token.isSymbol() && (token.symbol == "=" || token.symbol == "{" || token.symbol == "uses"))){
 		func->_returnType.parse(parser,arpha::Precedence::Assignment);
 	}
-	parseProperties(parser,func);
-	parseFunctionBody(parser,func,func->isIntrinsic() || func->isExternal());
+	parseFunctionBody(parser,func);
 	parser->leaveBlock();
 
 	return func;
@@ -435,6 +433,7 @@ struct DefParser: IntrinsicPrefixMacro {
 	DefParser(): IntrinsicPrefixMacro("def") {  }
 
 	Node* parse(Parser* parser){
+		parser->parseAttributes(arpha::Precedence::Tuple);
 		auto name = parser->expectName();
 		Node* result;
 		if(parser->match("(")) result = parseFunction(name,parser);
@@ -497,15 +496,36 @@ struct MacroParser: IntrinsicPrefixMacro {
 		//import defaults.
 		func->body.scope->import(compiler::findModule("arpha/ast"),"ast",true,false);
 		if(!functionLike) func->body.scope->import(compiler::findModule("arpha/syntax/parser"),"parser",true,false);
-		parseFunctionBody(parser,func,false);
+		if(parser->match("extends")){
+			if(!pmacro){
+				parser->syntaxError(format("Only prefix macroes can be extended!"));
+			}
+			auto parent = parser->expectName();
+			PrefixDefinition* extender = nullptr;
+			if(auto def = parser->currentScope()->lookupPrefix(parent)){
+				extender = def->asPrefixDefinition();
+			}
+			if(!extender){
+				parser->syntaxError(format("Expected a valid macro after 'extends'!"));
+			} else {
+				auto ref = new NodeReference(extender);
+				ref->setFlag(Node::RESOLVED | Node::CONSTANT | NodeReference::DONT_DUPLICATE_OBJECT);
+				auto def = new Variable(parent,parser->previousLocation(),func->body.scope,ref);
+				func->body.scope->define(def);
+				func->body.addChild(def);
+			}
+		} 
+		parseFunctionBody(parser,func);
 		
 		parser->leaveBlock();
 		if(setOuterScope) parser->_outerMacroOuterScope = nullptr;
 		//Create the actual macro
 		if(!infix){
 			if(!functionLike){
+				
+				macro = parser->compilationUnit()->resolver->resolveMacroAtParseStage(macro);
 				parser->introduceDefinition(pmacro);
-				return parser->compilationUnit()->resolver->resolveMacroAtParseStage(macro);
+				return macro;
 			} 
 			else {
 				parser->introduceDefinition(func);
@@ -590,10 +610,11 @@ static Function* parseTraitMethod(Parser* parser,ParameterTypeSuggestion* sugges
 		func->_returnType.parse(parser,arpha::Precedence::Assignment);
 	}
 	//special handling for body
-	auto hasBody = parseFunctionBody(parser,func,true);
+	func->makeNoBodyAllowed();
+	parseFunctionBody(parser,func);
 	parser->leaveBlock();
 
-	if(hasBody){
+	if(!func->hasNoBody()){
 		parser->mixinedExpressions.push_back(func);
 		return nullptr;
 	}

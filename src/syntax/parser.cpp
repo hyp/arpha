@@ -202,6 +202,29 @@ Node* Parser::parse(int stickiness){
 	return expression;	
 }
 
+void Parser::parseAttributes(int precedenceAfterColon){
+	if(attributesStrorage.size()) attributesStrorage.clear();
+	if(match("(")){
+		do {
+			auto prop   = expectName();
+			Node* value = nullptr;
+			if(match(":")) value = parse(precedenceAfterColon);
+			else if(match("(")){
+				value = parse();
+				expect(")");
+			}
+			attributesStrorage.push_back(std::make_pair(prop,value));
+		} while(match(","));
+		expect(")");
+	}
+}
+void Parser::applyAttributes(Node* node){
+	if(!attributesStrorage.size()) return;
+	for(auto i = attributesStrorage.begin();i!=attributesStrorage.end();++i){
+		node->applyProperty(i->first,i->second);
+	}
+}
+
 //introducing definitions
 void Parser::introduceDefinition(Variable* variableDefinition){
 	currentScope()->define(variableDefinition);

@@ -497,7 +497,7 @@ Type* NodeReference::returnType() const {
 Node* NodeReference::duplicate(DuplicationModifiers* mods) const {
 	auto old = mods->redefine;
 	mods->redefine = false;
-	auto expr = copyProperties(new NodeReference(_node->duplicate(mods)));
+	auto expr = copyProperties(new NodeReference(isFlagSet(DONT_DUPLICATE_OBJECT)? _node : _node->duplicate(mods)));
 	mods->redefine = old;
 	return expr;
 }

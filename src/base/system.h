@@ -35,7 +35,7 @@ namespace System {
     bool fileExists(const char* filename);
 	bool directoryExists(const char* filename);
 	const char* fileToString(const char* filename);
-	FILE* open(const char* filename,bool write = false);
+	FILE* open(const char* filename,bool write = false,bool binary = false);
 
 	//exe
 	int execute(const char* file,const char* param,const char* dir = nullptr);

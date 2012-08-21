@@ -20,7 +20,7 @@ def location  (expression *Expression) line: natural,column: natural
 
 # Decorators for definitions
 def applyProperty(expression *Expression,name LinearSequence(char8))
-def applyProperty(expression *Expression,name LinearSequence(char8),value *Expression)
+def applyProperty(expression *Expression,name LinearSequence(char8),value)
 
 # The types below are derived from Expression
 def IntegerLiteral       Type
@@ -47,6 +47,7 @@ def ScopedCommand        Type
 def Variable             Type
 def Function             Type
 def ExpressionReference  Type
+def PrefixMacro          Type
 
 def newStringLiteral(string LinearSequence(char8)) *StringLiteral
 def newTypeReference(type Type) *TypeReference

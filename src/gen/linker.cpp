@@ -31,7 +31,6 @@ struct VSLinker {
 	std::string executionDirectory;
 	std::string libExeFile;
 	std::string libDirectory;
-	std::string sdkDirectory;
 };
 
 bool searchForVSInstallation(std::string& path,VSLinker& linker){
@@ -49,7 +48,6 @@ bool searchForVSInstallation(std::string& path,VSLinker& linker){
 					linker.libExeFile = fdir + "\\VC\\bin\\lib.exe";
 					linker.executionDirectory = fdir + "\\Common7\\IDE";//IS there aby better way for this???
 					linker.libDirectory = fdir + "\\VC\\lib";
-					linker.sdkDirectory = path + "\\Microsoft SDKs\\Windows\\v7.0A\\Lib";//TODO
 					return true;
 			}
 		}
@@ -114,8 +112,6 @@ static void visualStudioLinkerDriver(Target* target,data::gen::Options* options,
 		}
 		else
 			cmd<<" /NODEFAULTLIB /ENTRY:\"main\"";
-		if(!linker.sdkDirectory.empty())
-			cmd<<" /LIBPATH:\""<<linker.sdkDirectory<<"\"";
 	}
 	
 	auto cmdString = cmd.str();
