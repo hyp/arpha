@@ -1,5 +1,7 @@
-# Arpha programming language
+# Arpha Programming Language 🚀
 
-Inspired by magpie, C, D, nemerle, go, and numerous other languages.
+Inspired by magpie, C, D, Nemerle, Go, and numerous other languages. 🧠✨
 
-Work in progress.
+> ⚠️ Work in progress: expect dragons 🐉 and sparks 🔥
+
+Happy hacking! 😄💻
