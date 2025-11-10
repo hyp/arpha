@@ -1,4 +1,5 @@
 #include "utf.h"
+#include <cstring>
 
 bool isValidUnicodeCharacter(UnicodeChar c){
 	return c <= 0x10FFFF;
@@ -124,9 +125,9 @@ namespace UTF16 {
 		}
 		else buffer[i] = 0;
 	}
-	StringBuffer::operator const U16Char*(){
-		return outOfBuffer? dynBuffer.begin()._Ptr : buffer;
-	}
+        StringBuffer::operator const U16Char*(){
+                return outOfBuffer ? dynBuffer.data() : buffer;
+        }
 
 
 	UnicodeChar decode(const U16Char** ptr) {
@@ -184,4 +185,12 @@ unittest(UTF){
 	expect(0x3046); //HIRAGANA LETTER U
 	expect(0x1D400); //MATHEMATICAL BOLD CAPITAL A
 #undef expect
+}
+
+unittest(UTF16StringBuffer){
+        std::string s(600, 'a');
+        UTF16::StringBuffer buf(s.c_str());
+        const U16Char* data = buf;
+        for(size_t i=0;i<600;i++) assert(data[i] == 'a');
+        assert(data[600] == 0);
 }
